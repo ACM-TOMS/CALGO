@@ -1,0 +1,226 @@
+// $Id: executables.dox,v 1.1.2.1 2005/12/15 02:08:35 tgkolda Exp $ 
+// $Source: /space/CVS-Acro/acro/packages/appspack/appspack/doc/input/executables.dox,v $ 
+
+/*!
+
+\page pageExecutables Using the APPSPACK Executables
+
+
+Depending on the configuration options you choose (see \ref
+pageConfigure), %APPSPACK will create the following executables:
+<ul>
+<li> \c appspack_serial - compiled by default
+<li> \c appspack_mpi - compiled if MPI is enabled (e.g., \c --with-mpi-compilers is specified at configure time)
+</ul>
+
+To use either of these, you need only complete three steps.
+<ul>
+<li> \ref pageExecutables_step1 
+<li> \ref pageExecutables_step2 
+<li> \ref pageExecutables_step3 
+</ul>
+
+We use \c example1 for illustration. The code for this example is
+provided in the \c examples directory (at the top level of the source
+tree).
+
+\section pageExecutables_step1 Step 1: Create an executable that evaluates the objective function.
+
+The first step is to create an executable that evaluates the objective
+function, and this step is the same for both the serial and MPI
+versions of the code.
+The executable will find the point to be evaluated in a specified
+input file and should put the result in a specified output file. 
+
+<ul>
+
+<li>The general formation for calling the function evaluation
+executable is as follows:
+
+\verbatim
+<Executable Name> <Input Prefix>.<tag> <Output Prefix>.<tag> <tag>
+\endverbatim
+
+<li>For example, the call might look something like:
+
+\verbatim
+example1 ex1_in.27 ex1_out.27 27
+\endverbatim
+
+</ul>
+
+The tag is a unique identifier that is assigned to each trial point
+and is used in the naming of files to prevent conflicts.  Thus, the
+calling sequence is as follows: the first argument is the name of the
+executable, the second argument is the name of the input file, the
+third argument is the name of the output file, and the fourth argument
+is a unique tag that can be used in the naming of auxillary files.
+
+The input file is very simply formatted. The first line is an integer
+that indicates the length of the vector. This is then is followed by
+the vector itself, one entry per line.
+
+<ul>
+<li>An example input file for the objective function executable:
+
+\code
+2
+1.24e-1
+17.4e-3
+\endcode
+</ul>
+
+Likewise, the output file is also simply formatted. It should contain
+either a single numeric entry that is the function value or an error
+string.
+
+<ul>
+<li> An example output file with a function value:
+
+\code
+7.58e-3
+\endcode
+
+<li> An example output file with a brief error string:
+
+\code
+Infeasible wrt Nonlinear Constraint 5
+\endcode
+</ul>
+
+In most cases, the executable you provide is actually a script that
+goes through several steps in order to calculate the objective value.
+If you are creating auxillary files, it is important that you use the
+tag (the fourth argument in the calling sequence) in the naming of
+your files to prevent conflicts. This is particularly important if
+running the MPI version of %APPSPACK.
+
+See the APPSPACK::Evaluator::SystemCall object for details on how the
+evaluation is processed.
+
+\section pageExecutables_step2 Step 2: Create an APPSPACK input file
+
+You must provide an input file specifying the parameters for running
+%APPSPACK. (This file is used to create a Parameter::List with three
+sublists: "Evaluator", "Bounds", and "Solver". These sublists are
+then used as arguments to the constructors for the
+APPSPACK::Evaluator::SystemCall, APPSPACK::Constraints::Bounds, and APPSPACK::Solver
+objects, respectively.)
+
+<ul>
+<li>Here is a sample input file (see \c examples/example1.apps):
+
+\verbatim
+# SAMPLE APPSPACK INPUT FILE
+@ "Evaluator"
+"Executable Name" string "/home/username/appspack/examples/example1"
+"Input Prefix" string "ex1_in"
+"Output Prefix" string "ex1_out"
+@@
+@ "Bounds"
+"Upper" vector 2 1 1
+"Lower" vector 2 -1 -1
+@@
+@ "Solver" 
+"Debug" int 4
+"Initial X" vector 2 2e-1 0.3
+@@
+\endverbatim
+
+<li>The format of the input file is as follows.
+
+<ul>
+<li> "Evaluator" 
+   <ul>
+   <li> "Executable Name" - Name of the executable that evaluates the
+	function. The full path name should be specified. Defaults to "a.out".
+   <li> "Input Prefix" - Input file prefix. Defaults to "input".
+   <li> "Output Prefix" - Input file prefix. Defaults to "output".
+   </ul>
+<li> "Bounds"
+  <ul>
+  <li>"Lower" - Lower bounds
+  <li>"Upper" - Upper bounds
+  <li>See \ref pageBoundsParameters for more details.
+  </ul>
+<li> "Solver"
+  <ul>
+  <li>See \ref pageParameters for a complete list of parameters that may be specified here.
+  </ul>
+</ul>
+
+<li>In general, the input file is processed as follows. 
+Any empty lines are ignored, and comment lines begin with a 
+\c #.  The beginning of a category is specified by a 
+\c @  followed by a space and then the category name in quotes.  
+The end of a category is designated by a line containing the symbols 
+@@.  Within a category, parameters are defined by name 
+(in quotes), type (\c string, \c int, \c double, 
+\c vector, or \c bool,), and value.  String values, such as 
+the executable name, are given in quotes.   Double and integer values 
+are just numbers.   Vectors values include an integer that represents 
+their length followed by each entry.  Boolean values are written without
+quotes.  The only recognized boolean values are \c true and 
+\c false, and any other input is treated as false. To summarize:
+  
+  <ul>
+  <li> Empty lines are ignored.
+
+  <li> Comment lines begin with a #.
+
+  <li> Parameters are specified generically as follows.
+
+\verbatim
+"String Parameter Name" string "A string"
+"Integer Parameter Name" int 4
+"Double Parameter Name" double 3.0
+"Vector Parameter Name" vector 2 0.3 0.4
+\endverbatim
+
+  <li> A sublist group is specified as follows. (The dots are replaced
+  by parameter specifications, as above.)
+
+\verbatim
+@ "Sublist List Name In Quotes"
+...
+@@
+\endverbatim
+
+  </ul>
+</ul>
+
+See APPSPACK::parseTextInputFile() for more details.
+
+\section pageExecutables_step3 Step 3: Run APPSPACK
+
+<ul>
+<li>Serial Version
+
+The command line for what is illustrated might look something like the
+following:
+\verbatim
+appspack_serial example1.apps
+\endverbatim
+
+In the serial version, there is one copy of %APPSPACK running.
+
+\image html Serial_Version4.gif "Serial APPSPACK"
+
+<li>MPI Version
+
+There is one master processor, and the remainder are workers that
+actually run the simulations.  The command line varies a bit
+depending on your version of MPI. However, the command line for what
+is illustrated might be something like the following:
+
+\verbatim
+mpirun -np 5 appspack_mpi example1.apps
+\endverbatim
+
+\image html MPI_Version4.gif "MPI APPSPACK"
+
+</ul>
+
+
+*/
+

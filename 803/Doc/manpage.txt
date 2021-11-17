@@ -1,0 +1,370 @@
+   NAME
+        m5, m5.awk - macro processor
+ 
+   SYNOPSIS
+        m5 [ -Dname ] [ -Dname=def ] [-c] [ -dp char ] [ -o file ] [
+        -sp char ] [ file ... ]
+ 
+        [g|n]awk -f m5.awk X [ -Dname ] [ -Dname=def ]  [-c]  [  -dp
+        char ] [ -o file ] [ -sp char ] [ file ... ]
+ 
+   DESCRIPTION
+        m5 is a Bourne shell script for invoking m5.awk, which actu-
+        ally   performs  the  macro  processing.   m5,  unlike  many
+        macroprocessors, does  not  directly  interpret  its  input.
+        Instead  it uses a two-pass approach in which the first pass
+        translates the input to an awk program, and the second  pass
+        executes  the  awk  program  to  produce  the  final output.
+        Details of usage are provided below.
+ 
+        As noted in the synopsis above, its invocation  may  require
+        specification  of  awk, gawk, or nawk, depending on the ver-
+        sion of awk  available  on  your  system.   This  choice  is
+        further  complicated  on  some systems, e.g. Sun, which have
+        both awk (original awk) and nawk (new awk).   Other  systems
+        appear to have new awk, but have named it just awk.  New awk
+        should be used, regardless of what it has been  named.   The
+        macro  processor translator will not work using original awk
+        because the former, for example, uses the built-in  function
+        match().
+ 
+   OPTIONS
+        The following options are supported:
+ 
+        -Dname        Following the cpp convention, define name as 1
+                      (one).   This  is  the  same  as if a -Dname=1
+                      appeared as an option or #name=1  appeared  as
+                      an  input  line.  Names specified using -D are
+                      awk variables  defined  just  before  main  is
+                      invoked.
+ 
+        -Dname=def    Define name as "def".  This is the same as  if
+                      #name="def"  appeared  as an input line. Names
+                      specified using -D are awk  variables  defined
+                      just before main is invoked.
+ 
+        X             Yes, that really is a capital "X".   The  ver-
+                      sion  of  nawk on Sun Solaris 2.5.1 apparently
+                      does its own argument processing before  pass-
+                      ing  the  arguments on to the awk program.  In
+                      this case, X (and all succeeding options)  are
+                      believed  by  nawk  to  be  file names and are
+                      passed on to the  macro  processor  translator
+                      (m5.awk)  for  its  own  argument processing).
+                      Without the X, Sun nawk  attempts  to  process
+                      succeeding  options  (e.g.,  -Dname)  as valid
+                      nawk  arguments  or  files,  thus  causing  an
+                      error.   This  may  not  be  a problem for all
+                      awks.
+ 
+        -c            Compile only.  The  output  program  is  still
+                      produced, but the final output is not.
+ 
+        -dp char      The directive prefix character (default is #).
+ 
+        -o file       The output program file (default is a.awk).
+ 
+        -sp char      The substitution prefix character (default  is
+                      $).
+ 
+   USAGE
+     Overview
+        The program that performs the  first  pass  noted  above  is
+        called  the m5 translator and is named m5.awk.  The input to
+        the translator may be either standard input or one  or  more
+        files  listed  on  the command line.  An input line with the
+        directive prefix character (# by default)  in  column  1  is
+        treated  as  a  directive  statement  in  the  MP  directive
+        language (awk).  All other input lines are processed as text
+        lines.   Simple  macros  are  created  using  awk assignment
+        statements and their values referenced using  the  substitu-
+        tion  prefix character ($ by default).  The backslash (\) is
+        the escape character; its presence forces the next character
+        to literally appear in the output.  This is most useful when
+        forcing the appearance of the  directive  prefix  character,
+        the  substitution prefix character, and the escape character
+        itself.
+ 
+     Macro Substitution
+        All input lines are scanned for macro  references  that  are
+        indicated  by  the  substitution prefix character.  Assuming
+        the default value of that character, macro references may be
+        of  the  form  $var, $(var), $(expr), $[str], $var[expr], or
+        $func(args).  These are replaced by  an  awk  variable,  awk
+        variable, awk expression, awk array reference to the special
+        array M[], regular awk  array  reference,  or  awk  function
+        call,  respectively.   These are, in effect, macros.  The MP
+        translator checks for proper nesting of parentheses and dou-
+        ble  quotes when translating $(expr) and $func(args) macros,
+        and checks for proper nesting of square brackets and  double
+        quotes  when translating $[expr] and $var[expr] macros.  The
+        substitution prefix character indicates a a macro  reference
+        unless  it  is (i) escaped (e.g., \$abc), (ii) followed by a
+        character other than A-Z, a-z, (, or [ (e.g., $@), or  (iii)
+        inside a macro reference (e.g., $($abc); probably an error).
+ 
+        An understanding of the implementation of macro substitution
+        will  help  in its proper usage. When a text line is encoun-
+        tered, it is scanned for macros, embedded in  an  awk  print
+        statement,  and  copied to the output program.  For example,
+        the input line
+ 
+        The quick $fox jumped over the lazy $dog.
+ 
+        is transformed into
+ 
+        print "The quick " fox " jumped over the lazy " dog "."
+ 
+        Obviously the use of this transformation technique relies completely
+        on the presence of the awk concatenation operator (one or more blanks).
+ 
+     Macros Containing Macros
+        As already noted, a macro  reference  inside  another  macro
+        reference  will not result in substitution and will probably
+        cause  an  awk   execution-time   error.    Furthermore,   a
+        substitution  prefix  character in the substituted string is
+        also generally not significant because the substitution pre-
+        fix  character  is  detected  at translation time, and macro
+        values are  assigned  at  execution  time.   However,  macro
+        references  of  the  form  $[expr]  provide  a simple nested
+        referencing capability.  For example, if $[abc] is in a text
+        line,  or  in a directive line and not on the left hand side
+        of   an   assignment   statement,   it   is   replaced    by
+        eval(M["abc"])/.   When  the output program is executed, the
+        m5 runtime routine eval()/ substitutes the value of M["abc"]
+        examining it for further macro references of the form $[str]
+        (where "str" denotes an arbitrary string).  If one is found,
+        substitution  and  scanning  proceed  recursively.  Function
+        type macro references may result in references to other mac-
+        ros,  thus  providing an additional form of nested referenc-
+        ing.
+ 
+     Directive Lines
+        Except for the include directive, when a directive  line  is
+        detected,  the  directive  prefix  is  removed,  the line is
+        scanned for macros, and then the line is copied to the  out-
+        put  program (as distinct from the final output).  Any valid
+        awk construct, including the function statement, is  allowed
+        in  a  directive  line.   Further information on writing awk
+        programs may be found in  Aho,  Kernighan,  and  Weinberger,
+        Dougherty and Robbins, and Robbins.
+ 
+     Include Directive
+        A single non-awk directive has been  provided:  the  include
+        directive.    Assuming  that  #  is  the  directive  prefix,
+        #include(filename) directs the MP translator to  immediately
+        read  from  the  indicated file, processing lines from it in
+        the normal manner.  This processing mode makes  the  include
+        directive  the  only  type  of  directive  to take effect at
+        translation time.  Nested  includes  are  allowed.   Include
+        directives  must  appear on a line by themselves.  More ela-
+        borate types of file processing may be  directly  programmed
+        using appropriate awk statements in the input file.
+ 
+     Main Program and Functions
+        The MP translator builds the resulting awk program in one of
+        two ways, depending on the form of the first input line.  If
+        that line begins with "function", it  is  assumed  that  the
+        user is providing one or more functions, including the func-
+        tion "main" required by m5.  If  the  first  line  does  not
+        begin  with  "function",  then  the  entire  input  file  is
+        translated  into  awk  statements  that  are  placed  inside
+        "main".   If some input lines are inside functions, and oth-
+        ers are not, awk will will detect this and complain.  The MP
+        by  design  has  little awareness of the syntax of directive
+        lines (awk statements), and as a consequence  syntax  errors
+        in directive lines are not detected until the output program
+        is executed.
+ 
+     Output
+        Finally, unless the -c (compile only) option is specified on
+        the  command line, the output program is executed to produce
+        the final output (directed by default to  standard  output).
+        The  version  of  awk  specified  in ARGV[0] (a built-in awk
+        variable containing the command name) is used to execute the
+        program.  If ARGV[0] is null, awk is used.
+ 
+   EXAMPLE
+        Understanding this example requires recognition  that  macro
+        substitution  is  a two-step process:  (i) the input text is
+        translated into an output awk  program,  and  (ii)  the  awk
+        program  is  executed  to  produce the final output with the
+        macro substitutions  actually  accomplished.   The  examples
+        below  illustrate  this  process.  # and $ are assumed to be
+        the directive  and  substitution  prefix  characters.   This
+        example  was  successfully  executed using awk on a Cray C90
+        running UNICOS 10.0.0.3, gawk on  a  Gateway  E-3200  runing
+        SuSE Linux Version 6.0, and nawk on a Sun Ultra 2 Model 2200
+        running Solaris 2.5.1.
+ 
+     Input Text
+        #function main() {
+ 
+           Example 1: Simple Substitution
+           ------------------------------
+        #  br = "brown"
+           The quick $br fox.
+ 
+           Example 2: Substitution inside a String
+           ---------------------------------------
+        #  r = "row"
+           The quick b$(r)n fox.
+ 
+           Example 3: Expression Substitution
+           ----------------------------------
+        #  a = 4
+        #  b = 3
+           The quick $(2*a + b) foxes.
+ 
+           Example 4: Macros References inside a Macro
+           -------------------------------------------
+        #  $[fox] = "\$[q] \$[b] \$[f]"
+        #  $[q] = "quick"
+        #  $[b] = "brown"
+        #  $[f] = "fox"
+           The $[fox].
+ 
+           Example 5: Array Reference Substitution
+           ---------------------------------------
+        #  x[7] = "brown"
+        #  b = 3
+           The quick $x[2*b+1] fox.
+ 
+           Example 6: Function Reference Substitution
+           ------------------------------------------
+           The quick $color(1,2) fox.
+ 
+           Example 7: Substitution of Special Characters
+           ---------------------------------------------
+        \#  The \$ quick \\ brown $# fox. $$
+        #}
+        #include(testincl.m5)
+ 
+     Included File testincl.m5
+        #function color(i,j) {
+           The lazy dog.
+        #  if (i == j)
+        #     return "blue"
+        #  else
+        #     return "brown"
+        #}
+ 
+     Output Program
+        function main() {
+           print
+           print "   Example 1: Simple Substitution"
+           print "   ------------------------------"
+           br = "brown"
+           print "   The quick " br " fox."
+           print
+           print "   Example 2: Substitution inside a String"
+           print "   ---------------------------------------"
+           r = "row"
+           print "   The quick b" r "n fox."
+           print
+           print "   Example 3: Expression Substitution"
+           print "   ----------------------------------"
+           a = 4
+           b = 3
+           print "   The quick " 2*a + b " foxes."
+           print
+           print "   Example 4: Macros References inside a Macro"
+           print "   -------------------------------------------"
+           M["fox"] = "$[q] $[b] $[f]"
+           M["q"] = "quick"
+           M["b"] = "brown"
+           M["f"] = "fox"
+           print "   The " eval(M["fox"]) "."
+           print
+           print "   Example 5: Array Reference Substitution"
+           print "   ---------------------------------------"
+           x[7] = "brown"
+           b = 3
+           print "   The quick " x[2*b+1] " fox."
+           print
+           print "   Example 6: Function Reference Substitution"
+           print "   ------------------------------------------"
+           print "   The quick " color(1,2) " fox."
+           print
+           print "   Example 7: Substitution of Special Characters"
+           print "   ---------------------------------------------"
+           print "\#  The \$ quick \\ brown $# fox. $$"
+        }
+        function color(i,j) {
+           print "   The lazy dog."
+           if (i == j)
+              return "blue"
+           else
+              return "brown"
+        }
+ 
+        function eval(inp   ,isplb,irb,out,name) {
+ 
+           splb = SP "["
+           out = ""
+ 
+           while( isplb = index(inp, splb) ) {
+              irb = index(inp, "]")
+              if ( irb == 0 ) {
+                 out = out substr(inp,1,isplb+1)
+                 inp = substr( inp, isplb+2 )
+              } else {
+                 name = substr( inp, isplb+2, irb-isplb-2 )
+                 sub( /^ +/, "", name )
+                 sub( / +$/, "", name )
+                 out = out substr(inp,1,isplb-1) eval(M[name])
+                 inp = substr( inp, irb+1 )
+              }
+           }
+ 
+           out = out inp
+ 
+           return out
+        }
+        BEGIN {
+           SP = "$"
+           main()
+           exit
+        }
+ 
+     Final Output
+ 
+           Example 1: Simple Substitution
+           ------------------------------
+           The quick brown fox.
+ 
+           Example 2: Substitution inside a String
+           ---------------------------------------
+           The quick brown fox.
+ 
+           Example 3: Expression Substitution
+           ----------------------------------
+           The quick 11 foxes.
+ 
+           Example 4: Macros References inside a Macro
+           -------------------------------------------
+           The quick brown fox.
+ 
+           Example 5: Array Reference Substitution
+           ---------------------------------------
+           The quick brown fox.
+ 
+           Example 6: Function Reference Substitution
+           ------------------------------------------
+           The lazy dog.
+           The quick brown fox.
+ 
+           Example 7: Substitution of Special Characters
+           ---------------------------------------------
+        #  The $ quick \ brown $# fox. $$
+ 
+   FILE
+        a.awk         default output program file
+ 
+   SEE ALSO
+        awk(1), cpp(1), gawk(1), m4(1), nawk(1).  vi(1)
+ 
+   AUTHOR
+        William A. Ward, Jr., School  of  Computer  and  Information
+        Sciences, University of South Alabama, Mobile, Alabama, July
+        23, 1999.

@@ -1,0 +1,6104 @@
+C      ALGORITHM 710, COLLECTED ALGORITHMS FROM ACM.
+C      THIS WORK PUBLISHED IN TRANSACTIONS ON MATHEMATICAL SOFTWARE,
+C      VOL. 18, NO. 4, DECEMBER, 1992, PP. 392-400.
+#!/bin/sh
+# This is a shell archive, meaning:
+# 1. Remove everything above the #!/bin/sh line.
+# 2. Save the resulting text in a file.
+# 3. Execute the file with /bin/sh (not csh) to create the files:
+#	makefile
+#	apply.f
+#	atotri.f
+#	cxutils.f
+#	d1mach.f
+#	dasum.f
+#	dgemv.f
+#	dger.f
+#	dmachr.f
+#	drandom.f
+#	dscal.f
+#	dzgeco.f
+#	dzgefa.f
+#	dzgesl.f
+#	elmbak.f
+#	gtinit.f
+#	invit.f
+#	main.f
+#	mlu.f
+#	msol.f
+#	newstr.f
+#	rayly.f
+#	refine.f
+#	resid.f
+#	rg.f
+#	rmatin.f
+#	second.f
+#	shemor.f
+#	tlr.f
+#	trayly.f
+#	tresid.f
+#	mclock.c
+# This archive created: Mon Oct 21 10:34:30 1991
+export PATH; PATH=/bin:$PATH
+if test -f 'makefile'
+then
+	echo shar: over-writing existing file "'makefile'"
+fi
+cat << \SHAR_EOF > 'makefile'
+# makefile for building a simple test routine for the
+# iterative refinement algorithms described in the TOMS
+# paper "Fortran Subroutines for Computing the Eigenvalues
+# and Eigenvectors of a General Matrix by Reduction to
+# General Tridiagonal Form."
+
+F77 = xlf
+
+DFILES = main.o mlu.o msol.o refine.o resid.o shemor.o dzgefa.o dzgesl.o\
+	d1mach.o dmachr.o apply.o atotri.o drandom.o rg.o\
+	newstr.o dzgeco.o rmatin.o tlr.o gtinit.o cxutils.o dasum.o \
+	invit.o elmbak.o trayly.o tresid.o
+
+DBLAS = dscal.o dger.o dgemv.o
+
+TIMER = second.o mclock.o
+
+double: $(DFILES) $(DBLAS) $(TIMER)
+	$(F77) $(DFILES) $(DBLAS) $(TIMER) -o double
+
+.f.o : ; $(F77) -O -c -u $*.f
+.c.o : ; cc -c $*.c
+SHAR_EOF
+if test -f 'apply.f'
+then
+	echo shar: over-writing existing file "'apply.f'"
+fi
+cat << \SHAR_EOF > 'apply.f'
+      SUBROUTINE APPLY1(N,Z,LDZ,XRE,XIM,IPVT,W,IFLAG)
+
+      INTEGER N,LDZ,IPVT(*),IFLAG
+      DOUBLE PRECISION Z(LDZ,*),XRE(*),XIM(*),W(*)
+
+
+
+*  Purpose:
+*     This routine applies the accumulated elementary
+*     transformations inv(Z) to the vector.  The matrix
+*     Z is the product of the elementary transformations
+*     and permutation matrices that tridiagonalize the
+*     original matrix A.  The computation is of the form
+*         inv(Z)*A*Z = T, where
+*     inv(Z) = inv(Lr(n-2)) * Lc(n-2) * P(n-2) * inv(Lr(n-3)) *
+*              Lc(n-3) * P(n-3) * ... * inv(Lr(1))*Lc(1)*P(1)
+*     Each of the elementary transformations is stored as a row or
+*     column of the supplied array in this routine.
+
+*  Arguments:
+*     N       -integer
+*              N specifies the order of the matrix Z.
+*              N must be nonnegative.
+*              not modified.
+
+*     Z       -double precision array, dimension (LDZ,N)
+*              Z contains information about the reduction to
+*              tridiagonal form.
+
+*     LDZ     -integer
+*              The leading dimension of the array Z.
+*              LDZ >= max(1,N).
+
+*     XRE     -double precision array, dimension (N)
+*              The real part of the vector used in applying the
+*              transformations.
+
+*     XIM     -double precision array, dimension (N)
+*              The imaginary part of the vector used in applying
+*              the transformations.
+
+*     IPIV    -integer array, dimension (N)
+*              Contains the pivot sequence used during the reduction
+*              to tridiagonal form.
+
+*     W       -double precision array, dimension (N)
+*              May contain information if a restart was performed
+*              in the tridiagonal process, as flagged by IFLAG.
+
+*     IFLAG   -integer
+*              Signals if a restart was required during reduction
+*              to tridiagonal form.  IFLAG = 1 signals that a
+*              restart was taken.
+
+*     .. Parameters ..
+      DOUBLE PRECISION TWO,ZERO
+      PARAMETER (TWO = 2.0, ZERO = 0.0)
+*     ..
+*     .. Local Scalars ..
+      INTEGER I,K, J, L, KP1
+      DOUBLE PRECISION MRE, MIM, IPRE, IPIM
+*     ..
+*     .. Executable Statements ..
+
+*     If a restart was taken then apply the Householder transformation.
+
+      IF (IFLAG .EQ. 1) THEN
+         IPRE = ZERO
+         IPIM = ZERO
+         DO 10 I=1, N
+            IPRE = IPRE + W(I) * XRE(I)
+            IPIM = IPIM + W(I) * XIM(I)
+ 10      CONTINUE
+         DO 20 I=1, N
+            XRE(I) = XRE(I) - TWO * IPRE * W(I)
+            XIM(I) = XIM(I) - TWO * IPIM * W(I)
+ 20      CONTINUE
+      ENDIF
+
+*     Apply the permutations.
+
+      DO 30 K = 1, N-2
+         KP1 = K+1
+         L = IPVT(KP1)
+         MRE = XRE(L)
+         MIM = XIM(L)
+         IF (L .EQ. KP1) GO TO 30
+         XRE(L) = XRE(KP1)
+         XIM(L) = XIM(KP1)
+         XRE(KP1) = MRE
+         XIM(KP1) = MIM
+ 30   CONTINUE
+
+*     Multiply by Lc(k).
+
+      DO 60 K=1, N-2
+         KP1 = K+1
+         DO 40 J = K+2, N
+            XRE(J) = XRE(J) - XRE(KP1) * Z(J,K)
+            XIM(J) = XIM(J) - XIM(KP1) * Z(J,K)
+ 40      CONTINUE
+
+*        Multiply by inv(Lr(k)).
+
+         DO 50 J = K+2, N
+            XRE(KP1) = XRE(KP1) + Z(K,J) * XRE(J)
+            XIM(KP1) = XIM(KP1) + Z(K,J) * XIM(J)
+ 50      CONTINUE
+ 60   CONTINUE
+      RETURN
+      END
+
+      SUBROUTINE APPLY2(N,Z,LDZ,X,IPVT,W,IFLAG)
+
+      INTEGER N,LDZ,IPVT(*),IFLAG
+      DOUBLE PRECISION Z(LDZ,*),X(*),W(*)
+
+*  Purpose:
+*     This routine is used to multiply the row vector (xre,xim)
+*     by the accumulated elementary transformations stored in
+*     the array Z.  See routine APPLY1 for further comments about Z.
+*     This routine assumes that the vector is some column of the
+*     identity matrix.
+
+*  Arguments:
+*     N       -integer
+*              The number of rows and columns in the matrix Z.
+*              N >= 0.
+
+*     Z       -double precision array, dimension (LDZ,N)
+*              Z contains information about the reduction to
+*              tridiagonal form.
+
+*     LDZ     -integer
+*              The leading dimension of the array Z.
+*              LDZ >= max(1,N).
+
+*     X       -double precision array, dimension (N)
+*              The vector used in applying the transformations.
+
+*     IPIV    -integer array, dimension (N)
+*              Contains the pivot sequence used during the
+*              reduction to tridiagonal form.
+
+*     W       -double precision array, dimension (N)
+*              May contain information if a restart was performed
+*              in the tridiagonal process, as flagged by IFLAG.
+
+*     IFLAG   -integer
+*              Signals if a restart was required during reduction to
+*              tridiagonal form. IFLAG = 1 signals a restart was taken.
+
+*     .. Parameters ..
+      DOUBLE PRECISION TWO,ZERO
+      PARAMETER (TWO = 2.0, ZERO = 0.0)
+*     ..
+*     .. Local Scalars ..
+      INTEGER I,K,L,J,KP1
+      DOUBLE PRECISION M,IP
+*     ..
+*     .. Executable Statements ..
+
+*     If a restart was taken then apply the Householder transformation.
+
+      IF (IFLAG .EQ. 1) THEN
+         IP = ZERO
+         DO 10 I=1, N
+            IP = IP + W(I) * X(I)
+ 10      CONTINUE
+         DO 20 I=1, N
+            X(I) = X(I) - TWO * IP * W(I)
+ 20      CONTINUE
+      ENDIF
+
+*     Apply the permutations.
+
+      DO 30 K = 1, N-2
+         KP1 = K+1
+         L = IPVT(KP1)
+         M = X(L)
+         IF (L .EQ. KP1) GO TO 30
+         X(L) = X(KP1)
+         X(KP1) = M
+ 30   CONTINUE
+
+*     Postmultiply the row vector x by inv(Lc(k)).
+
+      DO 60 K=1, N-2
+         KP1 = K+1
+         DO 40 J = K+2, N
+            X(KP1) = X(KP1) + Z(J,K) * X(J)
+ 40      CONTINUE
+
+*     Postmultiply the row vector x by Lr(k).
+
+         DO 50 J = K+2, N
+            X(J) = X(J) - X(KP1) * Z(K,J)
+ 50      CONTINUE
+ 60   CONTINUE
+      RETURN
+      END
+
+      SUBROUTINE APPLY3(N,Z,LDZ,XRE,XIM,IPVT,W,IFLAG)
+
+      INTEGER N,LDZ,IPVT(*),IFLAG
+      DOUBLE PRECISION Z(LDZ,*),XRE(*),XIM(*),W(*)
+
+*  Purpose:
+*     This routine used to multiply the accumulated elementary
+*     transformations stored in the array Z by the column vector
+*     (XRE,XIM).  See the routine APPLY1 for comments about the
+*      array Z.
+
+*  Arguments:
+*     N       -integer
+*              The number of rows and columns in the matrix Z.
+*              N >= 0.
+
+*     Z       -double precision array, dimension (LDZ,N)
+*              Z contains information about the reduction to
+*              tridiagonal form.
+
+*     LDZ     -integer
+*              The leading dimension of the array Z.
+*              LDZ >= max(1,N).
+
+*     XRE     -double precision array, dimension (N)
+*              The real part of the vector used in applying the
+*              transformations.
+
+*     XIM     -double precision array, dimension (N)
+*              The imaginary part of the vector used in applying the
+*              transformations.
+
+*     IPIV    -integer array, dimension (N)
+*              Contains the pivot sequence used during the reduction
+*              to tridiagonal form.
+
+*     W       -double precision array, dimension (N)
+*              May contain information if a restart was performed in
+*              the tridiagonal process, as flagged by IFLAG.
+
+*     IFLAG   -integer
+*              Signals if a restart was required during reduction to
+*              tridiagonal form. IFLAG = 1 signals a restart was taken.
+
+*     .. Parameters ..
+      DOUBLE PRECISION TWO,ZERO
+      PARAMETER (TWO = 2.0, ZERO = 0.0)
+*     ..
+*     .. Local Scalars ..
+      INTEGER I,J, K, L, KP1
+      DOUBLE PRECISION MRE,MIM,IPRE,IPIM
+
+*     .. Executable Statements ..
+      DO 30 K = N-2, 1, -1
+
+*     Multiply by Lr(k).
+
+         KP1 = K+1
+         DO 10 J = K+2, N
+            XRE(KP1) = XRE(KP1) - Z(K,J) * XRE(J)
+            XIM(KP1) = XIM(KP1) - Z(K,J) * XIM(J)
+ 10      CONTINUE
+
+*     Multiply by inv(Lc(k)).
+
+         DO 20 J = K+2, N
+            XRE(J) = XRE(J) + Z(J,K) * XRE(KP1)
+            XIM(J) = XIM(J) + Z(J,K) * XIM(KP1)
+ 20      CONTINUE
+ 30   CONTINUE
+
+*     Apply the permutations.
+
+      DO 40 K=N-2, 1, -1
+         KP1 = K+1
+         L = IPVT(KP1)
+         MRE = XRE(L)
+         MIM = XIM(L)
+         IF (L .EQ. KP1) GO TO 40
+         XRE(L) = XRE(KP1)
+         XIM(L) = XIM(KP1)
+         XRE(KP1) = MRE
+         XIM(KP1) = MIM
+ 40   CONTINUE
+
+*     If a restart was taken then apply the Householder transformation.
+
+      IF (IFLAG .EQ. 1) THEN
+         IPRE = ZERO
+         IPIM = ZERO
+         DO 50 I=1, N
+            IPRE = IPRE + W(I) * XRE(I)
+            IPIM = IPIM + W(I) * XIM(I)
+ 50      CONTINUE
+         DO 60 I=1, N
+            XRE(I) = XRE(I) - TWO * IPRE * W(I)
+            XIM(I) = XIM(I) - TWO * IPIM * W(I)
+ 60      CONTINUE
+      ENDIF
+      RETURN
+      END
+SHAR_EOF
+if test -f 'atotri.f'
+then
+	echo shar: over-writing existing file "'atotri.f'"
+fi
+cat << \SHAR_EOF > 'atotri.f'
+      SUBROUTINE ATOTRI( LDA, A, N, PIVOTS, INFO )
+*
+*     .. Scalar Arguments ..
+      INTEGER LDA, N, INFO
+
+*     .. Array Arguments ..
+      INTEGER PIVOTS(*)
+      DOUBLE PRECISION A(LDA,*)
+*
+*  Purpose:
+*    This subroutine reduces an n-by-n real general matrix A to
+*    tridiagonal form using elementary similarity transformations.
+
+*    At each step k the permutation that minimizes the maximum entry
+*    in the transformation matrix that reduces column k and then row k
+*    is applied.
+
+*  Arguments:
+*   LDA      -integer
+*             leading dimension of A
+
+*   A        -double precision array of dimension (LDA,N)
+*             On entry A contains the matrix being reduced.
+*             On exit A is overwritten by its tridiagonal form.
+
+*   N        -integer
+*             N specifies the order of the matrix A.
+*             N must be nonnegative.
+*             not modified.
+
+*   PIVOTS   -integer vector of dimension (LDA)
+*             On exit pivots contains the pivot sequence used during
+*             the reduction (permutation vector).
+
+*   INFO     -integer
+*             On exit, INFO is set to
+*             0  normal return.
+*             1  if NEWSTR should be executed before ATOTRI.
+
+*     .. Local Scalars ..
+      INTEGER I, J, K, L, PIVP, ERR, CNT
+      DOUBLE PRECISION M, TEMP, MINMLT, ONE
+      PARAMETER (ONE = 1.0)
+
+*     .. External Functions ..
+*     none
+
+*     .. External Subroutines ..
+      EXTERNAL PIVOT
+
+*     .. Intrinsic Functions ..
+      INTRINSIC MAX, MIN, MOD
+*
+*===================Executable Statements =================================
+
+      INFO = 0
+      CNT = 0
+      L = 1
+      PIVOTS(1) = 1
+      PIVOTS(N) = N
+
+*     -------------------------------------
+*     For each row and column of the matrix
+*     -------------------------------------
+      DO 1000 K=1, N-2
+
+*     ---------------------
+*     Find a suitable pivot
+*     ---------------------
+         CALL PIVOT( LDA, A, N, K, PIVP, MINMLT, ERR )
+         PIVOTS(K+1) = PIVP
+         IF( ERR .NE. 0 ) PRINT *,'ERR IN A2TRI',ERR
+*     -------------------
+*     Check for deflation
+*     -------------------
+         IF( ERR .EQ. 1 ) THEN
+            L = K+1
+            GOTO 1000
+         ENDIF
+*     --------------------------
+*     Interchange row and column
+*     --------------------------
+         IF( PIVP .NE. K+1 ) THEN
+            DO 200 I=1, N
+               TEMP = A(PIVP,I)
+               A(PIVP,I) = A(K+1,I)
+               A(K+1,I) = TEMP
+ 200        CONTINUE
+            DO 300 I=1, N
+               TEMP = A(I,PIVP)
+               A(I,PIVP) = A(I,K+1)
+               A(I,K+1) = TEMP
+ 300        CONTINUE
+         ENDIF
+*     -------------------------------------
+*     Check for zero inner product.
+*     -------------------------------------
+         IF( ERR .EQ. -1 ) THEN
+*     ------------------------------------
+*     Need to apply NEWSTART before A2TRI1
+*     ------------------------------------
+            PRINT *,'%BREAKDOWN AT K=',K
+            PRINT *,'%APPLY NEWSTART ROUTINE TO A'
+            INFO = 1
+            RETURN
+         ENDIF
+
+         IF( ERR .NE. 3 ) THEN
+*     --------------------------------------------------
+*     *********** zero out column k ********************
+*     --------------------------------------------------
+
+            TEMP = A(K+1,K)
+            CALL DSCAL((N-(K+2)+1),ONE/TEMP,A(K+2,K),1)
+*     -------------
+*     rank 1 update
+*     -------------
+            CALL DGER(N-(K+2)+1,N-(K+1)+1,-ONE,A(K+2,K),1,
+     $           A(K+1,K+1),LDA,A(K+2,K+1),LDA)
+*     ---------------------
+*     matrix vector product
+*     ---------------------
+            CALL DGEMV('NO',N-K+1,N-(K+2)+1,ONE,A(K,K+2),LDA,
+     $           A(K+2,K),1,ONE,A(K,K+1),1)
+         ENDIF
+*
+         IF( ERR .NE. 2 ) THEN
+*     --------------
+*     zero out row k
+*     --------------
+            TEMP = A(K,K+1)
+            CALL DSCAL((N-(K+2)+1),ONE/TEMP,A(K,K+2),LDA)
+*     ---------------------
+*     matrix vector product
+*     ---------------------
+            CALL DGEMV('T',N-(K+2)+1,N-(K+1)+1,ONE,A(K+2,K+1),LDA,
+     $           A(K,K+2),LDA,ONE,A(K+1,K+1),LDA)
+*     -------------
+*     rank 1 update
+*     -------------
+            CALL DGER(N-(K+1)+1,N-(K+2)+1,-ONE,A(K+1,K+1),1,
+     $           A(K,K+2),LDA,A(K+1,K+2),LDA)
+         ENDIF
+ 1000 CONTINUE
+
+      RETURN
+      END
+
+*     ===========================================================
+
+      SUBROUTINE PIVOT( LDA, A, N, K, PIVP, MINMLT, ERR )
+
+*     .. Scalar Arguments ..
+      INTEGER LDA, N, K, PIVP, ERR
+      DOUBLE PRECISION MINMLT
+
+*     .. Array Arguments ..
+      DOUBLE PRECISION  A(LDA,*)
+*------------------------------------------------------------------------------
+*  Purpose:
+*    This subroutine finds the pivot that minimizes the maximum entry
+*    in the matrix N, where N=N_rN_c and N_c reduces column k and
+*    inv(N_r) reduces row k.
+
+*    Routine also checks if the problem can be deflated at step k
+*    returning err=1 if so. If inner product of the row and column is
+*    zero then a pivot is selected based on maximum row/col entries
+*    and err is set to 2. On normal return err=0.
+
+*  Arguments:
+*    A   -double precision array of dimension (n,n)
+*         On entry A contains the partially reduced matrix.
+*         Not modified
+
+*    n   -integer
+*         n specifies the order of the matrix A.
+*         n must be at least zero.
+*         Not modified.
+
+*    k   -integer
+*         k specifies the row and column under consideration.
+*         Not modified
+
+*  pivp  -integer
+*         On return pivp contains the pivot index
+*         necessary to minimize the maximum entry in N.
+
+* minmlt -double precision
+*         On return minmlt contains the minimized maximum entry.
+
+*   err  -integer
+*         On exit err is set to
+*         -1  inner product = 0, recovery step required.
+*          0  normal return.
+*          1  problem deflated, row and column are zero
+*          2  problem deflated, row is zero
+*          3  problem deflated, column is zero
+
+*     .. Local Scalars ..
+      INTEGER I, PIVC, PIVR
+      DOUBLE PRECISION MAXCOL, MAXROW, NMXCOL, NMXROW, INPROD
+      DOUBLE PRECISION MAXNC, MAXNR, MXDIAG, V1
+      DOUBLE PRECISION TEMC, TEMR, TEMP
+      DOUBLE PRECISION BIG
+*     .. Parameters ..
+      PARAMETER (BIG = 1.0D8)
+
+*     .. External Functions ..
+*     none
+
+*     .. External Subroutines ..
+*     none
+
+*     .. Intrinsic Functions ..
+      INTRINSIC ABS, MAX
+
+*=================== Executable Statements =================================
+
+*     --------------------------
+*     Initialize returned values
+*     --------------------------
+      PIVP = K+1
+      MINMLT = BIG
+      ERR = 0
+*     -----------------------------------------------------
+*     Find maximum and next-to-max entries in row and col k
+*     And compute inner product
+*     -----------------------------------------------------
+      PIVC = K+1
+      PIVR = K+1
+      NMXCOL = 0.D0
+      NMXROW = 0.D0
+      MAXCOL = A(K+1,K)
+      MAXROW = A(K,K+1)
+      INPROD = MAXCOL * MAXROW
+      MAXCOL = DABS(MAXCOL)
+      MAXROW = DABS(MAXROW)
+
+      DO 100 I=K+2, N
+      TEMC = A(I,K)
+      TEMR = A(K,I)
+      INPROD = INPROD + TEMC * TEMR
+      TEMC = DABS(TEMC)
+      TEMR = DABS(TEMR)
+      IF( TEMC .GT. NMXCOL ) THEN
+         IF( TEMC .GT. MAXCOL ) THEN
+            NMXCOL = MAXCOL
+            MAXCOL = TEMC
+            PIVC = I
+         ELSE
+            NMXCOL = TEMC
+         ENDIF
+      ENDIF
+      IF( TEMR .GT. NMXROW ) THEN
+         IF( TEMR .GT. MAXROW ) THEN
+            NMXROW = MAXROW
+            MAXROW = TEMR
+            PIVR = I
+         ELSE
+            NMXROW = TEMR
+         ENDIF
+      ENDIF
+ 100  CONTINUE
+*     -------------------
+*     Check for deflation
+*     -------------------
+      IF( MAXCOL .EQ. 0.D0 .AND. MAXROW .EQ. 0.D0 ) THEN
+         ERR = 1
+         RETURN
+      ENDIF
+      IF( MAXROW .EQ. 0.D0 ) THEN
+         ERR = 2
+         PIVP = PIVC
+         RETURN
+      ENDIF
+      IF( MAXCOL .EQ. 0.D0 ) THEN
+         ERR = 3
+         PIVP = PIVR
+         RETURN
+      ENDIF
+*     ----------------------------
+*     Check for zero inner product
+*     ----------------------------
+      IF( INPROD .EQ. 0.D0 ) THEN
+         IF( MAXCOL .GT. MAXROW ) THEN
+            PIVP = PIVC
+         ELSE
+            PIVP = PIVR
+         ENDIF
+         ERR = -1
+         RETURN
+      ENDIF
+*     ----------------------------------------------------------
+*     Calculate maximum multipliers over all permutations i and
+*     determine the minimum triple (maxnc,maxnr,mxdiag)_i
+*     ----------------------------------------------------------
+      DO 200 I=K+1, N
+         V1 = A(I,K)
+         IF( V1 .EQ. 0.D0 ) THEN
+            MAXNC = BIG
+         ELSE IF( I .EQ. PIVC ) THEN
+            MAXNC = DABS(NMXCOL/V1)
+         ELSE
+            MAXNC = DABS(MAXCOL/V1)
+         ENDIF
+
+         IF( I .EQ. PIVR ) THEN
+            MAXNR = DABS(V1*NMXROW/INPROD)
+         ELSE
+            MAXNR = DABS(V1*MAXROW/INPROD)
+         ENDIF
+         MXDIAG = ABS(V1*A(K,I)/INPROD)
+
+         TEMP = MAXNC
+         IF( TEMP .LT. MAXNR ) TEMP = MAXNR
+         IF( TEMP .LT. MXDIAG ) TEMP = MXDIAG
+
+         IF( TEMP .LT. MINMLT ) THEN
+            MINMLT = TEMP
+            PIVP = I
+         ENDIF
+ 200  CONTINUE
+
+      RETURN
+      END
+SHAR_EOF
+if test -f 'cxutils.f'
+then
+	echo shar: over-writing existing file "'cxutils.f'"
+fi
+cat << \SHAR_EOF > 'cxutils.f'
+*     These routines are support routines only, provided since
+*     complex arithmetic is not portable in FORTRAN77.  CXDIV and
+*     CXMULT are complex division and multiplication; CXABS returns
+*     the modulus of the supplied number; ICXMAX returns the index of
+*     the complex entry of largest modulus in the arrays XRE and XIM;
+*     CXCOPY returns a copy of the supplied complex number; CXAXPY
+*     is a complex version of SAXPY; CXNRM2 returns the two-norm of
+*     the supplied complex array; CXDOTU sums the term-by-term
+*     product of the two supplied complex vectors; CXDOTC computes
+*     the complex inner-product of the two supplied vectors; CXSCL
+*     scales the supplied complex vector (XRE,XIM) by the complex
+*     number (ARE,AIM); CXDSCL scales (XRE,XIM) by the double
+*     precision number A; CXSQRT is the complex square-root;
+*     CXASUM computes the sum of the moduli of the supplied complex
+*     vector.
+
+      SUBROUTINE CXDIV(AR,AI,BR,BI,CR,CI)
+      DOUBLE PRECISION AR,AI,BR,BI,CR,CI
+
+*     complex division, (cr,ci) = (ar,ai)/(br,bi)
+
+      DOUBLE PRECISION S,ARS,AIS,BRS,BIS
+      S = ABS(BR) + ABS(BI)
+      ARS = AR/S
+      AIS = AI/S
+      BRS = BR/S
+      BIS = BI/S
+      S = BRS**2 + BIS**2
+      CR = (ARS*BRS + AIS*BIS)/S
+      CI = (AIS*BRS - ARS*BIS)/S
+      RETURN
+      END
+
+      SUBROUTINE CXMULT(AR,AI,BR,BI,CR,CI)
+      DOUBLE PRECISION AR, AI, BR, BI, CR, CI
+
+*     complex multiplication, (cr,ci) = (ar,ai)*(br,bi)
+
+      CR = AR * BR - AI * BI
+      CI = AR * BI + AI * BR
+      RETURN
+      END
+
+      DOUBLE PRECISION FUNCTION CXABS(AR,AI)
+      DOUBLE PRECISION AR, AI
+
+*     complex absolute value
+
+      DOUBLE PRECISION TRE,TIM,ANS,TMP
+      TRE = ABS(AR)
+      TIM = ABS(AI)
+      IF (TRE .EQ. 0.0D0) THEN
+         ANS = TIM
+      ELSE IF (TIM .EQ. 0.0D0) THEN
+         ANS = TRE
+      ELSE IF (TRE .GT. TIM) THEN
+         TMP = TIM/TRE
+         ANS = TRE * SQRT(1.0D0 + TMP*TMP)
+      ELSE
+         TMP = TRE/TIM
+         ANS = TIM * SQRT(1.0D0 + TMP*TMP)
+      ENDIF
+      CXABS = ANS
+      RETURN
+      END
+
+      INTEGER FUNCTION ICXMAX(N,XRE,XIM,INCX)
+      INTEGER N,INCX
+      DOUBLE PRECISION XRE(*),XIM(*)
+
+*     complex ICAMAX on (xre,xim)
+
+      INTEGER I,IX
+      DOUBLE PRECISION SMAX
+
+      ICXMAX = 0
+      IF( N.LT.1 ) RETURN
+      ICXMAX = 1
+      IF( N.EQ.1 ) RETURN
+      IF(INCX.EQ.1) GO TO 30
+
+*        code for increment not equal to 1
+
+      IX = 1
+      SMAX = ABS(XRE(1)) + ABS(XIM(1))
+      IX = IX + INCX
+      DO 20 I = 2,N
+         IF(ABS(XRE(IX)) + ABS(XIM(IX)) .LE. SMAX) GO TO 10
+         ICXMAX = I
+         SMAX = ABS(XRE(IX)) + ABS(XIM(IX))
+ 10      IX = IX + INCX
+ 20   CONTINUE
+      RETURN
+
+*        code for increment equal to 1
+
+ 30   SMAX = ABS(XRE(1)) + ABS(XIM(1))
+      DO 40 I = 2,N
+         IF(ABS(XRE(I)) + ABS(XIM(I)) .LE. SMAX) GO TO 40
+         ICXMAX = I
+         SMAX = ABS(XRE(I))+ABS(XIM(I))
+ 40   CONTINUE
+      RETURN
+      END
+
+      SUBROUTINE CXCOPY(N,XRE,XIM,YRE,YIM)
+      INTEGER N
+      DOUBLE PRECISION XRE(*),XIM(*),YRE(*),YIM(*)
+
+*     complex copy on (yre,yim) <- (xre,xim)
+
+      INTEGER I
+
+      DO 10 I=1,N
+         YRE(I) = XRE(I)
+         YIM(I) = XIM(I)
+ 10   CONTINUE
+      RETURN
+      END
+
+      SUBROUTINE CXAXPY(N,ARE,AIM,XRE,XIM,YRE,YIM)
+      INTEGER N
+      DOUBLE PRECISION ARE,AIM,XRE(*),XIM(*),YRE(*),YIM(*)
+
+*     complex axpy on (yre,yim) = (are,aim)*(xre,xim) + (yre,yim)
+
+      INTEGER I
+
+      DO 10 I=1,N
+         YRE(I) = YRE(I) + ARE*XRE(I) - AIM*XIM(I)
+         YIM(I) = YIM(I) + ARE*XIM(I) + AIM*XRE(I)
+ 10   CONTINUE
+      RETURN
+      END
+
+      DOUBLE PRECISION FUNCTION CXNRM2(N,XRE,XIM)
+      INTEGER N
+      DOUBLE PRECISION XRE(*),XIM(*)
+
+*     complex 2-norm on (xre,xim)
+
+*     .. Parameters ..
+      DOUBLE PRECISION ZERO
+      PARAMETER ( ZERO = 0.0)
+      INTEGER I
+      DOUBLE PRECISION SUM
+
+      SUM = ZERO
+      DO 10 I=1,N
+         SUM = SUM + XRE(I)**2 + XIM(I)**2
+ 10   CONTINUE
+      CXNRM2 = SQRT(SUM)
+      RETURN
+      END
+
+      SUBROUTINE CXDOTU(N,XRE,XIM,YRE,YIM,ZRE,ZIM)
+      INTEGER N
+      DOUBLE PRECISION XRE(*),XIM(*),YRE(*),YIM(*),ZRE,ZIM
+
+*     complex inner product (zre,zim) = (xre,xim)*(yre,yim)
+
+*     .. Parameters ..
+      DOUBLE PRECISION ZERO
+      PARAMETER ( ZERO = 0.0)
+      INTEGER I
+
+      ZRE = ZERO
+      ZIM = ZERO
+      DO 10 I=1,N
+         ZRE = ZRE + XRE(I)*YRE(I) - XIM(I)*YIM(I)
+         ZIM = ZIM + XRE(I)*YIM(I) + XIM(I)*YRE(I)
+ 10   CONTINUE
+      RETURN
+      END
+
+      SUBROUTINE CXDOTC(N,XRE,XIM,YRE,YIM,ZRE,ZIM)
+      INTEGER N
+      DOUBLE PRECISION XRE(*),XIM(*),YRE(*),YIM(*),ZRE,ZIM
+
+*     complex conjugate inner product (zre,zim) = (xre,xim)*(yre,yim)
+
+*     .. Parameters ..
+      DOUBLE PRECISION ZERO
+      PARAMETER ( ZERO = 0.0)
+      INTEGER I
+
+      ZRE = ZERO
+      ZIM = ZERO
+      DO 10 I=1,N
+         ZRE = ZRE + XRE(I)*YRE(I) + XIM(I)*YIM(I)
+         ZIM = ZIM + XRE(I)*YIM(I) - XIM(I)*YRE(I)
+ 10   CONTINUE
+      RETURN
+      END
+
+      SUBROUTINE CXSCAL(N,ARE,AIM,XRE,XIM)
+      INTEGER N
+      DOUBLE PRECISION ARE,AIM,XRE(*),XIM(*)
+
+*     complex scale (xre,xim) = (are,aim)*(xre,xim)
+
+      INTEGER I
+      DOUBLE PRECISION TRE,TIM
+
+      DO 10 I=1,N
+         TRE = ARE*XRE(I) - AIM*XIM(I)
+         TIM = ARE*XIM(I) + AIM*XRE(I)
+         XRE(I) = TRE
+         XIM(I) = TIM
+ 10   CONTINUE
+      RETURN
+      END
+
+      SUBROUTINE CXDSCAL(N,A,XRE,XIM)
+      INTEGER N
+      DOUBLE PRECISION A,XRE(*),XIM(*)
+
+*     complex scale with real (xre,xim) = a*(xre,xim)
+
+      INTEGER I
+
+      DO 10 I=1,N
+         XRE(I) = A * XRE(I)
+         XIM(I) = A * XIM(I)
+ 10   CONTINUE
+      RETURN
+      END
+
+      SUBROUTINE CXSQRT(XRE, XIM, YRE, YIM)
+      DOUBLE PRECISION XRE,XIM,YRE,YIM
+
+*     complex sqrt
+
+      DOUBLE PRECISION X,Y,W,R
+*     .. Parameters ..
+      DOUBLE PRECISION ZERO,ONE,TWO,HALF
+      PARAMETER (ZERO = 0.0,ONE = 1.0, TWO = 2.0 ,HALF = 0.5)
+      IF ((XRE .EQ. ZERO) .AND. (XIM .EQ. ZERO)) THEN
+         YRE = ZERO
+         YIM = ZERO
+         RETURN
+      ELSE
+         X = ABS(XRE)
+         Y = ABS(XIM)
+         IF (X .GE. Y) THEN
+            R = Y / X
+            W = SQRT(X)*SQRT(HALF*(ONE+SQRT(ONE+R*R)))
+         ELSE
+            R = X / Y
+            W = SQRT(Y)*SQRT(HALF*(R+SQRT(ONE+R*R)))
+         ENDIF
+         IF (XRE .GE. ZERO) THEN
+            YRE = W
+            YIM = XIM / (TWO*W)
+         ELSE
+            IF (XIM .GE. ZERO) THEN
+               YIM = W
+            ELSE
+               YIM = -W
+            ENDIF
+            YRE = XIM / (TWO* YIM)
+         ENDIF
+      ENDIF
+      RETURN
+      END
+
+      DOUBLE PRECISION FUNCTION DCXASUM(N,XRE,XIM)
+      INTEGER N
+      DOUBLE PRECISION XRE(*),XIM(*)
+*
+*     compute complex sum of absolute values in (xre,xim)
+
+*     .. Parameters ..
+      DOUBLE PRECISION ZERO
+      PARAMETER (ZERO = 0.0)
+      INTEGER I
+      DOUBLE PRECISION SUM
+
+      SUM = ZERO
+      DO 10 I=1,N
+         SUM = SUM + ABS(XRE(I)) + ABS(XIM(I))
+ 10   CONTINUE
+      DCXASUM = SUM
+      RETURN
+      END
+
+      SUBROUTINE CXSIGN1(XRE,XIM,YRE,YIM,ZRE,ZIM)
+      DOUBLE PRECISION XRE,XIM,YRE,YIM,ZRE,ZIM
+
+      DOUBLE PRECISION TMP1, TMP2
+
+      TMP1 = ABS(XRE) + ABS(XIM)
+      TMP2 = ABS(YRE) + ABS(YIM)
+      ZRE = (YRE / TMP2) * TMP1
+      ZIM = (YIM / TMP2) * TMP1
+      RETURN
+      END
+SHAR_EOF
+if test -f 'd1mach.f'
+then
+	echo shar: over-writing existing file "'d1mach.f'"
+fi
+cat << \SHAR_EOF > 'd1mach.f'
+      DOUBLE PRECISION FUNCTION D1MACH( I )
+
+*  -- LAPACK auxiliary routine --
+*     Argonne National Lab, Courant Institute, and N.A.G. Ltd.
+*     April 1, 1989
+
+*     .. Scalar Arguments ..
+      INTEGER            I
+*     ..
+
+*  Purpose
+*  =======
+
+*     D1MACH determines double precision machine constants by a call
+*     to the double precision version of MACHAR.
+
+*     (see W. J. Cody, "MACHAR: A subroutine to dynamically determine
+*     machine parameters," TOMS 14, December, 1988. )
+
+*  Arguments
+*  =========
+
+*  I      - INTEGER
+*           On entry, I is the index to one of the machine constants,
+*           as follows:
+
+*           D1MACH(1) = B**(EMIN-1), the smallest positive magnitude
+
+*           D1MACH(2) = B**EMAX*(1 - B**(-T)), the largest magnitude
+
+*           D1MACH(3) = B**(-T), the smallest relative spacing
+
+*           D1MACH(4) = B**(1-T), the largest relative spacing
+
+*           D1MACH(5) = LOG10(B)
+
+*     .. Local Scalars ..
+      LOGICAL            DEJAVU
+      INTEGER            IBDIG, IEXP, IRADIX, IROUND, MACHEP, MAXEXP,
+     $                   MINEXP, NEGEPS, NGUARD
+      DOUBLE PRECISION   EPS, EPSNEG, XMAX, XMIN
+*     ..
+*     .. Local Arrays ..
+      DOUBLE PRECISION   DMACH( 5 )
+*     ..
+*     .. External Subroutines ..
+      EXTERNAL           DMACHR
+*     ..
+*     .. Intrinsic Functions ..
+      INTRINSIC          DBLE, LOG10
+*     ..
+*     .. Save statement ..
+      SAVE
+*     ..
+*     .. Data statements ..
+      DATA               DEJAVU / .FALSE. /
+*     ..
+*     .. Executable Statements ..
+
+      IF( .NOT.DEJAVU ) THEN
+         CALL DMACHR( IRADIX, IBDIG, IROUND, NGUARD, MACHEP, NEGEPS,
+     $                IEXP, MINEXP, MAXEXP, EPS, EPSNEG, XMIN, XMAX )
+         DMACH( 1 ) = XMIN
+         DMACH( 2 ) = XMAX
+         DMACH( 3 ) = EPS
+         DMACH( 4 ) = DBLE( IRADIX )*EPS
+         DMACH( 5 ) = LOG10( DBLE( IRADIX ) )
+         DEJAVU = .TRUE.
+      END IF
+
+      IF( I.LT.1 .OR. I.GT.5 ) THEN
+         WRITE( *, FMT = 9999 )I
+ 9999    FORMAT( ' D1MACH - I OUT OF BOUNDS', I10 )
+         STOP
+      ELSE
+         D1MACH = DMACH( I )
+      END IF
+
+      RETURN
+
+*     End of D1MACH
+
+      END
+SHAR_EOF
+if test -f 'dasum.f'
+then
+	echo shar: over-writing existing file "'dasum.f'"
+fi
+cat << \SHAR_EOF > 'dasum.f'
+      double precision function dasum(n,dx,incx)
+
+c     takes the sum of the absolute values.
+c     jack dongarra, linpack, 3/11/78.
+
+      double precision dx(1),dtemp
+      integer i,incx,m,mp1,n,nincx
+
+      dasum = 0.0d0
+      dtemp = 0.0d0
+      if(n.le.0)return
+      if(incx.eq.1)go to 20
+
+c        code for increment not equal to 1
+
+      nincx = n*incx
+      do 10 i = 1,nincx,incx
+        dtemp = dtemp + dabs(dx(i))
+   10 continue
+      dasum = dtemp
+      return
+
+c        code for increment equal to 1
+
+
+c        clean-up loop
+
+   20 m = mod(n,6)
+      if( m .eq. 0 ) go to 40
+      do 30 i = 1,m
+        dtemp = dtemp + dabs(dx(i))
+   30 continue
+      if( n .lt. 6 ) go to 60
+   40 mp1 = m + 1
+      do 50 i = mp1,n,6
+        dtemp = dtemp + dabs(dx(i)) + dabs(dx(i + 1)) + dabs(dx(i + 2))
+     *  + dabs(dx(i + 3)) + dabs(dx(i + 4)) + dabs(dx(i + 5))
+   50 continue
+   60 dasum = dtemp
+      return
+      end
+SHAR_EOF
+if test -f 'dgemv.f'
+then
+	echo shar: over-writing existing file "'dgemv.f'"
+fi
+cat << \SHAR_EOF > 'dgemv.f'
+
+************************************************************************
+
+*     File of the DOUBLE PRECISION  Level-2 BLAS.
+*     ===========================================
+
+*     SUBROUTINE DGEMV ( TRANS, M, N, ALPHA, A, LDA, X, INCX,
+*    $                   BETA, Y, INCY )
+
+*     SUBROUTINE DGBMV ( TRANS, M, N, KL, KU, ALPHA, A, LDA, X, INCX,
+*    $                   BETA, Y, INCY )
+
+*     SUBROUTINE DSYMV ( UPLO, N, ALPHA, A, LDA, X, INCX,
+*    $                   BETA, Y, INCY )
+
+*     SUBROUTINE DSBMV ( UPLO, N, K, ALPHA, A, LDA, X, INCX,
+*    $                   BETA, Y, INCY )
+
+*     SUBROUTINE DSPMV ( UPLO, N, ALPHA, AP, X, INCX, BETA, Y, INCY )
+
+*     SUBROUTINE DTRMV ( UPLO, TRANS, DIAG, N, A, LDA, X, INCX )
+
+*     SUBROUTINE DTBMV ( UPLO, TRANS, DIAG, N, K, A, LDA, X, INCX )
+
+*     SUBROUTINE DTPMV ( UPLO, TRANS, DIAG, N, AP, X, INCX )
+
+*     SUBROUTINE DTRSV ( UPLO, TRANS, DIAG, N, A, LDA, X, INCX )
+
+*     SUBROUTINE DTBSV ( UPLO, TRANS, DIAG, N, K, A, LDA, X, INCX )
+
+*     SUBROUTINE DTPSV ( UPLO, TRANS, DIAG, N, AP, X, INCX )
+
+*     SUBROUTINE DGER  ( M, N, ALPHA, X, INCX, Y, INCY, A, LDA )
+
+*     SUBROUTINE DSYR  ( UPLO, N, ALPHA, X, INCX, A, LDA )
+
+*     SUBROUTINE DSPR  ( UPLO, N, ALPHA, X, INCX, AP )
+
+*     SUBROUTINE DSYR2 ( UPLO, N, ALPHA, X, INCX, Y, INCY, A, LDA )
+
+*     SUBROUTINE DSPR2 ( UPLO, N, ALPHA, X, INCX, Y, INCY, AP )
+
+*     See:
+
+*        Dongarra J. J., Du Croz J. J., Hammarling S.  and Hanson R. J..
+*        An  extended  set of Fortran  Basic Linear Algebra Subprograms.
+
+*        Technical  Memoranda  Nos. 41 (revision 3) and 81,  Mathematics
+*        and  Computer Science  Division,  Argonne  National Laboratory,
+*        9700 South Cass Avenue, Argonne, Illinois 60439, US.
+
+*        Or
+
+*        NAG  Technical Reports TR3/87 and TR4/87,  Numerical Algorithms
+*        Group  Ltd.,  NAG  Central  Office,  256  Banbury  Road, Oxford
+*        OX2 7DE, UK,  and  Numerical Algorithms Group Inc.,  1101  31st
+*        Street,  Suite 100,  Downers Grove,  Illinois 60515-1263,  USA.
+
+************************************************************************
+
+      SUBROUTINE DGEMV ( TRANS, M, N, ALPHA, A, LDA, X, INCX,
+     $                   BETA, Y, INCY )
+*     .. Scalar Arguments ..
+      DOUBLE PRECISION   ALPHA, BETA
+      INTEGER            INCX, INCY, LDA, M, N
+      CHARACTER*1        TRANS
+*     .. Array Arguments ..
+      DOUBLE PRECISION   A( LDA, * ), X( * ), Y( * )
+*     ..
+
+*  Purpose
+*  =======
+
+*  DGEMV  performs one of the matrix-vector operations
+
+*     y := alpha*A*x + beta*y,   or   y := alpha*A'*x + beta*y,
+
+*  where alpha and beta are scalars, x and y are vectors and A is an
+*  m by n matrix.
+
+*  Parameters
+*  ==========
+
+*  TRANS  - CHARACTER*1.
+*           On entry, TRANS specifies the operation to be performed as
+*           follows:
+
+*              TRANS = 'N' or 'n'   y := alpha*A*x + beta*y.
+
+*              TRANS = 'T' or 't'   y := alpha*A'*x + beta*y.
+
+*              TRANS = 'C' or 'c'   y := alpha*A'*x + beta*y.
+
+*           Unchanged on exit.
+
+*  M      - INTEGER.
+*           On entry, M specifies the number of rows of the matrix A.
+*           M must be at least zero.
+*           Unchanged on exit.
+
+*  N      - INTEGER.
+*           On entry, N specifies the number of columns of the matrix A.
+*           N must be at least zero.
+*           Unchanged on exit.
+
+*  ALPHA  - DOUBLE PRECISION.
+*           On entry, ALPHA specifies the scalar alpha.
+*           Unchanged on exit.
+
+*  A      - DOUBLE PRECISION array of DIMENSION ( LDA, n ).
+*           Before entry, the leading m by n part of the array A must
+*           contain the matrix of coefficients.
+*           Unchanged on exit.
+
+*  LDA    - INTEGER.
+*           On entry, LDA specifies the first dimension of A as declared
+*           in the calling (sub) program. LDA must be at least
+*           max( 1, m ).
+*           Unchanged on exit.
+
+*  X      - DOUBLE PRECISION array of DIMENSION at least
+*           ( 1 + ( n - 1 )*abs( INCX ) ) when TRANS = 'N' or 'n'
+*           and at least
+*           ( 1 + ( m - 1 )*abs( INCX ) ) otherwise.
+*           Before entry, the incremented array X must contain the
+*           vector x.
+*           Unchanged on exit.
+
+*  INCX   - INTEGER.
+*           On entry, INCX specifies the increment for the elements of
+*           X. INCX must not be zero.
+*           Unchanged on exit.
+
+*  BETA   - DOUBLE PRECISION.
+*           On entry, BETA specifies the scalar beta. When BETA is
+*           supplied as zero then Y need not be set on input.
+*           Unchanged on exit.
+
+*  Y      - DOUBLE PRECISION array of DIMENSION at least
+*           ( 1 + ( m - 1 )*abs( INCY ) ) when TRANS = 'N' or 'n'
+*           and at least
+*           ( 1 + ( n - 1 )*abs( INCY ) ) otherwise.
+*           Before entry with BETA non-zero, the incremented array Y
+*           must contain the vector y. On exit, Y is overwritten by the
+*           updated vector y.
+
+*  INCY   - INTEGER.
+*           On entry, INCY specifies the increment for the elements of
+*           Y. INCY must not be zero.
+*           Unchanged on exit.
+
+
+*  Level 2 Blas routine.
+
+*  -- Written on 22-October-1986.
+*     Jack Dongarra, Argonne National Lab.
+*     Jeremy Du Croz, Nag Central Office.
+*     Sven Hammarling, Nag Central Office.
+*     Richard Hanson, Sandia National Labs.
+
+
+*     .. Parameters ..
+      DOUBLE PRECISION   ONE         , ZERO
+      PARAMETER        ( ONE = 1.0D+0, ZERO = 0.0D+0 )
+*     .. Local Scalars ..
+      DOUBLE PRECISION   TEMP
+      INTEGER            I, INFO, IX, IY, J, JX, JY, KX, KY, LENX, LENY
+*     .. External Functions ..
+      LOGICAL            LSAME
+      EXTERNAL           LSAME
+*     .. External Subroutines ..
+      EXTERNAL           XERBLA
+*     .. Intrinsic Functions ..
+      INTRINSIC          MAX
+*     ..
+*     .. Executable Statements ..
+
+*     Test the input parameters.
+
+      INFO = 0
+      IF     ( .NOT.LSAME( TRANS, 'N' ).AND.
+     $         .NOT.LSAME( TRANS, 'T' ).AND.
+     $         .NOT.LSAME( TRANS, 'C' )      )THEN
+         INFO = 1
+      ELSE IF( M.LT.0 )THEN
+         INFO = 2
+      ELSE IF( N.LT.0 )THEN
+         INFO = 3
+      ELSE IF( LDA.LT.MAX( 1, M ) )THEN
+         INFO = 6
+      ELSE IF( INCX.EQ.0 )THEN
+         INFO = 8
+      ELSE IF( INCY.EQ.0 )THEN
+         INFO = 11
+      END IF
+      IF( INFO.NE.0 )THEN
+         CALL XERBLA( 'DGEMV ', INFO )
+         RETURN
+      END IF
+
+*     Quick return if possible.
+
+      IF( ( M.EQ.0 ).OR.( N.EQ.0 ).OR.
+     $    ( ( ALPHA.EQ.ZERO ).AND.( BETA.EQ.ONE ) ) )
+     $   RETURN
+
+*     Set  LENX  and  LENY, the lengths of the vectors x and y, and set
+*     up the start points in  X  and  Y.
+
+      IF( LSAME( TRANS, 'N' ) )THEN
+         LENX = N
+         LENY = M
+      ELSE
+         LENX = M
+         LENY = N
+      END IF
+      IF( INCX.GT.0 )THEN
+         KX = 1
+      ELSE
+         KX = 1 - ( LENX - 1 )*INCX
+      END IF
+      IF( INCY.GT.0 )THEN
+         KY = 1
+      ELSE
+         KY = 1 - ( LENY - 1 )*INCY
+      END IF
+
+*     Start the operations. In this version the elements of A are
+*     accessed sequentially with one pass through A.
+
+*     First form  y := beta*y.
+
+      IF( BETA.NE.ONE )THEN
+         IF( INCY.EQ.1 )THEN
+            IF( BETA.EQ.ZERO )THEN
+               DO 10, I = 1, LENY
+                  Y( I ) = ZERO
+   10          CONTINUE
+            ELSE
+               DO 20, I = 1, LENY
+                  Y( I ) = BETA*Y( I )
+   20          CONTINUE
+            END IF
+         ELSE
+            IY = KY
+            IF( BETA.EQ.ZERO )THEN
+               DO 30, I = 1, LENY
+                  Y( IY ) = ZERO
+                  IY      = IY   + INCY
+   30          CONTINUE
+            ELSE
+               DO 40, I = 1, LENY
+                  Y( IY ) = BETA*Y( IY )
+                  IY      = IY           + INCY
+   40          CONTINUE
+            END IF
+         END IF
+      END IF
+      IF( ALPHA.EQ.ZERO )
+     $   RETURN
+      IF( LSAME( TRANS, 'N' ) )THEN
+
+*        Form  y := alpha*A*x + y.
+
+         JX = KX
+         IF( INCY.EQ.1 )THEN
+            DO 60, J = 1, N
+               IF( X( JX ).NE.ZERO )THEN
+                  TEMP = ALPHA*X( JX )
+                  DO 50, I = 1, M
+                     Y( I ) = Y( I ) + TEMP*A( I, J )
+   50             CONTINUE
+               END IF
+               JX = JX + INCX
+   60       CONTINUE
+         ELSE
+            DO 80, J = 1, N
+               IF( X( JX ).NE.ZERO )THEN
+                  TEMP = ALPHA*X( JX )
+                  IY   = KY
+                  DO 70, I = 1, M
+                     Y( IY ) = Y( IY ) + TEMP*A( I, J )
+                     IY      = IY      + INCY
+   70             CONTINUE
+               END IF
+               JX = JX + INCX
+   80       CONTINUE
+         END IF
+      ELSE
+
+*        Form  y := alpha*A'*x + y.
+
+         JY = KY
+         IF( INCX.EQ.1 )THEN
+            DO 100, J = 1, N
+               TEMP = ZERO
+               DO 90, I = 1, M
+                  TEMP = TEMP + A( I, J )*X( I )
+   90          CONTINUE
+               Y( JY ) = Y( JY ) + ALPHA*TEMP
+               JY      = JY      + INCY
+  100       CONTINUE
+         ELSE
+            DO 120, J = 1, N
+               TEMP = ZERO
+               IX   = KX
+               DO 110, I = 1, M
+                  TEMP = TEMP + A( I, J )*X( IX )
+                  IX   = IX   + INCX
+  110          CONTINUE
+               Y( JY ) = Y( JY ) + ALPHA*TEMP
+               JY      = JY      + INCY
+  120       CONTINUE
+         END IF
+      END IF
+
+      RETURN
+
+*     End of DGEMV .
+
+      END
+      LOGICAL FUNCTION LSAME ( CA, CB )
+*     .. Scalar Arguments ..
+      CHARACTER*1            CA, CB
+*     ..
+
+*  Purpose
+*  =======
+
+*  LSAME  tests if CA is the same letter as CB regardless of case.
+*  CB is assumed to be an upper case letter. LSAME returns .TRUE. if
+*  CA is either the same as CB or the equivalent lower case letter.
+
+*  N.B. This version of the routine is only correct for ASCII code.
+*       Installers must modify the routine for other character-codes.
+
+*       For EBCDIC systems the constant IOFF must be changed to -64.
+*       For CDC systems using 6-12 bit representations, the system-
+*       specific code in comments must be activated.
+
+*  Parameters
+*  ==========
+
+*  CA     - CHARACTER*1
+*  CB     - CHARACTER*1
+*           On entry, CA and CB specify characters to be compared.
+*           Unchanged on exit.
+
+
+*  Auxiliary routine for Level 2 Blas.
+
+*  -- Written on 20-July-1986
+*     Richard Hanson, Sandia National Labs.
+*     Jeremy Du Croz, Nag Central Office.
+
+*     .. Parameters ..
+      INTEGER                IOFF
+      PARAMETER            ( IOFF=32 )
+*     .. Intrinsic Functions ..
+      INTRINSIC              ICHAR
+*     .. Executable Statements ..
+
+*     Test if the characters are equal
+
+      LSAME = CA .EQ. CB
+
+*     Now test for equivalence
+
+      IF ( .NOT.LSAME ) THEN
+         LSAME = ICHAR(CA) - IOFF .EQ. ICHAR(CB)
+      END IF
+
+      RETURN
+
+*  The following comments contain code for CDC systems using 6-12 bit
+*  representations.
+
+*     .. Parameters ..
+*     INTEGER                ICIRFX
+*     PARAMETER            ( ICIRFX=62 )
+*     .. Scalar Arguments ..
+*     CHARACTER*1            CB
+*     .. Array Arguments ..
+*     CHARACTER*1            CA(*)
+*     .. Local Scalars ..
+*     INTEGER                IVAL
+*     .. Intrinsic Functions ..
+*     INTRINSIC              ICHAR, CHAR
+*     .. Executable Statements ..
+
+*     See if the first character in string CA equals string CB.
+
+*     LSAME = CA(1) .EQ. CB .AND. CA(1) .NE. CHAR(ICIRFX)
+
+*     IF (LSAME) RETURN
+
+*     The characters are not identical. Now check them for equivalence.
+*     Look for the 'escape' character, circumflex, followed by the
+*     letter.
+
+*     IVAL = ICHAR(CA(2))
+*     IF (IVAL.GE.ICHAR('A') .AND. IVAL.LE.ICHAR('Z')) THEN
+*        LSAME = CA(1) .EQ. CHAR(ICIRFX) .AND. CA(2) .EQ. CB
+*     END IF
+
+*     RETURN
+
+*     End of LSAME.
+
+      END
+      SUBROUTINE XERBLA ( SRNAME, INFO )
+*     ..    Scalar Arguments ..
+      INTEGER            INFO
+      CHARACTER*6        SRNAME
+*     ..
+
+*  Purpose
+*  =======
+
+*  XERBLA  is an error handler for the Level 2 BLAS routines.
+
+*  It is called by the Level 2 BLAS routines if an input parameter is
+*  invalid.
+
+*  Installers should consider modifying the STOP statement in order to
+*  call system-specific exception-handling facilities.
+
+*  Parameters
+*  ==========
+
+*  SRNAME - CHARACTER*6.
+*           On entry, SRNAME specifies the name of the routine which
+*           called XERBLA.
+
+*  INFO   - INTEGER.
+*           On entry, INFO specifies the position of the invalid
+*           parameter in the parameter-list of the calling routine.
+
+
+*  Auxiliary routine for Level 2 Blas.
+
+*  Written on 20-July-1986.
+
+*     .. Executable Statements ..
+
+      WRITE (*,99999) SRNAME, INFO
+
+      STOP
+
+99999 FORMAT ( ' ** On entry to ', A6, ' parameter number ', I2,
+     $         ' had an illegal value' )
+
+*     End of XERBLA.
+
+      END
+
+SHAR_EOF
+if test -f 'dger.f'
+then
+	echo shar: over-writing existing file "'dger.f'"
+fi
+cat << \SHAR_EOF > 'dger.f'
+      SUBROUTINE DGER  ( M, N, ALPHA, X, INCX, Y, INCY, A, LDA )
+*     .. Scalar Arguments ..
+      DOUBLE PRECISION   ALPHA
+      INTEGER            INCX, INCY, LDA, M, N
+*     .. Array Arguments ..
+      DOUBLE PRECISION   A( LDA, * ), X( * ), Y( * )
+*     ..
+
+*  Purpose
+*  =======
+
+*  DGER   performs the rank 1 operation
+
+*     A := alpha*x*y' + A,
+
+*  where alpha is a scalar, x is an m element vector, y is an n element
+*  vector and A is an m by n matrix.
+
+*  Parameters
+*  ==========
+
+*  M      - INTEGER.
+*           On entry, M specifies the number of rows of the matrix A.
+*           M must be at least zero.
+*           Unchanged on exit.
+
+*  N      - INTEGER.
+*           On entry, N specifies the number of columns of the matrix A.
+*           N must be at least zero.
+*           Unchanged on exit.
+
+*  ALPHA  - DOUBLE PRECISION.
+*           On entry, ALPHA specifies the scalar alpha.
+*           Unchanged on exit.
+
+*  X      - DOUBLE PRECISION array of dimension at least
+*           ( 1 + ( m - 1 )*abs( INCX ) ).
+*           Before entry, the incremented array X must contain the m
+*           element vector x.
+*           Unchanged on exit.
+
+*  INCX   - INTEGER.
+*           On entry, INCX specifies the increment for the elements of
+*           X. INCX must not be zero.
+*           Unchanged on exit.
+
+*  Y      - DOUBLE PRECISION array of dimension at least
+*           ( 1 + ( n - 1 )*abs( INCY ) ).
+*           Before entry, the incremented array Y must contain the n
+*           element vector y.
+*           Unchanged on exit.
+
+*  INCY   - INTEGER.
+*           On entry, INCY specifies the increment for the elements of
+*           Y. INCY must not be zero.
+*           Unchanged on exit.
+
+*  A      - DOUBLE PRECISION array of DIMENSION ( LDA, n ).
+*           Before entry, the leading m by n part of the array A must
+*           contain the matrix of coefficients. On exit, A is
+*           overwritten by the updated matrix.
+
+*  LDA    - INTEGER.
+*           On entry, LDA specifies the first dimension of A as declared
+*           in the calling (sub) program. LDA must be at least
+*           max( 1, m ).
+*           Unchanged on exit.
+
+
+*  Level 2 Blas routine.
+
+*  -- Written on 22-October-1986.
+*     Jack Dongarra, Argonne National Lab.
+*     Jeremy Du Croz, Nag Central Office.
+*     Sven Hammarling, Nag Central Office.
+*     Richard Hanson, Sandia National Labs.
+
+
+*     .. Parameters ..
+      DOUBLE PRECISION   ZERO
+      PARAMETER        ( ZERO = 0.0D+0 )
+*     .. Local Scalars ..
+      DOUBLE PRECISION   TEMP
+      INTEGER            I, INFO, IX, J, JY, KX
+*     .. External Subroutines ..
+      EXTERNAL           XERBLA
+*     .. Intrinsic Functions ..
+      INTRINSIC          MAX
+*     ..
+*     .. Executable Statements ..
+
+*     Test the input parameters.
+
+      INFO = 0
+      IF     ( M.LT.0 )THEN
+         INFO = 1
+      ELSE IF( N.LT.0 )THEN
+         INFO = 2
+      ELSE IF( INCX.EQ.0 )THEN
+         INFO = 5
+      ELSE IF( INCY.EQ.0 )THEN
+         INFO = 7
+      ELSE IF( LDA.LT.MAX( 1, M ) )THEN
+         INFO = 9
+      END IF
+      IF( INFO.NE.0 )THEN
+         CALL XERBLA( 'DGER  ', INFO )
+         RETURN
+      END IF
+
+*     Quick return if possible.
+
+      IF( ( M.EQ.0 ).OR.( N.EQ.0 ).OR.( ALPHA.EQ.ZERO ) )
+     $   RETURN
+
+*     Start the operations. In this version the elements of A are
+*     accessed sequentially with one pass through A.
+
+      IF( INCY.GT.0 )THEN
+         JY = 1
+      ELSE
+         JY = 1 - ( N - 1 )*INCY
+      END IF
+      IF( INCX.EQ.1 )THEN
+         DO 20, J = 1, N
+            IF( Y( JY ).NE.ZERO )THEN
+               TEMP = ALPHA*Y( JY )
+               DO 10, I = 1, M
+                  A( I, J ) = A( I, J ) + X( I )*TEMP
+   10          CONTINUE
+            END IF
+            JY = JY + INCY
+   20    CONTINUE
+      ELSE
+         IF( INCX.GT.0 )THEN
+            KX = 1
+         ELSE
+            KX = 1 - ( M - 1 )*INCX
+         END IF
+         DO 40, J = 1, N
+            IF( Y( JY ).NE.ZERO )THEN
+               TEMP = ALPHA*Y( JY )
+               IX   = KX
+               DO 30, I = 1, M
+                  A( I, J ) = A( I, J ) + X( IX )*TEMP
+                  IX        = IX        + INCX
+   30          CONTINUE
+            END IF
+            JY = JY + INCY
+   40    CONTINUE
+      END IF
+
+      RETURN
+
+*     End of DGER  .
+
+      END
+      SUBROUTINE XERBLA ( SRNAME, INFO )
+*     ..    Scalar Arguments ..
+      INTEGER            INFO
+      CHARACTER*6        SRNAME
+*     ..
+
+*  Purpose
+*  =======
+
+*  XERBLA  is an error handler for the Level 2 BLAS routines.
+
+*  It is called by the Level 2 BLAS routines if an input parameter is
+*  invalid.
+
+*  Installers should consider modifying the STOP statement in order to
+*  call system-specific exception-handling facilities.
+
+*  Parameters
+*  ==========
+
+*  SRNAME - CHARACTER*6.
+*           On entry, SRNAME specifies the name of the routine which
+*           called XERBLA.
+
+*  INFO   - INTEGER.
+*           On entry, INFO specifies the position of the invalid
+*           parameter in the parameter-list of the calling routine.
+
+
+*  Auxiliary routine for Level 2 Blas.
+
+*  Written on 20-July-1986.
+
+*     .. Executable Statements ..
+
+      WRITE (*,99999) SRNAME, INFO
+
+      STOP
+
+99999 FORMAT ( ' ** On entry to ', A6, ' parameter number ', I2,
+     $         ' had an illegal value' )
+
+*     End of XERBLA.
+
+      END
+
+SHAR_EOF
+if test -f 'dmachr.f'
+then
+	echo shar: over-writing existing file "'dmachr.f'"
+fi
+cat << \SHAR_EOF > 'dmachr.f'
+      SUBROUTINE DMACHR( IBETA, IT, IRND, NGRD, MACHEP, NEGEP, IEXP,
+     $                   MINEXP, MAXEXP, EPS, EPSNEG, XMIN, XMAX )
+
+*  -- LAPACK auxiliary routine --
+*     Argonne National Lab, Courant Institute, and N.A.G. Ltd.
+*     April 1, 1989
+
+*     .. Scalar Arguments ..
+      INTEGER            IBETA, IEXP, IRND, IT, MACHEP, MAXEXP, MINEXP,
+     $                   NEGEP, NGRD
+      DOUBLE PRECISION   EPS, EPSNEG, XMAX, XMIN
+*     ..
+
+*  Purpose
+*  =======
+
+*     SMACHR computes double precision machine parameters.  This is
+*     the double precision version of MACHAR, contributed by
+*     W. J. Cody, Argonne National Laboratory.
+
+*-----------------------------------------------------------------------
+*   This Fortran 77 subroutine is intended to determine the parameters
+*   of the floating-point arithmetic system specified below.  The
+*   determination of the first three uses an extension of an algorithm
+*   due to M. Malcolm, CACM 15 (1972), pp. 949-951, incorporating some,
+*   but not all, of the improvements suggested by M. Gentleman and S.
+*   Marovich, CACM 17 (1974), pp. 276-277.  An earlier version of this
+*   program was published in the book Software Manual for the
+*   Elementary Functions by W. J. Cody and W. Waite, Prentice-Hall,
+*   Englewood Cliffs, NJ, 1980.  The present version is documented in
+*   W. J. Cody, "MACHAR: A subroutine to dynamically determine machine
+*   parameters," TOMS 14, December, 1988.
+
+*  Parameter values reported are as follows:
+
+*       IBETA   - the radix for the floating-point representation
+*       IT      - the number of base IBETA digits in the floating-point
+*                 significand
+*       IRND    - 0 if floating-point addition chops
+*                 1 if floating-point addition rounds, but not in the
+*                   IEEE style
+*                 2 if floating-point addition rounds in the IEEE style
+*                 3 if floating-point addition chops, and there is
+*                   partial underflow
+*                 4 if floating-point addition rounds, but not in the
+*                   IEEE style, and there is partial underflow
+*                 5 if floating-point addition rounds in the IEEE style,
+*                   and there is partial underflow
+*       NGRD    - the number of guard digits for multiplication with
+*                 truncating arithmetic.  It is
+*                 0 if floating-point arithmetic rounds, or if it
+*                   truncates and only  IT  base  IBETA digits
+*                   participate in the post-normalization shift of the
+*                   floating-point significand in multiplication;
+*                 1 if floating-point arithmetic truncates and more
+*                   than  IT  base  IBETA  digits participate in the
+*                   post-normalization shift of the floating-point
+*                   significand in multiplication.
+*       MACHEP  - the largest negative integer such that
+*                 1.0+FLOAT(IBETA)**MACHEP .NE. 1.0, except that
+*                 MACHEP is bounded below by  -(IT+3)
+*       NEGEPS  - the largest negative integer such that
+*                 1.0-FLOAT(IBETA)**NEGEPS .NE. 1.0, except that
+*                 NEGEPS is bounded below by  -(IT+3)
+*       IEXP    - the number of bits (decimal places if IBETA = 10)
+*                 reserved for the representation of the exponent
+*                 (including the bias or sign) of a floating-point
+*                 number
+*       MINEXP  - the largest in magnitude negative integer such that
+*                 FLOAT(IBETA)**MINEXP is positive and normalized
+*       MAXEXP  - the smallest positive power of  BETA  that overflows
+*       EPS     - the smallest positive floating-point number such
+*                 that  1.0+EPS .NE. 1.0. In particular, if either
+*                 IBETA = 2  or  IRND = 0, EPS = FLOAT(IBETA)**MACHEP.
+*                 Otherwise,  EPS = (FLOAT(IBETA)**MACHEP)/2
+*       EPSNEG  - A small positive floating-point number such that
+*                 1.0-EPSNEG .NE. 1.0. In particular, if IBETA = 2
+*                 or  IRND = 0, EPSNEG = FLOAT(IBETA)**NEGEPS.
+*                 Otherwise,  EPSNEG = (IBETA**NEGEPS)/2.  Because
+*                 NEGEPS is bounded below by -(IT+3), EPSNEG may not
+*                 be the smallest number that can alter 1.0 by
+*                 subtraction.
+*       XMIN    - the smallest non-vanishing normalized floating-point
+*                 power of the radix, i.e.,  XMIN = FLOAT(IBETA)**MINEXP
+*       XMAX    - the largest finite floating-point number.  In
+*                 particular  XMAX = (1.0-EPSNEG)*FLOAT(IBETA)**MAXEXP
+*                 Note - on some machines  XMAX  will be only the
+*                 second, or perhaps third, largest number, being
+*                 too small by 1 or 2 units in the last digit of
+*                 the significand.
+
+*     Latest revision - December 4, 1987
+
+*     Author - W. J. Cody
+*              Argonne National Laboratory
+*-----------------------------------------------------------------------
+
+*     .. Local Scalars ..
+      INTEGER            I, ITEMP, IZ, J, K, MX, NXRES
+      DOUBLE PRECISION   A, B, BETA, BETAH, BETAIN, ONE, T, TEMP, TEMP1,
+     $                   TEMPA, TWO, Y, Z, ZERO
+*     ..
+*     .. Intrinsic Functions ..
+      INTRINSIC          ABS, INT, DBLE
+*     ..
+*     .. Statement Functions ..
+      DOUBLE PRECISION   CONV
+*     ..
+*     .. Statement Function definitions ..
+      CONV( I ) = DBLE( I )
+*     ..
+*     .. Executable Statements ..
+
+      ONE = CONV( 1 )
+      TWO = ONE + ONE
+      ZERO = ONE - ONE
+*-----------------------------------------------------------------------
+*  Determine IBETA, BETA ala Malcolm.
+*-----------------------------------------------------------------------
+      A = ONE
+   10 A = A + A
+      TEMP = A + ONE
+      TEMP1 = TEMP - A
+      IF( TEMP1-ONE.EQ.ZERO )
+     $   GO TO 10
+      B = ONE
+   20 B = B + B
+      TEMP = A + B
+      ITEMP = INT( TEMP-A )
+      IF( ITEMP.EQ.0 )
+     $   GO TO 20
+      IBETA = ITEMP
+      BETA = CONV( IBETA )
+*-----------------------------------------------------------------------
+*  Determine IT, IRND.
+*-----------------------------------------------------------------------
+      IT = 0
+      B = ONE
+   30 IT = IT + 1
+      B = B*BETA
+      TEMP = B + ONE
+      TEMP1 = TEMP - B
+      IF( TEMP1-ONE.EQ.ZERO )
+     $   GO TO 30
+      IRND = 0
+      BETAH = BETA / TWO
+      TEMP = A + BETAH
+      IF( TEMP-A.NE.ZERO )
+     $   IRND = 1
+      TEMPA = A + BETA
+      TEMP = TEMPA + BETAH
+      IF( ( IRND.EQ.0 ) .AND. ( TEMP-TEMPA.NE.ZERO ) )
+     $   IRND = 2
+*-----------------------------------------------------------------------
+*  Determine NEGEP, EPSNEG.
+*-----------------------------------------------------------------------
+      NEGEP = IT + 3
+      BETAIN = ONE / BETA
+      A = ONE
+      DO 40 I = 1, NEGEP
+         A = A*BETAIN
+   40 CONTINUE
+      B = A
+   50 TEMP = ONE - A
+      IF( TEMP-ONE.NE.ZERO )
+     $   GO TO 60
+      A = A*BETA
+      NEGEP = NEGEP - 1
+      GO TO 50
+   60 NEGEP = -NEGEP
+      EPSNEG = A
+*-----------------------------------------------------------------------
+*  Determine MACHEP, EPS.
+*-----------------------------------------------------------------------
+      MACHEP = -IT - 3
+      A = B
+   70 TEMP = ONE + A
+      IF( TEMP-ONE.NE.ZERO )
+     $   GO TO 80
+      A = A*BETA
+      MACHEP = MACHEP + 1
+      GO TO 70
+   80 EPS = A
+*-----------------------------------------------------------------------
+*  Determine NGRD.
+*-----------------------------------------------------------------------
+      NGRD = 0
+      TEMP = ONE + EPS
+      IF( ( IRND.EQ.0 ) .AND. ( TEMP*ONE-ONE.NE.ZERO ) )
+     $   NGRD = 1
+*-----------------------------------------------------------------------
+*  Determine IEXP, MINEXP, XMIN.
+
+*  Loop to determine largest I and K = 2**I such that
+*         (1/BETA) ** (2**(I))
+*  does not underflow.
+*  Exit from loop is signaled by an underflow.
+*-----------------------------------------------------------------------
+      I = 0
+      K = 1
+      Z = BETAIN
+      T = ONE + EPS
+      NXRES = 0
+   90 Y = Z
+      Z = Y*Y
+*-----------------------------------------------------------------------
+*  Check for underflow here.
+*-----------------------------------------------------------------------
+      A = Z*ONE
+      TEMP = Z*T
+      IF( ( A+A.EQ.ZERO ) .OR. ( ABS( Z ).GE.Y ) )
+     $   GO TO 100
+      TEMP1 = TEMP*BETAIN
+      IF( TEMP1*BETA.EQ.Z )
+     $   GO TO 100
+      I = I + 1
+      K = K + K
+      GO TO 90
+  100 IF( IBETA.EQ.10 )
+     $   GO TO 110
+      IEXP = I + 1
+      MX = K + K
+      GO TO 140
+*-----------------------------------------------------------------------
+*  This segment is for decimal machines only.
+*-----------------------------------------------------------------------
+  110 IEXP = 2
+      IZ = IBETA
+  120 IF( K.LT.IZ )
+     $   GO TO 130
+      IZ = IZ*IBETA
+      IEXP = IEXP + 1
+      GO TO 120
+  130 MX = IZ + IZ - 1
+*-----------------------------------------------------------------------
+*  Loop to determine MINEXP, XMIN.
+*  Exit from loop is signaled by an underflow.
+*-----------------------------------------------------------------------
+  140 XMIN = Y
+      Y = Y*BETAIN
+*-----------------------------------------------------------------------
+*  Check for underflow here.
+*-----------------------------------------------------------------------
+      A = Y*ONE
+      TEMP = Y*T
+      IF( ( ( A+A ).EQ.ZERO ) .OR. ( ABS( Y ).GE.XMIN ) )
+     $   GO TO 150
+      K = K + 1
+      TEMP1 = TEMP*BETAIN
+      IF( ( TEMP1*BETA.NE.Y ) .OR. ( TEMP.EQ.Y ) ) THEN
+         GO TO 140
+      ELSE
+         NXRES = 3
+         XMIN = Y
+      END IF
+  150 MINEXP = -K
+*-----------------------------------------------------------------------
+*  Determine MAXEXP, XMAX.
+*-----------------------------------------------------------------------
+      IF( ( MX.GT.K+K-3 ) .OR. ( IBETA.EQ.10 ) )
+     $   GO TO 160
+      MX = MX + MX
+      IEXP = IEXP + 1
+  160 MAXEXP = MX + MINEXP
+*-----------------------------------------------------------------
+*  Adjust IRND to reflect partial underflow.
+*-----------------------------------------------------------------
+      IRND = IRND + NXRES
+*-----------------------------------------------------------------
+*  Adjust for IEEE-style machines.
+*-----------------------------------------------------------------
+      IF( IRND.GE.2 )
+     $   MAXEXP = MAXEXP - 2
+*-----------------------------------------------------------------
+*  Adjust for machines with implicit leading bit in binary
+*  significand, and machines with radix point at extreme
+*  right of significand.
+*-----------------------------------------------------------------
+      I = MAXEXP + MINEXP
+      IF( ( IBETA.EQ.2 ) .AND. ( I.EQ.0 ) )
+     $   MAXEXP = MAXEXP - 1
+      IF( I.GT.20 )
+     $   MAXEXP = MAXEXP - 1
+      IF( A.NE.Y )
+     $   MAXEXP = MAXEXP - 2
+      XMAX = ONE - EPSNEG
+      IF( XMAX*ONE.NE.XMAX )
+     $   XMAX = ONE - BETA*EPSNEG
+      XMAX = XMAX / ( BETA*BETA*BETA*XMIN )
+      I = MAXEXP + MINEXP + 3
+      IF( I.LE.0 )
+     $   GO TO 180
+      DO 170 J = 1, I
+         IF( IBETA.EQ.2 )
+     $      XMAX = XMAX + XMAX
+         IF( IBETA.NE.2 )
+     $      XMAX = XMAX*BETA
+  170 CONTINUE
+  180 RETURN
+
+*     End of DMACHR
+
+      END
+SHAR_EOF
+if test -f 'drandom.f'
+then
+	echo shar: over-writing existing file "'drandom.f'"
+fi
+cat << \SHAR_EOF > 'drandom.f'
+      DOUBLE PRECISION FUNCTION RANDOM()
+
+*     Returns a pseudo-random number between 0-1.
+
+      INTEGER M, I, MD, SEED
+      DOUBLE PRECISION FMD
+
+      DATA M/25173/,I/13849/,MD/65536/,FMD/65536.D0/,SEED/17/
+
+      SAVE SEED
+
+      SEED = MOD(M*SEED+I,MD)
+      RANDOM = SEED/FMD
+      RETURN
+      END
+SHAR_EOF
+if test -f 'dscal.f'
+then
+	echo shar: over-writing existing file "'dscal.f'"
+fi
+cat << \SHAR_EOF > 'dscal.f'
+      subroutine  dscal(n,da,dx,incx)
+
+c     scales a vector by a constant.
+c     uses unrolled loops for increment equal to one.
+c     jack dongarra, linpack, 3/11/78.
+
+      double precision da,dx(1)
+      integer i,incx,m,mp1,n,nincx
+
+      if(n.le.0)return
+      if(incx.eq.1)go to 20
+
+c        code for increment not equal to 1
+
+      nincx = n*incx
+      do 10 i = 1,nincx,incx
+        dx(i) = da*dx(i)
+   10 continue
+      return
+
+c        code for increment equal to 1
+
+
+c        clean-up loop
+
+   20 m = mod(n,5)
+      if( m .eq. 0 ) go to 40
+      do 30 i = 1,m
+        dx(i) = da*dx(i)
+   30 continue
+      if( n .lt. 5 ) return
+   40 mp1 = m + 1
+      do 50 i = mp1,n,5
+        dx(i) = da*dx(i)
+        dx(i + 1) = da*dx(i + 1)
+        dx(i + 2) = da*dx(i + 2)
+        dx(i + 3) = da*dx(i + 3)
+        dx(i + 4) = da*dx(i + 4)
+   50 continue
+      return
+      end
+
+SHAR_EOF
+if test -f 'dzgeco.f'
+then
+	echo shar: over-writing existing file "'dzgeco.f'"
+fi
+cat << \SHAR_EOF > 'dzgeco.f'
+      SUBROUTINE CXGECO(ARE,AIM,LDA,N,IPVT,RCOND,ZRE,ZIM)
+      INTEGER LDA,N,IPVT(1)
+      DOUBLE PRECISION ARE(LDA,*),AIM(LDA,*),ZRE(*),ZIM(*)
+      DOUBLE PRECISION RCOND
+
+*  Purpose:
+*     Complex version of Gaussian elimination with forward
+*     and back solves, in which the real and imaginary parts
+*     of the complex arrays are separate double precision
+*     arrays, for portability.
+
+*  Arguments:
+*     ARE      -double precision array, dimension (LDA,N)
+*     AIM      -double precision array, dimension (LDA,N)
+*               These contain the real and imaginary parts of
+*               the matrix A.
+*     LDA      -integer
+*               The leading dimension of the array A.
+*               LDA >= max(1,N).
+*     N        -integer
+*               The number of rows and columns in the matrix A.
+*               N >= 0.
+*     IPVT     -integer array, dimension (N)
+*               Contains the pivot sequence used during the
+*               factorization.
+*     RCOND    -double precision
+*               Returns an estimate of the condition number of the
+*               matrix A.
+*     ZRE      -double precision, dimension (N)
+*     ZIM      -double precision, dimension (N)
+*               These contain the solution to the linear system.
+
+*     .. Local Scalars ..
+      DOUBLE PRECISION EKRE,EKIM,TRE,TIM,WKRE,WKIM,WKMRE,WKMIM
+      DOUBLE PRECISION ANORM,S,DCXASUM,SM,YNORM
+      INTEGER INFO,J,K,KB,KP1,L
+
+*     compute 1-norm of a
+
+      ANORM = 0.0D0
+      DO 10 J = 1, N
+         ANORM = DMAX1(ANORM,DCXASUM(N,ARE(1,J),AIM(1,J)))
+ 10   CONTINUE
+
+*     factor
+
+      CALL CXGEFA(ARE,AIM,LDA,N,IPVT,INFO)
+
+*     rcond = 1/(norm(a)*(estimate of norm(inverse(a)))) .
+*     estimate = norm(z)/norm(y) where  a*z = y  and  ctrans(a)*y = e .
+*     ctrans(a)  is the conjugate transpose of a .
+*     the components of  e  are chosen to cause maximum local
+*     growth in the elements of w  where  ctrans(u)*w = e .
+*     the vectors are frequently rescaled to avoid overflow.
+
+*     solve ctrans(u)*w = e
+
+      EKRE = 1.0D0
+      EKIM = 0.0D0
+      DO 20 J = 1, N
+         ZRE(J) = 0.0D0
+         ZIM(J) = 0.0D0
+ 20   CONTINUE
+      DO 100 K = 1, N
+         IF (ABS(ZRE(K))+ABS(ZIM(K)) .NE. 0.0D0) THEN
+            CALL CXSIGN1(EKRE,EKIM,-ZRE(K),-ZIM(K),EKRE,EKIM)
+         ENDIF
+         IF (ABS(EKRE-ZRE(K))+ABS(EKIM-ZIM(K)) .LE.
+     $        ABS(ARE(K,K))+ABS(AIM(K,K))) GO TO 30
+         S = (ABS(ARE(K,K))+ABS(AIM(K,K))) /
+     $        (ABS(EKRE-ZRE(K))+ABS(EKIM-ZIM(K)))
+         CALL CXDSCAL(N,S,ZRE,ZIM)
+         EKRE = S*EKRE
+         EKIM = S*EKIM
+ 30      CONTINUE
+         WKRE = EKRE - ZRE(K)
+         WKIM = EKIM - ZIM(K)
+         WKMRE = -EKRE - ZRE(K)
+         WKMIM = -EKIM - ZIM(K)
+         S = ABS(WKRE)+ABS(WKIM)
+         SM = ABS(WKMRE)+ABS(WKMIM)
+         IF (ABS(ARE(K,K))+ABS(AIM(K,K)) .EQ. 0.0D0) GO TO 40
+         CALL CXDIV(WKRE,WKIM,ARE(K,K),-AIM(K,K),WKRE,WKIM)
+         CALL CXDIV(WKMRE,WKMIM,ARE(K,K),-AIM(K,K),WKMRE,WKMIM)
+         GO TO 50
+ 40      CONTINUE
+         WKRE = 1.0D0
+         WKIM = 0.0D0
+         WKMRE = 1.0D0
+         WKMIM = 0.0D0
+ 50      CONTINUE
+         KP1 = K + 1
+         IF (KP1 .GT. N) GO TO 90
+         DO 60 J = KP1, N
+            CALL CXMULT(WKMRE,WKMIM,ARE(K,J),-AIM(K,J),TRE,TIM)
+            SM = SM + ABS(ZRE(J)+TRE) + ABS(ZIM(J) + TIM)
+            CALL CXMULT(WKRE,WKIM,ARE(K,J),-AIM(K,J),TRE,TIM)
+            ZRE(J) = ZRE(J) + TRE
+            ZIM(J) = ZIM(J) + TIM
+            S = S + ABS(ZRE(J)) + ABS(ZIM(J))
+ 60      CONTINUE
+         IF (S .GE. SM) GO TO 80
+         TRE = WKMRE - WKRE
+         TIM = WKMIM - WKIM
+         WKRE = WKMRE
+         WKIM = WKMIM
+         DO 70 J = KP1, N
+            CALL CXMULT(TRE,TIM,ARE(K,J),-AIM(K,J),TRE,TIM)
+            ZRE(J) = ZRE(J) + TRE
+            ZIM(J) = ZIM(J) + TIM
+ 70      CONTINUE
+ 80      CONTINUE
+ 90      CONTINUE
+         ZRE(K) = WKRE
+         ZIM(K) = WKIM
+ 100  CONTINUE
+      S = 1.0D0/DCXASUM(N,ZRE,ZIM)
+      CALL CXDSCAL(N,S,ZRE,ZIM)
+
+*     solve ctrans(l)*y = w
+
+      DO 120 KB = 1, N
+         K = N + 1 - KB
+         IF (K .LT. N) THEN
+            CALL CXDOTC(N-K,ARE(K+1,K),AIM(K+1,K),ZRE(K+1),ZIM(K+1),
+     $           TRE,TIM)
+            ZRE(K) = ZRE(K) + TRE
+            ZIM(K) = ZIM(K) + TIM
+         ENDIF
+         IF (ABS(ZRE(K))+ABS(ZIM(K)) .LE. 1.0D0) GO TO 110
+         S = 1.0D0/(ABS(ZRE(K))+ABS(ZIM(K)))
+         CALL CXDSCAL(N,S,ZRE,ZIM)
+ 110     CONTINUE
+         L = IPVT(K)
+         TRE = ZRE(L)
+         TIM = ZIM(L)
+         ZRE(L) = ZRE(K)
+         ZIM(L) = ZIM(K)
+         ZRE(K) = TRE
+         ZIM(K) = TIM
+ 120  CONTINUE
+      S = 1.0D0/DCXASUM(N,ZRE,ZIM)
+      CALL CXDSCAL(N,S,ZRE,ZIM)
+
+      YNORM = 1.0D0
+
+*     solve l*v = y
+
+      DO 140 K = 1, N
+         L = IPVT(K)
+         TRE = ZRE(L)
+         TIM = ZIM(L)
+         ZRE(L) = ZRE(K)
+         ZIM(L) = ZIM(K)
+         ZRE(K) = TRE
+         ZIM(K) = TIM
+         IF (K .LT. N) THEN
+            CALL CXAXPY(N-K,TRE,TIM,ARE(K+1,K),AIM(K+1,K),ZRE(K+1),
+     $           ZIM(K+1))
+         ENDIF
+         IF (ABS(ZRE(K))+ABS(ZIM(K)) .LE. 1.0D0) GO TO 130
+         S = 1.0D0/(ABS(ZRE(K))+ABS(ZIM(K)))
+         CALL CXDSCAL(N,S,ZRE,ZIM)
+         YNORM = S*YNORM
+ 130     CONTINUE
+ 140  CONTINUE
+      S = 1.0D0/DCXASUM(N,ZRE,ZIM)
+      CALL CXDSCAL(N,S,ZRE,ZIM)
+      YNORM = S*YNORM
+
+*     solve  u*z = v
+
+      DO 160 KB = 1, N
+         K = N + 1 - KB
+         IF (ABS(ZRE(K))+ABS(ZIM(K)) .LE. ABS(ARE(K,K))+ABS(AIM(K,K)))
+     $        GO TO 150
+         S = (ABS(ARE(K,K))+ABS(AIM(K,K))) /
+     $        (ABS(ZRE(K))+ABS(ZIM(K)))
+         CALL CXDSCAL(N,S,ZRE,ZIM)
+         YNORM = S*YNORM
+ 150     CONTINUE
+         IF (ABS(ARE(K,K))+ABS(AIM(K,K)) .NE. 0.0D0) THEN
+            CALL CXDIV(ZRE(K),ZIM(K),ARE(K,K),AIM(K,K),ZRE(K),ZIM(K))
+         ENDIF
+         IF (ABS(ARE(K,K))+ABS(AIM(K,K)) .EQ. 0.0D0) THEN
+            ZRE(K) = 1.0D0
+            ZIM(K) = 0.0D0
+         ENDIF
+         TRE = -ZRE(K)
+         TIM = -ZIM(K)
+         CALL CXAXPY(K-1,TRE,TIM,ARE(1,K),AIM(1,K),ZRE(1),ZIM(1))
+ 160  CONTINUE
+
+*     make znorm = 1.0
+
+      S = 1.0D0/DCXASUM(N,ZRE,ZIM)
+      CALL CXDSCAL(N,S,ZRE,ZIM)
+      YNORM = S*YNORM
+
+      IF (ANORM .NE. 0.0D0) RCOND = YNORM/ANORM
+      IF (ANORM .EQ. 0.0D0) RCOND = 0.0D0
+      RETURN
+      END
+SHAR_EOF
+if test -f 'dzgefa.f'
+then
+	echo shar: over-writing existing file "'dzgefa.f'"
+fi
+cat << \SHAR_EOF > 'dzgefa.f'
+      SUBROUTINE CXGEFA(ARE,AIM,LDA,N,IPVT,INFO)
+      INTEGER LDA,N,IPVT(*),INFO
+      DOUBLE PRECISION ARE(LDA,*),AIM(LDA,*)
+
+*  Purpose:
+*     This routine performs LU factorization on the matrix whose
+*     real and imaginary entries are contained in ARE and AIM.
+
+*  Arguments:
+*     ARE      -double precision, dimension (LDA,N)
+*     AIM      -double precision, dimension (LDA,N)
+*               These contain the array A.
+*     LDA      -integer
+*               The leading dimension of the array A.
+*     N        -integer
+*               The number of rows and columns of the matrix A.
+*     IPVT     -integer array, dimension (N)
+*               Contains the pivot sequence used during the
+*               factorization.
+*     INFO     -integer
+*               Contains a nonzero error condition on error.
+
+*     .. Local Scalars ..
+      DOUBLE PRECISION TRE, TIM
+      INTEGER ICXMAX,J,K,KP1,L,NM1
+
+
+*     gaussian elimination with partial pivoting
+
+      INFO = 0
+      NM1 = N - 1
+      IF (NM1 .LT. 1) GO TO 70
+      DO 60 K = 1, NM1
+         KP1 = K + 1
+
+*        find l = pivot index
+
+         L = ICXMAX(N-K+1,ARE(K,K),AIM(K,K),1) + K - 1
+         IPVT(K) = L
+
+*        zero pivot implies this column already triangularized
+
+         IF (ABS(ARE(L,K))+ABS(AIM(L,K)) .EQ. 0.0D0) GO TO 40
+
+*        interchange if necessary
+
+         IF (L .EQ. K) GO TO 10
+         TRE = ARE(L,K)
+         TIM = AIM(L,K)
+         ARE(L,K) = ARE(K,K)
+         AIM(L,K) = AIM(K,K)
+         ARE(K,K) = TRE
+         AIM(K,K) = TIM
+ 10      CONTINUE
+
+*        compute multipliers
+
+         CALL CXDIV(-1.0D0,0.0D0,ARE(K,K),AIM(K,K),TRE,TIM)
+         CALL CXSCAL(N-K,TRE,TIM,ARE(K+1,K),AIM(K+1,K))
+
+*        row elimination with column indexing
+
+         DO 30 J = KP1, N
+            TRE = ARE(L,J)
+            TIM = AIM(L,J)
+            IF (L .EQ. K) GO TO 20
+            ARE(L,J) = ARE(K,J)
+            AIM(L,J) = AIM(K,J)
+            ARE(K,J) = TRE
+            AIM(K,J) = TIM
+ 20         CONTINUE
+            CALL CXAXPY(N-K,TRE,TIM,ARE(K+1,K),AIM(K+1,K),
+     $           ARE(K+1,J),AIM(K+1,J))
+ 30      CONTINUE
+         GO TO 50
+ 40      CONTINUE
+         INFO = K
+ 50      CONTINUE
+ 60   CONTINUE
+ 70   CONTINUE
+      IPVT(N) = N
+      IF (ABS(ARE(N,N))+ABS(AIM(N,N)) .EQ. 0.0D0) INFO = N
+      RETURN
+      END
+SHAR_EOF
+if test -f 'dzgesl.f'
+then
+	echo shar: over-writing existing file "'dzgesl.f'"
+fi
+cat << \SHAR_EOF > 'dzgesl.f'
+      SUBROUTINE CXGESL(ARE,AIM,LDA,N,IPVT,BRE,BIM,JOB)
+      INTEGER LDA,N,IPVT(*),JOB
+      DOUBLE PRECISION ARE(LDA,*),AIM(LDA,*),BRE(*),BIM(*)
+
+*  Purpose:
+*     Solves the linear system A X = B, where the real and imaginary
+*     parts of A and B are contained in (ARE,AIM) and (BRE,BIM).
+
+*  Arguments:
+*     ARE      -double precision, dimension (LDA,N)
+*     AIM      -double precision, dimension (LDA,N)
+*               Contain the real and imaginary parts of the matrix A.
+*     LDA      -integer
+*               Leading dimension of the array A.
+*     N        -integer
+*               Number of rows and columns of the matrix A.
+*     IPVT     -integer, dimension (N)
+*               Contains the pivot sequence used during the
+*               factorization of A.
+*     BRE      -double precision, dimension (N)
+*     BIM      -double precision, dimension (N)
+*               Contain the real and imaginary parts of the vector B.
+*               On exit, contain the solution.
+*     JOB      -integer
+*               Determines whether to operate on A or A'.
+
+*     .. Local Scalars ..
+      DOUBLE PRECISION TRE, TIM
+      INTEGER K,KB,L,NM1
+
+      NM1 = N - 1
+      IF (JOB .NE. 0) GO TO 50
+
+*        job = 0 , solve  a * x = b
+*        first solve  l*y = b
+
+      IF (NM1 .LT. 1) GO TO 30
+      DO 20 K = 1, NM1
+         L = IPVT(K)
+         TRE = BRE(L)
+         TIM = BIM(L)
+         IF (L .EQ. K) GO TO 10
+         BRE(L) = BRE(K)
+         BIM(L) = BIM(K)
+         BRE(K) = TRE
+         BIM(K) = TIM
+ 10      CONTINUE
+         CALL CXAXPY(N-K,TRE,TIM,ARE(K+1,K),AIM(K+1,K),BRE(K+1),
+     $        BIM(K+1))
+ 20   CONTINUE
+ 30   CONTINUE
+
+*        now solve  u*x = y
+
+      DO 40 KB = 1, N
+         K = N + 1 - KB
+         CALL CXDIV(BRE(K),BIM(K),ARE(K,K),AIM(K,K),BRE(K),BIM(K))
+         TRE = -BRE(K)
+         TIM = -BIM(K)
+         CALL CXAXPY(K-1,TRE,TIM,ARE(1,K),AIM(1,K),BRE(1),BIM(1))
+ 40   CONTINUE
+      GO TO 100
+ 50   CONTINUE
+
+*        job = nonzero, solve  ctrans(a) * x = b
+*        first solve  ctrans(u)*y = b
+
+      DO 60 K = 1, N
+         CALL CXDOTC(K-1,ARE(1,K),AIM(1,K),BRE(1),BIM(1),TRE,TIM)
+         CALL CXDIV(BRE(K)-TRE,BIM(K)-TIM,ARE(K,K),-AIM(K,K),
+     $        BRE(K),BIM(K))
+ 60   CONTINUE
+
+*        now solve ctrans(l)*x = y
+
+      IF (NM1 .LT. 1) GO TO 90
+      DO 80 KB = 1, NM1
+         K = N - KB
+         CALL CXDOTC(N-K,ARE(K+1,K),AIM(K+1,K),BRE(K+1),BIM(K+1),
+     $        TRE,TIM)
+         BRE(K) = BRE(K) + TRE
+         BIM(K) = BIM(K) + TIM
+         L = IPVT(K)
+         IF (L .EQ. K) GO TO 70
+         TRE = BRE(L)
+         TIM = BIM(L)
+         BRE(L) = BRE(K)
+         BIM(L) = BIM(K)
+         BRE(K) = TRE
+         BIM(K) = TIM
+ 70      CONTINUE
+ 80   CONTINUE
+ 90   CONTINUE
+ 100  CONTINUE
+      RETURN
+      END
+
+SHAR_EOF
+if test -f 'elmbak.f'
+then
+	echo shar: over-writing existing file "'elmbak.f'"
+fi
+cat << \SHAR_EOF > 'elmbak.f'
+      SUBROUTINE ELMBAK(NM,LOW,IGH,A,INT,M,Z)
+
+      INTEGER I,J,M,LA,MM,MP,NM,IGH,KP1,LOW,MP1
+      DOUBLE PRECISION A(NM,IGH),Z(NM,M)
+      DOUBLE PRECISION X
+      INTEGER INT(IGH)
+
+*     this subroutine is a translation of the algol procedure elmbak,
+*     num. math. 12, 349-368(1968) by martin and wilkinson.
+*     handbook for auto. comp., vol.ii-linear algebra, 339-358(1971).
+
+*     this subroutine forms the eigenvectors of a real general
+*     matrix by back transforming those of the corresponding
+*     upper hessenberg matrix determined by  elmhes.
+
+*     on input
+
+*        nm must be set to the row dimension of two-dimensional
+*          array parameters as declared in the calling program
+*          dimension statement.
+
+*        low and igh are integers determined by the balancing
+*          subroutine  balanc.  if  balanc  has not been used,
+*          set low=1 and igh equal to the order of the matrix.
+
+*        a contains the multipliers which were used in the
+*          reduction by  elmhes  in its lower triangle
+*          below the subdiagonal.
+
+*        int contains information on the rows and columns
+*          interchanged in the reduction by  elmhes.
+*          only elements low through igh are used.
+
+*        m is the number of columns of z to be back transformed.
+
+*        z contains the real and imaginary parts of the eigen-
+*          vectors to be back transformed in its first m columns.
+
+*     on output
+
+*        z contains the real and imaginary parts of the
+*          transformed eigenvectors in its first m columns.
+
+*     questions and comments should be directed to burton s. garbow,
+*     mathematics and computer science div, argonne national laboratory
+
+*     this version dated august 1983.
+
+*     ------------------------------------------------------------------
+
+      IF (M .EQ. 0) GO TO 200
+      LA = IGH - 1
+      KP1 = LOW + 1
+      IF (LA .LT. KP1) GO TO 200
+*     .......... for mp=igh-1 step -1 until low+1 do -- ..........
+      DO 140 MM = KP1, LA
+         MP = LOW + IGH - MM
+         MP1 = MP + 1
+
+         DO 110 I = MP1, IGH
+            X = A(I,MP-1)
+            IF (X .EQ. 0.0D0) GO TO 110
+
+            DO 100 J = 1, M
+               Z(I,J) = Z(I,J) + X * Z(MP,J)
+ 100        CONTINUE
+
+ 110     CONTINUE
+
+         I = INT(MP)
+         IF (I .EQ. MP) GO TO 140
+
+         DO 130 J = 1, M
+            X = Z(I,J)
+            Z(I,J) = Z(MP,J)
+            Z(MP,J) = X
+ 130     CONTINUE
+
+ 140  CONTINUE
+
+ 200  RETURN
+      END
+
+SHAR_EOF
+if test -f 'gtinit.f'
+then
+	echo shar: over-writing existing file "'gtinit.f'"
+fi
+cat << \SHAR_EOF > 'gtinit.f'
+      SUBROUTINE GTINIT(N,A,LDA, WR,WI,XRE,XIM,WORK,LDWORK)
+
+      INTEGER N, LDA,LDWORK
+      DOUBLE PRECISION A(LDA,*), WR, WI, XRE(*),XIM(*)
+      DOUBLE PRECISION WORK(LDWORK,*)
+
+*  Purpose:
+*     This routine performs one step of inverse iteration with the
+*     matrix from the tridiagonal step and the approximate eigenvalue.
+
+*  Arguments:
+*     N       -integer
+*              The number of rows and columns in the matrix A.
+*              N >= 0.
+
+*     A       -double precision array, dimension (LDA,N)
+*              A contains information about the reduction to
+*              tridiagonal form.
+
+*     LDA     -integer
+*              The leading dimension of the array A.
+*              LDA >= max(1,N).
+
+*     WR      -double precision
+*              The real part of the approximate eigenvalue.
+
+*     WI      -double precision
+*              The imaginary part of the approximate eigenvalue.
+
+*     XRE     -double precision array, dimension (N)
+*              On exit, contains the real part of the
+*              computed eigenvector.
+
+*     XIM     -double precision array, dimension (N)
+*              On exit, contains the imaginary part of the
+*              computed eigenvector.
+
+*     .. Parameters ..
+      DOUBLE PRECISION ONE,ZERO
+      PARAMETER (ONE = 1.0, ZERO = 0.0)
+*     ..
+*     .. Local Scalars ..
+      INTEGER I
+      DOUBLE PRECISION IP
+*     ..
+*     .. External Subroutines ..
+      EXTERNAL MLU,MSOL
+
+*     .. External Functions ..
+      EXTERNAL CXNRM2
+      DOUBLE PRECISION CXNRM2
+*     ..
+*     .. Executable Statements ..
+*     Set up the initial guess for the eigenvector.
+
+      DO 10 I = 1,N
+         XRE(I) = ONE
+         XIM(I) = ZERO
+ 10   CONTINUE
+
+*     Setup the tridiagonal matrix in the data structure to allow
+*     use of subroutine mlu and msol to solve the system.
+
+      DO 20 I=1, N-1
+         WORK(I,7) = ZERO
+         WORK(I,8) = ZERO
+         WORK(I+1,1) = A(I+1,I)
+         WORK(I+1,2) = ZERO
+         WORK(I,5) = A(I,I) - WR
+         WORK(I,6) = ZERO - WI
+         WORK(I,3) = A(I,I+1)
+         WORK(I,4) = ZERO
+ 20   CONTINUE
+      WORK(N,5) = A(N,N) - WR
+      WORK(N,6) = ZERO - WI
+      WORK(N,7) = ZERO
+      WORK(N,8) = ZERO
+      WORK(N+1,7) = ONE
+      WORK(N+1,8) = ZERO
+
+*     Factor and solve the tridiagonal matrix.
+
+      CALL MLU(N,WORK,LDWORK)
+      CALL MSOL(N,WORK,LDWORK,XRE,XIM)
+
+*     Scale the eigenvector.
+
+      IP = CXNRM2(N,XRE,XIM)
+      DO 30 I=1, N
+         XRE(I) = XRE(I) / IP
+         XIM(I) = XIM(I) / IP
+ 30   CONTINUE
+
+      RETURN
+      END
+SHAR_EOF
+if test -f 'invit.f'
+then
+	echo shar: over-writing existing file "'invit.f'"
+fi
+cat << \SHAR_EOF > 'invit.f'
+      subroutine invit(nm,n,a,wr,wi,select,mm,m,z,ierr,rm1,rv1,rv2)
+
+      integer i,j,k,l,m,n,s,ii,ip,mm,mp,nm,ns,n1,uk,ip1,its,km1,ierr
+      double precision a(nm,n),wr(n),wi(n),z(nm,mm),rm1(n,n),
+     x       rv1(n),rv2(n)
+      double precision t,w,x,y,eps3,norm,normv,epslon,growto,ilambd,
+     x       pythag,rlambd,ukroot
+      logical select(n)
+
+c     this subroutine is a translation of the algol procedure invit
+c     by peters and wilkinson.
+c     handbook for auto. comp., vol.ii-linear algebra, 418-439(1971).
+
+c     this subroutine finds those eigenvectors of a real upper
+c     hessenberg matrix corresponding to specified eigenvalues,
+c     using inverse iteration.
+
+c     on input
+
+c        nm must be set to the row dimension of two-dimensional
+c          array parameters as declared in the calling program
+c          dimension statement.
+
+c        n is the order of the matrix.
+
+c        a contains the hessenberg matrix.
+
+c        wr and wi contain the real and imaginary parts, respectively,
+c          of the eigenvalues of the matrix.  the eigenvalues must be
+c          stored in a manner identical to that of subroutine  hqr,
+c          which recognizes possible splitting of the matrix.
+
+c        select specifies the eigenvectors to be found. the
+c          eigenvector corresponding to the j-th eigenvalue is
+c          specified by setting select(j) to .true..
+
+c        mm should be set to an upper bound for the number of
+c          columns required to store the eigenvectors to be found.
+c          note that two columns are required to store the
+c          eigenvector corresponding to a complex eigenvalue.
+
+c     on output
+
+c        a and wi are unaltered.
+
+c        wr may have been altered since close eigenvalues are perturbed
+c          slightly in searching for independent eigenvectors.
+
+c        select may have been altered.  if the elements corresponding
+c          to a pair of conjugate complex eigenvalues were each
+c          initially set to .true., the program resets the second of
+c          the two elements to .false..
+
+c        m is the number of columns actually used to store
+c          the eigenvectors.
+
+c        z contains the real and imaginary parts of the eigenvectors.
+c          if the next selected eigenvalue is real, the next column
+c          of z contains its eigenvector.  if the eigenvalue is
+c          complex, the next two columns of z contain the real and
+c          imaginary parts of its eigenvector.  the eigenvectors are
+c          normalized so that the component of largest magnitude is 1.
+c          any vector which fails the acceptance test is set to zero.
+
+c        ierr is set to
+c          zero       for normal return,
+c          -(2*n+1)   if more than mm columns of z are necessary
+c                     to store the eigenvectors corresponding to
+c                     the specified eigenvalues.
+c          -k         if the iteration corresponding to the k-th
+c                     value fails,
+c          -(n+k)     if both error situations occur.
+
+c        rm1, rv1, and rv2 are temporary storage arrays.  note that rm1
+c          is square of dimension n by n and, augmented by two columns
+c          of z, is the transpose of the corresponding algol b array.
+
+c     the algol procedure guessvec appears in invit in line.
+
+c     calls cdiv for complex division.
+c     calls pythag for  dsqrt(a*a + b*b) .
+
+c     questions and comments should be directed to burton s. garbow,
+c     mathematics and computer science div, argonne national laboratory
+
+c     this version dated august 1983.
+
+c     ------------------------------------------------------------------
+
+      ierr = 0
+      uk = 0
+      s = 1
+c     .......... ip = 0, real eigenvalue
+c                     1, first of conjugate complex pair
+c                    -1, second of conjugate complex pair ..........
+      ip = 0
+      n1 = n - 1
+
+      do 980 k = 1, n
+         if (wi(k) .eq. 0.0d0 .or. ip .lt. 0) go to 100
+         ip = 1
+         if (select(k) .and. select(k+1)) select(k+1) = .false.
+  100    if (.not. select(k)) go to 960
+         if (wi(k) .ne. 0.0d0) s = s + 1
+         if (s .gt. mm) go to 1000
+         if (uk .ge. k) go to 200
+c     .......... check for possible splitting ..........
+         do 120 uk = k, n
+            if (uk .eq. n) go to 140
+            if (a(uk+1,uk) .eq. 0.0d0) go to 140
+  120    continue
+c     .......... compute infinity norm of leading uk by uk
+c                (hessenberg) matrix ..........
+  140    norm = 0.0d0
+         mp = 1
+
+         do 180 i = 1, uk
+            x = 0.0d0
+
+            do 160 j = mp, uk
+  160       x = x + dabs(a(i,j))
+
+            if (x .gt. norm) norm = x
+            mp = i
+  180    continue
+c     .......... eps3 replaces zero pivot in decomposition
+c                and close roots are modified by eps3 ..........
+         if (norm .eq. 0.0d0) norm = 1.0d0
+         eps3 = epslon(norm)
+c     .......... growto is the criterion for the growth ..........
+         ukroot = uk
+         ukroot = dsqrt(ukroot)
+         growto = 0.1d0 / ukroot
+  200    rlambd = wr(k)
+         ilambd = wi(k)
+         if (k .eq. 1) go to 280
+         km1 = k - 1
+         go to 240
+c     .......... perturb eigenvalue if it is close
+c                to any previous eigenvalue ..........
+  220    rlambd = rlambd + eps3
+c     .......... for i=k-1 step -1 until 1 do -- ..........
+  240    do 260 ii = 1, km1
+            i = k - ii
+            if (select(i) .and. dabs(wr(i)-rlambd) .lt. eps3 .and.
+     x         dabs(wi(i)-ilambd) .lt. eps3) go to 220
+  260    continue
+
+         wr(k) = rlambd
+c     .......... perturb conjugate eigenvalue to match ..........
+         ip1 = k + ip
+         wr(ip1) = rlambd
+c     .......... form upper hessenberg a-rlambd*i (transposed)
+c                and initial real vector ..........
+  280    mp = 1
+
+         do 320 i = 1, uk
+
+            do 300 j = mp, uk
+  300       rm1(j,i) = a(i,j)
+
+            rm1(i,i) = rm1(i,i) - rlambd
+            mp = i
+            rv1(i) = eps3
+  320    continue
+
+         its = 0
+         if (ilambd .ne. 0.0d0) go to 520
+c     .......... real eigenvalue.
+c                triangular decomposition with interchanges,
+c                replacing zero pivots by eps3 ..........
+         if (uk .eq. 1) go to 420
+
+         do 400 i = 2, uk
+            mp = i - 1
+            if (dabs(rm1(mp,i)) .le. dabs(rm1(mp,mp))) go to 360
+
+            do 340 j = mp, uk
+               y = rm1(j,i)
+               rm1(j,i) = rm1(j,mp)
+               rm1(j,mp) = y
+  340       continue
+
+  360       if (rm1(mp,mp) .eq. 0.0d0) rm1(mp,mp) = eps3
+            x = rm1(mp,i) / rm1(mp,mp)
+            if (x .eq. 0.0d0) go to 400
+
+            do 380 j = i, uk
+  380       rm1(j,i) = rm1(j,i) - x * rm1(j,mp)
+
+  400    continue
+
+  420    if (rm1(uk,uk) .eq. 0.0d0) rm1(uk,uk) = eps3
+c     .......... back substitution for real vector
+c                for i=uk step -1 until 1 do -- ..........
+  440    do 500 ii = 1, uk
+            i = uk + 1 - ii
+            y = rv1(i)
+            if (i .eq. uk) go to 480
+            ip1 = i + 1
+
+            do 460 j = ip1, uk
+  460       y = y - rm1(j,i) * rv1(j)
+
+  480       rv1(i) = y / rm1(i,i)
+  500    continue
+
+         go to 740
+c     .......... complex eigenvalue.
+c                triangular decomposition with interchanges,
+c                replacing zero pivots by eps3.  store imaginary
+c                parts in upper triangle starting at (1,3) ..........
+  520    ns = n - s
+         z(1,s-1) = -ilambd
+         z(1,s) = 0.0d0
+         if (n .eq. 2) go to 550
+         rm1(1,3) = -ilambd
+         z(1,s-1) = 0.0d0
+         if (n .eq. 3) go to 550
+
+         do 540 i = 4, n
+  540    rm1(1,i) = 0.0d0
+
+  550    do 640 i = 2, uk
+            mp = i - 1
+            w = rm1(mp,i)
+            if (i .lt. n) t = rm1(mp,i+1)
+            if (i .eq. n) t = z(mp,s-1)
+            x = rm1(mp,mp) * rm1(mp,mp) + t * t
+            if (w * w .le. x) go to 580
+            x = rm1(mp,mp) / w
+            y = t / w
+            rm1(mp,mp) = w
+            if (i .lt. n) rm1(mp,i+1) = 0.0d0
+            if (i .eq. n) z(mp,s-1) = 0.0d0
+
+            do 560 j = i, uk
+               w = rm1(j,i)
+               rm1(j,i) = rm1(j,mp) - x * w
+               rm1(j,mp) = w
+               if (j .lt. n1) go to 555
+               l = j - ns
+               z(i,l) = z(mp,l) - y * w
+               z(mp,l) = 0.0d0
+               go to 560
+  555          rm1(i,j+2) = rm1(mp,j+2) - y * w
+               rm1(mp,j+2) = 0.0d0
+  560       continue
+
+            rm1(i,i) = rm1(i,i) - y * ilambd
+            if (i .lt. n1) go to 570
+            l = i - ns
+            z(mp,l) = -ilambd
+            z(i,l) = z(i,l) + x * ilambd
+            go to 640
+  570       rm1(mp,i+2) = -ilambd
+            rm1(i,i+2) = rm1(i,i+2) + x * ilambd
+            go to 640
+  580       if (x .ne. 0.0d0) go to 600
+            rm1(mp,mp) = eps3
+            if (i .lt. n) rm1(mp,i+1) = 0.0d0
+            if (i .eq. n) z(mp,s-1) = 0.0d0
+            t = 0.0d0
+            x = eps3 * eps3
+  600       w = w / x
+            x = rm1(mp,mp) * w
+            y = -t * w
+
+            do 620 j = i, uk
+               if (j .lt. n1) go to 610
+               l = j - ns
+               t = z(mp,l)
+               z(i,l) = -x * t - y * rm1(j,mp)
+               go to 615
+  610          t = rm1(mp,j+2)
+               rm1(i,j+2) = -x * t - y * rm1(j,mp)
+  615          rm1(j,i) = rm1(j,i) - x * rm1(j,mp) + y * t
+  620       continue
+
+            if (i .lt. n1) go to 630
+            l = i - ns
+            z(i,l) = z(i,l) - ilambd
+            go to 640
+  630       rm1(i,i+2) = rm1(i,i+2) - ilambd
+  640    continue
+
+         if (uk .lt. n1) go to 650
+         l = uk - ns
+         t = z(uk,l)
+         go to 655
+  650    t = rm1(uk,uk+2)
+  655    if (rm1(uk,uk) .eq. 0.0d0 .and. t .eq. 0.0d0) rm1(uk,uk) = eps3
+c     .......... back substitution for complex vector
+c                for i=uk step -1 until 1 do -- ..........
+  660    do 720 ii = 1, uk
+            i = uk + 1 - ii
+            x = rv1(i)
+            y = 0.0d0
+            if (i .eq. uk) go to 700
+            ip1 = i + 1
+
+            do 680 j = ip1, uk
+               if (j .lt. n1) go to 670
+               l = j - ns
+               t = z(i,l)
+               go to 675
+  670          t = rm1(i,j+2)
+  675          x = x - rm1(j,i) * rv1(j) + t * rv2(j)
+               y = y - rm1(j,i) * rv2(j) - t * rv1(j)
+  680       continue
+
+  700       if (i .lt. n1) go to 710
+            l = i - ns
+            t = z(i,l)
+            go to 715
+  710       t = rm1(i,i+2)
+  715       call cdiv(x,y,rm1(i,i),t,rv1(i),rv2(i))
+  720    continue
+c     .......... acceptance test for real or complex
+c                eigenvector and normalization ..........
+  740    its = its + 1
+         norm = 0.0d0
+         normv = 0.0d0
+
+         do 780 i = 1, uk
+            if (ilambd .eq. 0.0d0) x = dabs(rv1(i))
+            if (ilambd .ne. 0.0d0) x = pythag(rv1(i),rv2(i))
+            if (normv .ge. x) go to 760
+            normv = x
+            j = i
+  760       norm = norm + x
+  780    continue
+
+         if (norm .lt. growto) go to 840
+c     .......... accept vector ..........
+         x = rv1(j)
+         if (ilambd .eq. 0.0d0) x = 1.0d0 / x
+         if (ilambd .ne. 0.0d0) y = rv2(j)
+
+         do 820 i = 1, uk
+            if (ilambd .ne. 0.0d0) go to 800
+            z(i,s) = rv1(i) * x
+            go to 820
+  800       call cdiv(rv1(i),rv2(i),x,y,z(i,s-1),z(i,s))
+  820    continue
+
+         if (uk .eq. n) go to 940
+         j = uk + 1
+         go to 900
+c     .......... in-line procedure for choosing
+c                a new starting vector ..........
+  840    if (its .ge. uk) go to 880
+         x = ukroot
+         y = eps3 / (x + 1.0d0)
+         rv1(1) = eps3
+
+         do 860 i = 2, uk
+  860    rv1(i) = y
+
+         j = uk - its + 1
+         rv1(j) = rv1(j) - eps3 * x
+         if (ilambd .eq. 0.0d0) go to 440
+         go to 660
+c     .......... set error -- unaccepted eigenvector ..........
+  880    j = 1
+         ierr = -k
+c     .......... set remaining vector components to zero ..........
+  900    do 920 i = j, n
+            z(i,s) = 0.0d0
+            if (ilambd .ne. 0.0d0) z(i,s-1) = 0.0d0
+  920    continue
+
+  940    s = s + 1
+  960    if (ip .eq. (-1)) ip = 0
+         if (ip .eq. 1) ip = -1
+  980 continue
+
+      go to 1001
+c     .......... set error -- underestimate of eigenvector
+c                space required ..........
+ 1000 if (ierr .ne. 0) ierr = ierr - n
+      if (ierr .eq. 0) ierr = -(2 * n + 1)
+ 1001 m = s - 1 - iabs(ip)
+      return
+      end
+      subroutine cdiv(ar,ai,br,bi,cr,ci)
+      double precision ar,ai,br,bi,cr,ci
+
+c     complex division, (cr,ci) = (ar,ai)/(br,bi)
+
+      double precision s,ars,ais,brs,bis
+      s = dabs(br) + dabs(bi)
+      ars = ar/s
+      ais = ai/s
+      brs = br/s
+      bis = bi/s
+      s = brs**2 + bis**2
+      cr = (ars*brs + ais*bis)/s
+      ci = (ais*brs - ars*bis)/s
+      return
+      end
+      double precision function epslon (x)
+      double precision x
+
+c     estimate unit roundoff in quantities of size x.
+
+      double precision a,b,c,eps
+
+c     this program should function properly on all systems
+c     satisfying the following two assumptions,
+c        1.  the base used in representing floating point
+c            numbers is not a power of three.
+c        2.  the quantity  a  in statement 10 is represented to
+c            the accuracy used in floating point variables
+c            that are stored in memory.
+c     the statement number 10 and the go to 10 are intended to
+c     force optimizing compilers to generate code satisfying
+c     assumption 2.
+c     under these assumptions, it should be true that,
+c            a  is not exactly equal to four-thirds,
+c            b  has a zero for its last bit or digit,
+c            c  is not exactly equal to one,
+c            eps  measures the separation of 1.0 from
+c                 the next larger floating point number.
+c     the developers of eispack would appreciate being informed
+c     about any systems where these assumptions do not hold.
+
+c     this version dated 4/6/83.
+
+      a = 4.0d0/3.0d0
+   10 b = a - 1.0d0
+      c = b + b + b
+      eps = dabs(c-1.0d0)
+      if (eps .eq. 0.0d0) go to 10
+      epslon = eps*dabs(x)
+      return
+      end
+      double precision function pythag(a,b)
+      double precision a,b
+
+c     finds dsqrt(a**2+b**2) without overflow or destructive underflow
+
+      double precision p,r,s,t,u
+      p = dmax1(dabs(a),dabs(b))
+      if (p .eq. 0.0d0) go to 20
+      r = (dmin1(dabs(a),dabs(b))/p)**2
+   10 continue
+         t = 4.0d0 + r
+         if (t .eq. 4.0d0) go to 20
+         s = r/t
+         u = 1.0d0 + 2.0d0*s
+         p = u*p
+         r = (s/u)**2 * r
+      go to 10
+   20 pythag = p
+      return
+      end
+
+SHAR_EOF
+if test -f 'main.f'
+then
+	echo shar: over-writing existing file "'main.f'"
+fi
+cat << \SHAR_EOF > 'main.f'
+      integer i,j,k,n,lda,ic,inftlr,ldwork
+      parameter (lda=751)
+      integer ipvt(lda),info,iflag,iter
+      double precision a(lda,lda),t(lda,lda),z(lda,lda),
+     >     xr(lda),xi(lda),wr,wi
+      double precision diag(lda),sub(lda),sup(lda),sav(lda)
+      double precision owr,owi,zi(lda,lda),rnorm,
+     >     w(lda),wwr(lda),wwi(lda)
+      double precision work(lda,20)
+      double precision zero,one,two
+      double precision second,t1,t2,t3,t4,t5,t6,t7,t8,t9,t10
+      double precision asave(lda,lda),scale(lda)
+      integer low,upp,int(lda),m
+      logical select(lda)
+      parameter (zero = 0.0, one = 1.0, two = 2.0)
+
+      ldwork = lda
+      n = 0
+    1 continue
+      iflag = 0
+      n = n + 20
+      if (n .gt. 100) stop
+      do 20 j = 1,n
+         do 10 i = 1,n
+            a(i,j) = zero
+ 10      continue
+ 20   continue
+
+      call matgen(a,lda,n)
+      do 21 j = 1,n
+         ipvt(j) = j
+ 21   continue
+
+      do 50 j = 1,n
+         do 40 i = 1,n
+            t(i,j) = a(i,j)
+ 40      continue
+ 50   continue
+*      call rmatin(lda,n,a,t,0)
+      write(6,*)' '
+      write(6,*)'matrix size ',n
+      t1 = second(t1)
+      call rg(lda,n,t,wwr,wwi,0,zi,ipvt,z,info)
+      t2 = second(t2) - t1
+      if( info .ne. 0 ) write(6,*)'TROUBLE FROM EISPACK info=',info
+c     write(6,51)'eigenvalues from eispack, matrix number',ic,
+c     >                    (wwr(i),wwi(i),i=1,n)
+c   51 format(a,i3/(2g16.7))
+      do 53 j = 1,n
+         do 52 i = 1,n
+            t(i,j) = a(i,j)
+ 52      continue
+ 53   continue
+
+c---------------------INVIT (FROM EISPACK) SECTION------------------
+
+      do 70 i=1,n
+         select(i) = .true.
+ 70   continue
+      t3 = second(t3)
+      call balanc(lda,n,t,low,upp,scale)
+      call elmhes(lda,n,low,upp,t,int)
+      do 90 i=1,n
+         do 80 j=1,n
+            asave(i,j) = t(i,j)
+ 80      continue
+ 90   continue
+      call hqr(lda,n,low,upp,t,wwr,wwi,info)
+      t4 = second(t4) - t3
+      if( info .ne. 0) write(6,*)'TROUBLE FROM HQR, info=',info
+      t5 = second(t5)
+      call invit(lda,n,asave,wwr,wwi,select,n,m,z,info,zi,xr,xi)
+      if( info .ne. 0) write(6,*)'TROUBLE FROM INVIT, info=',info
+      call elmbak(lda,low,upp,asave,int,m,z)
+      call balbak(lda,n,low,upp,scale,m,z)
+      t6 = second(t6) - t5
+      write(6,*)'time for invit setup                ',t4
+      write(6,*)'total time for invit, all vectors   ',t6
+      write(6,*)'average time per vector for invit   ',t6/n
+      call rgresid(lda,n,a,wwr,wwi,z,rnorm)
+      write(6,*)'maximum residual from invit is      ',rnorm
+      print *
+
+c---------------------------RG Section------------------------------
+
+      do 110 j=1,n
+         do 100 i=1,n
+            t(i,j) = a(i,j)
+            zi(i,j) = zero
+            z(i,j) = zero
+ 100     continue
+ 110  continue
+      t7 = second(t7)
+      call rg(lda,n,t,wwr,wwi,1,zi,ipvt,z,info)
+      t8 = second(t8) - t7
+      call rgresid(lda,n,a,wwr,wwi,zi,rnorm)
+      write(6,*)'time for rg, with vectors             ',t8
+      write(6,*)'maximum residual from rg is           ',rnorm
+      print *
+
+c------------------------ATOTRI/TLR Section----------------------
+
+      do 55 j = 1,n
+         do 54 i = 1,n
+            t(i,j) = a(i,j)
+ 54      continue
+ 55   continue
+
+      t3 = second(t3)
+      call atotri(lda,t,n,ipvt,info)
+      t4 = second(t4) - t3
+      do 56 i = 1,n-1
+         sub(i+1) = t(i+1,i)
+         diag(i) = t(i,i)
+         sup(i) = t(i,i+1)
+ 56   continue
+      diag(n) = t(n,n)
+      t5 = second(t5)
+      call tlr(n,diag,sub,sup,sav,inftlr)
+      t6 = second(t6) - t5
+      t10 = 0.0
+      if( info .ne. 0 ) then
+         t9 = second(t9)
+         write(6,*)'PROBLEMS from a2tri',info
+         do 57 j = 1,n
+            do 58 i = 1,n
+               t(i,j) = a(i,j)
+ 58         continue
+ 57      continue
+         call newstr(t,lda,n,w,iflag)
+         call atotri(lda,t,n,ipvt,info)
+         do 59 i = 1,n-1
+            sub(i+1) = t(i+1,i)
+            diag(i) = t(i,i)
+            sup(i) = t(i,i+1)
+ 59      continue
+         diag(n) = t(n,n)
+         call tlr(n,diag,sub,sup,sav,inftlr)
+         if( info .ne. 0 )
+     >        write(6,*)'BIG PROBLEMS from a2tri BIG trouble',info
+         t10 = second(t10) - t9
+      endif
+      write(6,*)'time for a2tri             ',t4
+      write(6,*)'time for tlr               ',t6
+      if (t10 .ne. zero) then
+         write(6,*)'time for restart           ',t10
+      endif
+      print *
+
+c---------------------REFINE Section----------------------------
+
+      iter = 0
+      rnorm = zero
+      t2 = zero
+      do 999 k = 1,n
+         wr = wwr(k)
+         wi = wwi(k)
+         owr = wr
+         owi = wi
+         wr = diag(k)
+         wi = sub(k)
+         do 98 i = 1,n
+            if( wi .gt. zero ) then
+               xr(i) = zi(i,k)
+               xi(i) = zi(i,k+1)
+            endif
+            if( wi .lt. zero ) then
+               xr(i) = zi(i,k-1)
+               xi(i) = zi(i,k)
+            endif
+            if( wi .eq. zero ) then
+               xr(i) = zi(i,k)
+               xi(i) = zero
+            endif
+ 98      continue
+         t1 = second(t1)
+         call refine(n,t,lda,a,wr,wi,xr,xi,ipvt,w,iflag,work,ldwork)
+         t2 = t2 + second(t2) - t1
+         iter = iter + ipvt(n+1)
+         rnorm = max(rnorm,w(n+1))
+ 99      format(a,2g24.16)
+ 999  continue
+      write(6,*)'total time in refine, all vectors      ',t2
+      write(6,*)'average time for eigenvalue in refine: ',t2/n
+      write(6,*)'max residual in refine                 ',rnorm
+      write(6,*)'average number of iterations for an ',
+     $          'eigenvalue in refine: ',float(iter)/float(n)
+
+c-------------------GTINIT Section-------------------------
+
+c     iter = 0
+c     rnorm = zero
+c     t2 = zero
+c     do 210 k=1,n
+c        wr = diag(k)
+c        wi = sub(k)
+c        do 200 i = 1,n
+c           if( wi .gt. zero ) then
+c              xr(i) = zi(i,k)
+c              xi(i) = zi(i,k+1)
+c           endif
+c           if( wi .lt. zero ) then
+c              xr(i) = zi(i,k-1)
+c              xi(i) = zi(i,k)
+c           endif
+c           if( wi .eq. zero ) then
+c              xr(i) = zi(i,k)
+c              xi(i) = zero
+c           endif
+c200     continue
+c        t1 = second(t1)
+c        call inviter(n,t,lda,a,wr,wi,xr,xi,ipvt,w,iflag,work,ldwork)
+c        t2 = t2 + second(t2) - t1
+c        iter = iter + ipvt(n+1)
+c        rnorm = max(rnorm,w(n+1))
+c210  continue
+c     write(6,*)'total time in inviter, all vectors     ',t2
+c     write(6,*)'average time per eigenvalue in inviter ',t2/n
+c     write(6,*)'max residual from inviter              ',rnorm
+
+      rnorm = zero
+      go to 1
+      end
+
+      subroutine matgen(a,lda,n)
+      integer lda,n,init,j,i
+      double precision a(lda,1)
+      save init
+      data init /1325/
+
+      do 30 j = 1,n
+         do 20 i = 1,n
+            init = mod(3125*init,65536)
+            a(i,j) = (init - 32768.0)/16384.0
+   20    continue
+   30 continue
+      return
+      end
+SHAR_EOF
+if test -f 'mlu.f'
+then
+	echo shar: over-writing existing file "'mlu.f'"
+fi
+cat << \SHAR_EOF > 'mlu.f'
+      SUBROUTINE MLU(N,WORK,LDWORK)
+
+      INTEGER N,LDWORK
+      DOUBLE PRECISION WORK(LDWORK,*)
+
+*  Purpose:
+*     Form the LU decomposition of a matrix of the form:
+
+*    (    d    sup   col  )
+*    (  sub  \  \     |   )
+*    (     \  \  \    |   )
+*    (      \  \  \   |   )
+*    (       \  \     |   )
+*    (        \  \    |   )
+*    (       sub  d  col  )
+
+*  Arguments:
+*     N      -integer
+*             number of rows and columns in the above matrix.
+*     WORK   -double precision array, dimension (LDWORK,N)
+*             Contains the above matrix in packed form, by diagonals.
+*     LDWORK -integer
+*             Leading dimension of the array WORK.
+
+*     .. Local Scalars ..
+      DOUBLE PRECISION TRE, TIM, CXABS
+      DOUBLE PRECISION ZERO
+      INTEGER I
+
+*     .. Parameters ..
+      PARAMETER (ZERO = 0.0)
+
+*     .. Executable Statements ..
+      DO 10 I = 2,N
+         WORK(I-1,15) = ZERO
+         WORK(I-1,16) = ZERO
+         WORK(I-1,19) = I-1
+
+*        pivot if necessary
+
+         IF( CXABS(WORK(I-1,5),WORK(I-1,6)) .LT.
+     $        CXABS(WORK(I,1),WORK(I,2)) ) THEN
+            WORK(I-1,19) = I
+
+            TRE = WORK(I-1,5)
+            TIM = WORK(I-1,6)
+            WORK(I-1,5) = WORK(I,1)
+            WORK(I-1,6) = WORK(I,2)
+            WORK(I,1) = TRE
+            WORK(I,2) = TIM
+
+            TRE = WORK(I-1,3)
+            TIM = WORK(I-1,4)
+            WORK(I-1,3) = WORK(I,5)
+            WORK(I-1,4) = WORK(I,6)
+            WORK(I,5) = TRE
+            WORK(I,6) = TIM
+
+            TRE = WORK(I-1,15)
+            TIM = WORK(I-1,16)
+            WORK(I-1,15) = WORK(I,3)
+            WORK(I-1,16) = WORK(I,4)
+            WORK(I,3) = TRE
+            WORK(I,4) = TIM
+
+            TRE = WORK(I-1,7)
+            TIM = WORK(I-1,8)
+            WORK(I-1,7) = WORK(I,7)
+            WORK(I-1,8) = WORK(I,8)
+            WORK(I,7) = TRE
+            WORK(I,8) = TIM
+         ENDIF
+
+         CALL CXDIV(WORK(I,1),WORK(I,2),WORK(I-1,5),WORK(I-1,6),
+     $        WORK(I,1), WORK(I,2))
+         WORK(I,1) = -WORK(I,1)
+         WORK(I,2) = -WORK(I,2)
+         CALL CXMULT(WORK(I-1,3),WORK(I-1,4),WORK(I,1),WORK(I,2),
+     $        TRE,TIM)
+         WORK(I,5) = TRE + WORK(I,5)
+         WORK(I,6) = TIM + WORK(I,6)
+         CALL CXMULT(WORK(I-1,15),WORK(I-1,16),WORK(I,1),WORK(I,2),
+     $        TRE,TIM)
+         WORK(I,3) = TRE + WORK(I,3)
+         WORK(I,4) = TIM + WORK(I,4)
+         CALL CXMULT(WORK(I-1,7),WORK(I-1,8),WORK(I,1),WORK(I,2),
+     $        TRE,TIM)
+         WORK(I,7) = TRE + WORK(I,7)
+         WORK(I,8) = TIM + WORK(I,8)
+ 10   CONTINUE
+      RETURN
+      END
+SHAR_EOF
+if test -f 'msol.f'
+then
+	echo shar: over-writing existing file "'msol.f'"
+fi
+cat << \SHAR_EOF > 'msol.f'
+      SUBROUTINE MSOL(N,WORK,LDWORK,XRE,XIM)
+
+      INTEGER N,LDWORK
+      DOUBLE PRECISION WORK(LDWORK,*),XRE(*),XIM(*)
+
+c  Purpose:
+c     This routine solves a system based on the factored
+c     matrix stored in the array WORK as returned by MLU.  The rhs
+c     is in x and the solution returned in x.
+
+c  Arguments:
+
+c     N      -integer
+c             Size of the matrix.
+
+c     WORK   -double precision array, dimension (LDWORK,N)
+c             Contains the matrix in packed, factored form.
+
+c     LDWORK -integer
+c             Leading dimension of the array WORK.
+
+c     XRE    -double precision array, dimension (N)
+c     XIM    -double precision array, dimension (N)
+c             On entry, contain the right hand side, and on exit,
+c             contain the solution.
+
+*     .. Local Scalars ..
+      INTEGER I
+      DOUBLE PRECISION TRE, TIM
+
+*     .. Executable Statements ..
+
+*     compute y = inv(L)*x
+
+      DO 10 I = 2,N
+         IF( INT(WORK(I-1,19) ).NE. I-1 ) THEN
+            TRE = XRE(I-1)
+            TIM = XIM(I-1)
+            XRE(I-1) = XRE(I)
+            XIM(I-1) = XIM(I)
+            XRE(I) = TRE
+            XIM(I) = TIM
+         ENDIF
+         CALL CXMULT(WORK(I,1),WORK(I,2),XRE(I-1),XIM(I-1),TRE,TIM)
+         XRE(I) = XRE(I) + TRE
+         XIM(I) = XIM(I) + TIM
+ 10   CONTINUE
+
+*     compute inv(U)*y
+
+      DO 20 I = 1,N
+         CALL CXMULT(WORK(I,7),WORK(I,8),XRE(N+1),XIM(N+1),TRE,TIM)
+         XRE(I) = XRE(I) - TRE
+         XIM(I) = XIM(I) - TIM
+ 20   CONTINUE
+      DO 30 I = N,3,-1
+         CALL CXDIV(XRE(I),XIM(I),WORK(I,5),WORK(I,6),XRE(I),XIM(I))
+         CALL CXMULT(WORK(I-1,3),WORK(I-1,4),XRE(I),XIM(I),TRE,TIM)
+         XRE(I-1) = XRE(I-1) - TRE
+         XIM(I-1) = XIM(I-1) - TIM
+         CALL CXMULT(WORK(I-2,15),WORK(I-2,16),XRE(I),XIM(I),TRE,TIM)
+         XRE(I-2) = XRE(I-2) - TRE
+         XIM(I-2) = XIM(I-2) - TIM
+ 30   CONTINUE
+      CALL CXDIV(XRE(2),XIM(2),WORK(2,5),WORK(2,6),XRE(2),XIM(2))
+      CALL CXMULT(WORK(1,3),WORK(1,4),XRE(2),XIM(2),TRE,TIM)
+      XRE(1) = XRE(1) - TRE
+      XIM(1) = XIM(1) - TIM
+      CALL CXDIV(XRE(1),XIM(1),WORK(1,5),WORK(1,6),XRE(1),XIM(1))
+      RETURN
+      END
+SHAR_EOF
+if test -f 'newstr.f'
+then
+	echo shar: over-writing existing file "'newstr.f'"
+fi
+cat << \SHAR_EOF > 'newstr.f'
+      SUBROUTINE NEWSTR(A, LDA, N, W, IFLAG)
+
+*     .. Scalar Arguments ..
+      INTEGER LDA, N, IFLAG
+
+*     .. Array Arguments ..
+      DOUBLE PRECISION A(LDA, *), W(*)
+
+*  Purpose:
+*     Subroutine to generate a random Householder transformation to
+*     apply to the matrix A to scramble it.  The matrix A is
+*     assumed to be in dense format.
+
+*  Arguments:
+*   A        -double precision array of dimension (LDA,N)
+*             On entry A contains the original matrix.
+*             On exit, A contains QAQ, where Q is defined by W below.
+
+*   LDA      -leading dimension of A
+
+*   N        -N specifies the order of the matrix A.
+*             N must be nonnegative.
+*             not modified.
+
+*   W        -double precision vector of length N.
+*             On exit, contains a random Householder vector defining
+*             a Householder transformation Q=I-2WW'.
+
+*   IFLAG    -integer
+*             On exit, IFLAG is set to one, indicating that NEWSTR
+*             has been called.
+
+*     .. Local Scalars ..
+      INTEGER LDQ
+      INTEGER I, J
+      DOUBLE PRECISION IP, C
+      PARAMETER (LDQ=751)
+
+*     .. Local Arrays ..
+      DOUBLE PRECISION Y(LDQ), X(LDQ)
+
+*     .. External Functions
+      DOUBLE PRECISION RANDOM
+
+*     .. Executable Statements ..
+
+*     generate random Householder vector
+
+      IFLAG = 1
+      IP = 0.0D0
+      DO 10 I=1, N
+         W(I) = RANDOM()
+         IP = IP + W(I)*W(I)
+ 10   CONTINUE
+      IP = DSQRT(IP)
+
+*     normalize
+
+      DO 20 I=1, N
+         W(I) = W(I) / IP
+ 20   CONTINUE
+
+*     now apply Householder similarity transformation:
+*     newa = (I-2ww')a(I-2ww')
+
+      C = 0.0D0
+      DO 30 I=1, N
+         Y(I) = 0.0D0
+         X(I) = 0.0D0
+         DO 40 J=1, N
+            Y(I) = Y(I) + A(I,J) * W(J)
+            X(I) = X(I) + A(J,I) * W(J)
+ 40      CONTINUE
+         C = C + X(I) * W(I)
+ 30   CONTINUE
+
+      DO 50 I=1, N
+         DO 60 J=1, N
+            A(I,J) = A(I,J) + 4.0D0 * C * W(I) * W(J) - 2.0D0 *
+     $           W(I) * X(J) - 2.0D0 * Y(I) * W(J)
+ 60      CONTINUE
+ 50   CONTINUE
+      RETURN
+      END
+SHAR_EOF
+if test -f 'rayly.f'
+then
+	echo shar: over-writing existing file "'rayly.f'"
+fi
+cat << \SHAR_EOF > 'rayly.f'
+      SUBROUTINE RAYLY(A,LDA,N,XR,XI,WR,WI)
+      INTEGER LDA,N
+      DOUBLE PRECISION A(LDA,*),XR(*),XI(*),WR,WI
+
+      INTEGER I,J
+      DOUBLE PRECISION TR(1000),TI(1000),ZERO,NEWWR,NEWWI,NORMX
+      DATA ZERO/0.0D0/
+
+      DO 10 J = 1,N
+         TR(J) = ZERO
+         TI(J) = ZERO
+ 10   CONTINUE
+      DO 30 J = 1,N
+         DO 20 I = 1,N
+            TR(I) = TR(I) + A(I,J)*XR(J)
+            TI(I) = TI(I) + A(I,J)*XI(J)
+ 20      CONTINUE
+ 30   CONTINUE
+      NEWWR = ZERO
+      NEWWI = ZERO
+      DO 40 I = 1,N
+         NEWWR = NEWWR + TR(I)*XR(I) + TI(I)*XI(I)
+         NEWWI = NEWWI + TI(I)*XR(I) - TR(I)*XI(I)
+ 40   CONTINUE
+      NORMX = ZERO
+      DO 50 I = 1,N
+         NORMX = NORMX + XR(I)*XR(I) + XI(I)*XI(I)
+ 50   CONTINUE
+      NEWWR = NEWWR/NORMX
+      NEWWI = NEWWI/NORMX
+      WR = NEWWR
+      WI = NEWWI
+      RETURN
+      END
+SHAR_EOF
+if test -f 'refine.f'
+then
+	echo shar: over-writing existing file "'refine.f'"
+fi
+cat << \SHAR_EOF > 'refine.f'
+      SUBROUTINE REFINE(N,A,LDA,AORG,WR,WI,XR,XI,IPVT,W,IFLAG,
+     $     WORK,LDWORK)
+
+      INTEGER N,LDA,IPVT(*),IFLAG,LDWORK
+      DOUBLE PRECISION A(LDA,*), AORG(LDA,*),WR,WI,XR(*),XI(*),W(*)
+      DOUBLE PRECISION WORK(LDWORK,*)
+
+*  Purpose:
+*     This routine uses an iterative refinement technique to
+*     improve the accuracy of the eigenvalue approximation
+*     (WR,WI) and to compute the corresponding eigenvector
+*     (XR,XI).  It is assumed that the user has reduced the
+*     matrix to tridiagonal form (see routines ATOTRI and TLR
+*     for details).  The matrix A contains information about
+*     the reduction to tridiagonal form.  AORG is the original
+*     matrix, required in the residual computation for the
+*     refinement.
+
+*  Arguments:
+*    N	    -integer
+*	     N specifies the order of the matrix A.
+*	     N must be nonnegative.
+*	     not modified.
+*
+*    A	    -double precision array, dimension (LDA,N)
+*	     A contains information about the reduction to
+*	     tridiagonal form.
+*
+*    LDA    -integer
+*	     The leading dimension of the array A.
+*	     LDA >= max(1,N).
+*
+*    AORG   -double precision array, dimension (LDA,N)
+*	     AORG contains the original matrix.
+*
+*    WR	    -double precision
+*	     On entry, is the real part of the approximate
+*	     eigenvalue.
+*	     On exit, is the improved real part of the
+*	     approximate eigenvalue.
+*
+*    WI	    -double precision
+*	     On entry, is the imaginary part of the
+*	     approximate eigenvalue.
+*	     On exit, is the improved imaginary part of the
+*	     approximate eigenvalue.
+*
+*    XR	    -double precision array, dimension (N)
+*	     The real part of the computed eigenvector.
+*
+*    XI	    -double precision array, dimension (N)
+*	     The imaginary part of the computed eigenvector.
+*
+*    IPIV   -integer array, dimension (N)
+*	     Contains the pivot sequence used during the
+*	     reduction to tridiagonal form.
+*
+*    W	    -double precision array, dimension (N)
+*	     May contain information if a restart was
+*	     performed in the tridiagonal process, as
+*	     indicated by IFLAG.
+*
+*    IFLAG  -integer
+*	     Signals if a restart was required during reduction
+*	     to tridiagonal form. IFLAG = 1 signals a restart
+*	     was taken.
+*
+*    WORK   -double precision array, dimension (LDWORK,19)
+*	     Used for workspace.
+
+*    LDWORK -integer
+*            The leading dimension of the array WORK.
+*            LDWORK >= max(1,N+1).
+
+*     .. Parameters ..
+      DOUBLE PRECISION ONE,ZERO
+      PARAMETER (ONE = 1.0, ZERO = 0.0)
+      INTEGER MAXITS
+      PARAMETER (MAXITS = 20)
+*     ..
+*     .. Local Scalars ..
+      INTEGER I,IS,ITER,ISTOP
+      DOUBLE PRECISION ANORM,RNORM
+      DOUBLE PRECISION T
+*     ..
+*     .. External Subroutines ..
+      EXTERNAL APPLY1, APPLY2, APPLY3, CXCOPY, GTINIT, RESID, SHEMOR
+*     ..
+*     .. External Functions ..
+      EXTERNAL ICXMAX, D1MACH,DASUM
+      INTEGER ICXMAX
+      DOUBLE PRECISION D1MACH,DASUM
+*     ..
+*     .. Intrinsic Functions ..
+      INTRINSIC MAX
+*     ..
+*     .. Executable Statements ..
+
+*     Do one step of inverse iteration to get an approximate
+*     eigenvector.
+
+      CALL GTINIT(N,A,LDA,WR,WI,XR,XI,WORK,LDWORK)
+      CALL APPLY3(N,A,LDA,XR,XI,IPVT,W,IFLAG)
+
+*     Compute the norm of A.
+
+      ANORM = ZERO
+      DO 10 I = 1,N
+         T = DASUM(N,AORG(1,I),1)
+         ANORM = MAX( ANORM, T )
+ 10   CONTINUE
+
+*     Iteration loop for refinement.
+
+      ITER = 1
+      CALL RESID(N,AORG,LDA,XR,XI,WR,WI,WORK(1,13),WORK(1,14),RNORM)
+
+ 20   CONTINUE
+
+*        Find the largest component of x.
+
+      IS = ICXMAX(N,XR,XI,1)
+
+*        Setup right-hand-side for solution; compute inv(Z)*Q*r.
+
+      CALL APPLY1(N,A,LDA,WORK(1,13),WORK(1,14),IPVT,W,IFLAG)
+      WORK(N+1,13) = ZERO
+      WORK(N+1,14) = ZERO
+
+*        Setup the n+1th column of the matrix; compute -inv(Z)*Q*x.
+
+      CALL CXCOPY(N,XR,XI,WORK(1,7),WORK(1,8))
+      WORK(N+1,7) = ZERO
+      WORK(N+1,8) = ZERO
+      CALL APPLY1(N,A,LDA,WORK(1,7),WORK(1,8),IPVT,W,IFLAG)
+      DO 30 I = 1,N
+         WORK(I,7) = -WORK(I,7)
+         WORK(I,8) = -WORK(I,8)
+ 30   CONTINUE
+
+*        Fill in the subdiagonal of matrix with sub(T).
+*        Fill in the diagonal of matrix with diag(T) - w*I.
+*        Fill in the superdiagonal of matrix with sup(T).
+
+      DO 40 I = 1,N-1
+         WORK(I+1,1) = A(I+1,I)
+         WORK(I+1,2) = ZERO
+         WORK(I,5) = A(I,I) - WR
+         WORK(I,6) = ZERO - WI
+         WORK(I,3) = A(I,I+1)
+         WORK(I,4) = ZERO
+ 40   CONTINUE
+      WORK(N,5) = A(N,N) - WR
+      WORK(N,6) = ZERO - WI
+
+*        Fill v with (e(s)'*Q*Z,-1)'
+
+      DO 50 I = 1,N
+         WORK(I,11) = ZERO
+ 50   CONTINUE
+      WORK(IS,11) = ONE
+      CALL APPLY2(N,A,LDA,WORK(1,11),IPVT,W,IFLAG)
+      DO 60 I = 1,N
+         WORK(I,12) = ZERO
+ 60   CONTINUE
+      WORK(N+1,11) = ONE
+      WORK(N+1,12) = ZERO
+
+*        Apply Sherman-Morrison on resulting matrix; solution into y.
+
+      CALL SHEMOR(N,WORK,LDWORK, ISTOP)
+      IF( ISTOP .EQ. 1 ) THEN
+         GO TO 80
+      ENDIF
+
+*        Transform solution back; y <- Q*Z*y.
+
+      CALL APPLY3(N,A,LDA,WORK(1,9),WORK(1,10),IPVT,W,IFLAG)
+
+*        Update eigenpair with corrections.
+
+      DO 70 I = 1,N
+         XR(I) = XR(I) + WORK(I,9)
+         XI(I) = XI(I) + WORK(I,10)
+ 70   CONTINUE
+      WR = WR + WORK(N+1,9)
+      WI = WI + WORK(N+1,10)
+
+*        Compute the residual w*I - A*x and check for convergence.
+
+      CALL RESID(N,AORG,LDA,XR,XI,WR,WI,WORK(1,13),WORK(1,14),RNORM)
+      IF( RNORM .LT. 10*ANORM*D1MACH(4) ) GO TO 80
+
+      ITER = ITER + 1
+      IF( ITER .GT. MAXITS ) GO TO 80
+      GO TO 20
+ 80   CONTINUE
+
+      W(N+1) = RNORM
+      IPVT(N+1) = ITER
+      RETURN
+      END
+SHAR_EOF
+if test -f 'resid.f'
+then
+	echo shar: over-writing existing file "'resid.f'"
+fi
+cat << \SHAR_EOF > 'resid.f'
+      SUBROUTINE RESID(N,A,LDA,XRE,XIM,WR,WI,RRE,RIM,RNORM)
+
+      INTEGER N,LDA
+      DOUBLE PRECISION A(LDA,*),WR,WI,RNORM
+      DOUBLE PRECISION XRE(*),XIM(*),RRE(*),RIM(*)
+
+*  Purpose:
+*     This routine computes the residual for the eigenpair
+*     (wr,wi) and x with the matrix A.
+*             r = (wr,wi)*x - A*x
+*     and returns the vector r and the norm of r.
+
+*  Arguments:
+*     N       -integer
+*             The number of rows and columns in the matrix A.
+*             N >= 0.
+
+*     A       -double precision array, dimension (LDA,N)
+*             A contains the matrix.
+
+*     LDA     -integer
+*             The leading dimension of the array A.
+*             LDA >= max(1,N).
+
+*     XRE     -double precision array, dimension (N)
+*             The real part of the computed eigenvector.
+
+*     XIM     -double precision array, dimension (N)
+*             The imaginary part of the computed eigenvector.
+
+*     WR      -double precision
+*             The real part of the computed eigenvalue.
+
+*     WI      -double precision
+*             The imaginary part of the computed eigenvalue.
+
+*     RRE     -double precision array, dimension (N)
+*             The real part of the computed residual vector.
+
+*     RIM     -double precision array, dimension (N)
+*             The imaginary part of the computed residual vector.
+
+*     RNORM   -double precision
+*             The norm of the residual (RRE, RIM).
+
+*     .. Parameters ..
+      DOUBLE PRECISION ZERO, ONE
+      PARAMETER (ZERO = 0.0, ONE = 1.0)
+*     ..
+*     .. Local Scalars ..
+      INTEGER I,J
+*     .. External Subroutines ..
+      EXTERNAL CXAXPY
+*     ..
+*     .. External Functions ..
+      EXTERNAL CXNRM2
+      DOUBLE PRECISION CXNRM2
+
+      CALL DGEMV('NON',N,N,-ONE,A,LDA,XRE,1,ZERO,RRE,1)
+      CALL DGEMV('NON',N,N,-ONE,A,LDA,XIM,1,ZERO,RIM,1)
+      CALL CXAXPY(N,WR,WI,XRE,XIM,RRE,RIM)
+
+      RNORM = CXNRM2(N,RRE,RIM)
+
+      RETURN
+      END
+
+      SUBROUTINE RGRESID(LDA,N,A,WWR,WWI,Z,RNORM)
+      INTEGER LDA, N
+      DOUBLE PRECISION A(LDA,LDA),WWR(LDA),WWI(LDA),Z(LDA,LDA)
+      DOUBLE PRECISION RRE(751), RIM(751)
+      DOUBLE PRECISION RNORM2, RNORM
+      INTEGER I
+      DOUBLE PRECISION ZEROVEC(751)
+
+      DO 10 I=1,N
+         ZEROVEC(I) = 0.0D0
+ 10   CONTINUE
+
+      RNORM = 0.0
+      I = 1
+
+ 20   CONTINUE
+      IF (WWI(I) .EQ. 0.0D0) THEN
+         CALL RESID(N,A,LDA,Z(1,I),ZEROVEC,WWR(I),WWI(I),RRE,
+     $        RIM,RNORM2)
+      ELSE
+         CALL RESID(N,A,LDA,Z(1,I),Z(1,I+1),WWR(I),WWI(I),RRE,
+     $        RIM,RNORM2)
+         I = I+1
+      ENDIF
+      RNORM = MAX(RNORM,RNORM2)
+      I = I+1
+      IF( I .LE. N ) GO TO 20
+      RETURN
+      END
+SHAR_EOF
+if test -f 'rg.f'
+then
+	echo shar: over-writing existing file "'rg.f'"
+fi
+cat << \SHAR_EOF > 'rg.f'
+      subroutine rg(nm,n,a,wr,wi,matz,z,iv1,fv1,ierr)
+
+      integer n,nm,is1,is2,ierr,matz
+      double precision a(nm,n),wr(n),wi(n),z(nm,n),fv1(n)
+      integer iv1(n)
+
+c     this subroutine calls the recommended sequence of
+c     subroutines from the eigensystem subroutine package (eispack)
+c     to find the eigenvalues and eigenvectors (if desired)
+c     of a real general matrix.
+
+c     on input
+
+c        nm  must be set to the row dimension of the two-dimensional
+c        array parameters as declared in the calling program
+c        dimension statement.
+
+c        n  is the order of the matrix  a.
+
+c        a  contains the real general matrix.
+
+c        matz  is an integer variable set equal to zero if
+c        only eigenvalues are desired.  otherwise it is set to
+c        any non-zero integer for both eigenvalues and eigenvectors.
+
+c     on output
+
+c        wr  and  wi  contain the real and imaginary parts,
+c        respectively, of the eigenvalues.  complex conjugate
+c        pairs of eigenvalues appear consecutively with the
+c        eigenvalue having the positive imaginary part first.
+
+c        z  contains the real and imaginary parts of the eigenvectors
+c        if matz is not zero.  if the j-th eigenvalue is real, the
+c        j-th column of  z  contains its eigenvector.  if the j-th
+c        eigenvalue is complex with positive imaginary part, the
+c        j-th and (j+1)-th columns of  z  contain the real and
+c        imaginary parts of its eigenvector.  the conjugate of this
+c        vector is the eigenvector for the conjugate eigenvalue.
+
+c        ierr  is an integer output variable set equal to an error
+c           completion code described in the documentation for hqr
+c           and hqr2.  the normal completion code is zero.
+
+c        iv1  and  fv1  are temporary storage arrays.
+
+c     questions and comments should be directed to burton s. garbow,
+c     mathematics and computer science div, argonne national laboratory
+
+c     this version dated august 1983.
+
+c     ------------------------------------------------------------------
+
+      if (n .le. nm) go to 10
+      ierr = 10 * n
+      go to 50
+
+   10 call  balanc(nm,n,a,is1,is2,fv1)
+      call  elmhes(nm,n,is1,is2,a,iv1)
+      if (matz .ne. 0) go to 20
+c     .......... find eigenvalues only ..........
+      call  hqr(nm,n,is1,is2,a,wr,wi,ierr)
+      go to 50
+c     .......... find both eigenvalues and eigenvectors ..........
+   20 call  eltran(nm,n,is1,is2,a,iv1,z)
+      call  hqr2(nm,n,is1,is2,a,wr,wi,z,ierr)
+      if (ierr .ne. 0) go to 50
+      call  balbak(nm,n,is1,is2,fv1,n,z)
+   50 return
+      end
+      subroutine balbak(nm,n,low,igh,scale,m,z)
+
+      integer i,j,k,m,n,ii,nm,igh,low
+      double precision scale(n),z(nm,m)
+      double precision s
+
+c     this subroutine is a translation of the algol procedure balbak,
+c     num. math. 13, 293-304(1969) by parlett and reinsch.
+c     handbook for auto. comp., vol.ii-linear algebra, 315-326(1971).
+
+c     this subroutine forms the eigenvectors of a real general
+c     matrix by back transforming those of the corresponding
+c     balanced matrix determined by  balanc.
+
+c     on input
+
+c        nm must be set to the row dimension of two-dimensional
+c          array parameters as declared in the calling program
+c          dimension statement.
+
+c        n is the order of the matrix.
+
+c        low and igh are integers determined by  balanc.
+
+c        scale contains information determining the permutations
+c          and scaling factors used by  balanc.
+
+c        m is the number of columns of z to be back transformed.
+
+c        z contains the real and imaginary parts of the eigen-
+c          vectors to be back transformed in its first m columns.
+
+c     on output
+
+c        z contains the real and imaginary parts of the
+c          transformed eigenvectors in its first m columns.
+
+c     questions and comments should be directed to burton s. garbow,
+c     mathematics and computer science div, argonne national laboratory
+
+c     this version dated august 1983.
+
+c     ------------------------------------------------------------------
+
+      if (m .eq. 0) go to 200
+      if (igh .eq. low) go to 120
+
+      do 110 i = low, igh
+         s = scale(i)
+c     .......... left hand eigenvectors are back transformed
+c                if the foregoing statement is replaced by
+c                s=1.0d0/scale(i). ..........
+         do 100 j = 1, m
+  100    z(i,j) = z(i,j) * s
+
+  110 continue
+c     ......... for i=low-1 step -1 until 1,
+c               igh+1 step 1 until n do -- ..........
+  120 do 140 ii = 1, n
+         i = ii
+         if (i .ge. low .and. i .le. igh) go to 140
+         if (i .lt. low) i = low - ii
+         k = scale(i)
+         if (k .eq. i) go to 140
+
+         do 130 j = 1, m
+            s = z(i,j)
+            z(i,j) = z(k,j)
+            z(k,j) = s
+  130    continue
+
+  140 continue
+
+  200 return
+      end
+      subroutine elmhes(nm,n,low,igh,a,int)
+
+      integer i,j,m,n,la,nm,igh,kp1,low,mm1,mp1
+      double precision a(nm,n)
+      double precision x,y
+      integer int(igh)
+
+c     this subroutine is a translation of the algol procedure elmhes,
+c     num. math. 12, 349-368(1968) by martin and wilkinson.
+c     handbook for auto. comp., vol.ii-linear algebra, 339-358(1971).
+
+c     given a real general matrix, this subroutine
+c     reduces a submatrix situated in rows and columns
+c     low through igh to upper hessenberg form by
+c     stabilized elementary similarity transformations.
+
+c     on input
+
+c        nm must be set to the row dimension of two-dimensional
+c          array parameters as declared in the calling program
+c          dimension statement.
+
+c        n is the order of the matrix.
+
+c        low and igh are integers determined by the balancing
+c          subroutine  balanc.  if  balanc  has not been used,
+c          set low=1, igh=n.
+
+c        a contains the input matrix.
+
+c     on output
+
+c        a contains the hessenberg matrix.  the multipliers
+c          which were used in the reduction are stored in the
+c          remaining triangle under the hessenberg matrix.
+
+c        int contains information on the rows and columns
+c          interchanged in the reduction.
+c          only elements low through igh are used.
+
+c     questions and comments should be directed to burton s. garbow,
+c     mathematics and computer science div, argonne national laboratory
+
+c     this version dated august 1983.
+
+c     ------------------------------------------------------------------
+
+      la = igh - 1
+      kp1 = low + 1
+      if (la .lt. kp1) go to 200
+
+      do 180 m = kp1, la
+         mm1 = m - 1
+         x = 0.0d0
+         i = m
+
+         do 100 j = m, igh
+            if (dabs(a(j,mm1)) .le. dabs(x)) go to 100
+            x = a(j,mm1)
+            i = j
+  100    continue
+
+         int(m) = i
+         if (i .eq. m) go to 130
+c     .......... interchange rows and columns of a ..........
+         do 110 j = mm1, n
+            y = a(i,j)
+            a(i,j) = a(m,j)
+            a(m,j) = y
+  110    continue
+
+         do 120 j = 1, igh
+            y = a(j,i)
+            a(j,i) = a(j,m)
+            a(j,m) = y
+  120    continue
+c     .......... end interchange ..........
+  130    if (x .eq. 0.0d0) go to 180
+         mp1 = m + 1
+
+         do 160 i = mp1, igh
+            y = a(i,mm1)
+            if (y .eq. 0.0d0) go to 160
+            y = y / x
+            a(i,mm1) = y
+
+            do 140 j = m, n
+  140       a(i,j) = a(i,j) - y * a(m,j)
+
+            do 150 j = 1, igh
+  150       a(j,m) = a(j,m) + y * a(j,i)
+
+  160    continue
+
+  180 continue
+
+  200 return
+      end
+      subroutine hqr(nm,n,low,igh,h,wr,wi,ierr)
+C  RESTORED CORRECT INDICES OF LOOPS (200,210,230,240). (9/29/89 BSG)
+
+      integer i,j,k,l,m,n,en,ll,mm,na,nm,igh,itn,its,low,mp2,enm2,ierr
+      double precision h(nm,n),wr(n),wi(n)
+      double precision p,q,r,s,t,w,x,y,zz,norm,tst1,tst2
+      logical notlas
+
+c     this subroutine is a translation of the algol procedure hqr,
+c     num. math. 14, 219-231(1970) by martin, peters, and wilkinson.
+c     handbook for auto. comp., vol.ii-linear algebra, 359-371(1971).
+
+c     this subroutine finds the eigenvalues of a real
+c     upper hessenberg matrix by the qr method.
+
+c     on input
+
+c        nm must be set to the row dimension of two-dimensional
+c          array parameters as declared in the calling program
+c          dimension statement.
+
+c        n is the order of the matrix.
+
+c        low and igh are integers determined by the balancing
+c          subroutine  balanc.  if  balanc  has not been used,
+c          set low=1, igh=n.
+
+c        h contains the upper hessenberg matrix.  information about
+c          the transformations used in the reduction to hessenberg
+c          form by  elmhes  or  orthes, if performed, is stored
+c          in the remaining triangle under the hessenberg matrix.
+
+c     on output
+
+c        h has been destroyed.  therefore, it must be saved
+c          before calling  hqr  if subsequent calculation and
+c          back transformation of eigenvectors is to be performed.
+
+c        wr and wi contain the real and imaginary parts,
+c          respectively, of the eigenvalues.  the eigenvalues
+c          are unordered except that complex conjugate pairs
+c          of values appear consecutively with the eigenvalue
+c          having the positive imaginary part first.  if an
+c          error exit is made, the eigenvalues should be correct
+c          for indices ierr+1,...,n.
+
+c        ierr is set to
+c          zero       for normal return,
+c          j          if the limit of 30*n iterations is exhausted
+c                     while the j-th eigenvalue is being sought.
+
+c     questions and comments should be directed to burton s. garbow,
+c     mathematics and computer science div, argonne national laboratory
+
+c     this version dated september 1989.
+
+c     ------------------------------------------------------------------
+
+      ierr = 0
+      norm = 0.0d0
+      k = 1
+c     .......... store roots isolated by balanc
+c                and compute matrix norm ..........
+      do 50 i = 1, n
+
+         do 40 j = k, n
+   40    norm = norm + dabs(h(i,j))
+
+         k = i
+         if (i .ge. low .and. i .le. igh) go to 50
+         wr(i) = h(i,i)
+         wi(i) = 0.0d0
+   50 continue
+
+      en = igh
+      t = 0.0d0
+      itn = 30*n
+c     .......... search for next eigenvalues ..........
+   60 if (en .lt. low) go to 1001
+      its = 0
+      na = en - 1
+      enm2 = na - 1
+c     .......... look for single small sub-diagonal element
+c                for l=en step -1 until low do -- ..........
+   70 do 80 ll = low, en
+         l = en + low - ll
+         if (l .eq. low) go to 100
+         s = dabs(h(l-1,l-1)) + dabs(h(l,l))
+         if (s .eq. 0.0d0) s = norm
+         tst1 = s
+         tst2 = tst1 + dabs(h(l,l-1))
+         if (tst2 .eq. tst1) go to 100
+   80 continue
+c     .......... form shift ..........
+  100 x = h(en,en)
+      if (l .eq. en) go to 270
+      y = h(na,na)
+      w = h(en,na) * h(na,en)
+      if (l .eq. na) go to 280
+      if (itn .eq. 0) go to 1000
+      if (its .ne. 10 .and. its .ne. 20) go to 130
+c     .......... form exceptional shift ..........
+      t = t + x
+
+      do 120 i = low, en
+  120 h(i,i) = h(i,i) - x
+
+      s = dabs(h(en,na)) + dabs(h(na,enm2))
+      x = 0.75d0 * s
+      y = x
+      w = -0.4375d0 * s * s
+  130 its = its + 1
+      itn = itn - 1
+c     .......... look for two consecutive small
+c                sub-diagonal elements.
+c                for m=en-2 step -1 until l do -- ..........
+      do 140 mm = l, enm2
+         m = enm2 + l - mm
+         zz = h(m,m)
+         r = x - zz
+         s = y - zz
+         p = (r * s - w) / h(m+1,m) + h(m,m+1)
+         q = h(m+1,m+1) - zz - r - s
+         r = h(m+2,m+1)
+         s = dabs(p) + dabs(q) + dabs(r)
+         p = p / s
+         q = q / s
+         r = r / s
+         if (m .eq. l) go to 150
+         tst1 = dabs(p)*(dabs(h(m-1,m-1)) + dabs(zz) + dabs(h(m+1,m+1)))
+         tst2 = tst1 + dabs(h(m,m-1))*(dabs(q) + dabs(r))
+         if (tst2 .eq. tst1) go to 150
+  140 continue
+
+  150 mp2 = m + 2
+
+      do 160 i = mp2, en
+         h(i,i-2) = 0.0d0
+         if (i .eq. mp2) go to 160
+         h(i,i-3) = 0.0d0
+  160 continue
+c     .......... double qr step involving rows l to en and
+c                columns m to en ..........
+      do 260 k = m, na
+         notlas = k .ne. na
+         if (k .eq. m) go to 170
+         p = h(k,k-1)
+         q = h(k+1,k-1)
+         r = 0.0d0
+         if (notlas) r = h(k+2,k-1)
+         x = dabs(p) + dabs(q) + dabs(r)
+         if (x .eq. 0.0d0) go to 260
+         p = p / x
+         q = q / x
+         r = r / x
+  170    s = dsign(dsqrt(p*p+q*q+r*r),p)
+         if (k .eq. m) go to 180
+         h(k,k-1) = -s * x
+         go to 190
+  180    if (l .ne. m) h(k,k-1) = -h(k,k-1)
+  190    p = p + s
+         x = p / s
+         y = q / s
+         zz = r / s
+         q = q / p
+         r = r / p
+         if (notlas) go to 225
+c     .......... row modification ..........
+         do 200 j = k, EN
+            p = h(k,j) + q * h(k+1,j)
+            h(k,j) = h(k,j) - p * x
+            h(k+1,j) = h(k+1,j) - p * y
+  200    continue
+
+         j = min0(en,k+3)
+c     .......... column modification ..........
+         do 210 i = L, j
+            p = x * h(i,k) + y * h(i,k+1)
+            h(i,k) = h(i,k) - p
+            h(i,k+1) = h(i,k+1) - p * q
+  210    continue
+         go to 255
+  225    continue
+c     .......... row modification ..........
+         do 230 j = k, EN
+            p = h(k,j) + q * h(k+1,j) + r * h(k+2,j)
+            h(k,j) = h(k,j) - p * x
+            h(k+1,j) = h(k+1,j) - p * y
+            h(k+2,j) = h(k+2,j) - p * zz
+  230    continue
+
+         j = min0(en,k+3)
+c     .......... column modification ..........
+         do 240 i = L, j
+            p = x * h(i,k) + y * h(i,k+1) + zz * h(i,k+2)
+            h(i,k) = h(i,k) - p
+            h(i,k+1) = h(i,k+1) - p * q
+            h(i,k+2) = h(i,k+2) - p * r
+  240    continue
+  255    continue
+
+  260 continue
+
+      go to 70
+c     .......... one root found ..........
+  270 wr(en) = x + t
+      wi(en) = 0.0d0
+      en = na
+      go to 60
+c     .......... two roots found ..........
+  280 p = (y - x) / 2.0d0
+      q = p * p + w
+      zz = dsqrt(dabs(q))
+      x = x + t
+      if (q .lt. 0.0d0) go to 320
+c     .......... real pair ..........
+      zz = p + dsign(zz,p)
+      wr(na) = x + zz
+      wr(en) = wr(na)
+      if (zz .ne. 0.0d0) wr(en) = x - w / zz
+      wi(na) = 0.0d0
+      wi(en) = 0.0d0
+      go to 330
+c     .......... complex pair ..........
+  320 wr(na) = x + p
+      wr(en) = x + p
+      wi(na) = zz
+      wi(en) = -zz
+  330 en = enm2
+      go to 60
+c     .......... set error -- all eigenvalues have not
+c                converged after 30*n iterations ..........
+ 1000 ierr = en
+ 1001 return
+      end
+      subroutine eltran(nm,n,low,igh,a,int,z)
+
+      integer i,j,n,kl,mm,mp,nm,igh,low,mp1
+      double precision a(nm,igh),z(nm,n)
+      integer int(igh)
+
+c     this subroutine is a translation of the algol procedure elmtrans,
+c     num. math. 16, 181-204(1970) by peters and wilkinson.
+c     handbook for auto. comp., vol.ii-linear algebra, 372-395(1971).
+
+c     this subroutine accumulates the stabilized elementary
+c     similarity transformations used in the reduction of a
+c     real general matrix to upper hessenberg form by  elmhes.
+
+c     on input
+
+c        nm must be set to the row dimension of two-dimensional
+c          array parameters as declared in the calling program
+c          dimension statement.
+
+c        n is the order of the matrix.
+
+c        low and igh are integers determined by the balancing
+c          subroutine  balanc.  if  balanc  has not been used,
+c          set low=1, igh=n.
+
+c        a contains the multipliers which were used in the
+c          reduction by  elmhes  in its lower triangle
+c          below the subdiagonal.
+
+c        int contains information on the rows and columns
+c          interchanged in the reduction by  elmhes.
+c          only elements low through igh are used.
+
+c     on output
+
+c        z contains the transformation matrix produced in the
+c          reduction by  elmhes.
+
+c     questions and comments should be directed to burton s. garbow,
+c     mathematics and computer science div, argonne national laboratory
+
+c     this version dated august 1983.
+
+c     ------------------------------------------------------------------
+
+c     .......... initialize z to identity matrix ..........
+      do 80 j = 1, n
+
+         do 60 i = 1, n
+   60    z(i,j) = 0.0d0
+
+         z(j,j) = 1.0d0
+   80 continue
+
+      kl = igh - low - 1
+      if (kl .lt. 1) go to 200
+c     .......... for mp=igh-1 step -1 until low+1 do -- ..........
+      do 140 mm = 1, kl
+         mp = igh - mm
+         mp1 = mp + 1
+
+         do 100 i = mp1, igh
+  100    z(i,mp) = a(i,mp-1)
+
+         i = int(mp)
+         if (i .eq. mp) go to 140
+
+         do 130 j = mp, igh
+            z(mp,j) = z(i,j)
+            z(i,j) = 0.0d0
+  130    continue
+
+         z(i,mp) = 1.0d0
+  140 continue
+
+  200 return
+      end
+      subroutine hqr2(nm,n,low,igh,h,wr,wi,z,ierr)
+
+      integer i,j,k,l,m,n,en,ii,jj,ll,mm,na,nm,nn,
+     x        igh,itn,its,low,mp2,enm2,ierr
+      double precision h(nm,n),wr(n),wi(n),z(nm,n)
+      double precision p,q,r,s,t,w,x,y,ra,sa,vi,vr,zz,norm,tst1,tst2
+      logical notlas
+
+c     this subroutine is a translation of the algol procedure hqr2,
+c     num. math. 16, 181-204(1970) by peters and wilkinson.
+c     handbook for auto. comp., vol.ii-linear algebra, 372-395(1971).
+
+c     this subroutine finds the eigenvalues and eigenvectors
+c     of a real upper hessenberg matrix by the qr method.  the
+c     eigenvectors of a real general matrix can also be found
+c     if  elmhes  and  eltran  or  orthes  and  ortran  have
+c     been used to reduce this general matrix to hessenberg form
+c     and to accumulate the similarity transformations.
+
+c     on input
+
+c        nm must be set to the row dimension of two-dimensional
+c          array parameters as declared in the calling program
+c          dimension statement.
+
+c        n is the order of the matrix.
+
+c        low and igh are integers determined by the balancing
+c          subroutine  balanc.  if  balanc  has not been used,
+c          set low=1, igh=n.
+
+c        h contains the upper hessenberg matrix.
+
+c        z contains the transformation matrix produced by  eltran
+c          after the reduction by  elmhes, or by  ortran  after the
+c          reduction by  orthes, if performed.  if the eigenvectors
+c          of the hessenberg matrix are desired, z must contain the
+c          identity matrix.
+
+c     on output
+
+c        h has been destroyed.
+
+c        wr and wi contain the real and imaginary parts,
+c          respectively, of the eigenvalues.  the eigenvalues
+c          are unordered except that complex conjugate pairs
+c          of values appear consecutively with the eigenvalue
+c          having the positive imaginary part first.  if an
+c          error exit is made, the eigenvalues should be correct
+c          for indices ierr+1,...,n.
+
+c        z contains the real and imaginary parts of the eigenvectors.
+c          if the i-th eigenvalue is real, the i-th column of z
+c          contains its eigenvector.  if the i-th eigenvalue is complex
+c          with positive imaginary part, the i-th and (i+1)-th
+c          columns of z contain the real and imaginary parts of its
+c          eigenvector.  the eigenvectors are unnormalized.  if an
+c          error exit is made, none of the eigenvectors has been found.
+
+c        ierr is set to
+c          zero       for normal return,
+c          j          if the limit of 30*n iterations is exhausted
+c                     while the j-th eigenvalue is being sought.
+
+c     calls cdiv for complex division.
+
+c     questions and comments should be directed to burton s. garbow,
+c     mathematics and computer science div, argonne national laboratory
+
+c     this version dated august 1983.
+
+c     ------------------------------------------------------------------
+
+      ierr = 0
+      norm = 0.0d0
+      k = 1
+c     .......... store roots isolated by balanc
+c                and compute matrix norm ..........
+      do 50 i = 1, n
+
+         do 40 j = k, n
+   40    norm = norm + dabs(h(i,j))
+
+         k = i
+         if (i .ge. low .and. i .le. igh) go to 50
+         wr(i) = h(i,i)
+         wi(i) = 0.0d0
+   50 continue
+
+      en = igh
+      t = 0.0d0
+      itn = 30*n
+c     .......... search for next eigenvalues ..........
+   60 if (en .lt. low) go to 340
+      its = 0
+      na = en - 1
+      enm2 = na - 1
+c     .......... look for single small sub-diagonal element
+c                for l=en step -1 until low do -- ..........
+   70 do 80 ll = low, en
+         l = en + low - ll
+         if (l .eq. low) go to 100
+         s = dabs(h(l-1,l-1)) + dabs(h(l,l))
+         if (s .eq. 0.0d0) s = norm
+         tst1 = s
+         tst2 = tst1 + dabs(h(l,l-1))
+         if (tst2 .eq. tst1) go to 100
+   80 continue
+c     .......... form shift ..........
+  100 x = h(en,en)
+      if (l .eq. en) go to 270
+      y = h(na,na)
+      w = h(en,na) * h(na,en)
+      if (l .eq. na) go to 280
+      if (itn .eq. 0) go to 1000
+      if (its .ne. 10 .and. its .ne. 20) go to 130
+c     .......... form exceptional shift ..........
+      t = t + x
+
+      do 120 i = low, en
+  120 h(i,i) = h(i,i) - x
+
+      s = dabs(h(en,na)) + dabs(h(na,enm2))
+      x = 0.75d0 * s
+      y = x
+      w = -0.4375d0 * s * s
+  130 its = its + 1
+      itn = itn - 1
+c     .......... look for two consecutive small
+c                sub-diagonal elements.
+c                for m=en-2 step -1 until l do -- ..........
+      do 140 mm = l, enm2
+         m = enm2 + l - mm
+         zz = h(m,m)
+         r = x - zz
+         s = y - zz
+         p = (r * s - w) / h(m+1,m) + h(m,m+1)
+         q = h(m+1,m+1) - zz - r - s
+         r = h(m+2,m+1)
+         s = dabs(p) + dabs(q) + dabs(r)
+         p = p / s
+         q = q / s
+         r = r / s
+         if (m .eq. l) go to 150
+         tst1 = dabs(p)*(dabs(h(m-1,m-1)) + dabs(zz) + dabs(h(m+1,m+1)))
+         tst2 = tst1 + dabs(h(m,m-1))*(dabs(q) + dabs(r))
+         if (tst2 .eq. tst1) go to 150
+  140 continue
+
+  150 mp2 = m + 2
+
+      do 160 i = mp2, en
+         h(i,i-2) = 0.0d0
+         if (i .eq. mp2) go to 160
+         h(i,i-3) = 0.0d0
+  160 continue
+c     .......... double qr step involving rows l to en and
+c                columns m to en ..........
+      do 260 k = m, na
+         notlas = k .ne. na
+         if (k .eq. m) go to 170
+         p = h(k,k-1)
+         q = h(k+1,k-1)
+         r = 0.0d0
+         if (notlas) r = h(k+2,k-1)
+         x = dabs(p) + dabs(q) + dabs(r)
+         if (x .eq. 0.0d0) go to 260
+         p = p / x
+         q = q / x
+         r = r / x
+  170    s = dsign(dsqrt(p*p+q*q+r*r),p)
+         if (k .eq. m) go to 180
+         h(k,k-1) = -s * x
+         go to 190
+  180    if (l .ne. m) h(k,k-1) = -h(k,k-1)
+  190    p = p + s
+         x = p / s
+         y = q / s
+         zz = r / s
+         q = q / p
+         r = r / p
+         if (notlas) go to 225
+c     .......... row modification ..........
+         do 200 j = k, n
+            p = h(k,j) + q * h(k+1,j)
+            h(k,j) = h(k,j) - p * x
+            h(k+1,j) = h(k+1,j) - p * y
+  200    continue
+
+         j = min0(en,k+3)
+c     .......... column modification ..........
+         do 210 i = 1, j
+            p = x * h(i,k) + y * h(i,k+1)
+            h(i,k) = h(i,k) - p
+            h(i,k+1) = h(i,k+1) - p * q
+  210    continue
+c     .......... accumulate transformations ..........
+         do 220 i = low, igh
+            p = x * z(i,k) + y * z(i,k+1)
+            z(i,k) = z(i,k) - p
+            z(i,k+1) = z(i,k+1) - p * q
+  220    continue
+         go to 255
+  225    continue
+c     .......... row modification ..........
+         do 230 j = k, n
+            p = h(k,j) + q * h(k+1,j) + r * h(k+2,j)
+            h(k,j) = h(k,j) - p * x
+            h(k+1,j) = h(k+1,j) - p * y
+            h(k+2,j) = h(k+2,j) - p * zz
+  230    continue
+
+         j = min0(en,k+3)
+c     .......... column modification ..........
+         do 240 i = 1, j
+            p = x * h(i,k) + y * h(i,k+1) + zz * h(i,k+2)
+            h(i,k) = h(i,k) - p
+            h(i,k+1) = h(i,k+1) - p * q
+            h(i,k+2) = h(i,k+2) - p * r
+  240    continue
+c     .......... accumulate transformations ..........
+         do 250 i = low, igh
+            p = x * z(i,k) + y * z(i,k+1) + zz * z(i,k+2)
+            z(i,k) = z(i,k) - p
+            z(i,k+1) = z(i,k+1) - p * q
+            z(i,k+2) = z(i,k+2) - p * r
+  250    continue
+  255    continue
+
+  260 continue
+
+      go to 70
+c     .......... one root found ..........
+  270 h(en,en) = x + t
+      wr(en) = h(en,en)
+      wi(en) = 0.0d0
+      en = na
+      go to 60
+c     .......... two roots found ..........
+  280 p = (y - x) / 2.0d0
+      q = p * p + w
+      zz = dsqrt(dabs(q))
+      h(en,en) = x + t
+      x = h(en,en)
+      h(na,na) = y + t
+      if (q .lt. 0.0d0) go to 320
+c     .......... real pair ..........
+      zz = p + dsign(zz,p)
+      wr(na) = x + zz
+      wr(en) = wr(na)
+      if (zz .ne. 0.0d0) wr(en) = x - w / zz
+      wi(na) = 0.0d0
+      wi(en) = 0.0d0
+      x = h(en,na)
+      s = dabs(x) + dabs(zz)
+      p = x / s
+      q = zz / s
+      r = dsqrt(p*p+q*q)
+      p = p / r
+      q = q / r
+c     .......... row modification ..........
+      do 290 j = na, n
+         zz = h(na,j)
+         h(na,j) = q * zz + p * h(en,j)
+         h(en,j) = q * h(en,j) - p * zz
+  290 continue
+c     .......... column modification ..........
+      do 300 i = 1, en
+         zz = h(i,na)
+         h(i,na) = q * zz + p * h(i,en)
+         h(i,en) = q * h(i,en) - p * zz
+  300 continue
+c     .......... accumulate transformations ..........
+      do 310 i = low, igh
+         zz = z(i,na)
+         z(i,na) = q * zz + p * z(i,en)
+         z(i,en) = q * z(i,en) - p * zz
+  310 continue
+
+      go to 330
+c     .......... complex pair ..........
+  320 wr(na) = x + p
+      wr(en) = x + p
+      wi(na) = zz
+      wi(en) = -zz
+  330 en = enm2
+      go to 60
+c     .......... all roots found.  backsubstitute to find
+c                vectors of upper triangular form ..........
+  340 if (norm .eq. 0.0d0) go to 1001
+c     .......... for en=n step -1 until 1 do -- ..........
+      do 800 nn = 1, n
+         en = n + 1 - nn
+         p = wr(en)
+         q = wi(en)
+         na = en - 1
+         if (q) 710, 600, 800
+c     .......... real vector ..........
+  600    m = en
+         h(en,en) = 1.0d0
+         if (na .eq. 0) go to 800
+c     .......... for i=en-1 step -1 until 1 do -- ..........
+         do 700 ii = 1, na
+            i = en - ii
+            w = h(i,i) - p
+            r = 0.0d0
+
+            do 610 j = m, en
+  610       r = r + h(i,j) * h(j,en)
+
+            if (wi(i) .ge. 0.0d0) go to 630
+            zz = w
+            s = r
+            go to 700
+  630       m = i
+            if (wi(i) .ne. 0.0d0) go to 640
+            t = w
+            if (t .ne. 0.0d0) go to 635
+               tst1 = norm
+               t = tst1
+  632          t = 0.01d0 * t
+               tst2 = norm + t
+               if (tst2 .gt. tst1) go to 632
+  635       h(i,en) = -r / t
+            go to 680
+c     .......... solve real equations ..........
+  640       x = h(i,i+1)
+            y = h(i+1,i)
+            q = (wr(i) - p) * (wr(i) - p) + wi(i) * wi(i)
+            t = (x * s - zz * r) / q
+            h(i,en) = t
+            if (dabs(x) .le. dabs(zz)) go to 650
+            h(i+1,en) = (-r - w * t) / x
+            go to 680
+  650       h(i+1,en) = (-s - y * t) / zz
+
+c     .......... overflow control ..........
+  680       t = dabs(h(i,en))
+            if (t .eq. 0.0d0) go to 700
+            tst1 = t
+            tst2 = tst1 + 1.0d0/tst1
+            if (tst2 .gt. tst1) go to 700
+            do 690 j = i, en
+               h(j,en) = h(j,en)/t
+  690       continue
+
+  700    continue
+c     .......... end real vector ..........
+         go to 800
+c     .......... complex vector ..........
+  710    m = na
+c     .......... last vector component chosen imaginary so that
+c                eigenvector matrix is triangular ..........
+         if (dabs(h(en,na)) .le. dabs(h(na,en))) go to 720
+         h(na,na) = q / h(en,na)
+         h(na,en) = -(h(en,en) - p) / h(en,na)
+         go to 730
+  720    call cxdiv(0.0d0,-h(na,en),h(na,na)-p,q,h(na,na),h(na,en))
+  730    h(en,na) = 0.0d0
+         h(en,en) = 1.0d0
+         enm2 = na - 1
+         if (enm2 .eq. 0) go to 800
+c     .......... for i=en-2 step -1 until 1 do -- ..........
+         do 795 ii = 1, enm2
+            i = na - ii
+            w = h(i,i) - p
+            ra = 0.0d0
+            sa = 0.0d0
+
+            do 760 j = m, en
+               ra = ra + h(i,j) * h(j,na)
+               sa = sa + h(i,j) * h(j,en)
+  760       continue
+
+            if (wi(i) .ge. 0.0d0) go to 770
+            zz = w
+            r = ra
+            s = sa
+            go to 795
+  770       m = i
+            if (wi(i) .ne. 0.0d0) go to 780
+            call cxdiv(-ra,-sa,w,q,h(i,na),h(i,en))
+            go to 790
+c     .......... solve complex equations ..........
+  780       x = h(i,i+1)
+            y = h(i+1,i)
+            vr = (wr(i) - p) * (wr(i) - p) + wi(i) * wi(i) - q * q
+            vi = (wr(i) - p) * 2.0d0 * q
+            if (vr .ne. 0.0d0 .or. vi .ne. 0.0d0) go to 784
+               tst1 = norm * (dabs(w) + dabs(q) + dabs(x)
+     x                      + dabs(y) + dabs(zz))
+               vr = tst1
+  783          vr = 0.01d0 * vr
+               tst2 = tst1 + vr
+               if (tst2 .gt. tst1) go to 783
+  784       call cxdiv(x*r-zz*ra+q*sa,x*s-zz*sa-q*ra,vr,vi,
+     x                h(i,na),h(i,en))
+            if (dabs(x) .le. dabs(zz) + dabs(q)) go to 785
+            h(i+1,na) = (-ra - w * h(i,na) + q * h(i,en)) / x
+            h(i+1,en) = (-sa - w * h(i,en) - q * h(i,na)) / x
+            go to 790
+  785       call cxdiv(-r-y*h(i,na),-s-y*h(i,en),zz,q,
+     x                h(i+1,na),h(i+1,en))
+
+c     .......... overflow control ..........
+  790       t = dmax1(dabs(h(i,na)), dabs(h(i,en)))
+            if (t .eq. 0.0d0) go to 795
+            tst1 = t
+            tst2 = tst1 + 1.0d0/tst1
+            if (tst2 .gt. tst1) go to 795
+            do 792 j = i, en
+               h(j,na) = h(j,na)/t
+               h(j,en) = h(j,en)/t
+  792       continue
+
+  795    continue
+c     .......... end complex vector ..........
+  800 continue
+c     .......... end back substitution.
+c                vectors of isolated roots ..........
+      do 840 i = 1, n
+         if (i .ge. low .and. i .le. igh) go to 840
+
+         do 820 j = i, n
+  820    z(i,j) = h(i,j)
+
+  840 continue
+c     .......... multiply by transformation matrix to give
+c                vectors of original full matrix.
+c                for j=n step -1 until low do -- ..........
+      do 880 jj = low, n
+         j = n + low - jj
+         m = min0(j,igh)
+
+         do 880 i = low, igh
+            zz = 0.0d0
+
+            do 860 k = low, m
+  860       zz = zz + z(i,k) * h(k,j)
+
+            z(i,j) = zz
+  880 continue
+
+      go to 1001
+c     .......... set error -- all eigenvalues have not
+c                converged after 30*n iterations ..........
+ 1000 ierr = en
+ 1001 return
+      end
+      subroutine balanc(nm,n,a,low,igh,scale)
+
+      integer i,j,k,l,m,n,jj,nm,igh,low,iexc
+      double precision a(nm,n),scale(n)
+      double precision c,f,g,r,s,b2,radix
+      logical noconv
+
+c     this subroutine is a translation of the algol procedure balance,
+c     num. math. 13, 293-304(1969) by parlett and reinsch.
+c     handbook for auto. comp., vol.ii-linear algebra, 315-326(1971).
+
+c     this subroutine balances a real matrix and isolates
+c     eigenvalues whenever possible.
+
+c     on input
+
+c        nm must be set to the row dimension of two-dimensional
+c          array parameters as declared in the calling program
+c          dimension statement.
+
+c        n is the order of the matrix.
+
+c        a contains the input matrix to be balanced.
+
+c     on output
+
+c        a contains the balanced matrix.
+
+c        low and igh are two integers such that a(i,j)
+c          is equal to zero if
+c           (1) i is greater than j and
+c           (2) j=1,...,low-1 or i=igh+1,...,n.
+
+c        scale contains information determining the
+c           permutations and scaling factors used.
+
+c     suppose that the principal submatrix in rows low through igh
+c     has been balanced, that p(j) denotes the index interchanged
+c     with j during the permutation step, and that the elements
+c     of the diagonal matrix used are denoted by d(i,j).  then
+c        scale(j) = p(j),    for j = 1,...,low-1
+c                 = d(j,j),      j = low,...,igh
+c                 = p(j)         j = igh+1,...,n.
+c     the order in which the interchanges are made is n to igh+1,
+c     then 1 to low-1.
+
+c     note that 1 is returned for igh if igh is zero formally.
+
+c     the algol procedure exc contained in balance appears in
+c     balanc  in line.  (note that the algol roles of identifiers
+c     k,l have been reversed.)
+
+c     questions and comments should be directed to burton s. garbow,
+c     mathematics and computer science div, argonne national laboratory
+
+c     this version dated august 1983.
+
+c     ------------------------------------------------------------------
+
+      radix = 16.0d0
+
+      b2 = radix * radix
+      k = 1
+      l = n
+      go to 100
+c     .......... in-line procedure for row and
+c                column exchange ..........
+   20 scale(m) = j
+      if (j .eq. m) go to 50
+
+      do 30 i = 1, l
+         f = a(i,j)
+         a(i,j) = a(i,m)
+         a(i,m) = f
+   30 continue
+
+      do 40 i = k, n
+         f = a(j,i)
+         a(j,i) = a(m,i)
+         a(m,i) = f
+   40 continue
+
+   50 go to (80,130), iexc
+c     .......... search for rows isolating an eigenvalue
+c                and push them down ..........
+   80 if (l .eq. 1) go to 280
+      l = l - 1
+c     .......... for j=l step -1 until 1 do -- ..........
+  100 do 120 jj = 1, l
+         j = l + 1 - jj
+
+         do 110 i = 1, l
+            if (i .eq. j) go to 110
+            if (a(j,i) .ne. 0.0d0) go to 120
+  110    continue
+
+         m = l
+         iexc = 1
+         go to 20
+  120 continue
+
+      go to 140
+c     .......... search for columns isolating an eigenvalue
+c                and push them left ..........
+  130 k = k + 1
+
+  140 do 170 j = k, l
+
+         do 150 i = k, l
+            if (i .eq. j) go to 150
+            if (a(i,j) .ne. 0.0d0) go to 170
+  150    continue
+
+         m = k
+         iexc = 2
+         go to 20
+  170 continue
+c     .......... now balance the submatrix in rows k to l ..........
+      do 180 i = k, l
+  180 scale(i) = 1.0d0
+c     .......... iterative loop for norm reduction ..........
+  190 noconv = .false.
+
+      do 270 i = k, l
+         c = 0.0d0
+         r = 0.0d0
+
+         do 200 j = k, l
+            if (j .eq. i) go to 200
+            c = c + dabs(a(j,i))
+            r = r + dabs(a(i,j))
+  200    continue
+c     .......... guard against zero c or r due to underflow ..........
+         if (c .eq. 0.0d0 .or. r .eq. 0.0d0) go to 270
+         g = r / radix
+         f = 1.0d0
+         s = c + r
+  210    if (c .ge. g) go to 220
+         f = f * radix
+         c = c * b2
+         go to 210
+  220    g = r * radix
+  230    if (c .lt. g) go to 240
+         f = f / radix
+         c = c / b2
+         go to 230
+c     .......... now balance ..........
+  240    if ((c + r) / f .ge. 0.95d0 * s) go to 270
+         g = 1.0d0 / f
+         scale(i) = scale(i) * f
+         noconv = .true.
+
+         do 250 j = k, n
+  250    a(i,j) = a(i,j) * g
+
+         do 260 j = 1, l
+  260    a(j,i) = a(j,i) * f
+
+  270 continue
+
+      if (noconv) go to 190
+
+  280 low = k
+      igh = l
+      return
+      end
+SHAR_EOF
+if test -f 'rmatin.f'
+then
+	echo shar: over-writing existing file "'rmatin.f'"
+fi
+cat << \SHAR_EOF > 'rmatin.f'
+      SUBROUTINE RMATIN(NM,N,A,AHOLD,INITIL)
+
+C     THIS INPUT SUBROUTINE READS A REAL MATRIX FROM SYSIN OF
+C     ORDER N.
+C     TO GENERATE THE MATRIX  A  INITIALLY,  INITIL  IS TO BE 0.
+C     TO REGENERATE THE MATRIX  A  FOR THE PURPOSE OF THE RESIDUAL
+C     CALCULATION,  INITIL  IS TO BE  1.
+
+C     THIS ROUTINE IS CATALOGUED AS  EISPDRV4(RGREADI).
+
+      INTEGER NM,N,INITIL,IREADA,INIT,IREAD1,IREADC,M,I
+      INTEGER IWRITE,J
+      DOUBLE PRECISION A(NM,NM),AHOLD(NM,NM)
+      INTEGER  IA( 20)
+      DATA IREADA/1/,IWRITE/6/
+      DATA IREADC/2/
+      SAVE INIT
+      DATA INIT /1/
+
+      IF( INIT .EQ. 1 ) THEN
+         OPEN(UNIT=IREADA,FILE='FILE33')
+         OPEN(UNIT=IREADC,FILE='FILE34')
+         REWIND IREADA
+         REWIND IREADC
+         INIT = 0
+      ENDIF
+      IF( INITIL .EQ. 1 )  GO TO 30
+      READ(IREADA,5) N, M
+ 5    FORMAT(I6,6X,I6)
+      IF( N .EQ. 0 ) GO TO 70
+      IF ( M .NE. 1 ) GO TO 14
+      DO 13 I = 1,N
+         READ(IREADA,16) (IA(J), J=I,N)
+         DO  12  J = I,N
+            A(I,J) = IA(J)
+            A(J,I) = A(I,J)
+ 12      CONTINUE
+ 13   CONTINUE
+      GO TO 19
+ 14   DO 17 I = 1,N
+         READ(IREADA,16) (IA(J), J=1,N)
+ 16      FORMAT(6I12)
+         DO 18 J = 1,N
+            A(I,J) = IA(J)
+ 18      CONTINUE
+ 17   CONTINUE
+ 19   DO 21 I = 1,N
+         DO 20 J = 1,N
+            AHOLD(I,J) = A(I,J)
+ 20      CONTINUE
+ 21   CONTINUE
+      RETURN
+ 30   DO 41 I = 1,N
+         DO 40 J = 1,N
+            A(I,J) = AHOLD(I,J)
+ 40      CONTINUE
+ 41   CONTINUE
+      RETURN
+
+ 70   WRITE(IWRITE,80)
+ 80   FORMAT(46H0END OF DATA FOR SUBROUTINE  RMATIN(RGREADI). /1H1)
+      STOP
+      END
+SHAR_EOF
+if test -f 'second.f'
+then
+	echo shar: over-writing existing file "'second.f'"
+fi
+cat << \SHAR_EOF > 'second.f'
+      real function second(t)
+
+c     this routine will gather the user time for a process.
+c     it has resolution of 1/60 of a second
+c     and uses the unix c program times.
+c     see the unix manual for details
+c     reports time in seconds.
+
+      integer mclock, itime
+      real t
+
+      itime = mclock()
+      second = float(itime)/60.
+
+c     this statement is here to bump the time by a bit
+c     incase no the interval was too small.
+
+      second = second + second*1.0e-6
+      return
+      end
+SHAR_EOF
+if test -f 'shemor.f'
+then
+	echo shar: over-writing existing file "'shemor.f'"
+fi
+cat << \SHAR_EOF > 'shemor.f'
+      SUBROUTINE SHEMOR(N,WORK,LDWORK, IFLAG)
+
+      INTEGER N,LDWORK,IFLAG
+      DOUBLE PRECISION WORK(LDWORK,*)
+
+*  Purpose:
+*     This routine applies the Sherman-Morrison update formula to
+*     the matrix:
+
+*             ( T     col )
+*             ( v'     0  ).
+
+*     Then solves the simpler matrix problem
+
+*             ( T     col )
+*             (        1  )
+
+*     and transforms the solution back to the original matrix problem.
+*     The tridiagonal matrix and the rhs are in the array WORK.
+
+*  Arguments:
+*     N       -integer
+*             The number of rows and columns in the original matrix A.
+*             N >= 0.
+
+*     WORK    -double precision array, dimension (LDWORK,19)
+*             Is used for a work space.
+
+*     LDWORK  -integer
+*              Leading dimension of the array WORK.
+
+*     IFLAG   -integer
+*             Normal return is zero.
+*             If the modified matrix is singular then IFLAG = 1 and
+*             the process fails.
+
+*     .. Parameters ..
+      DOUBLE PRECISION ONE,ZERO
+      PARAMETER (ONE = 1.0, ZERO = 0.0)
+*     ..
+*     .. Local Scalars ..
+      INTEGER I
+      DOUBLE PRECISION RCOND
+      DOUBLE PRECISION RNK1RE,RNK1IM,TWORE(2,2),TWOIM(2,2),
+     $     VXRE(2),VXIM(2)
+      INTEGER IP2(2)
+      DOUBLE PRECISION TRE,TIM
+*     ..
+*     .. External Subroutines ..
+      EXTERNAL MLU, MSOL, CXDOTU,CXGECO,CXGESL,CXAXPY,CXCOPY
+*     ..
+*     .. Executable Statements ..
+
+      IFLAG = 0
+
+*     Fill y with e(n+1)
+
+      DO 10 I = 1,N+1
+         WORK(I,9) = ZERO
+         WORK(I,10) = ZERO
+         WORK(I,17) = ZERO
+         WORK(I,18) = ZERO
+ 10   CONTINUE
+      RNK1RE = WORK(N,5)
+      RNK1IM = WORK(N,6)
+      WORK(N,5) = ONE
+      WORK(N,6) = ZERO
+      WORK(N+1,9) = -ONE
+      WORK(N+1,10) = ZERO
+      WORK(N,17) = RNK1RE - ONE
+      WORK(N,18) = RNK1IM
+
+*     Factor the matrix.
+
+      CALL MLU(N,WORK,LDWORK)
+
+*     Compute y = inv(A)*y
+
+      CALL MSOL(N,WORK,LDWORK,WORK(1,9),WORK(1,10))
+      CALL MSOL(N,WORK,LDWORK,WORK(1,17),WORK(1,18))
+
+*     Compute x = inv(A)*x
+
+      CALL MSOL(N,WORK,LDWORK,WORK(1,13),WORK(1,14))
+
+*     Perform the update.
+*     Compute alpha = 1/(1+v'*y) and gamma = v'*x
+
+      CALL CXDOTU(N+1,WORK(1,11),WORK(1,12),WORK(1,9),WORK(1,10),
+     $     TRE,TIM)
+      TWORE(1,1) = ONE + TRE
+      TWOIM(1,1) = TIM
+      CALL CXDOTU(N+1,WORK(1,11),WORK(1,12),WORK(1,17),WORK(1,18),
+     $     TRE,TIM)
+      TWORE(1,2) = TRE
+      TWOIM(1,2) = TIM
+      DO 20 I = 1,N+1
+         WORK(I,5) = ZERO
+         WORK(I,6) = ZERO
+ 20   CONTINUE
+      WORK(N,5) = ONE
+      WORK(N,6) = ZERO
+      CALL CXDOTU(N+1,WORK(1,5),WORK(1,6),WORK(1,9),WORK(1,10),TRE,TIM)
+      TWORE(2,1) = TRE
+      TWOIM(2,1) = TIM
+      CALL CXDOTU(N+1,WORK(1,5),WORK(1,6),WORK(1,17),WORK(1,18),TRE,TIM)
+      TWORE(2,2) = ONE + TRE
+      TWOIM(2,2) = TIM
+      CALL CXDOTU(N+1,WORK(1,11),WORK(1,12),WORK(1,13),WORK(1,14),
+     $     TRE,TIM)
+      VXRE(1) = TRE
+      VXIM(1) = TIM
+      CALL CXDOTU(N+1,WORK(1,5),WORK(1,6),WORK(1,13),WORK(1,14),TRE,TIM)
+      VXRE(2) = TRE
+      VXIM(2) = TIM
+      CALL CXGECO(TWORE,TWOIM,2,2,IP2,RCOND,WORK(1,5),WORK(1,6))
+      IF( RCOND .EQ. ZERO ) THEN
+         IFLAG = 1
+         RETURN
+      ENDIF
+      CALL CXGESL(TWORE,TWOIM,2,2,IP2,VXRE,VXIM,0)
+
+*     Update the solution
+
+      CALL CXAXPY(N+1,-VXRE(1),-VXIM(1),WORK(1,9),WORK(1,10),
+     $     WORK(1,13),WORK(1,14))
+      CALL CXAXPY(N+1,-VXRE(2),-VXIM(2),WORK(1,17),WORK(1,18),
+     $     WORK(1,13),WORK(1,14))
+      CALL CXCOPY(N+1,WORK(1,13),WORK(1,14),WORK(1,9),WORK(1,10))
+      RETURN
+      END
+SHAR_EOF
+if test -f 'tlr.f'
+then
+	echo shar: over-writing existing file "'tlr.f'"
+fi
+cat << \SHAR_EOF > 'tlr.f'
+c-----------------------------------------------------------------------------
+      subroutine tlr( size, diag, sub, sup, sav, info )
+
+c     .. Scalar Arguments ..
+      integer           size, info
+
+c     .. Array Arguments ..
+      double precision diag(*), sub(*), sup(*), sav(*)
+c----------------------------------------------------------------------------
+c  Purpose:
+c    This subroutine determines the eigenvalues of a general tridiagonal matrix
+c    stored in three vectors of length size by applying implicit double-shift
+c    LR iterations.
+
+c    The eigenvalues are returned with the real part on the diagonal and the
+c    imaginary part on the subdiagonal. Info equals 1 on exit if tlr is
+c    unable to determine the eigenvalues.
+
+c  Arguments:
+c   size -integer
+c         size specifies the order of the tridiagonal matrix
+c         not modified
+
+c   diag -real      array of dimension (size)
+c         On entry diag contains the diagonal of the tridiagonal matrix.
+c         On exit diag contains the real part of the eigenvalues.
+
+c    sub -real      array of dimension (size)
+c         On entry sub contains the sub-diagonal of the tridiagonal matrix.
+c         On exit sub contains the imaginary part of the eigenvalues.
+
+c    sup -real      array of dimension (size)
+c         On entry sup contains the super-diagonal of the
+c         tridiagonal matrix. It is used as a work array
+c         in the iteration.
+
+c    sav -real      array of dimension (size)
+c         sav is a work array used along with sup to save a copy
+c         of the previous iteration matrix in case the present
+c         iteration breaks down and an arbitrary shift is required.
+
+c   info -integer
+c         On exit, info is set to
+c          0  normal return.
+c          1  failure to converge to one or more eigenvalues
+
+c-------------------------------------------------------------------------
+c--------------------------------------------------------- G.A.Geist 11/89
+c--------------------------------------------------------- modified  ---
+c                                                   geist@msr.epm.ornl.gov
+
+c     .. Local Scalars ..
+      integer l, n, i, err
+
+c     .. External Functions ..
+c     none
+
+c     .. External Subroutines ..
+c     none
+
+c     .. Intrinsic Functions ..
+c     none
+
+c=================== Executable Statements =================================
+
+      l = 1
+      n = size
+      info = 0
+c     -----------------------------------
+c     Scale super-diagonal entries to one
+c     -----------------------------------
+      do 100 i=2, n
+         sub(i) = sub(i) * sup(i-1)
+  100 continue
+c     -----------------------------------
+c     Iterate until all eigenvalues found
+c     -----------------------------------
+  200 continue
+      call newln( diag, sub, n, l )
+      if( n .gt. 2 ) then
+         call lritr( diag, sub, l, n, sup, sav, err )
+         if( err .eq. 1 ) then
+            info = 1
+            return
+         endif
+         goto 200
+      endif
+
+      sub(1) = 0.0
+      call t2eig( diag, sub, size )
+
+      return
+      end
+c=========== end of tlr routine ==============================================
+c-----------------------------------------------------------------------------
+      subroutine newln( a, b, n, l )
+
+c     .. Scalar Arguments ..
+      integer           n, l
+
+c     .. Array Arguments ..
+      double precision a(*), b(*)
+c-------------------------------------------------------------------------
+c  Purpose:
+c    This subroutine searches up the subdiagonal 'b' for a negligable entry
+c    relative to the surrounding diagonals. If eigenvalues can be found,
+c    N is incremented otherwise L is set to the index of the negligable
+c    entry.
+c    After this it searches from N to L for two small subdiagonal entries.
+c    If this condition is found, then L is set to this index.
+
+c    On return N and L define the bounds of the active matrix.
+
+c  Arguments:
+c    a   -real      array of dimension (size)
+c         On entry a contains the diagonal of the tridiagonal matrix.
+c         not modified
+
+c    b   -real      array of dimension (size)
+c         On entry b contains the sub-diagonal of the tridiagonal matrix.
+c         On exit the negligable elements found in b are set to zero.
+
+c    n   -integer
+c         On entry n specifies the bottom of the previous active matrix.
+c         On exit n specifies the bottom of the present active matrix.
+
+c    l   -integer
+c         On entry l specifies the top of the previous active matrix.
+c         On exit l specifies the top of the present active matrix.
+
+c-------------------------------------------------------------------------
+c--------------------------------------------------------- G.A.Geist 11/89
+c--------------------------------------------------------- modified  10/91
+
+
+c     .. Local Scalars ..
+      integer  i
+      integer  m
+      logical  first, notfnd
+      double precision s, s1, s2, s3, norm
+      double precision y, x, w, zz, r, s, p, q, tst1, tst2
+
+c     .. External Functions ..
+c     none
+
+c     .. External Subroutines ..
+c     none
+
+c     .. Intrinsic Functions ..
+c     abs
+
+c     .. Data ..
+      data first/.true./
+
+      save first, norm
+c=================== Executable Statements =================================
+
+c     -------------------------------------------------
+c     norm is calculated once and saved for later calls
+c     -------------------------------------------------
+      if( first ) then
+         norm = a(1)
+         do 100 i=2, n
+            norm = norm + (a(i)+b(i))
+  100    continue
+         first = .false.
+      endif
+c     ------------------------
+c     determine new value of N
+c     ------------------------
+      notfnd = .true.
+  200 continue
+      if( notfnd .and. (n .gt. 2)) then
+         s = abs(a(n-1)) + abs(a(n))
+         if( s .eq. 0 ) s = norm
+         s2 = s + abs(b(n))
+         s1 = abs(a(n-2)) + abs(a(n-1))
+         if( s1 .eq. 0 ) s1 = norm
+         s3 = s1 + abs(b(n-1))
+
+         if( s2 .eq. s ) then
+             b(n)=0.0
+             n=n-1
+	 else if( s3 .eq. s1 ) then
+             b(n-1)=0.0
+             n=n-2
+	 else
+             notfnd = .false.
+         endif
+         goto 200
+      endif
+c     ------------------------
+c     determine new value of L
+c     ------------------------
+      l = 1
+      i = n-2
+  300 continue
+      if( i .gt. l ) then
+         s = abs(a(i-1)) + abs(a(i))
+         if( s .eq. 0.0 ) s = norm
+         s2 = s + abs(b(i))
+	 if( s2 .eq. s ) then
+            b(i)=0.0
+            l=i
+	 else
+            i = i-1
+         endif
+         goto 300
+      endif
+c     ----------------------------------------------------
+c     look for two consecutive small sub-diagonal elements
+c     ----------------------------------------------------
+      y = a(n-1)
+      x = a(n)
+      w = b(n)
+      do 400 m = n-2, l, -1
+         if( m .eq. l ) go to 500
+         zz = a(m)
+         r = x - zz
+         s = y - zz
+         p = (r*s - w)/b(m+1) + 1.0
+         q = a(m+1) - zz - r - s
+         r = b(m+2)
+         s = dabs(p) + dabs(q) + dabs(r)
+         p = p/s
+         q = q/s
+         r = r/s
+         tst1 = dabs(p)*(dabs(a(m-1)) + dabs(zz) + dabs(a(m+1)))
+         tst2 = tst1 + dabs(b(m))*(dabs(q) + dabs(r))
+         if( tst2 .eq. tst1 ) go to 500
+  400 continue
+  500 continue
+      l = m
+
+      return
+      end
+c----------------- end of newln routine --------------------------------------
+
+c----------------------------------------------------------------------------
+      subroutine lritr( a, b, l, n, ta, tb, info )
+
+c     .. Scalar Arguments ..
+      integer           n, l, info
+
+c     .. Array Arguments ..
+      double precision a(*), b(*), ta(*), tb(*)
+c-------------------------------------------------------------------------
+c  Purpose:
+c    This subroutine performs one implicit double-shift LR iteration
+c    on an general tridiagonal matrix with a unit super-diagonal, the
+c    diagonal stored in A and the subdiagonal stored in B.
+
+c    A copy is made of the matrix in case the iteration breaks down.
+c    If breakdown occurs, and arbitrary shift is applied to the saved
+c    matrix. If 10 consecutive shifts fail, then info is set to 1 and
+c    the routine returns.
+
+c  Arguments:
+
+c    a   -real      array of dimension (n)
+c         On entry a contains the diagonal of the tridiagonal matrix.
+c         modified
+
+c    b   -real      array of dimension (n)
+c         On entry b contains the sub-diagonal of the tridiagonal matrix.
+c         modified
+
+c    l   -integer
+c         On entry l specifies the top of the active matrix.
+c         Not modified
+
+c    n   -integer
+c         On entry n specifies the bottom of the active matrix.
+c         Not modified
+
+c    ta  -real       array of dimension (n)
+c         working array
+
+c    tb  -real       array of dimension (n)
+c         working array
+
+c  info  -integer
+c         On exit info is set to
+c          0  if normal exit
+c          1  if 10 consecutive iteration attempts break down.
+
+c-------------------------------------------------------------------------
+c--------------------------------------------------------- G.A.Geist 11/89
+c--------------------------------------------------------- modified  ---
+
+
+c     .. Local Scalars ..
+      integer  i, cnt
+      double precision x, y, z, c, d, m1, m2
+
+c     .. External Functions ..
+      double precision random
+
+c     .. External Subroutines ..
+c     none
+
+c     .. Intrinsic Functions ..
+c     none
+
+c=================== Executable Statements =================================
+
+      info = 0
+c     ----------------------
+c     Check for quick return
+c     ----------------------
+      if( n-l+1 .lt. 3 ) return
+c     -------------------------------------
+c     make copy of a,b in case of breakdown
+c     -------------------------------------
+      do 100 i=l, n
+         ta(i) = a(i)
+         tb(i) = b(i)
+  100 continue
+c     ---------------
+c     Begin iteration
+c     ---------------
+      cnt = 0
+c     ------------------
+c     form initial bulge
+c     ------------------
+      c = a(n) - a(l)
+      d = a(n-1) - a(l)
+      x = ( c * d - b(n) )/ b(l+1) +1.d0
+      y = a(l+1) - a(l) - c - d
+      z = b(l+2)
+
+  200 continue
+c     ----------------------------------------
+c     Start random shift if LR has broken down
+c     ----------------------------------------
+      if( cnt .gt. 0 ) then
+c        -------------------------------------
+c        Abort if > 10 iteration attempts fail
+c        -------------------------------------
+         if( cnt .gt. 10 ) then
+	    info = 1
+	    return
+	 endif
+
+         do 300 i=l, n
+	    a(i) = ta(i)
+	    b(i) = tb(i)
+  300    continue
+         y = y*random()
+         z = z*random()
+      endif
+c     ------------------------------------------------------
+c     Arbitrary shift if calculated shift leads to breakdown
+c     ------------------------------------------------------
+      if( x .eq. 0.0 ) x=1.d0
+
+      m1 = y/x
+      m2 = z/x
+c     ----------------------------
+c     3X3 matrix is a special case
+c     ----------------------------
+      if( n-l+1 .eq. 3 ) goto 500
+
+      a(l+1) = a(l+1) - m1
+      b(l+1) = b(l+1) + ( m2 - m1*( a(l)-a(l+1) ) )
+      a(l)   = a(l) + m1
+      c      = m1*b(l+2) - m2*( a(l)-a(l+2) )
+      d      = m2 * b(l+3)
+      b(l+2) = b(l+2) - m2
+c     ----------------
+c     chase bulge down
+c     ----------------
+      do 400 i=l+1, n-3
+         if( b(i) .eq. 0.0 ) then
+	    cnt = cnt+1
+	    goto 200
+	 endif
+         m1 = c/b(i)
+	 m2 = d/b(i)
+         a(i+1) = a(i+1) - m1
+         b(i+1) = b(i+1) + ( m2 - m1*( a(i)-a(i+1) ) )
+         a(i)   = a(i) + m1
+         c      = ( m1*b(i+2) - m2*( a(i)-a(i+2) ) )
+         d      = m2 * b(i+3)
+         b(i+2) = b(i+2) - m2
+  400 continue
+c     -------------------
+c     bulge falls off end
+c     -------------------
+      if( b(n-2) .eq. 0.0 ) then
+         cnt = cnt+1
+	 goto 200
+      endif
+      m1 = c/b(n-2)
+      m2 = d/b(n-2)
+
+  500 continue
+      a(n-1) = a(n-1) - m1
+      b(n-1) = b(n-1) + ( m2 - m1*( a(n-2)-a(n-1) ) )
+      a(n-2) = a(n-2) + m1
+      c      = ( m1*b(n) - m2*( a(n-2)-a(n) ) )
+      b(n)   = b(n) - m2
+
+      if( b(n-1) .eq. 0.0 ) then
+         if( c .eq. 0.0 ) return
+	 cnt = cnt+1
+	 goto 200
+      endif
+
+      m1     = c/b(n-1)
+      a(n)   = a(n) - m1
+      b(n)   = b(n) - m1*( a(n-1)-a(n) )
+      a(n-1) = a(n-1) + m1
+
+      return
+      end
+c=================== end of lritr routine ==============================
+c-----------------------------------------------------------------------
+      subroutine t2eig( a, b, n )
+
+c     .. Scalar Arguments ..
+      integer           n
+
+c     .. Array Arguments ..
+      double precision  a(*), b(*)
+c-----------------------------------------------------------------------
+c* Routine finds the eigenvalues of a tridiagonal matrix stored with the
+c* diagonal in vector 'a', the subdiagonal in vector 'b', and a unit
+c* superdiagonal. The matrix has the special form that no two consecutive
+c* b's are nonzero. On return the real part of the ith eigenvalue is in
+c* a[i] and the imaginary part is in b[i].
+c*----------------------------------------------------------------------
+c*/
+c     .. Local Scalars ..
+      integer           i
+      double precision  x, y
+
+      do 100 i=2, n
+         if( b(i) .ne. 0.0 ) then
+c        -------------------
+c	 calculate two roots
+c        -------------------
+ 	    x = -(a(i)+a(i-1))
+	    y = x*x - 4*(a(i)*a(i-1) - b(i))
+
+	    if( y .lt. 0.0 ) then
+c           -----------------
+c	    roots are complex
+c           -----------------
+	       b(i-1) = .5 * sqrt(-y)
+	       b(i)   = -b(i-1)
+	       a(i-1) = -.5 * x
+	       a(i)   = a(i-1)
+	    else
+c           --------------
+c	    roots are real
+c           --------------
+   	       y = sqrt( y )
+	       b(i-1) = 0.0
+	       b(i)   = 0.0
+	       a(i-1) = 0.5 * (y-x)
+	       a(i)   = -.5 * (y+x)
+	    endif
+	 endif
+  100 continue
+
+      return
+      end
+c------------- end of t2eig routine ------------------------
+
+SHAR_EOF
+if test -f 'trayly.f'
+then
+	echo shar: over-writing existing file "'trayly.f'"
+fi
+cat << \SHAR_EOF > 'trayly.f'
+      SUBROUTINE TRAYLY(A,LDA,N,XR,XI,WR,WI)
+      INTEGER LDA,N
+      DOUBLE PRECISION A(LDA,*),XR(*),XI(*),WR,WI
+
+      INTEGER I,J
+      DOUBLE PRECISION TR(751),TI(751),ZERO,NEWWR,NEWWI,NORMX
+      DOUBLE PRECISION TMPR,TMPI
+      DOUBLE PRECISION CXNRM2
+      PARAMETER (ZERO = 0.0)
+
+      DO 10 J = 1,N
+         TR(J) = ZERO
+         TI(J) = ZERO
+ 10   CONTINUE
+      DO 20 I = 2,N
+         TR(I) = TR(I) + A(I,I-1)*XR(I-1)
+         TI(I) = TI(I) + A(I,I-1)*XI(I-1)
+ 20   CONTINUE
+      DO 30 I = 1,N
+         TR(I) = TR(I) + A(I,I)*XR(I)
+         TI(I) = TI(I) + A(I,I)*XI(I)
+ 30   CONTINUE
+      DO 40 I = 1,N-1
+         TR(I) = TR(I) + A(I,I+1)*XR(I+1)
+         TI(I) = TI(I) + A(I,I+1)*XI(I+1)
+ 40   CONTINUE
+      NEWWR = ZERO
+      NEWWI = ZERO
+      DO 50 I = 1,N
+         CALL CXMULT(TR(I),TI(I),XR(I),-XI(I),TMPR,TMPI)
+         NEWWR = NEWWR + TMPR
+         NEWWI = NEWWI + TMPI
+ 50   CONTINUE
+      NORMX = CXNRM2(N,XR,XI)
+      NEWWR = NEWWR/NORMX
+      NEWWI = NEWWI/NORMX
+      WR = NEWWR
+      WI = NEWWI
+      RETURN
+      END
+SHAR_EOF
+if test -f 'tresid.f'
+then
+	echo shar: over-writing existing file "'tresid.f'"
+fi
+cat << \SHAR_EOF > 'tresid.f'
+      SUBROUTINE TRESID(N,A,LDA,XRE,XIM,WR,WI,RRE,RIM,RNORM)
+
+      INTEGER N,LDA
+      DOUBLE PRECISION A(LDA,*),WR,WI,RNORM
+      DOUBLE PRECISION XRE(*),XIM(*),RRE(*),RIM(*)
+
+*     this routine computes the residual for the eigenpair
+*     (wr,wi) and x with the matrix a, where a is the tridiagonal
+*     matrix produced by a2tri.
+*             r = (wr,wi)*x - A*x
+*     and also returns the norm of r.
+
+      INTEGER I,J
+      DOUBLE PRECISION ZERO,CXNRM2
+      DOUBLE PRECISION TRE,TIM,R1,R2,R3
+      PARAMETER (ZERO = 0.0)
+
+      DO 10 I = 1,N
+         RRE(I) = ZERO
+         RIM(I) = ZERO
+ 10   CONTINUE
+      DO 20 I = 2,N
+         RRE(I) = RRE(I) - A(I,I-1)*XRE(I-1)
+         RIM(I) = RIM(I) - A(I,I-1)*XIM(I-1)
+ 20   CONTINUE
+      DO 30 I = 1,N
+         RRE(I) = RRE(I) - A(I,I)*XRE(I)
+         RIM(I) = RIM(I) - A(I,I)*XIM(I)
+ 30   CONTINUE
+      DO 40 I = 1,N-1
+         RRE(I) = RRE(I) - A(I,I+1)*XRE(I+1)
+         RIM(I) = RIM(I) - A(I,I+1)*XIM(I+1)
+ 40   CONTINUE
+      CALL CXAXPY(N,WR,WI,XRE,XIM,RRE,RIM)
+
+      RNORM = CXNRM2(N,RRE,RIM)
+      RETURN
+      END
+SHAR_EOF
+if test -f 'mclock.c'
+then
+	echo shar: over-writing existing file "'mclock.c'"
+fi
+cat << \SHAR_EOF > 'mclock.c'
+
+long mclock_()
+  {
+  long  buf[4];
+  times(buf);
+  return(buf[0]);
+  }
+
+SHAR_EOF
+#	End of shell archive
+exit 0

@@ -1,0 +1,3948 @@
+C      ALGORITHM 721, COLLECTED ALGORITHMS FROM ACM.
+C      THIS WORK PUBLISHED IN TRANSACTIONS ON MATHEMATICAL SOFTWARE,
+C      VOL. 19, NO. 3, SEPTEMBER, 1993, PP. 389-404.
+      PROGRAM  mtieu
+C  THIS DRIVER COMPARES THE EIGENVALUES AND EIGENFUNCTION COEFFICIENTS
+C  OF THE MATHIEU EQUATION WITH REAL PARAMETER Q AND REAL ORDER AMU.
+C  ORDER CAN BE NONINTEGER OR INTEGER
+C  EVALUATION IS BY TWO DIFFERENT ALGORITHMS:
+C  MTIEU1 USES MATRIX TECHNIQUES
+C  MTIEU2 USES CONTINUED FRACTION TECHNIQUES
+C  WRITTEN BY R. B. SHIRTS, IDAHO NATIONAL ENGINEERING LABORATORY
+C  WRITTEN SEPTEMBER 1989
+C  LAST ALTERED JANUARY 1991
+C
+C  VARIABLES USED IN MTIEU
+C
+C      ANU    -  INPUT VARIABLE - ORDER OF MATHIEU EQUATION
+C      ANURD1 -  REDUCED ORDER - ANU-2*NANU2 - FLOQUET EXPONENT
+C      ANURD2 -  REDUCED ORDER - ANU-2*NANU2 - FLOQUET EXPONENT
+C      A1     -  MATHIEU EQUATION EIGENVALUE RETURNED BY MTIEU1
+C      A2     -  MATHIEU EQUATION EIGENVALUE RETURNED BY MTIEU2
+C      DIAG   -  WORKSPACE ARRAY FOR MTIEU1 HOLDING DIAGONAL ELEMENTS
+C      DIF    -  DISAGREEMENT BETWEEN A1 AND A2.  MINIMUM OF RELATIVE AN
+C                  ABSOLUTE DISAGREEMENT
+C      DIFV   -  ABSOLUTE DIFFERENCE BETWEEN EIGENVECTOR COEFFICIENTS
+C      DMXDIF -  MAXIMUM OF COMPARED VALUES OF DIFV
+C      DNANU  -  DOUBLE PRECISION VERSION OF NANU
+C      I      -  DUMMY LOOP INDEX COUNTING Q VALUES
+C      IA0B1  -  SPECIFIES A OR B SOLUTION WHEN ANU IS INTEGER
+C                  IA0B1 IS 0 IF EVEN SOLUTIONS, A(N), ARE SOUGHT.
+C                  IA0B1 IS 1 IF ODD SOLUTIONS, B(N), ARE SOUGHT.
+C                  IA0B1 IS UNUSED WHEN ANU IS NONINTEGER
+C      IBIT2  -  NUMBER OF BITS OF PRECISION LOST IN RECURSION FOR VEC2
+C      IC01   -  ARRAY ELEMENT OF VEC1 CONTAINING C(0)
+C      IC02   -  ARRAY ELEMENT OF VEC2 CONTAINING C(0)
+C      IER    -  ERROR FLAG FROM MATRIX DIAGONALIZATION.  ZERO IS NORMAL
+C      II     -  LOOP INDEX FOR INITIALIZING VEC1
+C      INDEX  -  FOURIER EXPANSION LABEL OF EIGENFUNCTION COEFFICIENTS
+C      INIT   -  FLAG USED TO SHOW WHETHER ARRAY VEC HAS BE INITIALIZED
+C      ITEMP  -  TEMPORARY VARIABLE USED IN OUTPUT OF COEFFICIENTS
+C      ITEST  -  ICO-NLEV USED FOR OUTPUT OF EIGENFUNCTION COEFFICIENTS
+C      ITEST2 -  INDEX USED TO OUTPUT EIGENFUNCTION COEFFICIENTS
+C      IVEC   -  FLAG FOR COMPUTATION OF EIGENFUNCTIONS (1=YES, 0=NO)
+C      JJ     -  LOOP INDEX FOR INITIALIZING VEC1
+C      K      -  LOOP INDEX IN OUTPUT OF EIGENFUNCTION COEFFICIENTS
+C      MAXDIM -  MAXIMUM DIMENSION CURRENTLY ALLOWED FOR DIAG AND SUBD
+C      MDIM   -  DIMENSION ACTUALLY USED IN MATRIX DIAGONALIZATION
+C      METHOD -  METHOD USED TO APPROXIMATE EIGENVALUE IN MTIEU2
+C                  1 INDICATES TAYLOR EXPANSION FOR NONINTEGER ORDER
+C                  2 INDICATES TAYLOR EXPANSION FOR INTEGER ORDER
+C                  3 INDICATES ASYMPTOTIC EXPANSION FOR LARGE Q
+C      NANU   -  INTEGER TRUNCATION OF ANU
+C      NCOF1  -  NUMBER OF COMPUTED COEFFICIENTS IN VEC1
+C                    MDIM FOR NONINTEGER ORDER
+C                    APPROX 2*MDIM FOR INTEGER ORDER
+C      NCOF2  -  NUMBER OF COMPUTED COEFFICIENTS IN VEC2
+C      NLEV   -  LEVEL OF CONTINUED FRACTION EXPANSION USED IN MTIEU2
+C      NQ     -  INPUT VARIABLE - NUMBER OF Q VALUES TO BE TESTED
+C      N0     -  ARRAY ELEMENT OF DIAG CONTAINING EIGENVALUE UPON RETURN
+C      ONE    -  1.D0
+C      Q      -  PARAMETER OF MATHIEU EQUATION
+C      QDEL   -  INPUT VARIABLE - INCREMENT FOR Q VALUE LOOP
+C      QSTART -  INPUT VARIABLE - INITIAL VALUE OF Q FOR LOOP
+C      SUBD   -  WORKSPACE ARRAY FOR MTIEU1 HOLDING SUBDIAGONAL ELEMENTS
+C      VEC1   -  WORKSPACE ARRAY FOR MTIEU1 HOLDING EIGENFUNCTION
+C                  COEFFICIENTS
+C      VEC2   -  WORKSPACE ARRAY FOR MTIEU2 HOLDING EIGENFUNCTION
+C                  COEFFICIENTS
+C      ZERO   -  0.D0
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL REFERENCES (FUNCTION,SUBROUTINE,COMMON)
+C
+C     EXTERNAL REFS       DABS,        DBLE,        DMAX1,       FLOAT
+C     EXTERNAL REFS       IDINT,       MIN0,        MTIEU1,      MTIEU2
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     INTRINSIC FUNCTIONS
+C
+      DOUBLE PRECISION    DABS,        DBLE,        DMAX1
+      INTEGER             IDINT,       MIN0
+      REAL                FLOAT
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     NON-COMMON VARIABLES
+C
+C     SETS                DIF,         DIFV,        DMXDIF,      DNANU
+C     SETS                I,           IA0B1,       II,          INDEX
+C     SETS                INIT,        ITEMP,       ITEST,       ITEST2
+C     SETS                JJ,          K,           MAXDIM,      MDIM
+C     SETS                NANU,        NCOF1,       NCOF2,       ONE
+C     SETS                Q,           VEC1,        VEC2,        ZERO
+C
+      DOUBLE PRECISION    A1,          A2,          ANU,         ANURD1
+      DOUBLE PRECISION    ANURD2,      DIAG(189),   DIF,         DIFV
+      DOUBLE PRECISION    DMXDIF,      DNANU,       ONE,         Q
+      DOUBLE PRECISION    QDEL,        QSTART,      SUBD(189)
+      DOUBLE PRECISION    VEC1(189,189),            VEC2(150),   ZERO
+      INTEGER             I,           IA0B1,       IBIT2,       IC01
+      INTEGER             IC02,        IER,         II,          INDEX
+      INTEGER             INIT,        ITEMP,       ITEST,       ITEST2
+      INTEGER             IVEC,        JJ,          K,           MAXDIM
+      INTEGER             MDIM,        METHOD,      N0,          NANU
+      INTEGER             NCOF1,       NCOF2,       NLEV,        NQ
+C
+      DATA zero, one/0.d0, 1.d0/
+C  MAXDIM MAY BE CHANGED IF CORRESPONDING CHANGES ARE MADE IN
+C  DIMENSIONS OF ARRAYS DIAG, SUBD, VEC1
+      maxdim = 189
+      mdim = maxdim
+C  MAXIMUM NUMBER OF COEFFICIENTS FROM MTIEU2 MAY BE CHANGED BY:
+C    REDIMENSIONING VEC2, CHANGING INITIAL VALUE OF NCOF2
+C    REDIMENSIONING VEC IN SUBROUTINES MTIEU2 AND EVEC
+C    REDIMENSIONING V AND VM IN SUBROUTINE NEWTON AND CHANGING THE TEST
+C      ON NLEV INDICATED (DIMENSION OF V AND VM AND VALUE IN TEST ARE
+C      HALF OF NEW DIMENSION OF VEC2)
+      ncof2 = 150
+      ncof1 = mdim
+      init = 0
+  100 WRITE (6, 1000)
+ 1000 FORMAT (' INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT ')
+      READ (5, *) anu
+C  ENTER -10 TO EXIT
+      IF (anu .EQ. ( - 10.d0)) stop
+      ia0b1 = 0
+      nanu = idint(anu)
+      dnanu = dble(float(nanu))
+C  TEST TO SEE IF ANU IS INTEGER.  IF SO SET IA0B1.
+      IF (((dnanu - anu) .EQ. 0.d0) .AND. (nanu .NE. 0)) THEN
+           WRITE (6, 2000) nanu
+           WRITE (6, 3000) nanu
+ 2000      FORMAT (' ENTER 0 IF YOU WANT EVEN SOLUTION (A', i3, ') ')
+ 3000      FORMAT (' ENTER 1 IF YOU WANT ODD  SOLUTION (B', i3, ') ')
+           READ (5, *) ia0b1
+      END IF
+      WRITE (6, 4000)
+ 4000 FORMAT (' ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS ')
+      WRITE (6, 5000)
+ 5000 FORMAT (' ENTER 0 FOR EIGENVALUES ONLY ')
+      READ (5, *) ivec
+  110 WRITE (6, 6000)
+ 6000 FORMAT (' ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER ')
+C  ENTER NQ=0 TO BEGIN A NEW ORDER OR EXIT
+      READ (5, *) nq, qdel, qstart
+      IF (nq .EQ. 0) GO TO 100
+      q = qstart - qdel
+      DO 180 i = 1, nq
+           q = q + qdel
+C  INITIALIZE EIGENVECTOR MATRIX FOR MTIEU1
+           IF (ivec .GE. 1) THEN
+C  IF VEC NOT INITIALIZED, INITIALIZE ENTIRE ARRAY
+C  IF VEC PREVIOUSLY INITIALIZED, INITIALIZE ONLY ALTERED PART
+                IF (init.LE.0) THEN
+                     ncof1 = maxdim
+                     mdim = maxdim
+                END IF
+                DO 130 ii = 1, ncof1
+                     DO 120 jj = 1, mdim
+                          vec1(ii, jj) = zero
+  120                CONTINUE
+                     vec1(ii, ii) = one
+  130           CONTINUE
+           init = 1
+           END IF
+           CALL mtieu1(anu, q, a1, ia0b1, ivec, anurd1, ic01, n0, mdim,
+     X          maxdim, diag, subd, vec1, ncof1, ier)
+C  RESET VEC2 TO ZERO
+           DO 140 ii = 1, ncof2
+                vec2(ii) = zero
+  140      CONTINUE
+           CALL mtieu2(anu, q, a2, ia0b1, ivec, anurd2, nlev, method,
+     X          vec2, ibit2, ic02, ncof2)
+C  COMPARE RESULTS FROM MTIEU1 AND MTIEU2
+           IF (dabs(a1) .GT. one) THEN
+C  USE RELATIVE ERROR FOR DABS(A) GREATER THAN UNITY
+                dif = (a1 - a2)/a1
+           ELSE
+C  USE ABSOLUTE ERROR FOR DABS(A) LESS THAN UNITY
+                dif = a1 - a2
+           END IF
+C  OUTPUT RESULTS
+           WRITE (6, 7000) ia0b1, anu, q
+           WRITE (6, 7100) mdim, ier, n0, a1
+           WRITE (6, 7200) nlev, method, ibit2, a2
+           IF (dabs(dif).GT.1.d-12) WRITE (6, 7300) dif
+ 7000      FORMAT (' IA0B1 ', i2, ' ANU = ', f12.8, ' Q = ', 1pe15.7)
+ 7100      FORMAT (' MDIM = ', i3, ' IER =    ', i2, ' N0   = ', i2,
+     X     ' A1 = ', 1pe20.12)
+ 7200      FORMAT (' NLEV = ', i3, ' METHOD = ', i2, ' IBIT = ', i2,
+     X     ' A2 = ', 1pe20.12)
+ 7300      FORMAT (' ** WARNING ** MAXIMUM EIGENVALUE DIFFERENCE LARGE '
+     X     ,1pe10.1)
+           IF (ivec .GE. 1) THEN
+C  OUTPUT OVERALL FLOQUET EXPONENT (REDUCED ORDER)
+                WRITE (6, 7400) anurd1, anurd2
+ 7400           FORMAT (' FLOQUET EXPONENT ', 1pe15.7, e15.7)
+C  PREPARE TO COMPARE EIGENFUNCTION COEFFICIENTS
+                itest = ic01 - ic02
+                itest2 = ncof1
+                IF (itest .GT. 0) THEN
+C  THIS BRANCH IF MTIEU1 REPORTS MORE NEGATIVE INDEX COEFFICIENTS
+C  THAN MTIEU2
+                     itemp = ncof2 + itest
+                     itest2 = min0(itemp, ncof1)
+                     dmxdif = zero
+                     WRITE (6, 8000)(2*(k - ic01), vec1(k, n0), k = 1,
+     X                    itest)
+                     DO 150 k = itest + 1, itest2
+                          index = 2*(k - ic01)
+                          WRITE (6, 8100) index, vec1(k, n0), vec2(k -
+     X                         itest)
+                          difv = dabs(vec1(k, n0)) - dabs(vec2(k -
+     X                         itest))
+                          dmxdif = dmax1(dmxdif, dabs(difv))
+  150                CONTINUE
+                     IF (itemp .GT. ncof1) THEN
+                          WRITE (6, 8200)(2*(k - ic01), vec2(k - itest),
+     X                         k = itest2 + 1, itemp)
+                     ELSE
+                          WRITE (6, 8000)(2*(k - ic01), vec1(k, n0), k =
+     X                         itest2 + 1, ncof1)
+                     END IF
+                ELSE
+                     IF (itest .EQ. 0) GO TO 160
+C  THIS BRANCH IF MTIEU2 REPORTS MORE NEGATIVE INDEX COEFFICIENTS
+C  THAN MTIEU1
+                     itest = - itest
+                     WRITE (6, 8200)(2*(k - ic02), vec2(k), k = 1,
+     X                    itest)
+  160                itemp = ncof1 + itest
+                     itest2 = min0(itemp, ncof2)
+                     dmxdif = zero
+                     DO 170 k = itest + 1, itest2
+                          index = 2*(k - ic02)
+                          WRITE (6, 8100) index, vec1(k - itest, n0),
+     X                         vec2(k)
+                          difv = dabs(vec1(k - itest, n0)) - dabs(vec2(
+     X                         k))
+                          dmxdif = dmax1(dmxdif, dabs(difv))
+  170                CONTINUE
+                     IF (itemp .GT. ncof2) THEN
+                          WRITE (6, 8000)(2*(k - ic02), vec1(k - itest,
+     X                         n0), k = itest2 + 1, itemp)
+                     ELSE
+                          WRITE (6, 8200)(2*(k - ic02), vec2(k), k =
+     X                         itest2 + 1, ncof2)
+                     END IF
+                END IF
+ 8000           FORMAT (i5, 1pe18.10)
+ 8100           FORMAT (i5, 1pe18.10, e18.10)
+ 8200           FORMAT (i5, 18x, 1pe18.10)
+                IF (dmxdif.GT.1.d-10) WRITE (6, 8300) dmxdif
+ 8300           FORMAT (' ** WARNING ** MAXIMUM DIFFERENCE LARGE ',
+     X          1pe13.5)
+           END IF
+  180 CONTINUE
+      GO TO 110
+      END
+      PROGRAM  mttest
+C  TESTS MATHIEU FUNCTION SOLUTIONS
+C  WRITTEN BY R. B. SHIRTS, IDAHO NATIONAL ENGINEERING LABORATORY
+C  WRITTEN DECEMBER 1990
+C  LAST ALTERED DECEMBER 1990
+C
+C  VARIABLE USED IN MTTEST
+C
+C      A      -  EIGENVALUE FOR MATHIEU'S EQUATION
+C      ANU    -  INPUT VARIABLE - ORDER OF MATHIEU EQUATION
+C      ANURD  -  REDUCED ORDER - ANU-2*NANU2 - FLOQUET EXPONENT
+C      DNANU  -  DOUBLE PRECISION VERSION OF NANU
+C      FI     -  IMAGINARY PART OF MATHIEU FUNCTION
+C      FR     -  REAL PART OF MATHIEU FUNCTION
+C      I      -  LOOP INDEX FOR X VALUES
+C      IA0B1  -  SPECIFIES A OR B SOLUTION WHEN ANU IS INTEGER
+C                  IA0B1 IS 0 IF EVEN SOLUTIONS, A(N), ARE SOUGHT.
+C                  IA0B1 IS 1 IF ODD SOLUTIONS, B(N), ARE SOUGHT.
+C                  IA0B1 IS UNUSED WHEN ANU IS NONINTEGER
+C      IBIT   -  NUMBER OF BITS OF PRECISION LOST IN RECURSION FOR VEC2
+C      IC0    -  ELEMENT OF VEC CONTAINING C(0)
+C      IER    -  0 FOR NORMAL RETURN, 1 IF NCOF.GT.MAXDIM
+C      II     -  LOOP INDEX FOR ZEROING VEC
+C      IVEC   -  FLAG FOR COMPUTATION OF EIGENFUNCTIONS (1=YES, 0=NO)
+C      K      -  INDEX FOR ELEMENTS OF VEC
+C      MAXDIM -  MAXIMUM DIMENSION OF VEC
+C      METHOD -  METHOD USED TO APPROXIMATE EIGENVALUE IN MTIEU2
+C                  1 INDICATES TAYLOR EXPANSION FOR NONINTEGER ORDER
+C                  2 INDICATES TAYLOR EXPANSION FOR INTEGER ORDER
+C                  3 INDICATES ASYMPTOTIC EXPANSION FOR LARGE Q
+C      NANU   -  INTEGER TRUNCATION OF ANU
+C      NCOF   -  NUMBER OF NONZERO ELEMENTS OF VEC
+C      NLEV   -  LEVEL OF CONTINUED FRACTION EXPANSION USED IN MTIEU2
+C      NX     -  NUMBER OF X VALUES FOR WHICH SOLN IS TO BE CALCULATED
+C      PHASE  -  ARBITRARY PHASE WHICH CAN BE USED TO FIX REAL OR
+C                   IMAGINARY PART
+C      Q      -  PARAMETER OF MATHIEU EQUATION
+C      VEC    -  ARRAY CONTAINING FOURIER COMPONENTS
+C      X      -  ABSCISSA FOR WHICH MATHIEU FUNCTION IS DESIRED
+C      XDEL   -  X INCREMENT IN LOOP ON X VALUES
+C      XSTART -  X VALUE AT START OF LOOP IN X VALUES
+C      ZERO   -  0.D0
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL REFERENCES (FUNCTION,SUBROUTINE,COMMON)
+C
+C     EXTERNAL REFS       DBLE,        FLOAT,       IDINT,       MTFCTN
+C     EXTERNAL REFS       MTIEU2
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     INTRINSIC FUNCTIONS
+C
+      DOUBLE PRECISION    DBLE
+      INTEGER             IDINT
+      REAL                FLOAT
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     NON-COMMON VARIABLES
+C
+C     SETS                DNANU,       I,           IA0B1,       II
+C     SETS                IVEC,        K,           MAXDIM,      NANU
+C     SETS                NCOF,        PHASE,       VEC,         X
+C     SETS                ZERO
+C
+      DOUBLE PRECISION    A,           ANU,         ANURD,       DNANU
+      DOUBLE PRECISION    FI,          FR,          PHASE,       Q
+      DOUBLE PRECISION    VEC(150),    X,           XDEL,        XSTART
+      DOUBLE PRECISION    ZERO
+      INTEGER             I,           IA0B1,       IBIT,        IC0
+      INTEGER             IER,         II,          IVEC,        K
+      INTEGER             MAXDIM,      METHOD,      NANU,        NCOF
+      INTEGER             NLEV,        NX
+C
+      DATA zero/0.d0/
+      ncof = 150
+  100 WRITE (6, 1000)
+ 1000 FORMAT (' INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT ')
+      READ (5, *) anu
+C  ENTER -10 TO EXIT
+      IF (anu .EQ. ( - 10.d0)) THEN
+           CLOSE (2)
+           STOP
+      END IF
+      ia0b1 = 0
+      nanu = idint(anu)
+      dnanu = dble(float(nanu))
+C  TEST TO SEE IF ANU IS INTEGER.  IF SO SET IA0B1.
+      IF (((dnanu - anu) .EQ. 0.d0) .AND. (nanu .NE. 0)) THEN
+           WRITE (6, 2000) nanu
+           WRITE (6, 3000) nanu
+ 2000      FORMAT (' ENTER 0 IF YOU WANT EVEN SOLUTION (A', i3, ') ')
+ 3000      FORMAT (' ENTER 1 IF YOU WANT ODD  SOLUTION (B', i3, ') ')
+           READ (5, *) ia0b1
+      END IF
+      ivec = 1
+  110 WRITE (6, 6000)
+ 6000 FORMAT (' ENTER Q OR Q=0 TO CHANGE ORDER ')
+C  ENTER Q=0 TO BEGIN A NEW ORDER OR EXIT
+      READ (5, *) q
+      IF (q .EQ. 0.d0) go TO 100
+C  RESET VEC TO ZERO
+      DO 140 ii = 1, ncof
+           vec(ii) = zero
+  140 CONTINUE
+      CALL mtieu2(anu, q, a, ia0b1, ivec, anurd, nlev, method, vec,
+     X     ibit, ic0, ncof)
+      WRITE (6, 7000) method, nlev, ia0b1, anu, q, a
+ 7000 FORMAT (' METHOD ', i2, ' NLEV ', i3, ' IA0B1 ', i2, ' ANU ',
+     X     f9.5, ' Q ', f9.4, ' A ', 1pe15.7)
+      WRITE (6, 7700) anurd
+ 7700 FORMAT (' FLOQUET EXPONENT ', f12.7)
+      DO 145 i = 1, ncof
+           k = 2*(i - ic0)
+           WRITE (6, 7500) k, vec(i)
+ 7500      FORMAT (i5, 1pe15.7)
+  145 CONTINUE
+      phase = zero
+      WRITE (6, 8000)
+ 8000 FORMAT (' ENTER NX,XSTART,XDEL - USE NX=0 TO CHANGE Q ')
+      READ (5, *) nx, xstart, xdel
+      IF (nx .LE. 0) go TO 110
+      x = xstart - xdel
+      maxdim = 150
+      DO 150 i = 1, nx
+           x = x + xdel
+           CALL mtfctn(x, fr, fi, vec, ncof, ic0, maxdim, anurd, phase,
+     X          ier)
+C  IF IMAGINARY PART IS BELOW ROUND-OFF ERROR, SET IT TO ZERO          
+           IF (fi+fr.EQ.fr) fi = zero
+C  IF REAL PART IS BELOW ROUND-OFF ERROR, SET IT TO ZERO
+           IF (fi+fr.EQ.fi) fr = zero
+           WRITE (6, 9000) ier, x, fr, fi
+ 9000      FORMAT (i4, f9.5, 1pe15.7, e15.7)
+  150 CONTINUE
+      go TO 110
+      END
+      SUBROUTINE  mtfctn(x, fr, fi, vec, ncof, ic0, maxdim, anu, phase,
+     X     ier)
+C  EVALUATES THE SOLUTION OF MATHIEU'S DIFFERENTIAL EQUATION
+C  AT COORDINATE X GIVEN A VECTOR OF FOURIER COEFFICIENTS
+C  WRITTEN BY R. B. SHIRTS, IDAHO NATIONAL ENGINEERING LABORATORY
+C  WRITTEN DECEMBER 1990
+C  LAST ALTERED JANUARY 1991
+C
+C  PARAMETERS PASSED TO MTFCTN
+C
+C      ANU    -  ORDER OF MATHIEU EQUATION
+C      IC0    -  ELEMENT OF VEC CONTAINING C(0)
+C      MAXDIM -  MAXIMUM DIMENSION OF VEC
+C      NCOF   -  NUMBER OF NONZERO ELEMENTS OF VEC
+C      PHASE  -  ARBITRARY PHASE WHICH CAN BE USED TO FIX REAL OR
+C                   IMAGINARY PART
+C      VEC    -  ARRAY CONTAINING FOURIER COMPONENTS
+C      X      -  ABSCISSA FOR WHICH MATHIEU FUNCTION IS DESIRED
+C
+C  PARAMETERS RETURNED BY MTFCTN
+C
+C      FI     -  IMAGINARY PART OF MATHIEU FUNCTION
+C      FR     -  REAL PART OF MATHIEU FUNCTION
+C      IER    -  0 FOR NORMAL RETURN, 1 IF NCOF.GT.MAXDIM
+C
+C  PARAMTERS USED WITHIN MTFCTN
+C
+C      ARG    -  ARGUMENT OF TRIGONOMETRIC FUNCTIONS
+C      I      -  LOOP INDEX FOR FOURIER COEFFICIENTS
+C      ZERO   -  0.D0
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL REFERENCES (FUNCTION,SUBROUTINE,COMMON)
+C
+C     EXTERNAL REFS       DBLE,        DCOS,        DSIN,        FLOAT
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL FUNCTIONS AND SUBROUTINES
+C
+      DOUBLE PRECISION    DCOS,        DSIN
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     INTRINSIC FUNCTIONS
+C
+      DOUBLE PRECISION    DBLE
+      REAL                FLOAT
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     RUNTIME DIMENSION VARIABLES
+C
+      INTEGER             MAXDIM
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     NON-COMMON VARIABLES
+C
+C     SETS                ARG,         FI,          FR,          I
+C     SETS                IER,         ZERO
+C
+      DOUBLE PRECISION    ANU,         ARG,         FI,          FR
+      DOUBLE PRECISION    PHASE,       VEC(MAXDIM), X,           ZERO
+      INTEGER             I,           IC0,         IER,         NCOF
+C
+      DATA zero/0.d0/
+      fr = zero
+      fi = zero
+C  TEST FOR ERROR CONDITION
+      IF (ncof .GT. maxdim) THEN
+           ier = 1
+      ELSE
+           ier = 0
+C  ACCUMULATE FOURIER TERMS
+           DO 10 i = 1, ncof
+                arg = x*(anu + dble(float(2*(i - ic0))) + phase)
+                fr = fr + vec(i)*dcos(arg)
+                fi = fi + vec(i)*dsin(arg)
+   10      CONTINUE
+      END IF
+      RETURN
+      END
+      SUBROUTINE  acalc(amu, q, a, nlev, ir)
+C  THIS ROUTINE ITERATIVELY SOLVES G(0)*H(0)-1 = 0 FROM NBS HANDBOOK
+C  EQUATION 20.3.14 BY NEWTON'S METHOD.
+C  WRITTEN BY R. B. SHIRTS, IDAHO NATIONAL ENGINEERING LABORATORY
+C  SEPTEMBER 1989
+C  LAST ALTERED NOVEMBER 1990
+C
+C  VARIABLES PASSED TO ACALC
+C
+C      A      -  APPROXIMATION TO MATHIEU EQUATION EIGENVALUE
+C      AMU    -  ORDER OF MATHIEU EQUATION
+C      IR     -  INTEGER TRUNCATION OF AMU (EXCEPT B(M) - THEN IR = M-1)
+C      Q      -  PARAMETER OF MATHIEU EQUATION
+C
+C  VARIABLES RETURNED BY ACALC
+C
+C      A      -  REFINED VALUE OF MATHIEU EQUATION EIGENVALUE
+C      NLEV   -  LEVEL OF CONTINUED FRACTION USED IN COMPUTATION
+C
+C  VARIABLES USED WITHIN ACALC
+C
+C      CHNG   -  ADJUSTMENT TO EIGENVALUE A COMPUTED BY ONE ITERATION
+C      DLNK   -  NATURAL LOG OF K TO WITHIN A TRUNCATION
+C      DLNQ   -  NATURAL LOG OF Q
+C      K      -  INDEX USED TO COMPUTE NLEV
+C      MXITER -  MAXIMUM NUMBER OF ITERATIONS OF NEWTON'S METHOD
+C      NCOUNT -  NUMBER OF ITERATIONS OF NEWTON'S METHOD
+C      TOLABS -  ERROR TOLERANCE FOR ABSOLUTE ERROR IN A
+C      TOLREL -  ERROR TOLERANCE FOR RELATIVE ERROR IN A
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL REFERENCES (FUNCTION,SUBROUTINE,COMMON)
+C
+C     EXTERNAL REFS       DABS,        DEXP,        DLOG,        IDINT
+C     EXTERNAL REFS       NEWTON
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL FUNCTIONS AND SUBROUTINES
+C
+      DOUBLE PRECISION    DEXP,        DLOG
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     INTRINSIC FUNCTIONS
+C
+      DOUBLE PRECISION    DABS
+      INTEGER             IDINT
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     NON-COMMON VARIABLES
+C
+C     SETS                A,           DLNK,        DLNQ,        K
+C     SETS                MXITER,      NCOUNT,      NLEV,        TOLABS
+C     SETS                TOLREL
+C
+      DOUBLE PRECISION    A,           AMU,         CHNG,        DLNK
+      DOUBLE PRECISION    DLNQ,        Q,           TOLABS,      TOLREL
+      INTEGER             IR,          K,           MXITER,      NCOUNT
+      INTEGER             NLEV
+C  *****************************************************************
+C  MACHINE DEPENDENT VARIABLES TOLABS AND TOLREL
+C  TOLABS=1.D-14 AND TOLREL=1.D-15 WERE FOUND TO BE CONVENIENT FOR
+C  52 BIT MANTISSA AND ARE ADEQUATE FOR MANTISSAS GREATER THAN 52 BITS
+C  TOLABS AND TOLREL MUST BE INCREASED FOR MASTISSAS LESS THAN 52 BITS
+      DATA tolabs, tolrel/1.d-14, 1.d-15/
+C  *****************************************************************
+      DATA mxiter/15/
+C  DETERMINE LEVEL OF CONTINUED FRACTION NECESSARY FOR EIGENVALUE
+C  ACCURATE TO 1 PART IN 10**14
+C
+C  TAKE MINIMUM IF Q IS SUFFICIENTLY SMALL
+      IF (q .LT. 2.d-3) THEN
+           k = 2
+C  COMPUTE FOR LARGER Q
+      ELSE
+           dlnq = dlog(q)
+           dlnk = 1.85d0 + dlnq*(0.171d0 + dlnq*0.0073d0)
+           k = idint(dexp(dlnk))
+      END IF
+      nlev = k + ir + 1
+C  NOW FIND ZERO OF NBS HANDBOOK 20.3.14 BY NEWTON'S METHOD
+      ncount = 0
+  100 ncount = ncount + 1
+      CALL newton(amu, q, a, chng, nlev)
+C  CORRECT A
+      a = a + chng
+C  CHECK TO SEE IF CONVERGENCE REACHED USING ABSOLUTE CHANGE
+      IF (dabs(chng) .LT. tolabs) return
+C  CHECK TO SEE IF CONVERGENCE REACHED USING RELATIVE CHANGE
+      IF (dabs(chng/a) .LT. tolrel) return
+C  CONTINUE ITERATION UNLESS MAXIMUM NUMBER OF ITERATIONS REACHED
+      IF (ncount .LT. mxiter) go TO 100
+      WRITE (6, 1000) chng
+      RETURN
+ 1000 FORMAT (' NO CONVERGENCE FOR EIGENVALUE. LAST CHANGE WAS ', 1p
+     X     e12.3)
+      END
+      SUBROUTINE  aintgr(anu, q, at, ia0b1)
+C  APPROXIMATES MATHIEU EQUATION EIGENVALUE FROM TAYLOR SERIES FOR
+C  INTEGER VALUES USING NBS HANDBOOK 20.2.25
+C  THE HIGHEST POWER OF Q USED IS ANU + 2
+C  EXCEPTION IS A(0) WHERE THE HIGHEST POWER OF Q USED IS 4.
+C  FOR EACH ORDER, THE LAST COEFFICIENT HAS BEEN ADJUSTED
+C  TO GIVE LARGER RADIUS OF CONVERGENCE
+C  EXCEPTION IS A(10) TO WHICH AN ADDITIONAL ADJUSTED COEFFICIENT HAS
+C  BEEN ADDED SO THE HIGHEST POWER OF Q IS 14 INSTEAD OF 12
+C  WRITTEN BY R. B. SHIRTS, IDAHO NATIONAL ENGINEERING LABORATORY
+C  SEPTEMBER 1989
+C  LAST ALTERED SEPTEMBER 1989
+C
+C  VARIABLES PASSED TO AINTGR
+C
+C      ANU    -  ORDER OF MATHIEU EQUATION
+C      IA0B1  -  SPECIFIES A OR B SOLUTION WHEN ANU IS INTEGER
+C                  IA0B1 IS 0 IF EVEN SOLUTIONS, A(N), ARE SOUGHT
+C                  IA0B1 IS 1 IF ODD SOLUTIONS, B(N), ARE SOUGHT
+C                  IA0B1 IS UNUSED WHEN ANU IS NONINTEGER
+C      Q      -  PARAMETER OF MATHIEU EQUATION
+C
+C  VARIABLE RETURNED BY AINTGR
+C
+C      AT     - APPROXIMATION TO MATHIEU EQUATION EIGENVALUE
+C
+C  VARIABLES USED WITHIN AINTGR
+C
+C      A'N'M', B'N'M' - E.G. A04,B72 - PARAMETERS DECLARED IN DATA
+C                       OR ASSIGNMENT STATEMENTS THAT REPRESENT TAYLOR
+C                       SERIES COEFFICIENTS.  LETTER A OR B DESIGNATES
+C                       EVEN OR ODD EIGENFUNCTIONS.
+C                       NUMERAL N DESIGNATES ORDER.
+C                       NUMERAL M DESIGNATES POWER OF Q.
+C      D1      -  LOCAL VARIABLE USED IN Q**8 TERM
+C      D2      -  LOCAL VARIABLE USED IN Q**10 TERM
+C      FOUR    -  4.D0
+C      HALF    -  0.5D0
+C      IR      -  NEAREST INTEGER TO ANU
+C      ONE     -  1.D0
+C      Q2      -  Q**2
+C      Q4      -  Q**4
+C      Q6      -  Q**6
+C      Q8      -  Q**8
+C      QS      -  -Q FOR A(2*N+1) FUNCTIONS, Q FOR B(2*N+1) FUNCTIONS
+C      R       -  DOUBLE PRECISION FORM OF IR - SEE NBS HANDBOOK 20.2.26
+C      RSQ     -  R**2
+C      R1      -  RSQ - 1.D0
+C      R4      -  RSQ - 4.D0
+C      R9      -  RSQ - 9.D0
+C      R16     -  RSQ - 16.D0
+C      R1P3    -  R1**3
+C      R4P3    -  R4**3
+C      TWO     -  2.D0
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL REFERENCES (FUNCTION,SUBROUTINE,COMMON)
+C
+C     EXTERNAL REFS       DBLE,        FLOAT,       IDINT
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     INTRINSIC FUNCTIONS
+C
+      DOUBLE PRECISION    DBLE
+      INTEGER             IDINT
+      REAL                FLOAT
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     NON-COMMON VARIABLES
+C
+C     SETS                A04,         A1010,       A1012,       A1014
+C     SETS                A102,        A104,        A106,        A108
+C     SETS                A22,         A24,         A42,         A44
+C     SETS                A46,         A62,         A64,         A66
+C     SETS                A68,         A810,        A82,         A84
+C     SETS                A86,         A88,         AT,          B1010
+C     SETS                B1012,       B13,         B22,         B24
+C     SETS                B32,         B33,         B34,         B35
+C     SETS                B44,         B46,         B52,         B54
+C     SETS                B55,         B56,         B57,         B66
+C     SETS                B68,         B72,         B74,         B76
+C     SETS                B77,         B78,         B79,         B810
+C     SETS                B88,         B910,        B911,        B92
+C     SETS                B94,         B96,         B98,         B99
+C     SETS                D1,          D2,          FOUR,        HALF
+C     SETS                IR,          ONE,         Q2,          Q4
+C     SETS                Q6,          Q8,          QS,          R
+C     SETS                R1,          R16,         R1P3,        R4
+C     SETS                R4P3,        R9,          RSQ,         TWO
+C
+      DOUBLE PRECISION    A04,         A1010,       A1012,       A1014
+      DOUBLE PRECISION    A102,        A104,        A106,        A108
+      DOUBLE PRECISION    A22,         A24,         A42,         A44
+      DOUBLE PRECISION    A46,         A62,         A64,         A66
+      DOUBLE PRECISION    A68,         A810,        A82,         A84
+      DOUBLE PRECISION    A86,         A88,         ANU,         AT
+      DOUBLE PRECISION    B1010,       B1012,       B13,         B22
+      DOUBLE PRECISION    B24,         B32,         B33,         B34
+      DOUBLE PRECISION    B35,         B44,         B46,         B52
+      DOUBLE PRECISION    B54,         B55,         B56,         B57
+      DOUBLE PRECISION    B66,         B68,         B72,         B74
+      DOUBLE PRECISION    B76,         B77,         B78,         B79
+      DOUBLE PRECISION    B810,        B88,         B910,        B911
+      DOUBLE PRECISION    B92,         B94,         B96,         B98
+      DOUBLE PRECISION    B99,         D1,          D2,          FOUR
+      DOUBLE PRECISION    HALF,        ONE,         Q,           Q2
+      DOUBLE PRECISION    Q4,          Q6,          Q8,          QS
+      DOUBLE PRECISION    R,           R1,          R16,         R1P3
+      DOUBLE PRECISION    R4,          R4P3,        R9,          RSQ
+      DOUBLE PRECISION    TWO
+      INTEGER             IA0B1,       IR
+      DATA one, two, four, half/1.d0, 2.d0, 4.d0, 0.5d0/
+C  DATA STATEMENTS CONTAINING TAYLOR SERIES COEFFICIENTS
+C  FIFTEEN PLACE NUMBERS ARE REPRESENTATIONS OF EXACT COEFFICIENTS
+C  NUMBERS WITH FEWER DECIMAL PLACES ARE ADJUSTED TO GIVE WIDER
+C  CONVERGENCE, EXCEPT A02, B12, B32, B33, AND B34 WHICH ARE EXACT.
+      DATA a04/3.8d-2/
+      DATA b22, b24/ - 8.33333333333333d-2, 3.08d-4/
+      DATA a22, a24/4.16666666666667d-1, - 1.6d-2/
+      DATA b32, b33, b34/6.25d-2, - 1.5625d-2, 6.34765625d-4/
+      DATA a42/3.33333333333333d-2/
+      DATA a44, a46/5.01157407407407d-4, - 2.8d-6/
+      DATA b44, b46/ - 3.66898148148148d-4, 1.88d-6/
+      DATA b52, b54/2.0833333333333d-2, 1.42092427248677d-5/
+      DATA b55, b56/ - 6.78168402777778d-6, 4.14884770217887d-8/
+      DATA a62, a64/1.42857142857143d-2, 4.25929300291545d-6/
+      DATA a66, b66/7.25619558491116d-8, - 6.3071724706444d-8/
+      DATA a68, b68/ - 1.02d-10, 8.d-11/
+      DATA b72, b74/1.04166666666667d-2, 1.58239293981481d-6/
+      DATA b76, b77/8.33974453647441d-10, - 4.7095027970679d-10/
+      DATA b78/7.80234775717837d-13/
+      DATA a82, a84/7.93650793650794d-3, 6.81121949073574d-7/
+      DATA a86, a88/1.937237439344d-10, 2.49488405660729d-12/
+      DATA a810, b88, b810/ - 1.12d-15, -2.31073104244159d-12, 1.02d-15/
+      DATA b92, b94/6.25d-3, 3.26577719155844d-7/
+      DATA b96, b98/5.48534751110435d-11, 1.48248080793013d-14/
+      DATA b99, b910/ - 9.38596699032984d-15, 5.5d-18/
+      DATA a102, a104/5.05050505050505d-3, 1.70090933310248d-7/
+      DATA a106, a108/1.80230539976803d-11, 2.99483444040784d-15/
+      DATA a1010, b1010/2.96352906699291d-17, - 2.83027771716131d-17/
+      DATA a1012, b1012, a1014/ - 9.47d-21, 5.25d-21, 7.42d-25/
+      q2 = q*q
+      q4 = q2*q2
+      IF (anu .LT. half) THEN
+           at = - q2*half + q4*a04
+           RETURN
+      END IF
+      IF (anu .LT. 1.5d0) THEN
+           IF ((anu .LT. one) .OR. (ia0b1 .EQ. 1)) THEN
+                qs = q
+                b13 = 0.014d0
+           ELSE
+                qs = - q
+                b13 = 0.0125d0
+           END IF
+           at = one - qs + q2*( - 1.25d-1 + qs*b13)
+           RETURN
+      END IF
+      IF ((anu .LT. two) .OR. ((anu .EQ. two) .AND. (ia0b1 .EQ. 1)))
+     X     THEN
+           at = four + b22*q2 + b24*q4
+           RETURN
+      END IF
+      IF (anu .LT. 2.5d0) THEN
+           at = four + a22*q2 + q4*a24
+           RETURN
+      END IF
+      IF (anu .LT. 3.5d0) THEN
+           IF ((anu .LT. 3.d0) .OR. (ia0b1 .EQ. 1)) THEN
+                qs = q
+                b35 = 6.d-5
+           ELSE
+                qs = - q
+                b35 = 3.2d-4
+           END IF
+           at = 9.d0 + q2*(b32 + qs*b33) + q4*(b34 + qs*b35)
+           RETURN
+      END IF
+      q6 = q4*q2
+      IF (anu .LT. 4.5d0) THEN
+           at = 16.d0 + q2*a42
+           IF ((anu .LT. four) .OR. ((anu .EQ. four) .AND. (ia0b1 .EQ.
+     X          1))) THEN
+                at = at + q4*b44 + q6*b46
+                RETURN
+           ELSE
+                at = at + q4*a44 + q6*a46
+                RETURN
+           END IF
+      END IF
+      IF (anu .LT. 5.5d0) THEN
+           IF ((anu .LT. 5.d0) .OR. (ia0b1 .EQ. 1)) THEN
+                qs = q
+                b57 = 1.35d-8
+           ELSE
+                qs = - q
+                b57 = 2.1d-8
+           END IF
+           at = 25.d0 + q2*b52 + q4*(b54 + qs*b55) + q6*(b56 + qs*b57)
+           RETURN
+      END IF
+      q8 = q4*q4
+      IF (anu .LT. 6.5d0) THEN
+           at = 36.d0 + q2*a62 + q4*a64
+           IF ((anu .LT. 6.d0) .OR. ((anu .EQ. 6.d0) .AND. (ia0b1 .EQ.
+     X          1))) THEN
+                at = at + q6*b66 + q8*b68
+                RETURN
+           ELSE
+                at = at + q6*a66 + q8*a68
+                RETURN
+           END IF
+      END IF
+      IF (anu .LT. 7.5d0) THEN
+           IF ((anu .LT. 7.d0) .OR. (ia0b1 .EQ. 1)) THEN
+                qs = q
+                b79 = 3.1d-13
+           ELSE
+                qs = - q
+                b79 = 3.95d-13
+           END IF
+           at = 49.d0 + q2*b72 + q4*b74 + q6*(b76 + qs*b77) + q8*(b78 +
+     X          qs*b79)
+           RETURN
+      END IF
+      IF (anu .LT. 8.5d0) THEN
+           at = 64.d0 + q2*a82 + q4*a84 + q6*a86
+           IF ((anu .LT. 8.d0) .OR. ((anu .EQ. 8.d0) .AND. (ia0b1 .EQ.
+     X          1))) THEN
+                at = at + q8*(b88 + q2*b810)
+                RETURN
+           ELSE
+                at = at + q8*(a88 + q2*a810)
+                RETURN
+           END IF
+      END IF
+      IF (anu .LT. 9.5d0) THEN
+           IF ((anu .LT. 9.d0) .OR. (ia0b1 .EQ. 1)) THEN
+                qs = q
+                b911 = 2.5d-18
+           ELSE
+                qs = - q
+                b911 = 2.7d-18
+           END IF
+           at = 81.d0 + q2*b92 + q4*b94 + q6*b96 + q8*b98
+           at = at + q8*qs*(b99 + qs*(b910 + qs*b911))
+           RETURN
+      END IF
+      IF (anu .LT. 10.5d0) THEN
+           at = 100.d0 + q2*(a102 + q2*(a104 + q2*(a106 + q2*a108)))
+           IF ((anu .LT. 10.d0) .OR. ((anu .EQ. 10.d0) .AND. (ia0b1 .EQ.
+     X          1))) THEN
+                at = at + q6*q4*(b1010 + b1012*q2)
+                RETURN
+           ELSE
+                at = at + q6*q4*(a1010 + a1012*q2 + a1014*q4)
+                RETURN
+           END IF
+      END IF
+C  THE REMAINING CODE FOR ORDERS GREATER THAN 10.5, BUT MAY NOT BE
+C  ACCURATE ENOUGH AND DOES NOT DISTINGUISH B(N) FROM A(N)
+      ir = idint(anu + half)
+      r = dble(float(ir))
+      rsq = r*r
+      r1 = rsq - one
+      r4 = rsq - four
+      r9 = rsq - 9.d0
+      r16 = rsq - 16.d0
+      r1p3 = r1*r1*r1
+      r4p3 = r4*r4*r4
+      d1 = 274748.d0 + rsq*(827565.d0 + rsq*(64228.d0 + rsq*( -
+     X     140354.d0 + rsq*(9144.d0 + rsq*1469.d0))))
+      d2 = 4453452.d0 + rsq*(20651309.d0 + rsq*(13541915.d0 + rsq*( -
+     X     2844430.d0 + rsq*( - 1039598.d0 + rsq*(69361.d0 + rsq*
+     X     4471.d0)))))
+      at = rsq + q2*half/r1 + q4*(5.d0*rsq + 7.d0)/(32.d0*r4*r1p3) + q6
+     X     *(9.d0*rsq*rsq + 58.d0*rsq + 29.d0)/(64.d0*r1p3*r1*r1*r4*r9)
+     X     + q8*d1/(8192.d0*r1p3*r1p3*r1*r4p3*r9*r16) + q6*q4*d2/(
+     X     16384.d0*r1p3*r1p3*r1p3*r4p3*r9*r16*(rsq - 25.d0))
+      RETURN
+      END
+      SUBROUTINE  asym(amu, q, asy, r, ir)
+C  THIS ROUTINE CALCULATES APPROXIMATE EIGENVALUES OF THE MATHIEU
+C  EQUATION USING ASYMPTOTIC EXPANSION FOR LARGE Q
+C  EXPANSION FOUND PARTIALLY IN NBS HANDBOOK OF MATHEMATICAL FUNCTIONS
+C  FORMULA 20.2.30 AND MORE COMPLETELY IN
+C  R. B. DINGLE AND H. J. W. MULLER, J. REINE ANGEW. MATH. 211,11 1962
+C  EXPANSION CONSISTS OF TWO PARTS.  PART 1 DEPENDS ONLY ON R.
+C  THE SECOND PART (AN EXPONENTIAL ADJUSTMENT) DEPENDS ON THE DIFFERENCE
+C  BETWEEN THE ORDER AND THE NEAREST HALF INTEGER
+C  WRITTEN BY R. B. SHIRTS, IDAHO NATIONAL ENGINEERING LABORATORY
+C  SEPTEMBER 1989
+C  LAST ALTERED SEPTEMBER 1989
+C
+C  VARIABLES PASSED TO ASYM
+C
+C      AMU    -  ORDER OF MATHIEU EQUATION
+C      IR     -  INTEGER FORM OF R
+C      Q      -  PARAMETER OF MATHIEU EQUATION
+C      R      -  R VARIABLE OF NBS HANDBOOK 20.2.30 - R = NAMU EXCEPT
+C                  R = NAMU-1 FOR B(N)
+C
+C  VARIABLES RETURNED BY ASYM
+C
+C      ASY    -  APPROXIMATE EIGENVALUE OF MATHIEU EQUATION
+C
+C  VARIABLES USED WITHIN ASYM
+C
+C      ADJ    -  EXPONENTIAL ADJUSTMENT FOR NON-HALF-INTEGER ORDER
+C      AMULT  -  MULTIPLIER USED ITERATIVELY IN COMPUTING RFAC
+C      ARG    -  ARGUMENT OF SINE WEIGHTING ADJUSTMENT
+C      C1,C2  -  CONSTANTS COMPUTED IN CALCULATING ADJUSTMENT
+C      D0,D1,...D7 - ASYMPTOTIC COEFFICIENTS OF X**M, M = 0,1,...,7
+C      DD1,DD2,DD3,DD4 - ASYMPTOTIC COEFFICIENTS X**M, M = 1,2,3,4 OF
+C                          ADJUSTMENT FOR NON-HALF-INTEGER ORDER
+C      HALF   -  0.5D0
+C      I      -  LOOP INDEX FOR COMPUTING RFAC
+C      ONE    -  1.D0
+C      PI     -  PI=3.141592653...
+C      QRT    -  Q**(1/2)
+C      RFAC   -  FACTORIAL OF IR
+C      TWO    -  2.D0
+C      W      -  VARIABLE USED IN NBS HANDBOOK 20.2.30;  W = 2*R+1
+C      W2,W4,W6,W8  -  W**M, M = 2,4,6,8
+C      X      -  Q**(-1/2) - PARAMETER IN EXPANSION
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL REFERENCES (FUNCTION,SUBROUTINE,COMMON)
+C
+C     EXTERNAL REFS       DEXP,        DSIN,        DSQRT
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL FUNCTIONS AND SUBROUTINES
+C
+      DOUBLE PRECISION    DEXP,        DSIN,        DSQRT
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     NON-COMMON VARIABLES
+C
+C     SETS                ADJ,         AMULT,       ARG,         ASY
+C     SETS                C1,          C2,          D0,          D1
+C     SETS                D2,          D3,          D4,          D5
+C     SETS                D6,          D7,          DD1,         DD2
+C     SETS                DD3,         DD4,         HALF,        I
+C     SETS                ONE,         PI,          QRT,         RFAC
+C     SETS                TWO,         W,           W2,          W4
+C     SETS                W6,          W8,          X
+C
+      DOUBLE PRECISION    ADJ,         AMU,         AMULT,       ARG
+      DOUBLE PRECISION    ASY,         C1,          C2,          D0
+      DOUBLE PRECISION    D1,          D2,          D3,          D4
+      DOUBLE PRECISION    D5,          D6,          D7,          DD1
+      DOUBLE PRECISION    DD2,         DD3,         DD4,         HALF
+      DOUBLE PRECISION    ONE,         PI,          Q,           QRT
+      DOUBLE PRECISION    R,           RFAC,        TWO,         W
+      DOUBLE PRECISION    W2,          W4,          W6,          W8
+      DOUBLE PRECISION    X
+      INTEGER             I,           IR
+C
+      DATA one, two, half, pi/1.d0, 2.d0, 0.5d0, 3.14159265358979d0/
+C  EVALUATE R FACTORIAL
+      rfac = one
+      IF (ir .LE. 1) go TO 110
+      amult = one
+      DO 100 i = 2, ir
+           amult = amult + one
+           rfac = rfac*amult
+  100 CONTINUE
+  110 w = two*r + one
+      w2 = w*w
+      w4 = w2*w2
+      w6 = w4*w2
+      w8 = w4*w4
+      qrt = dsqrt(q)
+      x = one/qrt
+C  FORM ASYMPTOTIC COEFFICIENTS FOR EXPONENTIAL ADJUSTMENT
+      dd1 = (3.d0*w2 + 8.d0*w + 3.d0)*1.5625d-2
+      dd2 = (9.d0*w4 + w2*(8.d0*w - 78.d0) - 88.d0*w - 87.d0)/8192.d0
+      dd3 = (9.d0*w6 - w4*(48.d0*w + 141.d0) + w2*(896.d0*w + 1643.d0) +
+     X     4016.d0*w + 801.d0)/524288.d0
+      dd4 = (27.d0*w8 - w6*(432.d0*w - 1420.d0) + w4*(9904.d0*w -
+     X     50878.d0) - w2*(120976.d0*w + 577076.d0) - 265968.d0*w -
+     X     196101.d0)/134217728.d0
+      arg = (amu - r - half)*pi
+      c1 = dsin(arg)*(two**(4*ir + 4))*dsqrt(two/pi)/rfac
+      c2 = r*half + 0.75d0
+C  EVALUATE EXPONENTIAL ADJUSTMENT
+      adj = c1*(q**c2)*dexp( - 4.d0*qrt)*(one - x*(dd1 - x*(dd2 - x*(dd3
+     X     - x*dd4))))
+C  FORM ASYMPTOTIC COEFFICIENTS OF PART 1
+      d0 = 0.125d0*(w2 + one)
+      d1 = 7.8125d-3*w*(w2 + 3.d0)
+      d2 = (5.d0*w4 + 34.d0*w2 + 9.d0)/4096.d0
+      d3 = w*(33.d0*w4 + 410.d0*w2 + 405.d0)/131072.d0
+      d4 = (63.d0*w6 + 1260.d0*w4 + 2943.d0*w2 + 486.d0)/1.048576d6
+      d5 = w*(527.d0*w6 + 15617.d0*w4 + 69001.d0*w2 + 41607.d0)/
+     X     3.3554432d7
+      d6 = (9387.d0*w8 + 388780.d0*w6 + 2845898.d0*w4 + 4021884.d0*w2 +
+     X     506979.d0)/2.147483648d9
+      d7 = w*(175045.d0*w8 + 9702612.d0*w6 + 107798166.d0*w4 +
+     X     288161796.d0*w2 + 130610637.d0)/1.37438953472d11
+C  FORM PART 1 AND ADD EXPONENTIAL ADJUSTMENT
+      asy = two*(qrt*w - q) - d0 - x*(d1 + x*(d2 + x*(d3 + x*(d4 + x*(d5
+     X     + x*(d6 + x*d7)))))) + adj
+      RETURN
+      END
+      SUBROUTINE  asymp(q, a, r)
+C  THIS ROUTINE CALCULATES APPROXIMATE EIGENFUNCTIONS OF THE MATHIEU
+C  EQUATION USING ASYMPTOTIC EXPANSION FOR LARGE Q
+C  EXPANSION FOUND PARTIALLY IN NBS HANDBOOK OF MATHEMATICAL fUNCTIONS
+C  FORMULA 20.2.30 AND MORE COMPLETELY IN
+C  R. B. DINGLE AND H. J. W. MULLER, J. REINE ANGEW. MATH. 211,11 1962
+C  THIS SUBROUTINE DIFFERS FROM ASYM IN THAT NO EXPONENTIAL ADJUSTMENT
+C  IS MADE SINCE ASYMP IS ONLY CALLED FOR Q VALUES FOR WHICH THE
+C  ADJUSTMENT IS NEGLIGIBLE
+C  WRITTEN BY R. B. SHIRTS, IDAHO NATIONAL ENGINEERING LABORATORY
+C  WRITTEN SEPTEMBER 1989
+C  LAST ALTERED SEPTEMBER 1989
+C
+C  PARAMETERS PASSED TO ASYMP
+C
+C      Q      -  PARAMETER OF MATHIEU EQUATION
+C      R      -  DOUBLE PRECISION FORM OF INTEGER TRUNACTION OF AMU
+C                  EXCEPT FOR INTEGER AMU WITH IA0B1=1 (B EIGENFUNCTIONS
+C                  WHEN R = AMU - 1
+C
+C  PARAMETERS RETURNED BY ASYMP
+C
+C      A      -  ASYMPTOTIC APPROXIMATION TO THE EIGENVALUE OF MATHIEU
+C                  EQUATION FOR LARGE Q
+C
+C  VARIABLES USED IN ASYMP
+C
+C      D0,D1,D2,...D7  -  COEFFICIENTS OF X**N FOR N= 0,1,2...7
+C      ONE    -  1.D0
+C      QRT    -  Q**(1/2)
+C      W      -  VARIABLE DEFINED IN NBS HANDBOOK EQ. 20.2.30.  W=2*R+1
+C      W2     -  W*W
+C      X      -  ONE/QRT
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL REFERENCES (FUNCTION,SUBROUTINE,COMMON)
+C
+C     EXTERNAL REFS       DSQRT
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL FUNCTIONS AND SUBROUTINES
+C
+      DOUBLE PRECISION    DSQRT
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     NON-COMMON VARIABLES
+C
+C     SETS                A,           D0,          D1,          D2
+C     SETS                D3,          D4,          D5,          D6
+C     SETS                D7,          ONE,         QRT,         W
+C     SETS                W2,          X
+C
+      DOUBLE PRECISION    A,           D0,          D1,          D2
+      DOUBLE PRECISION    D3,          D4,          D5,          D6
+      DOUBLE PRECISION    D7,          ONE,         Q,           QRT
+      DOUBLE PRECISION    R,           W,           W2,          X
+C
+      DATA one/1.d0/
+      qrt = dsqrt(q)
+      x = one/qrt
+      w = 2.d0*r + one
+      w2 = w*w
+C  FORM ASYMPTOTIC COEFFICIENTS OF POWERS OF X
+      d0 = 0.125d0*(w2 + one)
+      d1 = 7.8125d-3*w*(w2 + 3.d0)
+      d2 = (9.d0 + w2*(34.d0 + 5.d0*w2))/4096.d0
+      d3 = w*(405.d0 + w2*(410.d0 + w2*33.d0))/131072.d0
+      d4 = (486.d0 + w2*(2943.d0 + w2*(1260.d0 + w2*63.d0)))/1.048576d6
+      d5 = w*(41607.d0 + w2*(69001.d0 + w2*(15617.d0 + w2*527.d0)))/
+     X     3.3554432d7
+      d6 = (506979.d0 + w2*(4021884.d0 + w2*(2845898.d0 + w2*(388780.d0
+     X     + w2*9387.d0))))/2.147483648d9
+      d7 = w*(130610637.d0 + w2*(288161796.d0 + w2*(107798166.d0 + w2*(
+     X     9702612.d0 + w2*175045.d0))))/1.37438953472d11
+      a = 2.d0*(qrt*w - q) - d0 - x*(d1 + x*(d2 + x*(d3 + x*(d4 + x*(d5
+     X     + x*(d6 + x*d7))))))
+      RETURN
+      END
+      SUBROUTINE  ataylr(amu, q, at, iorder)
+C  APPROXIMATES EIGENVALUE OF MATHIEU EQUATION BY TAYLOR SERIES
+C  USING NBS HANDBOOK 20.3.15
+C  APPROXIMATION ACCURATE TO ORDER Q**IORDER (IORDER.LT.10)
+C  THIS METHOD IS USEFUL WHEN ORDER IS NOT TOO CLOSE TO AN INTEGER
+C  WRITTEN BY R. B. SHIRTS, IDAHO NATIONAL ENGINEERING LABORATORY
+C  SEPTEMBER 1989
+C  LAST ALTERED SEPTEMBER 1989
+C
+C  VARIABLES PASSED TO ATAYLR
+C
+C      AMU    -  ORDER OF MATHIEU EQUATION
+C      IORDER -  ORDER OF TAYLOR EXPANSION IN Q DESIRED
+C                  PRESENT VERSION ALLOWS 2,4,6,8
+C      Q      -  PARAMETER OF MATHIEU EQUATION
+C
+C  VARIABLES RETURNED BY ATAYLR
+C
+C      AT     -  APPROXIMATE EIGENVALUE OF THE MATHIEU EQUATION
+C
+C  VARIABLES USED WITHIN ATAYLR
+C
+C      ASQ    -  AMU**2
+C      A1     -  AMU - 1.D0
+C      A4     -  AMU - 4.D0
+C      A9     -  AMU - 9.D0
+C      Q2     -  Q**2
+C      Q4     -  Q**4
+C      Q6     -  Q**6
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     NON-COMMON VARIABLES
+C
+C     SETS                A1,          A4,          A9,          ASQ
+C     SETS                AT,          Q2,          Q4,          Q6
+C
+      DOUBLE PRECISION    A1,          A4,          A9,          AMU
+      DOUBLE PRECISION    ASQ,         AT,          Q,           Q2
+      DOUBLE PRECISION    Q4,          Q6
+      INTEGER             IORDER
+C
+      q2 = q*q
+      q4 = q2*q2
+      asq = amu*amu
+      a1 = asq - 1.d0
+      a4 = asq - 4.d0
+C  FORM EIGENVALUE THROUGH FOURTH ORDER IN Q
+      at = asq + q2*0.5d0/a1 + q4*(5.d0*asq + 7.d0)/(32.d0*a4*a1*a1*a1)
+      IF (iorder .LE. 4) return
+      a9 = asq - 9.d0
+      q6 = q4*q2
+C  FORM EIGENVALUE THROUGH SIXTH ORDER IN Q
+      at = at + (9.d0*asq*asq + 58.d0*asq + 29.d0)*q6/(64.d0*(a1**5)*a4*
+     X     a9)
+      IF (iorder .LE. 6) return
+C  FORM EIGENVALUE THROUGH EIGHTH ORDER IN Q
+      at = at + (274748.d0 + asq*(827565.d0 + asq*(64228.d0 + asq*( -
+     X     140354.d0 + asq*(9144.d0 + asq*1469.d0)))))*q4*q4/(8192.d0*(
+     X     a1**7)*a4*a4*a4*a9*(asq - 16.d0))
+      RETURN
+      END
+      SUBROUTINE  complx(vec, ia0b1, iorder, ic0, mdim, maxdim, n0,
+     X     ncof, ier)
+C  CONVERTS ARRAY OF REAL FOURIER SERIES COMPONENTS
+C  TO ARRAY OF COMPLEX FOURIER SERIES COMPONENTS
+C
+C  WRITTEN BY R. B. SHIRTS, IDAHO NATIONAL ENGINEERING LABORATORY
+C  FEBRUARY 1990
+C  LAST ALTERED NOVEMBER 1990
+C
+C  PARAMETERS PASSED TO COMPLX
+C      IA0B1  -  SPECIFIES A OR B SOLUTION
+C                  IA0B1 IS 0 IF EVEN SOLUTIONS, A(N), ARE SOUGHT
+C                  IA0B1 IS 1 IF ODD SOLUTIONS, B(N), ARE SOUGHT
+C      IORDER -  ORDER OF THE EIGENVALUE
+C      MDIM   -  DIMENSION OF MATRIX THAT WAS USED
+C      MAXDIM -  MAXIMUM DIMENSION ALLOWED
+C      N0     -  THE NUMBER OF THE DESIRED EIGENVALUE IN ORDER OF
+C                  INCREASING SIZE.
+C      VEC    -  WORKSPACE ARRAY FOR EIGENVECTORS
+C
+C  PARAMETERS RETURNED BY COMPLX
+C
+C      VEC    -  REARRANGED WORKSPACE ARRAY FOR EIGENVECTORS
+C      IC0    -  ARRAY ELEMENT OF EACH COLUMN OF VEC CONTAINING C(0) OF
+C                  SOLUTION = NN+1
+C      IER    -  ERROR FLAG FOR INSUFFICIENT DIMENSION OF VEC
+C                  IER.GT.0 INDICATES REAL FOURIER SERIES IS
+C                  OK BUT DIMENSION INSUFFICIENT FOR COMPLEX
+C                  FOURIER SERIES
+C      NCOF   -  NUMBER OF COEFFICIENTS PRODUCED
+C
+C  VARIABLES USED WITHIN COMPLX
+C
+C      I      -  LOOP INDEX USED IN EIGENVECTOR COMPONENT SHIFT
+C      ISHIFT -  USED TO SHIFT COMPONENTS FOR ZERO C(0) ELEMENT OF
+C                  B(2*N), ISHIFT IS 1 FOR B(2*N) SOLUTIONS, 0 OTHERWISE
+C      J      -  LOOP INDEX USED IN EIGENVECTOR COMPONENT SHIFT
+C      MODORD -  MOD(IORDER,2)
+C      ONE    -  1.D0
+C      RT2INV -  2.D0**(-0.5D0)
+C      SIGN   -  USED IN CONVERTING TO COMPLEX FOURIER SERIES
+C                   1 FOR A EIGENVECTORS
+C                  -1 FOR B EIGENVECTORS
+C      ZERO   -  0.D0
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL REFERENCES (FUNCTION,SUBROUTINE,COMMON)
+C
+C     EXTERNAL REFS       MOD
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     INTRINSIC FUNCTIONS
+C
+      INTEGER             MOD
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     RUNTIME DIMENSION VARIABLES
+C
+      INTEGER             MAXDIM
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     NON-COMMON VARIABLES
+C
+C     SETS                I,           IC0,         IER,         ISHIFT
+C     SETS                J,           MODORD,      NCOF,        ONE
+C     SETS                RT2INV,      SIGN,        VEC,         ZERO
+C
+      DOUBLE PRECISION    ONE,         RT2INV,      SIGN
+      DOUBLE PRECISION    VEC(MAXDIM,MAXDIM),       ZERO
+      INTEGER             I,           IA0B1,       IC0,         IER
+      INTEGER             IORDER,      ISHIFT,      J,           MDIM
+      INTEGER             MODORD,      N0,          NCOF
+C
+      DATA zero, one, rt2inv/0.d0, 1.d0, 0.70710678118654752d0/
+C  SHIFT COMPONENTS FOR COMPLEX FOURIER SERIES
+      ier = 0
+      modord = mod(iorder, 2)
+      IF ((ia0b1 .EQ. 0) .AND. (modord .EQ. 0)) THEN
+           ic0 = mdim
+           ncof = 2*mdim - 1
+           IF (ncof .GT. maxdim) go TO 170
+           DO 130 j = 1, n0
+                DO 110 i = 1, mdim - 1
+                     vec(i + mdim, j) = vec(i + 1, j)*rt2inv
+  110           CONTINUE
+                vec(mdim, j) = vec(1, j)
+                DO 120 i = 1, mdim - 1
+                     vec(ic0 - i, j) = vec(ic0 + i, j)
+  120           CONTINUE
+  130      CONTINUE
+      ELSE
+           ic0 = mdim + 1
+           IF (modord .EQ. 0) THEN
+                ishift = 1
+           ELSE
+                ishift = 0
+           END IF
+           IF (ia0b1 .EQ. 1) THEN
+                sign = - one
+           ELSE
+                sign = one
+           END IF
+           ncof = 2*mdim + ishift
+           IF (ncof .GT. maxdim) go TO 170
+           DO 160 j = 1, n0
+                DO 140 i = 1, mdim
+                     vec(i + mdim + ishift, j) = vec(i, j)*rt2inv
+  140           CONTINUE
+                IF (modord .EQ. 0) vec(ic0, j) = zero
+                DO 150 i = 1, mdim
+                     vec(ic0 - i, j) = vec(i + mdim + ishift, j)*sign
+  150           CONTINUE
+  160      CONTINUE
+      END IF
+      RETURN
+  170 WRITE (6, 1000) ncof
+ 1000 FORMAT (' *** ERROR *** MATRIX MUST BE REDIMENSIONED TO ', i4)
+      ier = 1
+      RETURN
+      END
+      SUBROUTINE  evec(nlev, vec, a, anu, q, ibit, ia0b1, nanu2, ic0,
+     X     ncof)
+C  CALCULATES EIGENFUNCTION COEFFICIENTS OF MATHIEU EQUATION USING
+C  CONTINUED FRACTION EXPANSION THROUGH BACKWARD RECURSION
+C  WRITTEN BY R. B. SHIRTS, IDAHO NATIONAL ENGINEERING LABORATORY
+C  DECEMBER 1989
+C  LAST ALTERED JANURY 1991
+C
+C  VARIABLES PASSED TO EVEC
+C
+C      A      -  EIGENVALUE OF MATHIEU EQUATION
+C      ANU    -  REDUCED ORDER OF MATHIEU EQUATION
+C      IA0B1  -  SPECIFIES A OR B SOLUTION WHEN ANU IS INTEGER
+C                  IA0B1 IS 0 IF EVEN SOLUTIONS, A(N), ARE SOUGHT
+C                  IA0B1 IS 1 IF ODD SOLUTIONS, B(N), ARE SOUGHT
+C                  IA0B1 IS UNUSED WHEN ANU IS NONINTEGER
+C      NANU2  -  THE NEAREST EVEN INTEGER TO UNREDUCED ANU IS 2*NANU2
+C      NLEV   -  LEVEL OF CONTINUED FRACTION USED IN COMPUTATION
+C      Q      -  PARAMETER OF MATHIEU EQUATION
+C
+C  VARIABLES RETURNED BY EVEC
+C
+C      IBIT   -  MAXIMUM OF IBITN AND IBITP
+C                  MAXIMUM NUMBER OF BITS OF PRECISION LOST IN RECURSION
+C      IC0    -  ELEMENT OF VEC CONTAINING C0
+C      NCOF   -  NUMBER OF COMPUTED FOURIER COEFFICIENTS
+C      VEC    -  ARRAY OF EIGENFUNCTION FOURIER COEFFICIENTS
+C
+C  LOCAL VARIABLES USED BY EVEC
+C
+C      ARG, ARGM - VARIABLES USED TO COMPUTE V AND VM ELEMENTS
+C      BIG    -  A LARGE POSITIVE NUMBER USED FOR NUMERICAL INFINITY
+C      DABS3  -  MAGNITUDE OF THREE NUMBERS ADDED TOGETHER IN
+C                  CALCULATION OF BITS OF PRECISION LOST
+C      DLN2   -  NATURAL LOGARITHM OF 2
+C      DMX3   -  MAXIMUM MAGNITUDE OF THREE NUMBERS IN CALCULATION OF
+C                  BITS OF PRECISION LOST
+C      EPS    -  A SMALL POSITIVE NUMBER
+C      ERROR  -  RELATIVE ERROR IN MATCHING COEFFICIENTS
+C      G      -  ARRAY CONTAINING RATIOS OF FOURIER COEFFICIENTS
+C      GOLD   -  TEMPORARY VARIABLE CONTAINING PREVIOUS G
+C      H      -  ARRAY CONTAINING INVERTED RATIOS OF FOURIER COEFFICIENT
+C      HOLD   -  TEMPORARY VARIABLE CONTAINING PREVIOUS H
+C      I      -  LOOP INDEX
+C      IBITN  -  NUMBER OF BITS OF PRECISION LOST IN NEGATIVE RECURSION
+C      IBITP  -  NUMBER OF BITS OF PRECISION LOST IN POSITIVE RECURSION
+C      IC0MI  -  LOOP INDEX - IC0 - I
+C      IC0PI  -  LOOP INDEX - IC0 + I
+C      ITOP   -  LIMIT OF I LOOP INDEX
+C      KV     -  INDEX SHIFT VARIABLE - 0 FOR EVEN INTEGER ORDERS
+C                                       1 FOR ODD INTEGER ORDERS
+C      MODANU -  MOD(NANU,2) - USED ONLY FOR INTEGER ORDER
+C                  MODANU = 0 FOR EVEN ORDERS, MODANU = 1 FOR ODD ORDERS
+C      NANU   -  INTEGER TRUNCATION OF ANU
+C      NLEVM  -  NLEV-1
+C      NM     -  INDEX FOR DECREMENTING COEFFICIENT LABEL
+C      NN     -  INDEX FOR CALCULATING G AND H ARRAYS
+C      NP     -  INDEX FOR INCREMENTING COEFFICIENT LABEL
+C      ONE    -  1.D0
+C      R192   -  DOUBLE PRECISION EVALUATION OF 1/192
+C      SCALE  -  SCALING FACTOR FOR NORMALIZATION OF EIGENFUNCTION
+C      SIGN   -  RELATIVE SIGN OF POSITIVE AND NEGATIVE COEFFICIENTS
+C                  IS USED ONLY FOR INTEGER ORDER
+C      SIGN8  -  0.125D0*SIGN
+C      SUM    -  SUM OF SQUARES OF EIGENFUNCTION COEFFICIENTS
+C      TEMP   -  TEMPORARY VARIABLE
+C      TESTN  -  TEST PARAMETER FOR NEGATIVE RECURSION TO DETERMINE
+C                  IF PRECISION IS BEING LOST
+C      TESTP  -  TEST PARAMETER FOR POSITIVE RECURSION TO DETERMINE
+C                  IF PRECISION IS BEING LOST
+C      TWO    -  2.D0
+C      V,VM   -  VARIABLES DEFINED BY NBS HANDBOOK FORMULA 20.3.13
+C                  FOR POSITIVE AND NEGATIVE INDEX RESPECTIVELY
+C      ZERO   -  0.D0
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL REFERENCES (FUNCTION,SUBROUTINE,COMMON)
+C
+C     EXTERNAL REFS       BIGVAL,      DABS,        DBLE,        DLOG
+C     EXTERNAL REFS       DMAX1,       DSQRT,       FLOAT,       IDINT
+C     EXTERNAL REFS       MAX0,        MOD
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL FUNCTIONS AND SUBROUTINES
+C
+      DOUBLE PRECISION    DLOG,        DSQRT
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     INTRINSIC FUNCTIONS
+C
+      DOUBLE PRECISION    DABS,        DBLE,        DMAX1
+      INTEGER             IDINT,       MAX0,        MOD
+      REAL                FLOAT
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     NON-COMMON VARIABLES
+C
+C     SETS                ARG,         ARGM,        BIG,         DABS3
+C     SETS                DLN2,        DMX3,        EPS,         G
+C     SETS                GOLD,        H,           HOLD,        I
+C     SETS                IBIT,        IBITN,       IBITP,       IC0
+C     SETS                IC0MI,       IC0PI,       ITOP,        KV
+C     SETS                MODANU,      NANU,        NCOF,        NLEVM
+C     SETS                NM,          NN,          NP,          ONE
+C     SETS                R192,        SCALE,       SIGN,        SIGN8
+C     SETS                SUM,         TEMP,        TESTN,       TESTP
+C     SETS                TWO,         V,           VEC,         VM
+C     SETS                ZERO
+C
+      DOUBLE PRECISION    A,           ANU,         ARG,         ARGM
+      DOUBLE PRECISION    BIG,         DABS3,       DLN2,        DMX3
+C     DOUBLE PRECISION    ERROR
+      DOUBLE PRECISION    EPS,         G(75),       GOLD,        H(75)
+      DOUBLE PRECISION    HOLD,        ONE,         Q,           R192
+      DOUBLE PRECISION    SCALE,       SIGN,        SIGN8,       SUM
+      DOUBLE PRECISION    TEMP,        TESTN,       TESTP,       TWO
+      DOUBLE PRECISION    V,           VEC(150),    VM,          ZERO
+      INTEGER             I,           IA0B1,       IBIT,        IBITN
+      INTEGER             IBITP,       IC0,         IC0MI,       IC0PI
+      INTEGER             ITOP,        KV,          MODANU,      NANU
+      INTEGER             NANU2,       NCOF,        NLEV,        NLEVM
+      INTEGER             NM,          NN,          NP
+C
+      DATA zero, one, two, r192/0.d0, 1.d0, 2.d0, 5.208333333333333d-3/
+      DATA dln2, eps/0.69314718055994531d0, 1.d-9/
+C
+C  ARRAYS TO BE REDIMENSIONED FOR LARGER VALUES OF Q OR HIGHER ORDER
+C  VEC(150), G(75=150/2), H(75=150/2)
+C
+C  SET BIG TO LARGEST MACHINE REPRESENTABLE NUMBER
+      CALL bigval(big)
+      IF (nlev .GT. 150) go TO 170
+      nlevm = nlev - 1
+      nanu = idint(anu)
+      ibitp = 0
+      ibitn = 0
+C  BRANCH FOR INTEGER OR NONINTEGER ORDER
+      IF (anu .EQ. dble(float(nanu))) THEN
+C
+C  THIS PART OF CODE FOR INTEGER ORDER
+C
+C  INITIALIZE BACKWARD RECURSION FOR HIGH INDEX G VALUES
+           modanu = mod(nanu, 2)
+           gold = zero
+C  INITIALIZE ARG FOR CALCULATING V FOR EVEN AND ODD ORDERS
+           IF (modanu .EQ. 0) THEN
+                arg = dble(float(2*nlev))
+           ELSE
+                arg = dble(float(2*nlev + 1))
+           END IF
+C  INITIALIZE ITOP ACCORDING TO HOW MANY G ELEMENTS ARE TO BE
+C  CALCULATED BY OUTWARD RECURSION
+           IF (nanu2 .GT. 1) THEN
+                itop = nlev - nanu2
+           ELSE
+                IF ((modanu .EQ. 0) .AND. (ia0b1 .EQ. 1)) THEN
+                     itop = nlev - 2
+                ELSE
+                     itop = nlev - 1
+                END IF
+           END IF
+C  RECUR INWARD TO MAXIMUM
+           DO 100 i = 1, itop
+                arg = arg - two
+                temp = - arg*arg
+                v = (a + temp)/q
+                gold = one/(v - gold)
+C  TEST TO SEE IF PRECISION IS BEING LOST IN BACKWARD RECURSION
+                dmx3 = dmax1(dabs(a), dabs(temp), dabs(q*gold))
+                dabs3 = dabs(a + temp - q*gold)
+                testp = dabs3/dmx3
+C  IF PRECISION IS BEING LOST, ACCUMULATE ERROR
+                IF ((testp .LT. one) .AND. (i .LT. itop)) THEN
+C  IF PRECISION IS BEING LOST, ADD THIS TO ERROR IN G CALCULATION
+                     ibitp = ibitp + idint(dble(float(idint(dlog(dmx3)/
+     X                    dln2))) + one - eps - dlog(dabs3)/dln2)
+                END IF
+                g(nlev - i) = gold
+  100      CONTINUE
+C  RECUR OUTWARD TO MEET BACKWARD RECURSION
+C
+C  INITIATE FOR THE FOUR DIFFERENT TYPES OF SOLUTIONS
+           IF (modanu .EQ. 1) THEN
+                IF (ia0b1 .EQ. 0) THEN
+                     g(1) = (a - q - one)/q
+                ELSE
+                     g(1) = (a + q - one)/q
+                END IF
+C  RESET G(1) FOR SMALL Q AND ORDER 1
+                IF ((q .LT. 2.8d-3) .AND. (nanu2 .EQ. 0)) THEN
+                     IF (ia0b1 .EQ. 1) THEN
+                          sign8 = - 0.125d0
+                     ELSE
+                          sign8 = 0.125d0
+                     END IF
+                     g(1) = - 0.125d0*q*(one + sign8*q + q*q*r192)
+C   ACCUMULATE ERROR FROM LOSS OF PRECISION
+                     ibitn = ibitn + idint(one - eps - dlog(dabs(
+     X                    2.387d-3*q*q*q))/dln2)
+                ELSE
+C  TEST TO SEE IF PRECISION IS BEING LOST IN CALCULATION OF G(1)
+                     testn = dabs(g(1)*q)
+C  IF PRECISION IS BEING LOST, ACCUMULATE ERROR
+                     IF (testn .LT. one) ibitn = ibitn + idint(one - eps
+     X                    - dlog(dabs(g(1)*q))/dln2)
+                END IF
+                arg = one
+                kv = 1
+           ELSE
+                IF (ia0b1 .EQ. 0) THEN
+                     g(1) = a/(two*q)
+                ELSE
+C  FOR B(2N) SET G(1) TO BIG IN PLACE OF INFINITY
+                     g(1) = big
+                END IF
+                arg = zero
+                kv = 0
+           END IF
+C  INITIALIZE ITOP ACCORDING TO HOW MANY G ELEMENTS CALCULATED BY
+C  OUTWARD RECURSION
+           IF ((g(1) .EQ. big) .AND. (nanu2 .LE. 1)) THEN
+                itop = 1
+           ELSE
+                itop = nanu2 - 1
+           END IF
+           IF (itop .LE. 0) go TO 120
+C  BEGIN RECURSION
+           DO 110 i = 1, itop
+                arg = arg + two
+                temp = - arg*arg
+                v = (a + temp)/q
+C  FOR B(2N) BEGIN RECURSION WITH G(2)
+                IF (g(i) .GE. big) THEN
+                     IF (itop .EQ. 1) THEN
+C  FOR B(2) SWITCH GOLD AND V
+                          g(2) = gold
+                          gold = v
+                     ELSE
+                          g(i + 1) = v
+                     END IF
+                ELSE
+                     temp = - one/g(i)
+                     g(i + 1) = v + temp
+                     IF (i .LT. itop) THEN
+C  TEST TO SEE IF PRECISION IS BEING LOST IN FORWARD RECURSION
+                          dmx3 = dmax1(dabs(a), dabs(arg*arg), dabs(temp
+     X                         *q))
+                          dabs3 = dabs(a - arg*arg + temp*q)
+                          testn = dabs3/dmx3
+C  IF PRECISION IS BEING LOST, ACCUMULATE ERROR
+                          IF (testn .LT. one) ibitn = ibitn + idint(
+     X                         dble(float(idint(dlog(dmx3)/dln2))) + one
+     X                         - eps - dlog(dabs3)/dln2)
+                     END IF
+                END IF
+  110 CONTINUE
+  120 CONTINUE
+C
+C  THE FOLLOWING LINES CAN BE USED TO CALCULATE THE RELATIVE ERROR FOR
+C  MATCHING G COEFFICIENTS
+C          IF (ITOP.GE.1) THEN
+C               ERROR=(GOLD-G(ITOP+1))/DMAX1(DABS(GOLD),DABS(G(ITOP+1)))
+C          ELSE
+C               ERROR=(GOLD-G(1))/DMAX1(DABS(GOLD),DABS(G(1)))
+C          END IF
+C
+C  SET INDEX VARIABLES IC0 AND NCOF
+      ic0 = nlev + kv
+      ncof = 2*nlev - 1 + kv
+C  NOW DETERMINE COEFFICIENTS AND SUM SQUARES FOR NORMALIZATION
+      vec(ic0) = one
+      IF (ia0b1 .EQ. 1) THEN
+           sign = - one
+      ELSE
+           sign = one
+      END IF
+      IF (modanu .EQ. 1) THEN
+           vec(ic0 - 1) = sign
+           sum = two
+      ELSE
+           sum = one
+      END IF
+      ic0pi = ic0 + 1
+      ic0mi = ic0 - 1
+      IF ((ia0b1 .EQ. 1) .AND. (modanu .EQ. 0)) THEN
+C  RESET C0 TO ZERO FOR B(2N) AND BEGIN WITH C(2)
+           vec(ic0) = zero
+           vec(ic0pi) = one
+           sum = zero
+      ELSE
+           vec(ic0pi) = vec(ic0pi - 1)*g(1)
+      END IF
+      vec(ic0mi - kv) = sign*vec(ic0pi)
+      sum = sum + two*vec(ic0pi)*vec(ic0pi)
+C  EXPAND REAL FOURIER SERIES TO COMPLEX FOURIER SERIES
+      DO 130 i = 2, nlevm
+           ic0pi = ic0 + i
+           ic0mi = ic0 - i
+           vec(ic0pi) = vec(ic0pi - 1)*g(i)
+           vec(ic0mi - kv) = sign*vec(ic0pi)
+           sum = sum + two*vec(ic0pi)*vec(ic0pi)
+  130 CONTINUE
+C  END OF INTEGER ORDER BRANCH
+C  JUMP TO NORMALIZATION
+      ELSE
+C  THIS PART FOR NONINTEGER ORDER
+C  MATCH AT G(N)*H(N) FOR NONINTEGER ORDER
+C  (N IS NEAREST EVEN INTEGER ORDER)
+C
+C  INITIALIZE VARIABLES FOR RECURSION
+      gold = zero
+      hold = zero
+C  PERFORM BACKWARD RECURSION TO OBTAIN G AND H ELEMENTS
+      DO 140 i = 1, nlev
+           nn = nlev - i + 1
+           arg = anu + dble(float(2*(nn + nanu2) - 2))
+           argm = anu + dble(float(2*(nanu2 - nn)))
+           temp = - arg*arg
+           v = (a + temp)/q
+C  TEST TO SEE IF PRECISION IS BEING LOST IN G RECURSION
+           dmx3 = dmax1(dabs(a), dabs(temp), dabs(gold*q))
+           dabs3 = dabs(a + temp - gold*q)
+           testp = dabs3/dmx3
+C  IF PRECISION IS BEING LOST, ACCUMULATE ERROR
+           IF ((testp .LT. one) .AND. (i .LT. nlev)) THEN
+                ibitp = ibitp + idint(dble(float(idint(dlog(dmx3)/dln2)
+     X               )) + one - eps - dlog(dabs3)/dln2)
+           END IF
+           gold = one/(v - gold)
+           temp = - argm*argm
+           vm = (a + temp)/q
+C  TEST TO SEE IF PRECISION IS BEING LOST IN H RECURSION
+           dmx3 = dmax1(dabs(a), dabs(temp), dabs(hold*q))
+           dabs3 = dabs(a + temp - hold*q)
+           testn = dabs3/dmx3
+C  IF PRECISION IS BEING LOST, ACCUMULATE ERROR
+           IF (testn .LT. one) ibitn = ibitn + idint(dble(float(idint(
+     X          dlog(dmx3)/dln2))) + one - eps - dlog(dabs3)/dln2)
+           hold = one/(vm - hold)
+           g(nn) = gold
+           h(nn) = hold
+  140 CONTINUE
+C  CAN BE USED TO CHECK ON SATISFYING CONDITION ON COEFFICIENTS
+C          ERROR=ONE-G(1)*H(1)
+      np = nlev
+      ic0 = np - nanu2
+      ncof = 2*nlev - 1
+C  INITIALIZE RECURSION USING NP ELEMENT AS UNITY
+      vec(np) = one
+      nm = np
+C  PERFORM RECURSION FOR COEFFICIENTS
+      sum = one
+      DO 150 i = 1, nlevm
+           np = np + 1
+           nm = nm - 1
+           vec(np) = g(i + 1)*vec(np - 1)
+           vec(nm) = h(i)*vec(nm + 1)
+           sum = sum + vec(np)*vec(np) + vec(nm)*vec(nm)
+  150 CONTINUE
+C  END OF BRANCH FOR NONINTEGER ORDER
+      END IF
+      scale = dsqrt(one/sum)
+C  NORMALIZE EIGENFUNCTION COEFFICIENTS
+      DO 160 i = 1, ncof
+      vec(i) = vec(i)*scale
+  160 CONTINUE
+C  SET NUMBER OF BITS OF PRECISION LOST
+      ibit = max0(ibitp, ibitn)
+      RETURN
+  170 WRITE (6, 1000) nlev
+ 1000 FORMAT (' ERROR - ARRAYS MUST BE DIMENSIONED FOR ', i4,
+     X     ' LEVELS ')
+      RETURN
+      END
+      SUBROUTINE  imtql1(n, d, e, ierr)
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL REFERENCES (FUNCTION,SUBROUTINE,COMMON)
+C
+C     EXTERNAL REFS       DABS,        DSIGN,       DSQRT
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL FUNCTIONS AND SUBROUTINES
+C
+      DOUBLE PRECISION    DSQRT
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     INTRINSIC FUNCTIONS
+C
+      DOUBLE PRECISION    DABS,        DSIGN
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     RUNTIME DIMENSION VARIABLES
+C
+      INTEGER             N
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     NON-COMMON VARIABLES
+C
+C     SETS                B,           C,           D,           E
+C     SETS                F,           G,           I,           IERR
+C     SETS                II,          J,           L,           M
+C     SETS                MACHEP,      MML,         P,           R
+C     SETS                S
+C
+      DOUBLE PRECISION    B,           C,           D(N),        E(N)
+      DOUBLE PRECISION    F,           G,           MACHEP,      P
+      DOUBLE PRECISION    R,           S
+      INTEGER             I,           IERR,        II,          J
+      INTEGER             L,           M,           MML
+C
+C     DOUBLE PRECISION SQRT,ABS,SIGN, i.e. DSQRT,DABS,DSIGN
+C
+C     THIS SUBROUTINE IS A TRANSLATION OF THE ALGOL PROCEDURE IMTQL1,
+C     NUM. MATH. 12, 377-383(1968) BY MARTIN AND WILKINSON,
+C     AS MODIFIED IN NUM. MATH. 15, 450(1970) BY DUBRULLE.
+C     HANDBOOK FOR AUTO. COMP., VOL.II-LINEAR ALGEBRA, 241-248(1971).
+C
+C     THIS SUBROUTINE FINDS THE EIGENVALUES OF A SYMMETRIC
+C     TRIDIAGONAL MATRIX BY THE IMPLICIT QL METHOD.
+C
+C     ON INPUT-
+C
+C        N IS THE ORDER OF THE MATRIX,
+C
+C        D CONTAINS THE DIAGONAL ELEMENTS OF THE INPUT MATRIX,
+C
+C        E CONTAINS THE SUBDIAGONAL ELEMENTS OF THE INPUT MATRIX
+C          IN ITS LAST N-1 POSITIONS.  E(1) IS ARBITRARY.
+C
+C      ON OUTPUT-
+C
+C        D CONTAINS THE EIGENVALUES IN ASCENDING ORDER.  IF AN
+C          ERROR EXIT IS MADE, THE EIGENVALUES ARE CORRECT AND
+C          ORDERED FOR INDICES 1,2,...IERR-1, BUT MAY NOT BE
+C          THE SMALLEST EIGENVALUES,
+C
+C        E HAS BEEN DESTROYED,
+C
+C        IERR IS SET TO
+C          ZERO       FOR NORMAL RETURN,
+C          J          IF THE J-TH EIGENVALUE HAS NOT BEEN
+C                     DETERMINED AFTER 30 ITERATIONS.
+C
+C     QUESTIONS AND COMMENTS SHOULD BE DIRECTED TO B. S. GARBOW,
+C     APPLIED MATHEMATICS DIVISION, ARGONNE NATIONAL LABORATORY
+C
+C     ------------------------------------------------------------------
+C
+C     ********** MACHEP IS A MACHINE DEPENDENT PARAMETER SPECIFYING
+C                THE RELATIVE PRECISION OF FLOATING POINT ARITHMETIC.
+C
+C                **********
+      machep = 2.0d0**( - 53)
+C
+      ierr = 0
+      IF (n .EQ. 1) go TO 230
+C
+      DO 100 i = 2, n
+  100 e(i - 1) = e(i)
+C
+      e(n) = 0.0d0
+C
+      DO 210 l = 1, n
+           j = 0
+C     ********** LOOK FOR SMALL SUB-DIAGONAL ELEMENT **********
+  110      DO 120 m = l, n
+                IF (m .EQ. n) go TO 130
+                IF (dabs(e(m)) .LE. machep*(dabs(d(m)) + dabs(d(m + 1))
+     X               )) go TO 130
+  120      CONTINUE
+C
+  130      p = d(l)
+           IF (m .EQ. l) go TO 170
+           IF (j .EQ. 30) go TO 220
+           j = j + 1
+C     ********** FORM SHIFT **********
+           g = (d(l + 1) - p)/(2.0d0*e(l))
+           r = dsqrt(g*g + 1.0d0)
+           g = d(m) - p + e(l)/(g + dsign(r, g))
+           s = 1.0d0
+           c = 1.0d0
+           p = 0.0d0
+           mml = m - l
+C     ********** FOR I=M-1 STEP -1 UNTIL L DO -- **********
+           DO 160 ii = 1, mml
+                i = m - ii
+                f = s*e(i)
+                b = c*e(i)
+                IF (dabs(f) .LT. dabs(g)) go TO 140
+                c = g/f
+                r = dsqrt(c*c + 1.0d0)
+                e(i + 1) = f*r
+                s = 1.0d0/r
+                c = c*s
+                go TO 150
+  140           s = f/g
+                r = dsqrt(s*s + 1.0d0)
+                e(i + 1) = g*r
+                c = 1.0d0/r
+                s = s*c
+  150           g = d(i + 1) - p
+                r = (d(i) - g)*s + 2.0d0*c*b
+                p = s*r
+                d(i + 1) = g + p
+                g = c*r - b
+  160      CONTINUE
+C
+           d(l) = d(l) - p
+           e(l) = g
+           e(m) = 0.0d0
+           go TO 110
+C     ********** ORDER EIGENVALUES **********
+  170      IF (l .EQ. 1) go TO 190
+C     ********** FOR I=L STEP -1 UNTIL 2 DO -- **********
+           DO 180 ii = 2, l
+                i = l + 2 - ii
+                IF (p .GE. d(i - 1)) go TO 200
+                d(i) = d(i - 1)
+  180      CONTINUE
+C
+  190      i = 1
+  200      d(i) = p
+  210 CONTINUE
+C
+      go TO 230
+C     ********** SET ERROR -- NO CONVERGENCE TO AN
+C                EIGENVALUE AFTER 30 ITERATIONS **********
+  220 ierr = l
+  230 RETURN
+C     ********** LAST CARD OF IMTQL1 **********
+      END
+      SUBROUTINE  imtql2(nm, n, d, e, z, ierr)
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL REFERENCES (FUNCTION,SUBROUTINE,COMMON)
+C
+C     EXTERNAL REFS       DABS,        DSIGN,       DSQRT
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     INTRINSIC FUNCTIONS
+C
+      DOUBLE PRECISION    DABS,        DSIGN,       DSQRT
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     RUNTIME DIMENSION VARIABLES
+C
+      INTEGER             N,           NM
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     NON-COMMON VARIABLES
+C
+C     SETS                B,           C,           D,           E
+C     SETS                F,           G,           I,           IERR
+C     SETS                II,          J,           K,           L
+C     SETS                M,           MACHEP,      MML,         P
+C     SETS                R,           S,           Z
+C
+      DOUBLE PRECISION    B,           C,           D(N),        E(N)
+      DOUBLE PRECISION    F,           G,           MACHEP,      P
+      DOUBLE PRECISION    R,           S,           Z(NM,N)
+      INTEGER             I,           IERR,        II,          J
+      INTEGER             K,           L,           M,           MML
+C
+C     DOUBLE PRECISION SQRT,ABS,SIGN, i.e. DSQRT,DABS,DSIGN
+C
+C     THIS SUBROUTINE IS A TRANSLATION OF THE ALGOL PROCEDURE IMTQL2,
+C     NUM. MATH. 12, 377-383(1968) BY MARTIN AND WILKINSON,
+C     AS MODIFIED IN NUM. MATH. 15, 450(1970) BY DUBRULLE.
+C     HANDBOOK FOR AUTO. COMP., VOL.II-LINEAR ALGEBRA, 241-248(1971).
+C
+C     THIS SUBROUTINE FINDS THE EIGENVALUES AND EIGENVECTORS
+C     OF A SYMMETRIC TRIDIAGONAL MATRIX BY THE IMPLICIT QL METHOD.
+C     THE EIGENVECTORS OF A FULL SYMMETRIC MATRIX CAN ALSO
+C     BE FOUND IF  TRED2  HAS BEEN USED TO REDUCE THIS
+C     FULL MATRIX TO TRIDIAGONAL FORM.
+C
+C     ON INPUT-
+C
+C        NM MUST BE SET TO THE ROW DIMENSION OF TWO-DIMENSIONAL
+C          ARRAY PARAMETERS AS DECLARED IN THE CALLING PROGRAM
+C          DIMENSION STATEMENT,
+C
+C        N IS THE ORDER OF THE MATRIX,
+C
+C        D CONTAINS THE DIAGONAL ELEMENTS OF THE INPUT MATRIX,
+C
+C        E CONTAINS THE SUBDIAGONAL ELEMENTS OF THE INPUT MATRIX
+C          IN ITS LAST N-1 POSITIONS.  E(1) IS ARBITRARY,
+C
+C        Z CONTAINS THE TRANSFORMATION MATRIX PRODUCED IN THE
+C          REDUCTION BY  TRED2, IF PERFORMED.  IF THE EIGENVECTORS
+C          OF THE TRIDIAGONAL MATRIX ARE DESIRED, Z MUST CONTAIN
+C          THE IDENTITY MATRIX.
+C
+C      ON OUTPUT-
+C
+C        D CONTAINS THE EIGENVALUES IN ASCENDING ORDER.  IF AN
+C          ERROR EXIT IS MADE, THE EIGENVALUES ARE CORRECT BUT
+C          UNORDERED FOR INDICES 1,2,...,IERR-1,
+C
+C        E HAS BEEN DESTROYED,
+C
+C        Z CONTAINS ORTHONORMAL EIGENVECTORS OF THE SYMMETRIC
+C          TRIDIAGONAL (OR FULL) MATRIX.  IF AN ERROR EXIT IS MADE,
+C          Z CONTAINS THE EIGENVECTORS ASSOCIATED WITH THE STORED
+C          EIGENVALUES,
+C
+C        IERR IS SET TO
+C          ZERO       FOR NORMAL RETURN,
+C          J          IF THE J-TH EIGENVALUE HAS NOT BEEN
+C                     DETERMINED AFTER 30 ITERATIONS.
+C
+C     QUESTIONS AND COMMENTS SHOULD BE DIRECTED TO B. S. GARBOW,
+C     APPLIED MATHEMATICS DIVISION, ARGONNE NATIONAL LABORATORY
+C
+C     ------------------------------------------------------------------
+C
+C     ********** MACHEP IS A MACHINE DEPENDENT PARAMETER SPECIFYING
+C                THE RELATIVE PRECISION OF FLOATING POINT ARITHMETIC.
+C
+C                **********
+      machep = 2.0d0**( - 53)
+C
+      ierr = 0
+      IF (n .EQ. 1) go TO 1001
+C
+      DO 100 i = 2, n
+  100 e(i - 1) = e(i)
+C
+      e(n) = 0.0d0
+C
+      DO 240 l = 1, n
+           j = 0
+C     ********** LOOK FOR SMALL SUB-DIAGONAL ELEMENT **********
+  105      DO 110 m = l, n
+                IF (m .EQ. n) go TO 120
+                IF (dabs(e(m)) .LE. machep*(dabs(d(m)) + dabs(d(m + 1))
+     X               )) go TO 120
+  110      CONTINUE
+C
+  120      p = d(l)
+           IF (m .EQ. l) go TO 240
+           IF (j .EQ. 30) go TO 1000
+           j = j + 1
+C     ********** FORM SHIFT **********
+           g = (d(l + 1) - p)/(2.0d0*e(l))
+           r = dsqrt(g*g + 1.0d0)
+           g = d(m) - p + e(l)/(g + dsign(r, g))
+           s = 1.0d0
+           c = 1.0d0
+           p = 0.0d0
+           mml = m - l
+C     ********** FOR I=M-1 STEP -1 UNTIL L DO -- **********
+           DO 200 ii = 1, mml
+                i = m - ii
+                f = s*e(i)
+                b = c*e(i)
+                IF (dabs(f) .LT. dabs(g)) go TO 150
+                c = g/f
+                r = dsqrt(c*c + 1.0d0)
+                e(i + 1) = f*r
+                s = 1.0d0/r
+                c = c*s
+                go TO 160
+  150           s = f/g
+                r = dsqrt(s*s + 1.0d0)
+                e(i + 1) = g*r
+                c = 1.0d0/r
+                s = s*c
+  160           g = d(i + 1) - p
+                r = (d(i) - g)*s + 2.0d0*c*b
+                p = s*r
+                d(i + 1) = g + p
+                g = c*r - b
+C     ********** FORM VECTOR **********
+                DO 180 k = 1, n
+                     f = z(k, i + 1)
+                     z(k, i + 1) = s*z(k, i) + c*f
+                     z(k, i) = c*z(k, i) - s*f
+  180           CONTINUE
+C
+  200      CONTINUE
+C
+           d(l) = d(l) - p
+           e(l) = g
+           e(m) = 0.0d0
+           go TO 105
+  240 CONTINUE
+C     ********** ORDER EIGENVALUES AND EIGENVECTORS **********
+      DO 300 ii = 2, n
+           i = ii - 1
+           k = i
+           p = d(i)
+C
+           DO 260 j = ii, n
+                IF (d(j) .GE. p) go TO 260
+                k = j
+                p = d(j)
+  260      CONTINUE
+C
+           IF (k .EQ. i) go TO 300
+           d(k) = d(i)
+           d(i) = p
+C
+           DO 280 j = 1, n
+                p = z(j, i)
+                z(j, i) = z(j, k)
+                z(j, k) = p
+  280      CONTINUE
+C
+  300 CONTINUE
+C
+      go TO 1001
+C     ********** SET ERROR -- NO CONVERGENCE TO AN
+C                EIGENVALUE AFTER 30 ITERATIONS **********
+ 1000 ierr = l
+ 1001 RETURN
+C     ********** LAST CARD OF IMTQL2 **********
+      END
+      SUBROUTINE  mt1int(iorder, q, a, ia0b1, ivec, ic0, n0, mdim,
+     Xmaxdim, diag, subd, vec, ncof, ireal, ier)
+C  CALCULATES EIGENVALUES AND EIGENFUNCTIONS OF THE MATHIEU EQUATION
+C  OF INTEGER ORDER BY DIAGONALIZATION OF TRIDIAGONAL MATRIX
+C  ACCURACY OF EIGENVALUES IS 1 PART IN 10**12
+C       EXCEPT WHEN EIGENVALUE IS NEAR ZERO WHEN IT IS CONTROLLED BY
+C       MACHINE PRECISION AND MAY BE LESS THAN 12 DECIMAL PLACES
+C  WRITTEN BY R. B. SHIRTS, IDAHO NATIONAL ENGINEERING LABORATORY
+C  FEBRUARY 1990
+C  LAST ALTERED NOVEMBER 1990
+C
+C  PARAMETERS PASSED TO MT1INT
+C      DIAG   -  WORKSPACE ARRAY FOR DIAGONAL MATRIX ELEMENTS
+C      IA0B1  -  SPECIFIES A OR B SOLUTION
+C                  IA0B1 IS 0 IF EVEN SOLUTIONS, A(N), ARE SOUGHT
+C                  IA0B1 IS 1 IF ODD SOLUTIONS, B(N), ARE SOUGHT
+C      IORDER -  ORDER OF THE EIGENVALUE
+C      IREAL  -  FLAG FOR REQUESTING EITHER REAL OR COMPLEX SERIES
+C                  IREAL=0 FOR COMPLEX SERIES
+C                  IREAL=1 FOR REAL SERIES
+C      IVEC   -  FLAG FOR COMPUTATION OF EIGENVECTORS (1=YES, 0=NO)
+C      MAXDIM -  MAXIMUM DIMENSION ALLOWED
+C      MDIM   -  DIMENSION OF MATRIX THAT WAS USED
+C                IF IER = 2, MDIM IS THE DIMENSION THAT WOULD BE NEEDED
+C                MDIM=189 IS SUFFICIENT FOR ALL Q VALUES FOR IORDER.LT.2
+C                FOR IORDER.GT.25, REGIONS OF VALIDITY OF THE TWO METHOD
+C                DO NOT OVERLAP, AND LARGER MDIM IS REQUIRED FOR SOME Q
+C      Q      -  PARAMETER OF MATHIEU EQUATION
+C      SUBD   -  WORKSPACE ARRAY FOR SUBDIAGONAL MATRIX ELEMENTS
+C      VEC    -  WORKSPACE ARRAY FOR EIGENVECTORS
+C
+C  PARAMETERS RETURNED BY MT1INT
+C
+C      A      -  EIGENVALUE OF MATHIEU EQUATION
+C      DIAG   -  ARRAY CONTAINS EIGENVALUES IN INCREASING ORDER WITH
+C                A = DIAG(N0).  FOR INTEGER ANU, DIAG CONTAINS ACCURATE
+C                VALUES FOR ALL EIGENVALUES OF A GIVEN SYMMETRY TYPE UP
+C                THROUGH ORDER N0, I.E. A(0),A(2),A(4),...A(2*N0-2) OR
+C                A(1), A(3), A(5),...A(2*N0-1) FOR IA0B1=0, OR
+C                B(1),B(3),B(5),...B(2*N0-1) OR B(2),B(4),B(6),  B(2*N0)
+C                FOR IA0B1=1.
+C                EIGENVALUES NUMBERED GREATER THAN N0 ARE LESS ACCURATE
+C      IC0    -  ARRAY ELEMENT OF N0-TH COLUMN OF VEC CONTAINING C(0)
+C      IER    -  ERROR FLAG
+C                  IER=-1 IF ARRAY DIMENSIONING IS INSUFFICIENT TO
+C                     CONVERT TO COMPLEX FOURIER SERIES BUT REAL
+C                     SERIES AND EIGENVALUES ARE OK
+C                  IER=0 IF NO PROBLEMS WERE FOUND
+C                  IER=1 IF PROBLEMS WERE FOUND IN IMTQL1
+C                  IER=2 IF ARRAY DIMENSIONING IS INSUFFICIENT
+C                  A IS SET TO A LARGE POSITIVE VALUE WHEN IER.GT.0
+C      NCOF   -  NUMBER OF COMPUTED EIGENVECTOR COEFFICIENTS
+C      N0     -  THE NUMBER OF THE DESIRED EIGENVALUE IN ORDER OF
+C                  INCREASING SIZE.
+C      VEC    -  ARRAY CONTAINING EIGENVECTORS
+C
+C  VARIABLES USED WITHIN MT1INT
+C
+C      AMU    -  ORDER OF THE EIGENVALUE - DOUBLE PRECISION VERSION
+C      ARG    -  USED IN COMPUTING MATRIX ELEMENTS
+C      A0,A1  -  EMPIRICALLY DETERMINED PARAMETERS FOR DETERMINING MDIM
+C      BIG    -  LARGE POSITIVE VALUE FOR A ON ERROR CONDITION
+C      C      -  PARAMETER USED IN CALCULATING MATRIX ELEMENTS, C=2*I
+C      I      -  LOOP INDEX USED TO CALCULATE MATRIX ELEMENTS
+C      IERC   -  ERROR FLAG FROM COMPLX THAT DIMENSIONING IS INSUFFICIEN
+C                  TO CONVERT FROM REAL TO COMPLEX FOURIER SERIES
+C      IERR   -  ERROR FLAG FROM IMTQL1
+C      ONE    -  1.D0
+C      RT2    -  2.D0**(0.5D0)
+C      TWO    -  2.D0
+C      ZERO   -  0.D0
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL REFERENCES (FUNCTION,SUBROUTINE,COMMON)
+C
+C     EXTERNAL REFS       BIGVAL,      COMPLX,      DBLE,        FLOAT
+C     EXTERNAL REFS       IDINT,       IMTQL1,      IMTQL2,      MOD
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     INTRINSIC FUNCTIONS
+C
+      DOUBLE PRECISION    DBLE
+      INTEGER             IDINT,       MOD
+      REAL                FLOAT
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     RUNTIME DIMENSION VARIABLES
+C
+      INTEGER             MAXDIM
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     NON-COMMON VARIABLES
+C
+C     SETS                A,           A0,          A1,          AMU
+C     SETS                ARG,         BIG,         C,           DIAG
+C     SETS                I,           IER,         MDIM,        N0
+C     SETS                ONE,         RT2,         SUBD,        TWO
+C     SETS                ZERO
+C
+      DOUBLE PRECISION    A,           A0,          A1,          AMU
+      DOUBLE PRECISION    ARG,         BIG,         C
+      DOUBLE PRECISION    DIAG(MAXDIM),ONE,         Q,           RT2
+      DOUBLE PRECISION    SUBD(MAXDIM),TWO,         VEC(MAXDIM,MAXDIM)
+      DOUBLE PRECISION    ZERO
+      INTEGER             I,           IA0B1,       IC0,         IER
+      INTEGER             IERC,        IERR,        IORDER,      IREAL
+      INTEGER             IVEC,        MDIM,        N0,          NCOF
+C
+      DATA zero, one, two, rt2/0.d0, 1.d0, 2.d0, 1.414213562373095d0/
+C
+C  SET BIG TO LARGEST MACHINE REPRESENTABLE NUMBER
+      CALL bigval(big)
+C  BEGIN EIGENVALUE CALCULATION BY MATRIX DIAGONALIZATION
+C  N0 IS THE EIGENVALUE DESIRED
+      ier = 0
+      IF (mod(iorder, 2) .EQ. 0) THEN
+      IF (ia0b1 .EQ. 1) THEN
+           c = zero
+           n0 = iorder/2
+      ELSE
+           c = - two
+           n0 = 1 + iorder/2
+      END IF
+      ELSE
+      c = - one
+      n0 = (iorder + 1)/2
+      END IF
+C  CALCULATE DIMENSION NECESSARY FOR ACCURACY OF 1 PART IN 10**12
+      amu = dble(float(iorder))
+      IF (ia0b1 .EQ. 1) THEN
+      a0 = (4.49d0 + 0.167d0*amu)/(one + 6.1d-2*amu)
+      a1 = (0.234d0 + 1.77d-2*amu)/(one + 4.9d-2*amu)
+      ELSE
+      a0 = (4.71d0 + 8.65d-2*amu)/(one + 3.5d-2*amu)
+      a1 = (0.232d0 + 1.34d-2*amu)/(one + 3.6d-2*amu)
+      END IF
+      mdim = idint(a0*q**a1) + n0 + 1
+      IF (mdim .GT. maxdim) go TO 110
+C  STORE DIAGONAL ELEMENTS IN DIAG, SUBDIAGONAL ELEMENTS IN SUBD
+      DO 100 i = 1, mdim
+      c = c + two
+      arg = c*c
+      IF ((mod(iorder, 2) .EQ. 1) .AND. (i .EQ. 1)) THEN
+           IF (ia0b1 .EQ. 1) THEN
+                arg = arg - q
+           ELSE
+                arg = arg + q
+           END IF
+      END IF
+      diag(i) = arg
+      IF (i .EQ. 2) THEN
+           IF ((ia0b1 .EQ. 0) .AND. (mod(iorder, 2) .EQ. 0)) THEN
+                subd(i) = rt2*q
+           ELSE
+                subd(i) = q
+           END IF
+      ELSE
+           subd(i) = q
+      END IF
+  100 CONTINUE
+      IF (ivec .GE. 1) THEN
+C  GET EIGENVALUES AND EIGENVECTORS OF SYMMETRIC TRIDIAGONAL MATRIX
+C  IN INCREASING ORDER FROM EISPACK ROUTINE OR IMTQL2
+           CALL imtql2(maxdim, mdim, diag, subd, vec, ierr)
+      ELSE
+C  GET EIGENVALUES OF SYMMETRIC TRIDIAGONAL MATRIX
+C  IN INCREASING ORDER FROM EISPACK ROUTINE IMTQL1
+           CALL imtql1(mdim, diag, subd, ierr)
+      END IF
+      IF (ierr .EQ. 0) THEN
+           a = diag(n0)
+      ELSE
+C  SET EIGENVALUE TO LARGE POSITIVE NUMBER ON ERROR CONDITION
+           a = big
+           ier = 1
+           RETURN
+      END IF
+C  RETURN IF ONLY EIGENVALUE WANTED
+      IF (ivec .LE. 0) return
+C  RETURN HERE IF COMPONENTS OF REAL FOURIER SERIES ARE WANTED
+      IF (ireal .GE. 1) return
+C  CONVERT TO COMPONENTS OF COMPLEX FOURIER SERIES
+      CALL complx(vec, ia0b1, iorder, ic0, mdim, maxdim, n0, ncof, ierc)
+      IF (ierc .GE. 1) go TO 120
+      RETURN
+  110 WRITE (6, 5000) mdim
+ 5000 FORMAT (' ** ERROR ** ARRAYS MUST BE REDIMENSIONED TO ', i5)
+      a = big
+      ier = 2
+      RETURN
+  120 WRITE (6, 5000) ncof
+      ier = - 1
+      RETURN
+      END
+      SUBROUTINE  mtieu1(anu, q, a, ia0b1, ivec, amurd, ic0, n0, mdim,
+     X     maxdim, diag, subd, vec, ncof, ier)
+C  CALCULATES EIGENVALUES OF THE MATHIEU EQUATION OF NONINTEGER OR
+C  INTEGER ORDER
+C  METHOD USED IS:
+C       DIAGONALIZATION OF TRIDIAGONAL MATRIX FOR SMALL Q
+C       ASYMPTOTIC SERIES FOR LARGE Q
+C
+C  ACCURACY OF EIGENVALUES IS 1 PART IN 10**12
+C       EXCEPT WHEN EIGENVALUE IS NEAR ZERO WHEN IT IS CONTROLLED BY
+C       MACHINE PRECISION AND MAY BE LESS THAN 12 DECIMAL PLACES
+C  WRITTEN BY R. B. SHIRTS, IDAHO NATIONAL ENGINEERING LABORATORY
+C  SEPTEMBER 1989
+C  LAST ALTERED JANUARY 1991
+C
+C  PARAMETERS PASSED TO MTIEU1
+C
+C      ANU    -  ORDER OF THE EIGENVALUE
+C      DIAG   -  WORKSPACE ARRAY FOR DIAGONAL MATRIX ELEMENTS
+C      IA0B1  -  SPECIFIES A OR B SOLUTION WHEN ANU IS INTEGER
+C                  IA0B1 IS 0 IF EVEN SOLUTIONS, A(N), ARE SOUGHT
+C                  IA0B1 IS 1 IF ODD SOLUTIONS, B(N), ARE SOUGHT
+C                  IA0B1 IS UNUSED WHEN ANU IS NONINTEGER
+C      IVEC   -  FLAG FOR COMPUTATION OF EIGENVECTORS (1=YES, 0=NO)
+C      MAXDIM -  MAXIMUM DIMENSION ALLOWED
+C      Q      -  PARAMETER OF MATHIEU EQUATION
+C      SUBD   -  WORKSPACE ARRAY FOR SUBDIAGONAL MATRIX ELEMENTS
+C      VEC    -  WORKSPACE ARRAY FOR EIGENVECTORS
+C
+C  PARAMETERS RETURNED BY MTIEU1
+C
+C      A      -  EIGENVALUE OF MATHIEU EQUATION
+C      DIAG   -  ARRAY CONTAINS EIGENVALUES IN INCREASING ORDER WITH
+C                A = DIAG(N0).  FOR INTEGER ANU, DIAG CONTAINS ACCURATE
+C                VALUES FOR ALL EIGENVALUES OF A GIVEN SYMMETRY TYPE UP
+C                THROUGH ORDER N0, SPECIFICALLY A0,A1,A2,...A(N0-1) FOR
+C                IA0B1=0, OR B1,B2,B3,...B(N0) FOR IA0B1=1.
+C                FOR NONINTEGER ORDER, DIAG CONTAINS ACCURATE VALUES FOR
+C                EIGENVALUES FOR ORDERS DABS(AMURD),...ANU-4, 2*R-ANU-2,
+C                ANU-2, 2*R-ANU, ANU.
+C                EIGENVALUES NUMBERED GREATER THAN N0 ARE LESS ACCURATE
+C      IC0    -  ARRAY ELEMENT OF N0-TH COLUMN OF VEC CONTAINING C(0)
+C      IER    -  ERROR FLAG
+C                  IER=-1 WHEN ARRAY DIMENSIONING IS INSUFFICIENT TO
+C                    CONVERT TO COMPLEX FOURIER SERIES BUT REAL SERIES
+C                    AND EIGENVALUES ARE OK
+C                  IER=0 IF NO PROBLEMS WERE FOUND IN IMTQL1 OR IMTQL2
+C                  IER=1 IF PROBLEMS WERE FOUND IN IMTQL1 OR IMTQL2
+C                  IER=2 IF ARRAY DIMENSIONING IS INSUFFICIENT
+C                  A IS SET TO A LARGE POSITIVE VALUE WHEN IER.GT.0
+C      MDIM   -  DIMENSION OF MATRIX THAT WAS USED
+C                MDIM = 0 IS RETURNED IF ASYMPTOTIC EXPANSIONS WERE USED
+C                IF IER = 2, MDIM IS THE DIMENSION THAT WOULD BE NEEDED
+C                MDIM=189 IS SUFFICIENT FOR ALL VALUES OF Q FOR ANU.LT.2
+C                FOR ANU.GT.25, REGIONS OF VALIDITY OF THE TWO METHODS
+C                DO NOT OVERLAP, AND LARGER MDIM IS REQUIRED FOR SOME Q
+C      NCOF   -  NUMBER OF COMPUTED EIGENVECTOR COMPONENTS
+C                  MDIM FOR NONINTEGER ORDER
+C                  APPROX 2*MDIM FOR INTEGER ORDER
+C      N0     -  THE NUMBER OF THE DESIRED EIGENVALUE IN ORDER OF
+C                  INCREASING SIZE.
+C                  N0=0 IS RETURNED WHEN ASYMPTOTIC EXPANSION ARE USED
+C      VEC   -   ARRAY CONTAINING EIGENVECTOR COMPONENTS
+C
+C  VARIABLES USED WITHIN MTIEU1
+C
+C      AMU    -  MAGNITUDE OF THE ORDER
+C      AMURD  -  AMU REDUCED BY SUBTRACTING NEAREST EVEN INTEGER
+C      ARGM   -  AMURD + C
+C      ARGP   -  AMURD - C
+C      A0,A1  -  PARAMETERS USED TO COMPUTE MDIM
+C      BIG    -  LARGE POSITIVE VALUE FOR A ON ERROR CONDITION
+C      C      -  PARAMETER USED IN CALCULATING MATRIX ELEMENTS, C=2*I
+C      DNAMU  -  DOUBLE PRECISION FORM OF NAMU
+C      I      -  LOOP INDEX USED TO CALCULATE MATRIX ELEMENTS
+C      IALTER -  VARIABLE USED TO BRANCH ON MANUAL OVERRIDE OF DIMENSION
+C      IA0B1L -  LOCAL COPY OF IA0B1 NEEDED IN CASE ANU IS NEGATIVE
+C      IERR   -  ERROR FLAG FROM IMTQL1 OR IMTQL2
+C      IM     -  ARRAY INDEX LT IC0 FOR COMPONENT MATRIX ELEMENTS
+C      IP     -  ARRAY INDEX GT IC0 FOR COMPUTING MATRIX ELEMENTS
+C      IREAL  -  FLAG CALLING FOR COMPLEX OR REAL FOURIER SERIES
+C                  IREAL=0 HERE FOR COMPLEX SERIES
+C      MODDIM -  MOD(MDIM,2)
+C      NAMU   -  INTEGER TRUNCATION OF AMU
+C      NN     -  INDEX DEFINING NUMBER OF PAIRS OF ROWS AND COLUMNS TO
+C                  BE ADDED TO MATRIX (NDIM = 2*NN + 1)
+C      ONE    -  1.D0
+C      QMAG   -  MAGNITUDE OF Q
+C      QMIN   -  BOUNDARY OF ASYMPTOTIC REGION
+C      R      -  VALUE USED BY ASYMPTOTIC EXPANSION. R = DNAMU
+C                  EXCEPT R = DNAMU-1 FOR IA0B1=1 (B(M) EIGENVALUES)
+C      ZERO   -  0.D0
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL REFERENCES (FUNCTION,SUBROUTINE,COMMON)
+C
+C     EXTERNAL REFS       ASYMP,       BIGVAL,      DABS,        DBLE
+C     EXTERNAL REFS       FLOAT,       IDINT,       IMTQL1,      IMTQL2
+C     EXTERNAL REFS       MOD,         MT1INT,      XCHNG
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     INTRINSIC FUNCTIONS
+C
+      DOUBLE PRECISION    DABS,        DBLE
+      INTEGER             IDINT,       MOD
+      REAL                FLOAT
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     RUNTIME DIMENSION VARIABLES
+C
+      INTEGER             MAXDIM
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     NON-COMMON VARIABLES
+C
+C     SETS                A,           A0,          A1,          AMU
+C     SETS                AMURD,       ARGM,        ARGP,        BIG
+C     SETS                C,           DIAG,        DNAMU,       I
+C     SETS                IA0B1L,      IC0,         IER,         IM
+C     SETS                IP,          IREAL,       MDIM,        MODDIM
+C     SETS                N0,          NAMU,        NCOF,        NN
+C     SETS                ONE,         QMAG,        QMIN,        R
+C     SETS                SUBD,        ZERO
+C
+      DOUBLE PRECISION    A,           A0,          A1,          AMU
+      DOUBLE PRECISION    AMURD,       ANU,         ARGM,        ARGP
+      DOUBLE PRECISION    BIG,         C,           DIAG(MAXDIM),DNAMU
+      DOUBLE PRECISION    ONE,         Q,           QMAG,        QMIN
+      DOUBLE PRECISION    R,           SUBD(MAXDIM),VEC(MAXDIM,MAXDIM)
+      DOUBLE PRECISION    ZERO
+      INTEGER             I,           IA0B1,       IA0B1L,      IC0
+C     INTEGER             IALTER
+      INTEGER             IER,         IERR,        IM,          IP
+      INTEGER             IREAL,       IVEC,        MDIM,        MODDIM
+      INTEGER             N0,          NAMU,        NCOF,        NN
+C
+      DATA zero, one/0.d0, 1.d0/
+C
+C  SET BIG TO LARGEST MACHINE REPRESENTABLE NUMBER
+      CALL bigval(big)
+      ier = 0
+      ireal = 0
+      ia0b1l = ia0b1
+C  CONVERT TO POSITIVE ORDER
+      amu = dabs(anu)
+      namu = idint(amu)
+      dnamu = dble(float(namu))
+C  CONVERT TO POSITIVE PARAMETER
+      IF (q .LT. zero) THEN
+           qmag = - q
+C  EXCHANGE A AND B SOLUTIONS FOR Q NEGATIVE AND NAMU ODD
+           IF ((dnamu .EQ. amu) .AND. (mod(namu, 2) .EQ. 1)) ia0b1l = 1
+     X          - ia0b1l
+      ELSE
+           qmag = q
+      END IF
+      r = dnamu
+      IF (ia0b1l .EQ. 1) r = r - one
+C  CHECK TO SEE IF ASYMPTOTIC EXPANSIONS MORE EFFICIENT
+      qmin = 135.8d0 + r*(58.63d0 + r*(49.1798d0 + r*3.525d-3))
+      IF ((qmag .GT. qmin) .AND. (ivec .LE. 0)) THEN
+C  USE ASYMPTOTIC EXPANSIONS IF EIGENFUNCTION NOT DESIRED
+           mdim = 0
+           n0 = 0
+           CALL asymp(qmag, a, r)
+      ELSE
+C  FIND THE SMALLEST DIAGONAL ELEMENT IN MAGNITUDE
+C  USE THIS FOR THE CENTER DIAGONAL ELEMENT
+           IF (mod(namu, 2) .EQ. 0) THEN
+                amurd = amu - dnamu
+           ELSE
+                amurd = amu - dnamu - one
+                IF (amurd .EQ. (- one)) amurd = one
+           END IF
+C  TEST TO SEE IF AMU IS INTEGER.  IF SO CALL MT1INT.
+           IF ((dnamu - amu) .EQ. zero) THEN
+                CALL mt1int(namu, qmag, a, ia0b1l, ivec, ic0, n0, mdim,
+     X               maxdim, diag, subd, vec, ncof, ireal, ier)
+                IF (ivec .LE. 0) return
+                moddim = mod(ncof, 2)
+C  ADJUST COEFFICIENTS FOR NEGATIVE Q
+                IF (q .LT. zero) THEN
+                     nn = mdim
+                     CALL xchng(amu, q, ic0, n0, nn, vec, amurd, moddim,
+     X                    ncof, maxdim)
+                END IF
+C  RENUMBER FOR NEGATIVE ANU
+                IF (anu .LT. zero) THEN
+                     IF (mod(namu, 2) .EQ. 1) ic0 = ic0 - 1
+                     amurd = - amurd
+                END IF
+                RETURN
+           END IF
+C  BEGIN EIGENVALUE CALCULATION BY MATRIX DIAGONALIZATION
+C
+C  N0 IS THE EIGENVALUE DESIRED
+           n0 = namu + 1
+C  DETERMINE MINIMUM MATRIX DIMENSION FOR ACCURACY OF 1 PART IN 10**12
+           a0 = (8.46d0 + 0.444d0*amu)/(one + 0.085d0*amu)
+           a1 = (0.240d0 + 0.0214d0*amu)/(one + 0.059d0*amu)
+           mdim = idint(a0*qmag**a1 + amu) + 3
+C  FOLLOWING STATEMENTS CAN BE USED TO MANUALLY OVERRIDE DIMENSIONING
+C          WRITE(6,1000) MDIM
+C1000 FORMAT(' MATRIX DIMENSION DETERMINED TO BE ',I5,' ENTER 1 TO ALTER
+C    X, 0 OTHERWISE ')
+C          READ(5,2000) IALTER
+C2000 FORMAT(I1)
+C          IF (IALTER.NE.0) THEN
+C               WRITE(6,3000)
+C3000 FORMAT(' ENTER NEW DIMENSION (I4) ')
+C               READ(5,4000) MDIM
+C4000 FORMAT(I4)
+C          END IF
+           IF (mdim .GT. maxdim) go TO 120
+           moddim = mod(mdim, 2)
+           IF (moddim .EQ. 1) THEN
+                nn = (mdim - 1)/2
+                ic0 = nn + 1
+           ELSE
+                nn = mdim/2 - 1
+                IF (amurd .LT. zero) THEN
+C FOR EVEN DIMENSIONS ADD EXTRA TERM AT TOP IF AMURD IS NEGATIVE
+                     ic0 = nn + 1
+                ELSE
+C FOR EVEN DIMENSIONS ADD EXTRA TERM AT BOTTOM IF AMURD IS POSITIVE
+                     ic0 = nn + 2
+                END IF
+           END IF
+           c = zero
+C  STORE DIAGONAL ELEMENTS IN DIAG, SUBDIAGONAL ELEMENTS IN SUBD
+           diag(ic0) = amurd*amurd
+           subd(ic0) = qmag
+           IF (nn .EQ. 0) go TO 110
+           DO 100 i = 1, nn
+                ip = ic0 + i
+                im = ic0 - i
+                c = c + 2.d0
+                argm = amurd - c
+                argp = amurd + c
+                diag(im) = argm*argm
+                diag(ip) = argp*argp
+                subd(im) = qmag
+                subd(ip) = qmag
+  100      CONTINUE
+  110      CONTINUE
+           IF (moddim .EQ. 0) THEN
+C  THIS PORTION FOR EVEN DIMENSION MATRIX
+                IF (amurd .LT. zero) THEN
+                     argp = argp + 2.d0
+                     diag(mdim) = argp*argp
+                     subd(mdim) = qmag
+                ELSE
+                     argm = argm - 2.d0
+                     diag(1) = argm*argm
+                     subd(1) = qmag
+                END IF
+           END IF
+           IF (ivec .GE. 1) THEN
+C  GET EIGENVALUES AND EIGENVECTORS OF SYMMETRIC TRIDIAGONAL MATRIX
+C  IN INCREASING ORDER FROM EISPACK ROUTINE OR IMTQL2
+                CALL imtql2(maxdim, mdim, diag, subd, vec, ierr)
+                ncof = mdim
+           ELSE
+C  GET EIGENVALUES OF SYMMETRIC TRIDIAGONAL MATRIX
+C  IN INCREASING ORDER FROM EISPACK ROUTINE IMTQL1
+                CALL imtql1(mdim, diag, subd, ierr)
+                ncof = 0
+           END IF
+           IF (ierr .EQ. 0) THEN
+                a = diag(n0)
+           ELSE
+C  SET EIGENVALUE TO LARGE POSITIVE NUMBER ON ERROR CONDITION
+                a = big
+                ier = 1
+           END IF
+           IF (ivec .LE. 0) return
+C  EXCHANGE VEC COMPONENTS FOR NEGATIVE ORDER OR NEGATIVE Q
+           IF ((anu .LT. zero) .OR. (q .LT. zero)) call xchng(anu, q,
+     X          ic0, n0, nn, vec, amurd, moddim, mdim, maxdim)
+           RETURN
+  120      WRITE (6, 5000) mdim
+           a = big
+           ier = 2
+      END IF
+      RETURN
+ 5000 FORMAT (' ** ERROR ** ARRAYS MUST BE REDIMENSIONED TO ', i5)
+      END
+      SUBROUTINE  mtieu2(anu, q, a, ia0b1, ivec, amurd, nlev, method,
+     X     vec, ibit, ic0, ncof)
+C  RETURNS EIGENVALUE AND EIGENVECTOR COEFFICIENTS OF MATHIEU EQUATION
+C  FOR NONINTEGER OR INTEGER ORDER ANU (ANU.LT.10.50)
+C  METHOD IS ITERATIVE REFINEMENT OF APPROXIMATE EIGENVALUE USING
+C  NEWTON'S METHOD
+C  ACCURACY OF EIGENVALUES IS 1 PART IN 10**14
+C  EIGENFUNCTION COEFFICIENTS DETERMINED BY CONTINUED FRACTION EXPANSION
+C  USING BACKWARD RECURSION
+C  ACCURACY OF EIGENFUNCTION COEFFICIENTS IS LESS THAN EIGENVALUES
+C  IBIT GIVES MAXIMUM NUMBER OF DOUBTFUL BITS IN EIGENVECTORS
+C  WRITTEN BY R. B. SHIRTS, IDAHO NATIONAL ENGINEERING LABORATORY
+C  SEPTEMBER 1989
+C  LAST ALTERED JANUARY 1991
+C
+C  VARIABLES PASSED TO MTIEU2
+C
+C      ANU    -  ORDER OF MATHIEU EQUATION
+C      IA0B1  -  SPECIFIES A OR B SOLUTION WHEN ANU IS INTEGER
+C                  IA0B1 IS 0 IF EVEN SOLUTIONS, A(N), ARE SOUGHT
+C                  IA0B1 IS 1 IF ODD SOLUTIONS, B(N), ARE SOUGHT
+C                  IA0B1 IS UNUSED WHEN ANU IS NONINTEGER
+C      IVEC   -  FLAG FOR COMPUTATION OF EIGENVALUES (1=YES, 0=NO)
+C      Q      -  PARAMETER OF MATHIEU EQUATION
+C
+C  VARIABLES RETURNED BY MTIEU2
+C
+C      A      -  EIGENVALUE OF MATHIEU EQUATION FOR PARAMETER Q AND
+C                  ORDER ANU
+C      AMURD  -  REDUCED ORDER - ORDER LESS NEAREST EVEN INTEGER
+C      IBIT   -  NUMBER OF BITS OF PRECISION LOST IN VEC CALCULATION
+C      IC0    -  ELEMENT OF VEC CONTAINING C0
+C      METHOD -  INDICATES METHOD USED TO APPROXIMATE A
+C                  1 - TAYLOR EXPANSION FOR NONINTEGER ORDER
+C                  2 - TAYLOR EXPANSION FOR INTEGER ORDER
+C                  3 - ASYMPOTIC EXPANSION FOR LARGE Q
+C      NCOF   -  NUMBER OF COMPUTED COEFFICIENTS IN VEC
+C      NLEV   -  LEVEL OF CONTINUED FRACTION USED IN EVALUATION OF A
+C      VEC    -  ARRAY OF EIGENFUNCTION FOURIER COEFFICIENTS
+C
+C  VARIABLE USED WITHIN MTIEU2
+C
+C      AA     -  ARRAY CONTAINING PROPORTIONALITY CONSTANTS OF NINT(AMU)
+C                  DIVIDING REGIONS OF INTEGER AND NONINTEGER TAYLOR
+C                  SERIES FOR ORDERS 0+, 1-, 1+, 2-, 2+,... 11-
+C      AMU    -  MAGNITUDE OF ANU - DABS(ANU)
+C      DNAMU  -  DOUBLE PRECISION VERSION OF NAMU
+C      FRAC   -  DIFFERENCE BETWEEN NEAREST INTEGER ORDER AND ORDER
+C      HALF   -  0.5D0
+C      I      -  LOOP INDEX FOR EIGENVECTOR COMPONENT CHANGES FOR
+C                  NEGATIVE ANU OR Q
+C      IA0B1L -  LOCAL COPY OF IA0B1 NEEDED IN CASE ANU IS NEGATIVE
+C      IM     -  ARRAY INDEX LT IC0 FOR VEC COMPONENT CHANGES
+C      INDEX  -  INDEX TO APPLICABLE ARRAY ELEMENT OF QASY
+C      INDEX1 -  INDEX TO APPLICABLE ARRAY ELEMENT OF QASY1
+C      IP     -  ARRAY INDEX GT IC0 FOR VEC COMPONENT CHANGES
+C      IR     -  INTEGER FORM OF R
+C      NAMU   -  INTEGER TRUNCATION OF AMU
+C      NAMU2  -  NEAREST EVEN INTEGER TO AMU IS 2*NAMU2
+C                  IS NEEDED TO DETERMINE FLOQUET EXPONENT
+C      ONE    -  1.D0
+C      QASY   -  ARRAY CONTAINING BOUNDARY OF ASYMPOTIC REGION AT
+C                  INTEGER ORDER FOR ORDERS 0+, 1-, 1+, 2-, 2+,... 11-
+C      QASYM  -  WEIGHTED AVERAGE OF QASY(INDEX) AND QASY1(INDEX1)
+C                  GIVING BOUNDARY OF REGION 3
+C      QASY1  -  ARRAY CONTAINING BOUNDARY OF ASYMTOTIC REGION AT
+C                  HALF INTEGER ORDERS 0.5,1.5,2.5,...10.5
+C      QINT   -  COMPUTED VALUE OF Q DIVIDING REGIONS OF INTEGER AND
+C                  NONINTEGER TAYLOR SERIES
+C      QMAG   -  MAGNITUDE OF Q - DABS(Q)
+C      QTOP   -  Q VALUE OF REGION WHERE ASYMPTOTIC EXPANSION ACCURATE
+C                  TO 1 PART IN 10**14 WITHOUT REFINEMENT
+C      R      -  R VARIABLE OF NBS HANDBOOK 20.2.30 - R = NAMU EXCEPT
+C                  R = NAMU-1 FOR B(NAMU)
+C      RP     -  NEAREST INTEGER ORDER
+C      TEMP   -  TEMPORARY VARIABLE FOR EIGENVECTOR COMPONENT EXCHANGE
+C      TWO    -  2.D0
+C      WT     -  WEIGHT TO LINEARLY CONNECT ASY AND ASY1
+C      ZERO   -  0.D0
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL REFERENCES (FUNCTION,SUBROUTINE,COMMON)
+C
+C     EXTERNAL REFS       ACALC,       AINTGR,      ASYM,        ATAYLR
+C     EXTERNAL REFS       DABS,        DBLE,        EVEC,        FLOAT
+C     EXTERNAL REFS       IDINT,       MOD
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     INTRINSIC FUNCTIONS
+C
+      DOUBLE PRECISION    DABS,        DBLE
+      INTEGER             IDINT,       MOD
+      REAL                FLOAT
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     NON-COMMON VARIABLES
+C
+C     SETS                AA,          AMU,         AMURD,       DNAMU
+C     SETS                FRAC,        HALF,        I,           IA0B1L
+C     SETS                IBIT,        IC0,         IM,          INDEX
+C     SETS                INDEX1,      IP,          IR,          METHOD
+C     SETS                NAMU,        NAMU2,       NCOF,        ONE
+C     SETS                QASY,        QASY1,       QASYM,       QINT
+C     SETS                QMAG,        QTOP,        R,           RP
+C     SETS                TEMP,        TWO,         VEC,         WT
+C     SETS                ZERO
+C
+      DOUBLE PRECISION    A,           AA(22),      AMU,         AMURD
+      DOUBLE PRECISION    ANU,         DNAMU,       FRAC,        HALF
+      DOUBLE PRECISION    ONE,         Q,           QASY(22)
+      DOUBLE PRECISION    QASY1(11),   QASYM,       QINT,        QMAG
+      DOUBLE PRECISION    QTOP,        R,           RP,          TEMP
+      DOUBLE PRECISION    TWO,         VEC(150),    WT,          ZERO
+      INTEGER             I,           IA0B1,       IA0B1L,      IBIT
+      INTEGER             IC0,         IM,          INDEX,       INDEX1
+      INTEGER             IP,          IR,          IVEC,        METHOD
+      INTEGER             NAMU,        NAMU2,       NCOF,        NLEV
+C
+      DATA zero, one, two, half/0.d0, 1.d0, 2.d0, 0.5d0/
+      DATA qasy/1.53d0, 1.8d0, 3.4d0, 4.5d0, 4.1d0, 6.13d0, 7.6d0,
+     X     9.6d0, 12.4d0, 14.5d0, 18.3d0, 22.7d0, 25.4d0, 31.75d0,
+     X     35.2d0, 42.2d0, 47.4d0, 54.9d0, 61.62d0, 69.1d0, 83.0d0,
+     X     84.d0/
+      DATA qasy1/0.8d0, 1.5d0, 3.3d0, 6.5d0, 10.d0, 17.d0, 24.d0, 32.d0,
+     X     46.7d0, 61.6d0, 82.d0/
+      DATA aa/1.2d0, 2.4d0, 3.d0, 3.5d0, 5.d0, 6.3d0, 8.d0, 12.d0,
+     X     15.d0, 18.d0, 18.d0, 25.d0, 29.d0, 35.d0, 35.d0, 42.d0,
+     X     43.d0, 57.d0, 52.d0, 67.d0, 62.d0, 140.d0/
+C  SET DEFAULT PARAMETERS
+      ncof = 0
+      ic0 = 0
+      ibit = 0
+C  CONVERT TO POSITIVE ORDER
+      amu = dabs(anu)
+C  TEST IF ORDER TOO LARGE
+      IF (amu .GT. 10.5d0) go TO 120
+      namu = idint(amu)
+      dnamu = dble(float(namu))
+C  CONVERT TO POSITIVE PARAMETER
+      ia0b1l = ia0b1
+      IF (q .LT. zero) THEN
+           qmag = - q
+C  EXCHANGE A AND B SOLUTIONS FOR Q NEGATIVE AND NAMU ODD
+           IF ((dnamu .EQ. amu) .AND. (mod(namu, 2) .EQ. 1)) ia0b1l = 1
+     X          - ia0b1l
+      ELSE
+           qmag = q
+      END IF
+C  CALCULATE ARRAY INDICES FOR DISTINGUISHING REGIONS
+      IF (ia0b1l .EQ. 1) THEN
+           index = idint(two*amu)
+           index1 = namu
+      ELSE
+           index = idint(two*amu) + 1
+           index1 = namu + 1
+      END IF
+C  CALCULATE R AND FRAC
+      ir = namu
+      r = dble(float(ir))
+      frac = amu - r
+      IF (frac .GT. half) frac = frac - one
+      IF (ia0b1l .EQ. 1) THEN
+           ir = ir - 1
+           r = r - one
+      END IF
+C  FIRST OBTAIN AN APPROXIMATE VALUE OF THE EIGENVALUE
+C
+C  USE ASYMPTOTIC EXPANSIONS IF Q IS LARGE ENOUGH (REGION 3)
+      wt = dabs(two*frac)
+      qasym = qasy(index)*(one - wt) + qasy1(index1)*wt
+      IF (qmag .GT. qasym) THEN
+           CALL asym(amu, qmag, a, r, ir)
+           method = 3
+C  CHECK NOW TO SEE IF Q IS LARGE ENOUGH THAT ASYMPOTIC EXPANSION
+C  ALREADY HAS ACCURACY OF 1 PART IN 10**14
+           qtop = 235.d0 + r*(188.d0 + 116.d0*r)
+           IF ((qmag .GT. qtop) .AND. (ivec .LE. 0)) return
+      ELSE
+C  CHECK TO SEE IF Q IS IN REGION 2
+           IF (amu .LE. half) THEN
+                qint = 1.2d0
+           ELSE
+                rp = r
+                IF ((frac .LT. zero) .OR. (ia0b1l .EQ. 1)) rp = rp + one
+                qint = aa(index)*(dabs(frac)**(one/rp))
+           END IF
+C  IF Q IS IN REGION 2, USE APPROX. 2 (TAYLOR SERIES FOR INTEGER ORDER)
+           IF (qmag .GT. qint) THEN
+                CALL aintgr(amu, qmag, a, ia0b1l)
+                method = 2
+           ELSE
+C  Q IS IN REGION 1, USE APPROX. 1 (TAYLOR SERIES FOR NONINTEGER ORDER)
+                method = 1
+                IF (frac .LT. zero) THEN
+C  USE TAYLOR SERIES THROUGH Q**4 FOR ORDERS GT THAN NEAREST INTEGER
+                     CALL ataylr(amu, qmag, a, 4)
+                ELSE
+C  USE TAYLOR SERIES THROUGH Q**6 FOR ORDERS LT THAN NEAREST INTEGER
+                     CALL ataylr(amu, qmag, a, 6)
+                END IF
+           END IF
+      END IF
+C  REDUCE ORDER BY SUBTRACTING NEAREST EVEN INTEGER
+      namu2 = idint((amu + one)*half)
+      amurd = amu - dble(float(2*namu2))
+      IF (amurd .EQ. (- one)) THEN
+           amurd = one
+           namu2 = namu2 - 1
+      END IF
+C  REFINE APPROXIMATE EIGENVALUE USING NEWTON'S METHOD
+      CALL acalc(amurd, qmag, a, nlev, ir)
+      IF (ivec .GE. 1) THEN
+C  CALCULATE EIGENVECTOR
+           CALL evec(nlev, vec, a, amurd, qmag, ibit, ia0b1l, namu2,
+     X          ic0, ncof)
+C  REVERSE ORDER OF VEC COMPONENTS FOR NEGATIVE ORDER
+C  REORDERING ONLY NECESSARY FOR NONINTEGER ORDER
+           IF ((anu .LT. zero) .AND. (amu .NE. dnamu)) THEN
+                DO 100 i = 1, nlev - 1
+                     ip = nlev + i
+                     im = nlev - i
+                     temp = vec(ip)
+                     vec(ip) = vec(im)
+                     vec(im) = temp
+  100           CONTINUE
+           END IF
+           IF (anu .LT. zero) THEN
+C  RESET IC0 IF ORDER NEGATIVE OR EXCHANGES MADE
+                IF (amu .EQ. dnamu) THEN
+                     IF (mod(namu, 2) .EQ. 1) ic0 = ic0 - 1
+                ELSE
+                     ic0 = ic0 + 2*namu2
+                END IF
+C  REVERSE FLOQUET EXPONENT IF ORDER NEGATIVE
+                amurd = - amurd
+           END IF
+C  PERFORM SIGN CHANGES IN EVEN EIGENVECTOR COMPONENTS FOR NEGATIVE Q
+           IF (q .LT. zero) THEN
+                DO 110 i = 2, ncof, 2
+                     vec(i) = - vec(i)
+  110           CONTINUE
+           END IF
+      END IF
+      RETURN
+  120 WRITE (6, 1000)
+      RETURN
+ 1000 FORMAT (' ORDER GREATER THAN 10.5, OUTSIDE OF RANGE. ')
+      END
+      SUBROUTINE  newton(amu, q, a, chng, nlev)
+C  EVALUATES EQUATIONS 20.3.13 - 20.3.14 OF NBS HANDBOOK
+C  AND CALCULATES THE ADJUSTMENT TO A ACCORDING TO NEWTON'S METHOD
+C  WRITTEN BY R. B. SHIRTS, IDAHO NATIONAL ENGINEERING LABORATORY
+C  SEPTEMBER 1989
+C  LAST ALTERED SEPTEMBER 1989
+C
+C  VARIABLES PASSED TO NEWTON
+C
+C      A      -  APPROXIMATION TO MATHIEU EQUATION EIGENVALUE
+C      AMU    -  ORDER OF MATHIEU EQUATION
+C      NLEV   -  LEVEL OF CONTINUED FRACTION USED IN COMPUTATION
+C      Q      -  PARAMETER OF MATHIEU EQUATION
+C
+C  VARIABLES RETURNED BY NEWTON
+C
+C      CHNG   -  ADJUSTMENT TO EIGENVALUE A COMPUTED BY NEWTON'S METHOD
+C
+C  LOCAL VARIABLES USED IN NEWTON
+C
+C      ARG, ARGM - VARIABLES USED TO COMPUTE V AND VM ELEMENTS
+C      F      -  FUNCTIONAL VALUE OF HN(0)*GN(0) - HD(0)*GD(0)
+C      FP     -  DERIVATIVE OF FUNCTION F WITH RESPECT TO A
+C      GD,GDP -  DENOMINATOR OF G AND ITS DERIVATIVE WITH RESPECT TO A
+C      GN,GNP -  NUMERATOR OF G AND ITS DERIVATIVE WITH RESPECT TO A
+C      GNB4   -  NUMERATOR OF G FROM PREVIOUS LEVEL.  TEMPORARY VARIABLE
+C      HD,HDP -  DENOMINATOR OF H AND ITS DERIVATIVE WITH RESPECT TO A
+C      HN,HNP -  NUMERATOR OF H AND ITS DERIVATIVE WITH RESPECT TO A
+C      HNB4   -  NUMERATOR OF H FROM PREVIOUS LEVEL.  TEMPORARY VARIABLE
+C      GNPB4,HNPB4  - DERIVATIVES OF NUMERATORS OF G AND H FROM PREVIOUS
+C                       LEVEL.  TEMPORARY VARIABLES
+C      J      -  LOOP INDEX USED TO EXPAND CONTINUED FRACTION
+C      JN     -  INDEX USED TO LOCATE V AND VM ELEMENTS DURING
+C                  CONTINUED FRACTION EXPANSION
+C      K      -  LOOP INDEX USED IN SETTING V AND VM ELEMENTS
+C      ONE    -  1.D0
+C      TEST   -  SCALE FACTOR TO PREVENT FLOATING OVERFLOW IN CONTINUED
+C                  FRACTION RECURSION
+C      V,VM   -  ARRAYS CONTAINING PARAMETERS FOR CONTINUED FRACTION
+C                  EXPANSION DEFINED IN NBS HANDBOOK 20.3.13.  V(N)
+C                  CONTAINS V   AND VM(N) CONTAINS V
+C                            2N                     -2N
+C      ZERO   -  0.D0
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL REFERENCES (FUNCTION,SUBROUTINE,COMMON)
+C
+C     EXTERNAL REFS       DABS,        DBLE,        FLOAT
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     INTRINSIC FUNCTIONS
+C
+      DOUBLE PRECISION    DBLE
+      REAL                FLOAT
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     NON-COMMON VARIABLES
+C
+C     SETS                ARG,         ARGM,        CHNG,        F
+C     SETS                FP,          GD,          GDP,         GN
+C     SETS                GNB4,        GNP,         GNPB4,       HD
+C     SETS                HDP,         HN,          HNB4,        HNP
+C     SETS                HNPB4,       J,           JN,          K
+C     SETS                ONE,         TEST,        V,           VM
+C     SETS                ZERO
+C
+      DOUBLE PRECISION    A,           AMU,         ARG,         ARGM
+      DOUBLE PRECISION    CHNG,        F,           FP,          GD
+      DOUBLE PRECISION    GDP,         GN,          GNB4,        GNP
+      DOUBLE PRECISION    GNPB4,       HD,          HDP,         HN
+      DOUBLE PRECISION    HNB4,        HNP,         HNPB4,       ONE
+      DOUBLE PRECISION    Q,           TEST,        V(75),       VM(75)
+      DOUBLE PRECISION    ZERO
+      INTEGER             J,           JN,          K,           NLEV
+C
+      DATA zero, one/0.d0, 1.d0/
+C **********************************************************************
+C  THE PARAMETER TEST IS A MACHINE DEPENDENT VARIABLE THAT SHOULD BE
+C  LESS THAN THE LARGEST MACHINE FLOATING POINT NUMBER MULTIPLIED BY
+C  MACHINE ROUND-OFF
+C  TEST IS UNNECCESSARY FOR IEEE FORTRAN IMPLEMENTATIONS WITH
+C  EXPONENT RANGES UP TO 10**300.
+C **********************************************************************
+      DATA test/1.d20/
+C  TEST IN FOLLOWING STATEMENT CAN BE RAISED IF ARRAYS V AND VM ARE
+C  CORRESPONDINGLY REDIMENSIONED
+      IF (nlev .GT. 75) go TO 120
+C  SET VALUES OF ARRAYS V AND VM
+      DO 100 k = 1, nlev
+           arg = amu + dble(float(2*k - 2))
+           argm = amu - dble(float(2*k))
+           vm(k) = (a - argm*argm)/q
+           v(k) = (a - arg*arg)/q
+  100 CONTINUE
+C  INITIALIZE VARIABLES FOR RECURSION
+      gd = one
+      hd = one
+      gn = zero
+      hn = zero
+      gdp = zero
+      hdp = zero
+      gnp = zero
+      hnp = zero
+      DO 110 j = 1, nlev
+           jn = nlev - j + 1
+C  STORE VARIABLE FROM PREVIOUS ITERATION OF RECURSION
+           gnb4 = gn
+           hnb4 = hn
+           gnpb4 = gnp
+           hnpb4 = hnp
+C  EVALUATE VARIABLES BY RECURSION ON CONTINUED FRACTION
+           gn = gd
+           hn = hd
+           gnp = gdp
+           hnp = hdp
+           gdp = gdp*v(jn) + gd/q - gnpb4
+           hdp = hdp*vm(jn) + hd/q - hnpb4
+           gd = gd*v(jn) - gnb4
+           hd = hd*vm(jn) - hnb4
+C **********************************************************************
+C  THE FOLLOWING LINES ARE USED TO AVOID FLOATING OVERFLOWS ON
+C  MACHINES WITH LIMITED FLOATING POINT RANGES
+C  THESE LINES MAY BE REMOVED FOR EXPONENT RANGES UP TO 10**300
+           IF ((dabs(hn).GT.test).OR.(dabs(hd).GT.test)) THEN
+                hn=hn/test
+                hd=hd/test
+                hnp=hnp/test
+                hdp=hdp/test
+           END IF
+           IF ((dabs(gn).GT.test).OR.(dabs(gd).GT.test)) THEN
+                gn=gn/test
+                gd=gd/test
+                gnp=gnp/test
+                gdp=gdp/test
+           END IF
+C **********************************************************************
+  110 CONTINUE
+C  FORM FUNCTION, DERIVATIVE, AND CHANGE
+      f = gn*hn - gd*hd
+      fp = gn*hnp + gnp*hn - gd*hdp - gdp*hd
+      chng = - f/fp
+      RETURN
+C  THIS SECTION REACHED IF LEVEL NEEDED GREATER THAN DIMENSIONED FOR
+  120 WRITE (6, 1000) nlev
+ 1000 FORMAT (i5, ' CALCULATED LEVEL OF CONTINUED FRACTION GREATER ',
+     X     'THAN    DIMENSION PROVIDED ')
+      RETURN
+      END
+      SUBROUTINE  xchng(anu, q, ic0, n0, nn, vec, anurd, moddim, mdim,
+     X     maxdim)
+C  EXCHANGES EIGENVECTOR COMPONENTS OF MATHIEU EQUATION FOR
+C  NEGATIVE ORDER OR NEGATIVE Q
+C  WRITTEN BY R. B. SHIRTS, IDAHO NATIONAL ENGINEERING LABORATORY
+C  OCTOBER 1990
+C  LAST ALTERED OCTOBER 1990
+C
+C  VARIABLES PASSED TO XCHNG
+C
+C      ANU    -  ORDER OF THE EIGENVALUE
+C      ANURD  -  AMU REDUCED BY SUBTRACTING NEAREST EVEN INTEGER
+C      IC0    -  ARRAY ELEMENT OF N0-TH COLUMN OF VEC CONTAINING C(0)
+C      MAXDIM -  MAXIMUM DIMENSION ALLOWED FOR ARRAY VEC
+C      MDIM   -  NUMBER OF EIGENVECTOR COEFFICIENTS
+C      MODDIM -  MOD(MDIM,2)
+C      NN     -  NUMBER OF PAIRS OF COMPONENTS TO BE EXCHANGED
+C      N0     -  THE NUMBER OF EIGENVECTORS CONSIDERED ACCURATE ENOUGH
+C                  TO BE TREATED
+C      Q      -  PARAMETER OF MATHIEU EQUATION
+C      VEC    -  ARRAY CONTAINING EIGENVECTOR COMPONENTS
+C
+C  VARIABLES RETURNED BY XCHNG
+C
+C      VEC    -  ARRAY CONTAINING REARRANGED EIGENVECTOR COMPONENTS
+C
+C  VARIABLES USED WITHIN XCHNG
+C
+C      I      -  LOOP INDEX USED IN EXCHANGE
+C      IC02   -  NUMBER OF PAIRS OF EIGENVECTOR COMPONENTS TO HAVE SIGNS
+C                  CHANGED FOR NEGATIVE Q
+C      IM     -  ARRAY INDEX LT IC0 FOR VEC COMPONENT CHANGES
+C      IP     -  ARRAY INDEX GT IC0 FOR VEC COMPONENT CHANGES
+C      J      -  LOOP INDEX ON EIGENVECTOR COLUMNS
+C      ONE    -  1.D0
+C      TEMP   -  TEMPORARY VARIABLE FOR EIGENVECTOR COMPONENT EXCHANGE
+C      ZERO   -  0.D0
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL REFERENCES (FUNCTION,SUBROUTINE,COMMON)
+C
+C     EXTERNAL REFS       MOD
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     INTRINSIC FUNCTIONS
+C
+      INTEGER             MOD
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     RUNTIME DIMENSION VARIABLES
+C
+      INTEGER             MAXDIM
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     NON-COMMON VARIABLES
+C
+C     SETS                ANURD,       I,           IC0,         IC02
+C     SETS                IM,          IP,          J,           ONE
+C     SETS                TEMP,        VEC,         ZERO
+C
+      DOUBLE PRECISION    ANU,         ANURD,       ONE,         Q
+      DOUBLE PRECISION    TEMP,        VEC(MAXDIM,MAXDIM),       ZERO
+      INTEGER             I,           IC0,         IC02,        IM
+      INTEGER             IP,          J,           MDIM,        MODDIM
+      INTEGER             N0,          NN
+C
+      DATA zero, one/0.d0, 1.d0/
+C  EXCHANGE VEC COMPONENTS IN FIRST N0 COLUMNS FOR NEGATIVE ORDER
+      IF (anu .LT. zero) THEN
+           DO 130 j = 1, n0
+                DO 100 i = 1, nn
+                     ip = ic0 + i
+                     im = ic0 - i
+                     temp = vec(ip, j)
+                     vec(ip, j) = vec(im, j)
+                     vec(im, j) = temp
+  100           CONTINUE
+C  IF MDIM IS EVEN, SHIFT COMPONENTS FOR EXCHANGE OF FIRST/LAST ELEMENT
+                IF (moddim .EQ. 0) THEN
+                     IF (anurd .LT. zero) THEN
+C  SHIFT LAST ELEMENT TO FIRST AND OTHERS UP
+                          temp = vec(mdim, j)
+                          DO 110 i = 1, mdim - 1
+                               vec(mdim + 1 - i, j) = vec(mdim - i, j)
+  110                     CONTINUE
+                          vec(1, j) = temp
+                     ELSE
+C  SHIFT FIRST ELEMENT TO LAST AND OTHERS DOWN
+                          temp = vec(1, j)
+                          DO 120 i = 1, mdim - 1
+                               vec(i, j) = vec(i + 1, j)
+  120                     CONTINUE
+                          vec(mdim, j) = temp
+                     END IF
+                END IF
+  130      CONTINUE
+C  CORRECT IC0 IF A SHIFT HAS BEEN MADE
+           IF (moddim .EQ. 0) THEN
+                IF (anurd .LT. zero) THEN
+                     ic0 = ic0 + 1
+                ELSE
+                     ic0 = ic0 - 1
+                END IF
+           END IF
+           anurd = - anurd
+      END IF
+C  PERFORM SIGN CHANGES IN EIGENVECTOR COMPONENTS FOR NEGATIVE Q
+      IF (q .LT. zero) THEN
+           IF (mod(ic0, 2) .EQ. 0) THEN
+                ic02 = ic0/2
+           ELSE
+                ic02 = (ic0 - 1)/2
+           END IF
+           DO 150 j = 1, n0
+                DO 140 i = 1, ic02
+                     ip = ic0 + 2*i - 1
+                     im = ic0 - 2*i + 1
+                     vec(ip, j) = - vec(ip, j)
+                     vec(im, j) = - vec(im, j)
+  140           CONTINUE
+                IF (mod(mdim, 4) .EQ. 2) vec(mdim, j) = - vec(mdim, j)
+  150 CONTINUE
+      END IF
+      RETURN
+      END
+      SUBROUTINE  bigval(big)
+C  SETS LARGE POSITIVE NUMBER USED AS MACHINE INFINITY AND
+C  FOR ERROR CONDITION.
+C  THE VALUE SET HERE IS APPROPRIATE FOR IEEE FORTRAN IMPLEMENTATIONS
+C  BUT MUST BE CHANGED FOR VAX AND IBM IMPLEMENTATIONS AND OTHERS WITH
+C  SHORT EXPONENT FIELDS.
+C  THE PRECISE NUMBER USED IS IRRELEVANT FOR CODE OPERATION
+C  
+C  WRITTEN BY R. B. SHIRTS, IDAHO NATIONAL ENGINEERING LABORATORY
+C  FEBRUARY 1991
+C  LAST ALTERED FEBRUARY 1991
+C
+C  VARIABLES RETURNED BY BIGVAL
+C
+C      BIG    -  LARGE POSITIVE NUMBER FOR MACHINE INFINITY
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     EXTERNAL REFERENCES (FUNCTION,SUBROUTINE,COMMON)
+C
+C     EXTERNAL REFS       D1MACH - (CAN BE USED IF AVAILABLE)
+C
+C- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+C
+C     NON-COMMON VARIABLES
+C
+C     SETS                BIG
+C
+      DOUBLE PRECISION    BIG
+C
+C  SET BIG
+      big = 1.79D308
+      RETURN
+      END
+ 1.5
+ 1
+ 1,1,1
+ 0,0,0
+ 6.99
+ 1
+ 1,1,9.32355002165
+ 0,0,0
+ 10
+ 0
+ 1
+ 1,1,0.1
+ 0,0,0
+ 10.00000001929
+ 1
+ 1,1,0.1
+ 0,0,0
+ 8.5
+ 1
+ 1,1,1000
+ 0,0,0
+ 10
+ 1
+ 1
+ 1,1,0.001
+ 0,0,0
+ 9
+ 0
+ 1
+ 1,1,1
+ 0,0,0
+ -9
+ 1
+ 1
+ 1,1,1
+ 0,0,0
+ 9
+ 1
+ 1
+ 1,1,-1
+ 0,0,0
+ 10
+ 0
+ 1
+ 1,1,-1
+ 0,0,0
+ 8.4
+ 0
+ 1,1,5000
+ 0,0,0
+ 1.1
+ 0
+ 2,0.1,0.3
+ 0,0,0
+ 2.1
+ 0
+ 2,1,3
+ 0,0,0
+ 3
+ 0
+ 0
+ 10,1,1
+ 0,0,0
+ 2.9
+ 0
+ 10,1,1
+ 0,0,0
+ 4
+ 0
+ 0
+ 1,1,1
+ 0,0,0
+ 4
+ 1
+ 0
+ 1,1,1
+ 0,0,0
+ 5
+ 0
+ 0
+ 1,1,1
+ 0,0,0
+ 5
+ 1
+ 0
+ 1,1,1
+ 0,0,0
+ 6
+ 0
+ 0
+ 1,1,1
+ 0,0,0
+ 6
+ 1
+ 0
+ 1,1,1
+ 0,0,0
+ 7
+ 0
+ 0
+ 1,1,1
+ 0,0,0
+ 8
+ 1
+ 0
+ 1,1,1
+ 0,0,0
+ -10
+  0              
+  1              
+  41,0,0.157079632678
+  0              
+  1              
+  1              
+  1              
+  41,0,0.157079632678
+  0              
+  2.8            
+  1              
+  41,0,0.157079632678
+  0              
+  -10            
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  0 ANU =   1.50000000 Q =   1.0000000E+00
+MDIM =  12 IER =     0 N0   =  2 A1 =   2.537180087120E+00
+NLEV =   8 METHOD =  1 IBIT =  1 A2 =   2.537180087120E+00
+FLOQUET EXPONENT  -5.0000000E-01 -5.0000000E-01
+ -12                    1.2162292099E-10
+ -10 -1.8693287326E-08 -1.8694416617E-08
+  -8  2.0135066913E-06  2.0135067075E-06
+  -6 -1.4034853608E-04 -1.4034853608E-04
+  -4  5.5716226315E-03  5.5716226315E-03
+  -2 -9.8548799759E-02 -9.8548799759E-02
+   0  3.6032232350E-01  3.6032232350E-01
+   2  9.2267084302E-01  9.2267084302E-01
+   4 -9.5349630422E-02 -9.5349630422E-02
+   6  3.4429460257E-03  3.4429460257E-03
+   8 -6.4112758089E-05 -6.4112758089E-05
+  10  7.3100367435E-07  7.3100367711E-07
+  12 -5.6355545646E-09 -5.6357963565E-09
+  14                    3.1360747031E-11
+  16                   -1.3192703297E-13
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  0 ANU =   6.99000000 Q =   9.3235500E+00
+MDIM =  23 IER =     0 N0   =  7 A1 =   4.978090261455E+01
+NLEV =  16 METHOD =  1 IBIT = 59 A2 =   4.978090261455E+01
+FLOQUET EXPONENT   9.9000000E-01  9.9000000E-01
+ -24                   -8.0209598484E-13
+ -22 -4.1234238765E-11  4.1253347473E-11
+ -20  1.7320595843E-09 -1.7320601567E-09
+ -18 -5.7845340621E-08  5.7845340644E-08
+ -16  1.4845455213E-06 -1.4845455213E-06
+ -14 -2.7889260406E-05  2.7889260406E-05
+ -12  3.5591005645E-04 -3.5591005645E-04
+ -10 -2.6991759364E-03  2.6991759364E-03
+  -8  8.7341852191E-03 -8.7341852191E-03
+  -6  3.2994718227E-03 -3.2994718227E-03
+  -4  6.7628624974E-17  3.9562015536E-17
+  -2 -3.2994718227E-03  3.2994718227E-03
+   0 -1.7255754933E-02  1.7255754933E-02
+   2 -8.7019632864E-02  8.7019632864E-02
+   4 -3.6392433646E-01  3.6392433646E-01
+   6 -8.8414795471E-01  8.8414795471E-01
+   8  2.7660504859E-01 -2.7660504859E-01
+  10 -3.6702867241E-02  3.6702867241E-02
+  12  2.8887182514E-03 -2.8887182514E-03
+  14 -1.5429594899E-04  1.5429594899E-04
+  16  6.0292958176E-06 -6.0292958178E-06
+  18 -1.8097690509E-07  1.8097690536E-07
+  20  4.3196904237E-09 -4.3196910791E-09
+  22 -8.4123395643E-11  8.4150000536E-11
+  24                   -1.3654523202E-12
+  26                    1.8761332400E-14
+  28                   -2.2126824292E-16
+  30                    2.2657555562E-18
+  32                   -2.0342018979E-20
+  34                    1.6148776364E-22
+  36                   -1.1419514583E-24
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 0 IF YOU WANT EVEN SOLUTION (A 10) 
+ENTER 1 IF YOU WANT ODD  SOLUTION (B 10) 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  0 ANU =  10.00000000 Q =   1.0000000E-01
+MDIM =   9 IER =     0 N0   =  6 A1 =   1.000000505051E+02
+NLEV =  15 METHOD =  2 IBIT =  6 A2 =   1.000000505051E+02
+FLOQUET EXPONENT   0.0000000E+00  0.0000000E+00
+ -28                   -2.2174328099E-31
+ -26                    1.5167239300E-27
+ -24                   -8.7363288488E-24
+ -22                    4.1584919391E-20
+ -20                   -1.5968606072E-16
+ -18                    4.7905805994E-13
+ -16 -1.0730893455E-09 -1.0730896526E-09
+ -14  1.6740188371E-06  1.6740188371E-06
+ -12 -1.6070561650E-03 -1.6070561650E-03
+ -10  7.0710222695E-01  7.0710222695E-01
+  -8  1.9641786222E-03  1.9641786222E-03
+  -6  3.0690323840E-06  3.0690323840E-06
+  -4  3.6536123150E-09  3.6536123150E-09
+  -2  3.8058520880E-12  3.8058520880E-12
+   0  7.6117003318E-15  7.6117003318E-15
+   2  3.8058520880E-12  3.8058520880E-12
+   4  3.6536123150E-09  3.6536123150E-09
+   6  3.0690323840E-06  3.0690323840E-06
+   8  1.9641786222E-03  1.9641786222E-03
+  10  7.0710222695E-01  7.0710222695E-01
+  12 -1.6070561650E-03 -1.6070561650E-03
+  14  1.6740188371E-06  1.6740188371E-06
+  16 -1.0730893455E-09 -1.0730896526E-09
+  18                    4.7905805994E-13
+  20                   -1.5968606072E-16
+  22                    4.1584919391E-20
+  24                   -8.7363288488E-24
+  26                    1.5167239300E-27
+  28                   -2.2174328099E-31
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  0 ANU =  10.00000002 Q =   1.0000000E-01
+MDIM =  16 IER =     0 N0   = 11 A1 =   1.000000508909E+02
+NLEV =  15 METHOD =  1 IBIT = 35 A2 =   1.000000508909E+02
+FLOQUET EXPONENT   1.9290001E-08  1.9290001E-08
+ -18                    2.5435707059E-33
+ -16  5.6974599623E-30 -5.6975962214E-30
+ -14 -8.8880346066E-27  8.8882446270E-27
+ -12  8.5325029537E-24 -8.5327045730E-24
+ -10 -3.7542880298E-21  3.7543767420E-21
+  -8 -1.0457577300E-23  1.0457823846E-23
+  -6 -1.0445400278E-23  1.0445196824E-23
+  -4 -6.6743096113E-21  6.6744734836E-21
+  -2 -5.6066403340E-18  5.6065506880E-18
+   0 -5.3822821095E-15  5.3822848436E-15
+   2 -5.3822824482E-12  5.3822819761E-12
+   4 -5.1669879094E-09  5.1669880497E-09
+   6 -4.3402672010E-06  4.3402672010E-06
+   8 -2.7777680404E-03  2.7777680404E-03
+  10 -9.9999355934E-01  9.9999355934E-01
+  12  2.2727206201E-03 -2.2727206201E-03
+  14 -2.3674185543E-06  2.3674201351E-06
+  16                   -1.5175779330E-09
+  18                    6.7749040131E-13
+  20                   -2.2583019110E-16
+  22                    5.8809956481E-20
+  24                   -1.2355034622E-23
+  26                    2.1449715287E-27
+  28                   -3.1359235733E-31
+  30                    3.9199047633E-35
+  32                   -4.2423214438E-39
+  34                    4.0173500726E-43
+  36                   -3.3589885149E-47
+  38                    2.4992474988E-51
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  0 ANU =   8.50000000 Q =   1.0000000E+03
+MDIM =  60 IER =     0 N0   =  9 A1 =  -9.624199321901E+02
+NLEV =  38 METHOD =  3 IBIT = 14 A2 =  -9.624199321901E+02
+FLOQUET EXPONENT   5.0000000E-01  5.0000000E-01
+ -66                    1.6559106648E-09
+ -64                   -8.3978960436E-09
+ -62                    4.0288808198E-08
+ -60  1.7328579668E-07 -1.8275920082E-07
+ -58 -7.8024874637E-07  7.8261555015E-07
+ -56  3.1573385666E-06 -3.1579682666E-06
+ -54 -1.1983828942E-05  1.1984007808E-05
+ -52  4.2676851662E-05 -4.2676906064E-05
+ -50 -1.4227890356E-04  1.4227892134E-04
+ -48  4.4287408451E-04 -4.4287409077E-04
+ -46 -1.2831865960E-03  1.2831865984E-03
+ -44  3.4486073225E-03 -3.4486073235E-03
+ -42 -8.5614490356E-03  8.5614490360E-03
+ -40  1.9536057479E-02 -1.9536057479E-02
+ -38 -4.0721575761E-02  4.0721575761E-02
+ -36  7.6919914617E-02 -7.6919914617E-02
+ -34 -1.3024600564E-01  1.3024600564E-01
+ -32  1.9460001714E-01 -1.9460001714E-01
+ -30 -2.5013279666E-01  2.5013279666E-01
+ -28  2.6381083835E-01 -2.6381083835E-01
+ -26 -2.0327095901E-01  2.0327095901E-01
+ -24  6.3998125322E-02 -6.3998125322E-02
+ -22  1.0633492286E-01 -1.0633492286E-01
+ -20 -2.1549029267E-01  2.1549029267E-01
+ -18  1.8299741378E-01 -1.8299741378E-01
+ -16 -1.6673023863E-02  1.6673023863E-02
+ -14 -1.6294526930E-01  1.6294526930E-01
+ -12  2.0319157423E-01 -2.0319157423E-01
+ -10 -5.9482437477E-02  5.9482437477E-02
+  -8 -1.4057620080E-01  1.4057620080E-01
+  -6  2.0268318641E-01 -2.0268318641E-01
+  -4 -6.0621304113E-02  6.0621304113E-02
+  -2 -1.4359742404E-01  1.4359742404E-01
+   0  1.9914542143E-01 -1.9914542143E-01
+   2 -4.8113885298E-02  4.8113885299E-02
+   4 -1.5253894742E-01  1.5253894742E-01
+   6  1.9800932241E-01 -1.9800932241E-01
+   8 -4.6395065105E-02  4.6395065105E-02
+  10 -1.5000574355E-01  1.5000574355E-01
+  12  2.0730171587E-01 -2.0730171587E-01
+  14 -8.1896452881E-02  8.1896452881E-02
+  16 -1.1126420802E-01  1.1126420802E-01
+  18  2.1927102505E-01 -2.1927102505E-01
+  20 -1.7481210537E-01  1.7481210537E-01
+  22  2.2436416821E-02 -2.2436416821E-02
+  24  1.4186041459E-01 -1.4186041459E-01
+  26 -2.4411742128E-01  2.4411742128E-01
+  28  2.6451451653E-01 -2.6451451653E-01
+  30 -2.2530853783E-01  2.2530853783E-01
+  32  1.6192017849E-01 -1.6192017849E-01
+  34 -1.0155485791E-01  1.0155485791E-01
+  36  5.6693910594E-02 -5.6693910595E-02
+  38 -2.8538954070E-02  2.8538954070E-02
+  40  1.3074412316E-02 -1.3074412318E-02
+  42 -5.4894257464E-03  5.4894257494E-03
+  44  2.1239956931E-03 -2.1239956999E-03
+  46 -7.6079251562E-04  7.6079253271E-04
+  48  2.5322980513E-04 -2.5322985172E-04
+  50 -7.8580705381E-05  7.8580842705E-05
+  52  2.2798275914E-05 -2.2798711700E-05
+  54 -6.1985577659E-06  6.2000409863E-06
+  56  1.5786058349E-06 -1.5840030653E-06
+  58 -3.6002843052E-07  3.8096892161E-07
+  60                   -8.6419910371E-08
+  62                    1.8521799604E-08
+  64                   -3.7566184527E-09
+  66                    7.2211679006E-10
+  68                   -1.3174211430E-10
+  70                    2.2841382454E-11
+  72                   -3.7682685998E-12
+  74                    5.9223618358E-13
+  76                   -8.8770185777E-14
+  78                    1.2703332309E-14
+  80                   -1.7368639633E-15
+  82                    2.2357288679E-16
+** WARNING ** MAXIMUM DIFFERENCE LARGE   2.09405E-08
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 0 IF YOU WANT EVEN SOLUTION (A 10) 
+ENTER 1 IF YOU WANT ODD  SOLUTION (B 10) 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  1 ANU =  10.00000000 Q =   1.0000000E-03
+MDIM =   6 IER =     0 N0   =  5 A1 =   1.000000000051E+02
+NLEV =  12 METHOD =  2 IBIT =  5 A2 =   1.000000000051E+02
+FLOQUET EXPONENT   0.0000000E+00  0.0000000E+00
+ -22                   -4.1584932114E-32
+ -20                    1.5968613932E-26
+ -18                   -4.7905841794E-21
+ -16                    1.0730908561E-15
+ -14                   -1.6740217355E-10
+ -12  1.6070608655E-05  1.6070608659E-05
+ -10 -7.0710678073E-01 -7.0710678073E-01
+  -8 -1.9641855026E-05 -1.9641855026E-05
+  -6 -3.0690398482E-10 -3.0690398482E-10
+  -4 -3.6536188671E-15 -3.6536188671E-15
+  -2 -3.8058529863E-20 -3.8058529863E-20
+   0  0.0000000000E+00  0.0000000000E+00
+   2  3.8058529863E-20  3.8058529863E-20
+   4  3.6536188671E-15  3.6536188671E-15
+   6  3.0690398482E-10  3.0690398482E-10
+   8  1.9641855026E-05  1.9641855026E-05
+  10  7.0710678073E-01  7.0710678073E-01
+  12 -1.6070608655E-05 -1.6070608659E-05
+  14                    1.6740217355E-10
+  16                   -1.0730908561E-15
+  18                    4.7905841794E-21
+  20                   -1.5968613932E-26
+  22                    4.1584932114E-32
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 0 IF YOU WANT EVEN SOLUTION (A  9) 
+ENTER 1 IF YOU WANT ODD  SOLUTION (B  9) 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  0 ANU =   9.00000000 Q =   1.0000000E+00
+MDIM =  10 IER =     0 N0   =  5 A1 =   8.100625032663E+01
+NLEV =  16 METHOD =  2 IBIT =  4 A2 =   8.100625032663E+01
+FLOQUET EXPONENT   1.0000000E+00  1.0000000E+00
+ -32                   -6.2997150375E-28
+ -30                    5.5437098578E-25
+ -28                   -4.2131785422E-22
+ -26                    2.7301078179E-19
+ -24                   -1.4851573757E-16
+ -22                    6.6533849148E-14
+ -20 -2.3951383689E-11 -2.3951621319E-11
+ -18  6.7062377290E-09  6.7062377301E-09
+ -16 -1.3948315801E-06 -1.3948315801E-06
+ -14  2.0084032314E-04  2.0084032314E-04
+ -12 -1.7671298287E-02 -1.7671298287E-02
+ -10  7.0654063977E-01  7.0654063977E-01
+  -8  2.2087408065E-02  2.2087408065E-02
+  -6  3.9447181696E-04  3.9447181696E-04
+  -4  5.4792628062E-06  5.4792628062E-06
+  -2  6.9352270024E-08  6.9352270024E-08
+   0  6.9352270024E-08  6.9352270024E-08
+   2  5.4792628062E-06  5.4792628062E-06
+   4  3.9447181696E-04  3.9447181696E-04
+   6  2.2087408065E-02  2.2087408065E-02
+   8  7.0654063977E-01  7.0654063977E-01
+  10 -1.7671298287E-02 -1.7671298287E-02
+  12  2.0084032314E-04  2.0084032314E-04
+  14 -1.3948315801E-06 -1.3948315801E-06
+  16  6.7062377290E-09  6.7062377301E-09
+  18 -2.3951383689E-11 -2.3951621319E-11
+  20                    6.6533849148E-14
+  22                   -1.4851573757E-16
+  24                    2.7301078179E-19
+  26                   -4.2131785422E-22
+  28                    5.5437098578E-25
+  30                   -6.2997150375E-28
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 0 IF YOU WANT EVEN SOLUTION (A -9) 
+ENTER 1 IF YOU WANT ODD  SOLUTION (B -9) 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  1 ANU =  -9.00000000 Q =   1.0000000E+00
+MDIM =   9 IER =     0 N0   =  5 A1 =   8.100625032663E+01
+NLEV =  15 METHOD =  2 IBIT =  4 A2 =   8.100625032663E+01
+FLOQUET EXPONENT  -1.0000000E+00 -1.0000000E+00
+ -28                   -5.5437015686E-25
+ -26                    4.2131785422E-22
+ -24                   -2.7301078179E-19
+ -22                    1.4851573757E-16
+ -20                   -6.6533849148E-14
+ -18                    2.3951621319E-11
+ -16 -6.7061225708E-09 -6.7062377301E-09
+ -14  1.3948315793E-06  1.3948315801E-06
+ -12 -2.0084032314E-04 -2.0084032314E-04
+ -10  1.7671298287E-02  1.7671298287E-02
+  -8 -7.0654063977E-01 -7.0654063977E-01
+  -6 -2.2087408065E-02 -2.2087408065E-02
+  -4 -3.9447181654E-04 -3.9447181654E-04
+  -2 -5.4792390168E-06 -5.4792390168E-06
+   0 -6.7639706747E-08 -6.7639706747E-08
+   2  6.7639706747E-08  6.7639706747E-08
+   4  5.4792390168E-06  5.4792390168E-06
+   6  3.9447181654E-04  3.9447181654E-04
+   8  2.2087408065E-02  2.2087408065E-02
+  10  7.0654063977E-01  7.0654063977E-01
+  12 -1.7671298287E-02 -1.7671298287E-02
+  14  2.0084032314E-04  2.0084032314E-04
+  16 -1.3948315793E-06 -1.3948315801E-06
+  18  6.7061225708E-09  6.7062377301E-09
+  20                   -2.3951621319E-11
+  22                    6.6533849148E-14
+  24                   -1.4851573757E-16
+  26                    2.7301078179E-19
+  28                   -4.2131785422E-22
+  30                    5.5437015686E-25
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 0 IF YOU WANT EVEN SOLUTION (A  9) 
+ENTER 1 IF YOU WANT ODD  SOLUTION (B  9) 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  1 ANU =   9.00000000 Q =  -1.0000000E+00
+MDIM =  10 IER =     0 N0   =  5 A1 =   8.100625032663E+01
+NLEV =  16 METHOD =  2 IBIT =  4 A2 =   8.100625032663E+01
+FLOQUET EXPONENT   1.0000000E+00  1.0000000E+00
+ -32                   -6.2997150375E-28
+ -30                   -5.5437098578E-25
+ -28                   -4.2131785422E-22
+ -26                   -2.7301078179E-19
+ -24                   -1.4851573757E-16
+ -22                   -6.6533849148E-14
+ -20 -2.3951383689E-11 -2.3951621319E-11
+ -18 -6.7062377290E-09 -6.7062377301E-09
+ -16 -1.3948315801E-06 -1.3948315801E-06
+ -14 -2.0084032314E-04 -2.0084032314E-04
+ -12 -1.7671298287E-02 -1.7671298287E-02
+ -10 -7.0654063977E-01 -7.0654063977E-01
+  -8  2.2087408065E-02  2.2087408065E-02
+  -6 -3.9447181696E-04 -3.9447181696E-04
+  -4  5.4792628062E-06  5.4792628062E-06
+  -2 -6.9352270024E-08 -6.9352270024E-08
+   0  6.9352270024E-08  6.9352270024E-08
+   2 -5.4792628062E-06 -5.4792628062E-06
+   4  3.9447181696E-04  3.9447181696E-04
+   6 -2.2087408065E-02 -2.2087408065E-02
+   8  7.0654063977E-01  7.0654063977E-01
+  10  1.7671298287E-02  1.7671298287E-02
+  12  2.0084032314E-04  2.0084032314E-04
+  14  1.3948315801E-06  1.3948315801E-06
+  16  6.7062377290E-09  6.7062377301E-09
+  18  2.3951383689E-11  2.3951621319E-11
+  20                    6.6533849148E-14
+  22                    1.4851573757E-16
+  24                    2.7301078179E-19
+  26                    4.2131785422E-22
+  28                    5.5437098578E-25
+  30                    6.2997150375E-28
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 0 IF YOU WANT EVEN SOLUTION (A 10) 
+ENTER 1 IF YOU WANT ODD  SOLUTION (B 10) 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  0 ANU =  10.00000000 Q =  -1.0000000E+00
+MDIM =  11 IER =     0 N0   =  6 A1 =   1.000050506752E+02
+NLEV =  17 METHOD =  2 IBIT =  7 A2 =   1.000050506752E+02
+FLOQUET EXPONENT   0.0000000E+00  0.0000000E+00
+ -32                   -2.9998256767E-28
+ -30                   -2.7718237741E-25
+ -28                   -2.2174420199E-22
+ -26                   -1.5167163702E-19
+ -24                   -8.7361875135E-17
+ -22                   -4.1583659656E-14
+ -20 -1.5967689304E-11 -1.5967827920E-11
+ -18 -4.7902261436E-09 -4.7902261442E-09
+ -16 -1.0729704946E-06 -1.0729704946E-06
+ -14 -1.6737318770E-04 -1.6737318770E-04
+ -12 -1.6065907702E-02 -1.6065907702E-02
+ -10 -7.0665142200E-01 -7.0665142200E-01
+  -8  1.9634974485E-02  1.9634974485E-02
+  -6 -3.0682933990E-04 -3.0682933990E-04
+  -4  3.6529636618E-06  3.6529636618E-06
+  -2 -3.8057630826E-08 -3.8057630826E-08
+   0  7.6111417511E-10  7.6111417511E-10
+   2 -3.8057630826E-08 -3.8057630826E-08
+   4  3.6529636618E-06  3.6529636618E-06
+   6 -3.0682933990E-04 -3.0682933990E-04
+   8  1.9634974485E-02  1.9634974485E-02
+  10 -7.0665142200E-01 -7.0665142200E-01
+  12 -1.6065907702E-02 -1.6065907702E-02
+  14 -1.6737318770E-04 -1.6737318770E-04
+  16 -1.0729704946E-06 -1.0729704946E-06
+  18 -4.7902261436E-09 -4.7902261442E-09
+  20 -1.5967689304E-11 -1.5967827920E-11
+  22                   -4.1583659656E-14
+  24                   -8.7361875135E-17
+  26                   -1.5167163702E-19
+  28                   -2.2174420199E-22
+  30                   -2.7718237741E-25
+  32                   -2.9998256767E-28
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  0 ANU =   8.40000000 Q =   5.0000000E+03
+MDIM =   0 IER =     0 N0   =  0 A1 =  -7.632657385853E+03
+NLEV =  55 METHOD =  3 IBIT =  0 A2 =  -7.632657385855E+03
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  0 ANU =   1.10000000 Q =   3.0000000E-01
+MDIM =  10 IER =     0 N0   =  2 A1 =   1.359229179886E+00
+NLEV =   7 METHOD =  1 IBIT =  0 A2 =   1.359229179886E+00
+IA0B1  0 ANU =   1.10000000 Q =   4.0000000E-01
+MDIM =  10 IER =     0 N0   =  2 A1 =   1.436691385835E+00
+NLEV =   7 METHOD =  2 IBIT =  0 A2 =   1.436691385835E+00
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  0 ANU =   2.10000000 Q =   3.0000000E+00
+MDIM =  15 IER =     0 N0   =  3 A1 =   6.098747301730E+00
+NLEV =  10 METHOD =  2 IBIT =  0 A2 =   6.098747301730E+00
+IA0B1  0 ANU =   2.10000000 Q =   4.0000000E+00
+MDIM =  16 IER =     0 N0   =  3 A1 =   6.867218812119E+00
+NLEV =  11 METHOD =  3 IBIT =  0 A2 =   6.867218812119E+00
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 0 IF YOU WANT EVEN SOLUTION (A  3) 
+ENTER 1 IF YOU WANT ODD  SOLUTION (B  3) 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  0 ANU =   3.00000000 Q =   1.0000000E+00
+MDIM =   7 IER =     0 N0   =  2 A1 =   9.078368847203E+00
+NLEV =  10 METHOD =  2 IBIT =  0 A2 =   9.078368847203E+00
+IA0B1  0 ANU =   3.00000000 Q =   2.0000000E+00
+MDIM =   8 IER =     0 N0   =  2 A1 =   9.370322483621E+00
+NLEV =  11 METHOD =  2 IBIT =  0 A2 =   9.370322483621E+00
+IA0B1  0 ANU =   3.00000000 Q =   3.0000000E+00
+MDIM =   8 IER =     0 N0   =  2 A1 =   9.915506290452E+00
+NLEV =  11 METHOD =  2 IBIT =  0 A2 =   9.915506290452E+00
+IA0B1  0 ANU =   3.00000000 Q =   4.0000000E+00
+MDIM =   9 IER =     0 N0   =  2 A1 =   1.067102710352E+01
+NLEV =  12 METHOD =  2 IBIT =  0 A2 =   1.067102710352E+01
+IA0B1  0 ANU =   3.00000000 Q =   5.0000000E+00
+MDIM =   9 IER =     0 N0   =  2 A1 =   1.154883203634E+01
+NLEV =  12 METHOD =  2 IBIT =  0 A2 =   1.154883203634E+01
+IA0B1  0 ANU =   3.00000000 Q =   6.0000000E+00
+MDIM =   9 IER =     0 N0   =  2 A1 =   1.246560068334E+01
+NLEV =  12 METHOD =  2 IBIT =  0 A2 =   1.246560068334E+01
+IA0B1  0 ANU =   3.00000000 Q =   7.0000000E+00
+MDIM =  10 IER =     0 N0   =  2 A1 =   1.335842131628E+01
+NLEV =  13 METHOD =  2 IBIT =  0 A2 =   1.335842131628E+01
+IA0B1  0 ANU =   3.00000000 Q =   8.0000000E+00
+MDIM =  10 IER =     0 N0   =  2 A1 =   1.418188036232E+01
+NLEV =  13 METHOD =  3 IBIT =  0 A2 =   1.418188036232E+01
+IA0B1  0 ANU =   3.00000000 Q =   9.0000000E+00
+MDIM =  10 IER =     0 N0   =  2 A1 =   1.490367966818E+01
+NLEV =  13 METHOD =  3 IBIT =  0 A2 =   1.490367966818E+01
+IA0B1  0 ANU =   3.00000000 Q =   1.0000000E+01
+MDIM =  10 IER =     0 N0   =  2 A1 =   1.550278436973E+01
+NLEV =  13 METHOD =  3 IBIT =  0 A2 =   1.550278436973E+01
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  0 ANU =   2.90000000 Q =   1.0000000E+00
+MDIM =  13 IER =     0 N0   =  3 A1 =   8.478030100439E+00
+NLEV =   9 METHOD =  1 IBIT =  0 A2 =   8.478030100439E+00
+IA0B1  0 ANU =   2.90000000 Q =   2.0000000E+00
+MDIM =  15 IER =     0 N0   =  3 A1 =   8.676299220043E+00
+NLEV =  10 METHOD =  1 IBIT =  0 A2 =   8.676299220043E+00
+IA0B1  0 ANU =   2.90000000 Q =   3.0000000E+00
+MDIM =  16 IER =     0 N0   =  3 A1 =   8.930155054095E+00
+NLEV =  10 METHOD =  2 IBIT =  0 A2 =   8.930155054095E+00
+IA0B1  0 ANU =   2.90000000 Q =   4.0000000E+00
+MDIM =  17 IER =     0 N0   =  3 A1 =   9.104414801012E+00
+NLEV =  11 METHOD =  2 IBIT =  0 A2 =   9.104414801012E+00
+IA0B1  0 ANU =   2.90000000 Q =   5.0000000E+00
+MDIM =  17 IER =     0 N0   =  3 A1 =   9.152351899940E+00
+NLEV =  11 METHOD =  2 IBIT =  0 A2 =   9.152351899940E+00
+IA0B1  0 ANU =   2.90000000 Q =   6.0000000E+00
+MDIM =  18 IER =     0 N0   =  3 A1 =   9.090548689080E+00
+NLEV =  11 METHOD =  3 IBIT =  0 A2 =   9.090548689080E+00
+IA0B1  0 ANU =   2.90000000 Q =   7.0000000E+00
+MDIM =  18 IER =     0 N0   =  3 A1 =   8.934314159854E+00
+NLEV =  12 METHOD =  3 IBIT =  0 A2 =   8.934314159854E+00
+IA0B1  0 ANU =   2.90000000 Q =   8.0000000E+00
+MDIM =  19 IER =     0 N0   =  3 A1 =   8.692639673515E+00
+NLEV =  12 METHOD =  3 IBIT =  0 A2 =   8.692639673515E+00
+IA0B1  0 ANU =   2.90000000 Q =   9.0000000E+00
+MDIM =  19 IER =     0 N0   =  3 A1 =   8.372193961241E+00
+NLEV =  12 METHOD =  3 IBIT =  0 A2 =   8.372193961241E+00
+IA0B1  0 ANU =   2.90000000 Q =   1.0000000E+01
+MDIM =  20 IER =     0 N0   =  3 A1 =   7.979017581497E+00
+NLEV =  12 METHOD =  3 IBIT =  0 A2 =   7.979017581497E+00
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 0 IF YOU WANT EVEN SOLUTION (A  4) 
+ENTER 1 IF YOU WANT ODD  SOLUTION (B  4) 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  0 ANU =   4.00000000 Q =   1.0000000E+00
+MDIM =   8 IER =     0 N0   =  3 A1 =   1.603383234036E+01
+NLEV =  11 METHOD =  2 IBIT =  0 A2 =   1.603383234036E+01
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 0 IF YOU WANT EVEN SOLUTION (A  4) 
+ENTER 1 IF YOU WANT ODD  SOLUTION (B  4) 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  1 ANU =   4.00000000 Q =   1.0000000E+00
+MDIM =   7 IER =     0 N0   =  2 A1 =   1.603297008141E+01
+NLEV =  10 METHOD =  2 IBIT =  0 A2 =   1.603297008141E+01
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 0 IF YOU WANT EVEN SOLUTION (A  5) 
+ENTER 1 IF YOU WANT ODD  SOLUTION (B  5) 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  0 ANU =   5.00000000 Q =   1.0000000E+00
+MDIM =   8 IER =     0 N0   =  3 A1 =   2.502085434545E+01
+NLEV =  12 METHOD =  2 IBIT =  0 A2 =   2.502085434545E+01
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 0 IF YOU WANT EVEN SOLUTION (A  5) 
+ENTER 1 IF YOU WANT ODD  SOLUTION (B  5) 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  1 ANU =   5.00000000 Q =   1.0000000E+00
+MDIM =   8 IER =     0 N0   =  3 A1 =   2.502084082329E+01
+NLEV =  11 METHOD =  2 IBIT =  0 A2 =   2.502084082329E+01
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 0 IF YOU WANT EVEN SOLUTION (A  6) 
+ENTER 1 IF YOU WANT ODD  SOLUTION (B  6) 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  0 ANU =   6.00000000 Q =   1.0000000E+00
+MDIM =   9 IER =     0 N0   =  4 A1 =   3.601429004604E+01
+NLEV =  13 METHOD =  2 IBIT =  0 A2 =   3.601429004604E+01
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 0 IF YOU WANT EVEN SOLUTION (A  6) 
+ENTER 1 IF YOU WANT ODD  SOLUTION (B  6) 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  1 ANU =   6.00000000 Q =   1.0000000E+00
+MDIM =   8 IER =     0 N0   =  3 A1 =   3.601428991063E+01
+NLEV =  12 METHOD =  2 IBIT =  0 A2 =   3.601428991063E+01
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 0 IF YOU WANT EVEN SOLUTION (A  7) 
+ENTER 1 IF YOU WANT ODD  SOLUTION (B  7) 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  0 ANU =   7.00000000 Q =   1.0000000E+00
+MDIM =   9 IER =     0 N0   =  4 A1 =   4.901041825036E+01
+NLEV =  14 METHOD =  2 IBIT =  0 A2 =   4.901041825036E+01
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 0 IF YOU WANT EVEN SOLUTION (A  8) 
+ENTER 1 IF YOU WANT ODD  SOLUTION (B  8) 
+ENTER 1 FOR BOTH EIGENVALUES AND EIGENFUNCTIONS 
+ENTER 0 FOR EIGENVALUES ONLY 
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+IA0B1  1 ANU =   8.00000000 Q =   1.0000000E+00
+MDIM =   8 IER =     0 N0   =  4 A1 =   6.400793718925E+01
+NLEV =  14 METHOD =  2 IBIT =  0 A2 =   6.400793718925E+01
+ENTER NQ,QDEL,QSTART OR NQ=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER Q OR Q=0 TO CHANGE ORDER 
+METHOD  1 NLEV   7 IA0B1  0 ANU   0.00000 Q    1.0000 A  -4.5513860E-01
+FLOQUET EXPONENT    0.0000000
+ -12  3.8691973E-10
+ -10 -5.5892543E-08
+  -8  5.6143062E-06
+  -6 -3.6181499E-04
+  -4  1.3184401E-02
+  -2 -2.1658934E-01
+   0  9.5175112E-01
+   2 -2.1658934E-01
+   4  1.3184401E-02
+   6 -3.6181499E-04
+   8  5.6143062E-06
+  10 -5.5892543E-08
+  12  3.8691973E-10
+ENTER NX,XSTART,XDEL - USE NX=0 TO CHANGE Q 
+  0  0.00000  5.4422874E-01  0.0000000E+00
+  0  0.15708  5.6068466E-01  0.0000000E+00
+  0  0.31416  6.0966526E-01  0.0000000E+00
+  0  0.47124  6.8966581E-01  0.0000000E+00
+  0  0.62832  7.9714753E-01  0.0000000E+00
+  0  0.78540  9.2539355E-01  0.0000000E+00
+  0  0.94248  1.0636960E+00  0.0000000E+00
+  0  1.09956  1.1975215E+00  0.0000000E+00
+  0  1.25664  1.3101156E+00  0.0000000E+00
+  0  1.41372  1.3854901E+00  0.0000000E+00
+  0  1.57080  1.4120336E+00  0.0000000E+00
+  0  1.72788  1.3854901E+00  0.0000000E+00
+  0  1.88496  1.3101156E+00  0.0000000E+00
+  0  2.04204  1.1975215E+00  0.0000000E+00
+  0  2.19911  1.0636960E+00  0.0000000E+00
+  0  2.35619  9.2539355E-01  0.0000000E+00
+  0  2.51327  7.9714753E-01  0.0000000E+00
+  0  2.67035  6.8966581E-01  0.0000000E+00
+  0  2.82743  6.0966526E-01  0.0000000E+00
+  0  2.98451  5.6068466E-01  0.0000000E+00
+  0  3.14159  5.4422874E-01  0.0000000E+00
+  0  3.29867  5.6068466E-01  0.0000000E+00
+  0  3.45575  6.0966526E-01  0.0000000E+00
+  0  3.61283  6.8966581E-01  0.0000000E+00
+  0  3.76991  7.9714753E-01  0.0000000E+00
+  0  3.92699  9.2539355E-01  0.0000000E+00
+  0  4.08407  1.0636960E+00  0.0000000E+00
+  0  4.24115  1.1975215E+00  0.0000000E+00
+  0  4.39823  1.3101156E+00  0.0000000E+00
+  0  4.55531  1.3854901E+00  0.0000000E+00
+  0  4.71239  1.4120336E+00  0.0000000E+00
+  0  4.86947  1.3854901E+00  0.0000000E+00
+  0  5.02655  1.3101156E+00  0.0000000E+00
+  0  5.18363  1.1975215E+00  0.0000000E+00
+  0  5.34071  1.0636960E+00  0.0000000E+00
+  0  5.49779  9.2539355E-01  0.0000000E+00
+  0  5.65487  7.9714753E-01  0.0000000E+00
+  0  5.81195  6.8966581E-01  0.0000000E+00
+  0  5.96903  6.0966526E-01  0.0000000E+00
+  0  6.12611  5.6068466E-01  0.0000000E+00
+  0  6.28319  5.4422874E-01  0.0000000E+00
+ENTER Q OR Q=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER 0 IF YOU WANT EVEN SOLUTION (A  1) 
+ENTER 1 IF YOU WANT ODD  SOLUTION (B  1) 
+ENTER Q OR Q=0 TO CHANGE ORDER 
+METHOD  2 NLEV   7 IA0B1  1 ANU   1.00000 Q    1.0000 A  -1.1024882E-01
+FLOQUET EXPONENT    1.0000000
+ -14 -3.7871150E-11
+ -12  6.4043997E-09
+ -10 -7.7560057E-07
+  -8  6.2902751E-05
+  -6 -3.0883941E-03
+  -4  7.7487442E-02
+  -2 -7.0284149E-01
+   0  7.0284149E-01
+   2 -7.7487442E-02
+   4  3.0883941E-03
+   6 -6.2902751E-05
+   8  7.7560057E-07
+  10 -6.4043997E-09
+  12  3.7871150E-11
+ENTER NX,XSTART,XDEL - USE NX=0 TO CHANGE Q 
+  0  0.00000  0.0000000E+00  0.0000000E+00
+  0  0.15708  0.0000000E+00  1.5379721E-01
+  0  0.31416  0.0000000E+00  3.1507810E-01
+  0  0.47124  0.0000000E+00  4.8948579E-01
+  0  0.62832  0.0000000E+00  6.7896858E-01
+  0  0.78540  0.0000000E+00  8.8010657E-01
+  0  0.94248  0.0000000E+00  1.0831171E+00
+  0  1.09956  0.0000000E+00  1.2722235E+00
+  0  1.25664  0.0000000E+00  1.4279005E+00
+  0  1.41372  0.0000000E+00  1.5308853E+00
+  0  1.57080  0.0000000E+00  1.5669620E+00
+  0  1.72788  0.0000000E+00  1.5308853E+00
+  0  1.88496  0.0000000E+00  1.4279005E+00
+  0  2.04204  0.0000000E+00  1.2722235E+00
+  0  2.19911  0.0000000E+00  1.0831171E+00
+  0  2.35619  0.0000000E+00  8.8010657E-01
+  0  2.51327  0.0000000E+00  6.7896858E-01
+  0  2.67035  0.0000000E+00  4.8948579E-01
+  0  2.82743  0.0000000E+00  3.1507810E-01
+  0  2.98451  0.0000000E+00  1.5379721E-01
+  0  3.14159  0.0000000E+00  2.8921768E-11
+  0  3.29867  0.0000000E+00 -1.5379721E-01
+  0  3.45575  0.0000000E+00 -3.1507810E-01
+  0  3.61283  0.0000000E+00 -4.8948579E-01
+  0  3.76991  0.0000000E+00 -6.7896858E-01
+  0  3.92699  0.0000000E+00 -8.8010657E-01
+  0  4.08407  0.0000000E+00 -1.0831171E+00
+  0  4.24115  0.0000000E+00 -1.2722235E+00
+  0  4.39823  0.0000000E+00 -1.4279005E+00
+  0  4.55531  0.0000000E+00 -1.5308853E+00
+  0  4.71239  0.0000000E+00 -1.5669620E+00
+  0  4.86947  0.0000000E+00 -1.5308853E+00
+  0  5.02655  0.0000000E+00 -1.4279005E+00
+  0  5.18363  0.0000000E+00 -1.2722235E+00
+  0  5.34071  0.0000000E+00 -1.0831171E+00
+  0  5.49779  0.0000000E+00 -8.8010657E-01
+  0  5.65487  0.0000000E+00 -6.7896858E-01
+  0  5.81195  0.0000000E+00 -4.8948579E-01
+  0  5.96903  0.0000000E+00 -3.1507810E-01
+  0  6.12611  0.0000000E+00 -1.5379721E-01
+  0  6.28319  0.0000000E+00 -5.7840805E-11
+ENTER Q OR Q=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 
+ENTER Q OR Q=0 TO CHANGE ORDER 
+METHOD  1 NLEV   9 IA0B1  0 ANU   2.80000 Q    1.0000 A   7.9140384E+00
+FLOQUET EXPONENT    0.8000000
+ -14  7.0079221E-12
+ -12 -1.1655680E-09
+ -10  1.3697749E-07
+  -8 -1.0508564E-05
+  -6  4.6146180E-04
+  -4 -8.8153921E-03
+  -2  2.0042801E-02
+   0  1.3857326E-01
+   2  9.8794441E-01
+   4 -6.5427390E-02
+   6  1.7077707E-03
+   8 -2.4566315E-05
+  10  2.2596043E-07
+  12 -1.4491961E-09
+  14  6.8642486E-12
+  16 -2.5022499E-14
+  18  7.2418578E-17
+ENTER NX,XSTART,XDEL - USE NX=0 TO CHANGE Q 
+  0  0.00000  1.0744522E+00  0.0000000E+00
+  0  0.15708  9.9679721E-01  3.9486278E-01
+  0  0.31416  7.7284792E-01  7.3143290E-01
+  0  0.47124  4.3057151E-01  9.5518106E-01
+  0  0.62832  1.8385232E-02  1.0217786E+00
+  0  0.78540 -3.9604236E-01  9.0711015E-01
+  0  0.94248 -7.3340541E-01  6.1869377E-01
+  0  1.09956 -9.1849915E-01  2.0324161E-01
+  0  1.25664 -9.0144363E-01 -2.5598003E-01
+  0  1.41372 -6.7695951E-01 -6.5558800E-01
+  0  1.57080 -2.9228725E-01 -8.9956765E-01
+  0  1.72788  1.6232679E-01 -9.2828865E-01
+  0  1.88496  5.7882193E-01 -7.3694746E-01
+  0  2.04204  8.6254384E-01 -3.7545434E-01
+  0  2.19911  9.5699651E-01  6.9448891E-02
+  0  2.35619  8.5359097E-01  5.0107967E-01
+  0  2.51327  5.8571241E-01  8.3744280E-01
+  0  2.67035  2.1310167E-01  1.0258413E+00
+  0  2.82743 -1.9532163E-01  1.0460103E+00
+  0  2.98451 -5.7433136E-01  9.0535340E-01
+  0  3.14159 -8.6925009E-01  6.3154716E-01
+  0  3.29867 -1.0385204E+00  2.6645200E-01
+  0  3.45575 -1.0551726E+00 -1.3747304E-01
+  0  3.61283 -9.0978101E-01 -5.1967413E-01
+  0  3.76991 -6.1546034E-01 -8.1582967E-01
+  0  3.92699 -2.1278097E-01 -9.6665539E-01
+  0  4.08407  2.2967836E-01 -9.3161866E-01
+  0  4.24115  6.2361900E-01 -7.0430617E-01
+  0  4.39823  8.7974450E-01 -3.2276308E-01
+  0  4.55531  9.3301671E-01  1.3247501E-01
+  0  4.71239  7.6521795E-01  5.5596338E-01
+  0  4.86947  4.1430924E-01  8.4641459E-01
+  0  5.02655 -3.5109929E-02  9.3642602E-01
+  0  5.18363 -4.7712610E-01  8.1073949E-01
+  0  5.34071 -8.1504747E-01  5.0632310E-01
+  0  5.49779 -9.8509684E-01  9.6346216E-02
+  0  5.65487 -9.6608783E-01 -3.3323234E-01
+  0  5.81195 -7.7537726E-01 -7.0466502E-01
+  0  5.96903 -4.5681088E-01 -9.6104725E-01
+  0  6.12611 -6.7509543E-02 -1.0700298E+00
+  0  6.28319  3.3202399E-01 -1.0218648E+00
+ENTER Q OR Q=0 TO CHANGE ORDER 
+INPUT ANU - ORDER OF MATHIEU EQUATION OR -10 TO EXIT 

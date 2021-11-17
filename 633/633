@@ -1,0 +1,3532 @@
+C     ALGORITHM 633 COLLECTED ALGORITHMS FROM ACM.
+C     ALGORITHM APPEARED IN ACM-TRANS. MATH. SOFTWARE, VOL.11, NO. 2,
+C     JUN., 1985, P. 170-182.
+      INTEGER I, IPRINT, J, KRES, LDL, LDX, LMAX, LOCIW, LOCW,          MAN   10
+     *     N, P, P2                                                     MAN   20
+      INTEGER ITITLE(72), IWORK(50), LVAR(6,10)                         MAN   30
+      DOUBLE PRECISION PCERR, WORK(500), X(20,6), XC(20,6)              MAN   40
+      LDX = 20                                                          MAN   50
+      LOCW = 500                                                        MAN   60
+      LDL = 6                                                           MAN   70
+      LOCIW = 50                                                        MAN   80
+      READ (5,99999) (ITITLE(I),I=1,72)                                 MAN   90
+      WRITE (6,99996) (ITITLE(I),I=1,72)                                MAN  100
+      DO 60 K=1,2                                                       MAN  110
+           READ (5,99998) N, P, JOBAB, PCERR, IPRINT, KRES              MAN  120
+           IF (K.GE.2) GO TO 20                                         MAN  130
+           DO 10 I=1,N                                                  MAN  140
+                READ (5,99997) (X(I,J),J=1,P)                           MAN  150
+   10      CONTINUE                                                     MAN  160
+   20      CONTINUE                                                     MAN  170
+           DO 40 I=1,N                                                  MAN  180
+                DO 30 J=1,P                                             MAN  190
+                     XC(I,J) = X(I,J)                                   MAN  200
+   30           CONTINUE                                                MAN  210
+   40      CONTINUE                                                     MAN  220
+           LMAX = 1                                                     MAN  230
+           IF (K.EQ.1) GO TO 50                                         MAN  240
+           P2 = 2                                                       MAN  250
+           LMAX = 6                                                     MAN  260
+   50      CALL LDA(XC, LDX, N, P, JOBAB, PCERR, P2, LVAR, LDL,         MAN  270
+     *          LMAX, KRES, IPRINT, WORK, LOCW, IWORK, LOCIW)           MAN  280
+   60 CONTINUE                                                          MAN  290
+      STOP                                                              MAN  300
+99999 FORMAT (72A1)                                                     MAN  310
+99998 FORMAT (3I3, F3.0, 10I3)                                          MAN  320
+99997 FORMAT (F5.1, F7.0, F5.0, F5.0, F7.0, F5.0, F6.0)                 MAN  330
+99996 FORMAT (1H1, 72A1)                                                MAN  340
+      END                                                               MAN  350
+C                                                                       LDA   10
+C --------------------------------------------------------------        LDA   20
+C                                                                       LDA   30
+      SUBROUTINE LDA(X, LDX, N, P, JOBAB, PCERR, P2, LVAR, LDL,         LDA   40
+     *     LMAX, KRES, IPRINT, WORK, LOCW, IWORK, LOCIW)
+C ***
+C
+C     LDA PERFORMS A LINEAR DEPENDENCY ANALYSIS, WHICH ATTEMPTS TO
+C        IDENTIFY THE NUMBER OF LINEAR DEPENDENCIES AND THE BEST SUBSETS
+C        OF ESTIMATED AND PREDICTOR VARIABLES.
+C
+C     DESCRIPTION OF ARGUMENTS:
+C
+C        X       REAL(LDX,P).        LDX .GE. MAX(N,P).
+C                MATRIX CONTAINING THE N OBSERVATIONS IN ROWS WITH THE
+C                P VARIABLES IN COLUMNS. X IS DESTROYED BY LDA.
+C
+C        LDX     INTEGER.
+C                LDX IS THE LEADING DIMENSION OF THE ARRAY X. LDX MUST
+C                BE GREATER THAN OR EQUAL TO THE MAXIMUM OF N AND P.
+C
+C        N       INTEGER.            N .GT. 1
+C                N IS THE NUMBER OF ROWS (OBSERVATIONS) IN THE MATRIX X.
+C
+C        P       INTEGER.            P .GT. 1
+C                P IS THE NUMBER OF COLUMNS (VARIABLES) IN THE MATRIX X.
+C
+C        JOBAB   INTEGER.
+C                JOBAB CONTROLS THE TYPE OF COMPUTATIONS PERFORMED.
+C                IT HAS THE DECIMAL EXPANSION  AB  WITH THE FOLLOWING
+C                MEANING:
+C
+C                   A  =  1    DETERMINE NUMBER OF DEPENDENCIES FROM
+C                              PCERR.
+C                      =  2    NUMBER OF DEPENDENCIES IS SPECIFIED BY
+C                              INPUT PARAMETER P2.
+C                      =  3    NUMBER OF DEPENDENCIES IS SPECIFIED BY
+C                              P2 AND SPECIFIED SETS OF ESTIMATED
+C                              VARAIABLES GIVEN IN LVAR.
+C
+C                   B  =  0    COMPUTE ONLY BENCHMARK SOLUTION (USUALLY
+C                              CLOSE TO OPTIMAL SOLUTION)
+C                      =  1    TRY ALL POSSIBLE SUBSETS OF VARIABLES
+C                              TO FIND SETS WITH SMALLEST "REDUCED
+C                              SPACED" RESIDUALS.
+C                FOR EXAMPLE: IF JOBAB = 10, LDA WILL USE PCERR TO
+C                   DETERMINE THE NUMBER OF DEPENDENCIES AND ONLY
+C                   COMPUTE THE BENCHMARK SOLUTION.
+C
+C        PCERR   REAL.     PCERR .GE. 0  AND  PCERR .LE. 100.
+C                WHEN A = 1 IN JOBAB, PCERR IS THE MAXIMUM PERCENTAGE
+C                   OF UNEXPLAINED ERROR VARIATION WHICH IS ACCEPTABLE,
+C                   ASSUMING A DIAGONAL STRUCTURE IN THE ERROR MATRIX.
+C                IF A = 2 OR 3 IN JOBAB, PCERR IS NOT REFERENCED.
+C
+C        P2      INTEGER.      P2 .GT. 0  AND  P2 .LT. P.
+C                IF A = 2 OR 3 IN JOBAB, P2 IS THE NUMBER OF DEPENDENT
+C                   VARIABLES FOR THE ANALYSIS.
+C                IF A = 1 IN JOBAB, P2 MUST APPEAR AS AN ARGUMENT BUT
+C                   MAY BE UNSPECIFIED. THE COMPUTED VALUE OF P2 IS
+C                   RETURNED.
+C
+C        LVAR    INTEGER(LDL,LMAX).      LDL .GE. P2.
+C                IF A = 1 OR 2 IN JOBAB, LVAR MUST APPEAR AS AN ARGUMENT
+C                   BUT MAY BE UNSPECIFIED.
+C                IF A = 3 IN JOBAB, LVAR CONTAINS LMAX SETS OF ESTIMATED
+C                   VARIABLES TO ANALYZE. EACH SET CONTAINS P2
+C                   VARIABLES.
+C
+C        LDL     INTEGER.
+C                LDL IS THE LEADING DIMENSION OF THE ARRAY LVAR. LDL
+C                MUST BE GREATER THAN OR EQUAL TO THE INPUT VALUE OF P2
+C                (A=2,3) OR ITS EXPECTED COMPUTED VALUE (A=1).
+C
+C        LMAX    INTEGER.
+C                FOR A = 1 OR 2 IN JOBAB:
+C                   IF B = 1 IN JOBAB, LMAX IS THE MAXIMUM NUMBER OF
+C                      COMPETING DEPENDENCIES TO OUTPUT FOR USER
+C                      INSPECTION.
+C                   IF B = 0 IN JOBAB, LMAX MUST BE SET TO 1.
+C                FOR A = 3 IN JOBAB:
+C                   LMAX IS THE NUMBER OF SETS OF ESTIMATED VARIABLES
+C                   IN LVAR TO ANALYZE.
+C
+C        KRES    INTEGER.
+C                IF B = 1 IN JOBAB, A SET OF ESTIMATED VARIABLES WILL
+C                   NOT BE ANALYZED FURTHER IF THE "REDUCED SPACE"
+C                   RESIDUAL IS 10**KRES TIMES LARGER THAN THE SMALLEST
+C                   CURRENT "REDUCED SPACE" RESIDUAL COMPUTED (BENCHMARK
+C                   SET EVALUATED FIRST). IF KRES IS LESS THAN ZERO, THE
+C                   DEFAULT VALUE OF 2 IS USED.
+C                IF B = 0 IN JOBAB, KRES IS NOT REFERENCED.
+C
+C        IPRINT  INTEGER.     IPRINT .GE. 1  AND  IPRINT .LE. 4.
+C                IPRINT CONTROLS THE AMOUNT OF OUTPUT. FOR MOST ANALYSIS
+C                IPRINT = 1 WILL PROBABLY BE SATISFACTORY. AS IPRINT
+C                INCREASES, THE AMOUNT OF OUTPUT INCREASES.
+C
+C        WORK    REAL(LOCW).
+C                SCRATCH STORAGE USED BY LDA. USER NEED NOT SPECIFY
+C                ANY ELEMENTS IN WORK.
+C
+C        LOCW    INTEGER.
+C                THE NUMBER OF ELEMENTS IN WORK. LOCW MUST BE LARGER
+C                THAN    N*P + 3*P**2 + 4*P + N + 5*LMAX.
+C
+C        IWORK   INTEGER(LOCIW).
+C                SCRATCH STORAGE USED BY LDA. USER NEED NOT SPECIFY
+C                ANY ELEMENTS IN IWORK.
+C
+C        LOCIW   INTEGER.
+C                THE NUMBER OF ELEMENTS IN IWORK. LOCIW MUST BE LARGER
+C                THAN    4*P.
+C
+C     THIS VERSION OF LDA IS DATED 10/1/84.
+C
+C     REFERENCES:
+C
+C        V. E. KANE, R. C. WARD, AND G. J. DAVIS, "ASSESSMENT OF LINEAR
+C           DEPENDENCIES IN MULTIVARIATE DATA," SIAM J. SCI. STAT.
+C           COMPUT., TO APPEAR
+C
+C        R. C. WARD, G. J. DAVIS, AND V. E. KANE, "AN ALGORITHM FOR
+C           LINEAR DEPENDENCY ANALYSIS OF MULTIVARIATE DATA,"
+C           ACM TOMS, SUBMITTED.
+C
+C     THE LDA SUPPLIED CODE CONSISTS OF THE FOLLOWING SUBROUTINES:
+C
+C        BETA, CHKEV, DEPEND, LDA, PICVAR, PRINTM, RESFLY, SCPROD.
+C
+C     THE LDA SUPPLIED CODE CALLS THE FOLLOWING ADDITIONAL SOFTWARE:
+C
+C        LINPACK:   DPODI, DPOFA, DPOSL, DSVDC
+C        EISPACK:   RS
+C        BLAS:      DAXPY, DCOPY, DDOT, DNRM2, DSCAL, DROT, DROTG, DSWAP
+C        FORTRAN:   DABS,         DLOG, DMAX1, DSIGN, DSQRT, IFIX, MIN0,
+C                   SNGL
+C
+C ***
+      INTEGER I, I1, I10, I2, I3, I4, I5, I6, I7, I8, I9, ID,
+     *     IERR, IPRINT, J, J1, J2, J3, J4, JOB, JOBAB, KALL,
+     *     KRES, LDL, LDX, LMAX, LOCIW, LOCW, MAX0, N, P, P2
+      INTEGER IWORK(LOCIW), LVAR(LDL,LMAX), IDUM(1,1)
+      DOUBLE PRECISION PCERR, WORK(LOCW), X(LDX,P), DUM(1,1)
+      IERR = 0
+      ID = 1
+      CALL PRINTM(1, DUM, ID, ID, ID, IDUM, ID, ID, ID)
+      WRITE (6,99998)
+      WRITE (6,99997) N, P, LDX, JOBAB, IPRINT
+      IF (LDX.GE.MAX0(N,P)) GO TO 10
+      WRITE (6,99996)
+      IERR = 1
+   10 IF (MIN0(N,P).GE.2) GO TO 20
+      WRITE (6,99995)
+      IERR = 1
+   20 IF (IPRINT.GE.1 .AND. IPRINT.LE.4) GO TO 30
+      WRITE (6,99994)
+      IERR = 1
+   30 JOB = JOBAB/10
+      KALL = JOBAB - JOB*10
+      IF (JOB.EQ.3) KALL = 1
+      IF (JOB.GE.1 .AND. JOB.LE.3) GO TO 40
+      WRITE (6,99993)
+      GO TO 150
+   40 IF (KALL.EQ.0 .OR. KALL.EQ.1) GO TO 50
+      WRITE (6,99992)
+      IERR = 1
+   50 IF (JOB.NE.1) GO TO 60
+      WRITE (6,99991) PCERR
+      IF (PCERR.GE.0.D0.AND.PCERR.LT.100.D0) GO TO 60
+      WRITE (6,99990)
+      IERR = 1
+   60 IF (JOB.NE.2) GO TO 70
+      WRITE (6,99989) P2
+      IF (P2.GT.0 .AND. P2.LT.P) GO TO 70
+      WRITE (6,99988)
+      IERR = 1
+   70 IF (JOB.NE.3) GO TO 120
+      WRITE (6,99987) P2, LMAX
+      DO 80 I=1,P2
+           WRITE (6,99986) (LVAR(I,J),J=1,LMAX)
+   80 CONTINUE
+      IF (P2.GT.0 .AND. P2.LT.P) GO TO 90
+      WRITE (6,99988)
+      IERR = 1
+   90 DO 110 I=1,P2
+           DO 100 J=1,LMAX
+                K = LVAR(I,J)
+                IF (K.GE.1 .AND. K.LE.P) GO TO 100
+                WRITE (6,99999) I, J
+                IERR = 1
+  100      CONTINUE
+  110 CONTINUE
+      GO TO 130
+  120 IF (KALL.EQ.1) WRITE (6,99985) KRES, LMAX
+      IF (KALL.NE.0) GO TO 130
+      IF (LMAX.EQ.1) GO TO 130
+      WRITE (6,99984)
+      IERR = 1
+  130 IF (KALL.EQ.1 .AND. KRES.LT.0) KRES = 2
+      I1 = 1 + N*P
+      I2 = I1 + P
+      I3 = I2 + P*P
+      I4 = I3 + P*P
+      I5 = I4 + P
+      I6 = I5 + P*P
+      I7 = I6 + N
+      I8 = I7 + P
+      I9 = I8 + LMAX*5
+      I10 = I9 + P - 1
+      J1 = P + 1
+      J2 = J1 + P
+      J3 = J2 + P
+      J4 = J3 + P - 1
+      WRITE (6,99983) LOCW, I10
+      WRITE (6,99982) LOCIW, J4
+      IF (I10.LE.LOCW .AND. J4.LE.LOCIW) GO TO 140
+      WRITE (6,99981)
+      IERR = 1
+  140 IF (IERR.NE.0) GO TO 150
+      WRITE (6,99980)
+      CALL DEPEND(X, LDX, N, P, JOB, KALL, PCERR, P2, LVAR,
+     *     LDL, LMAX, KRES, WORK(1), WORK(I1), WORK(I2),
+     *     WORK(I3), WORK(I4), WORK(I5), WORK(I6), WORK(I7),
+     *     WORK(I8), WORK(I9), IWORK(1), IWORK(J1), IWORK(J2),
+     *     IWORK(J3), IPRINT)
+  150 RETURN
+99999 FORMAT (/6H LVAR(, I3, 1H,, I3, 22H) LESS THAN 1 OR GREAT,
+     *     9HER THAN P//36H **** PROGRAM ABORTING AFTER CHECKIN,
+     *     22HG OTHER ARGUMENTS ****)
+99998 FORMAT (1X, 16HINPUT PARAMETERS/)
+99997 FORMAT (4H N =, I4/4H P =, I3/6H LDX =, I4/8H JOBAB =,
+     *     I3/9H IPRINT =, I3)
+99996 FORMAT (/45H LDX NOT GREATER THAN OR EQUAL TO MAXIMUM OF ,
+     *     7HN AND P//38H **** PROGRAM ABORTING AFTER CHECKING ,
+     *     20HOTHER ARGUMENTS ****)
+99995 FORMAT (/26H N OR P NOT GREATER THAN 1//14H **** PROGRAM ,
+     *     44HABORTING AFTER CHECKING OTHER ARGUMENTS ****)
+99994 FORMAT (/27H IPRINT NOT BETWEEN 1 AND 4//13H **** PROGRAM,
+     *     45H ABORTING AFTER CHECKING OTHER ARGUMENTS ****)
+99993 FORMAT (/34H A IN JOBAB IS NOT BETWEEN 1 AND 3//7H **** P,
+     *     20HROGRAM ABORTING ****)
+99992 FORMAT (/25H B IN JOBAB IS NOT 0 OR 1//15H **** PROGRAM A,
+     *     43HBORTING AFTER CHECKING OTHER ARGUMENTS ****)
+99991 FORMAT (8H PCERR =, F7.2)
+99990 FORMAT (/30H PCERR NOT BETWEEN 0. AND 100.//10H **** PROG,
+     *     48HRAM ABORTING AFTER CHECKING OTHER ARGUMENTS ****)
+99989 FORMAT (5H P2 =, I3)
+99988 FORMAT (/23H P2 NOT BETWEEN 0 AND P//17H **** PROGRAM ABO,
+     *     41HRTING AFTER CHECKING OTHER ARGUMENTS ****)
+99987 FORMAT (5H P2 =, I3/7H LMAX =, I3/16H LVAR(P2,LMAX) =)
+99986 FORMAT (1X, 40I3)
+99985 FORMAT (7H KRES =, I3/7H LMAX =, I3)
+99984 FORMAT (/43H B IN JOBAB IS ZERO, LMAX MUST BE SET TO 1.//
+     *     49H **** PROGRAM ABORTING AFTER CHECKING OTHER ARGUM,
+     *     9HENTS ****)
+99983 FORMAT (7H LOCW =, I7, 10X, 26H(ACTUAL WORK SPACE NEEDED ,
+     *     1H=, I7, 1H))
+99982 FORMAT (8H LOCIW =, I6, 10X, 25H(ACTUAL IWORK SPACE NEEDE,
+     *     3HD =, I6, 1H))
+99981 FORMAT (/43H USER DID NOT ALLOCATE ENOUGH WORKING SPACE//
+     *     27H **** PROGRAM ABORTING ****)
+99980 FORMAT (////)
+      END
+C                                                                       DEP   10
+C --------------------------------------------------------------        DEP   20
+C                                                                       DEP   30
+      SUBROUTINE DEPEND(X, LDX, N, P, JOB, KALL, PCERR, P2,             DEP   40
+     *     LVAR, LDL, LMAX, KRES, XSAVE, W, V, CORR, XMU, R,
+     *     WK, WK2, OUTPUT, COVD, IVAR, INT, DVAR, PVAR, IPRINT)
+C ***
+C     SUBROUTINE DEPEND DRIVES THE COMPUTATIONS IN THE LINEAR
+C        DEPENDENCY ANALYSIS CALLING ON VARIOUS SUBROUTINES TO
+C        COMPUTE NEEDED QUANTITIES.
+C ***
+      INTEGER I, ID, IE, IERR, IFIX, II, INFO, IOPT, IP,
+     *     IPRINT, ISC, IT1, IT2, IT3, J, JE, JOB, JP, K, KALL,
+     *     KE, KP1, KRES, LAST, LDL, LDX, LIST, LKNT, LMAX,
+     *     LOC, LRES, MATZ, N, NO, P, P1, P12, P2, P2PJ
+      INTEGER DVAR(P), INT(P), IVAR(P), LVAR(LDL,LMAX),
+     *     PVAR(P), IDUM(1,1)
+      DOUBLE PRECISION BOUND, CRES, ENU2, PCERR, PROD, PSIK,
+     *     BIG, PSIMIN, RLKDR, RN, RNM1, RVAL, XLAMAX, DUMS,
+     *     TEMP
+      DOUBLE PRECISION CORR(P,P), COVD(P), DET(2),
+     *     OUTPUT(LMAX,5), R(P,P), V(P,P), W(P), WK(N), WK2(P),
+     *     X(LDX,P), XMU(P), XSAVE(N,P), DUM(1,1)
+      DOUBLE PRECISION         DLOG, DSIGN, DSQRT
+      REAL SNGL
+C ***
+C     PROLOG.
+C ***
+      ID = 1
+      IF (IPRINT.EQ.4) CALL PRINTM(4, X, LDX, N, P, IDUM, ID,
+     *     ID, ID)
+      RN = N
+      RNM1 = N-1
+      MATZ = 0
+      BIG = 1.D35
+C ***
+C     COMPUTE MEANS.
+C ***
+      DO 20 J=1,P
+           XMU(J) = 0.D0
+           DO 10 I=1,N
+                XMU(J) = XMU(J) + X(I,J)
+   10      CONTINUE
+           XMU(J) = XMU(J)/RN
+   20 CONTINUE
+      IF (IPRINT.GE.2) CALL PRINTM(2, XMU, LDX, P, 1, IDUM, ID,
+     *     ID, ID)
+C ***
+C     COMPUTE COVARIANCE MATRIX.
+C ***
+      DO 50 I=1,P
+           DO 40 J=1,P
+                CORR(I,J) = 0.D0
+                DO 30 K=1,N
+                     CORR(I,J) = CORR(I,J) + X(K,I)*X(K,J)
+   30           CONTINUE
+                CORR(I,J) = (CORR(I,J)-RN*XMU(I)*XMU(J))/RNM1
+   40      CONTINUE
+   50 CONTINUE
+      IF (IPRINT.GE.3) CALL PRINTM(3, CORR, P, P, P, IDUM, ID,
+     *     ID, ID)
+C ***
+C     CHECK FOR CONSTANT VARIABLES
+C ***
+      K = 0
+      DO 60 I=1,P
+           IF (CORR(I,I).NE.0.D0) GO TO 60
+           IDUM(1,1) = I
+           CALL PRINTM(36, DUM, ID, ID, ID, IDUM, 1, 1, 1)
+           K = 1
+   60 CONTINUE
+      IF (K.EQ.1) GO TO 600
+C ***
+C     COMPUTE CENTERED AND SCALED X, AND SAVE.
+C ***
+      DO 80 I=1,N
+           DO 70 J=1,P
+                X(I,J) = (X(I,J)-XMU(J))/DSQRT(CORR(J,J))
+                XSAVE(I,J) = X(I,J)
+   70      CONTINUE
+   80 CONTINUE
+      IDUM(1,1) = 1
+      IF (IPRINT.EQ.4) CALL PRINTM(9, X, LDX, N, P, IDUM, 1, 1,
+     *     1)
+C ***
+C     SAVE COVARIANCE DIAGONALS AND COMPUTE CORRELATION MATRIX.
+C ***
+      DO 90 I=1,P
+           COVD(I) = CORR(I,I)
+   90 CONTINUE
+      DO 110 I=1,P
+           DO 100 J=I,P
+                CORR(I,J) = CORR(I,J)/DSQRT(COVD(I)*COVD(J))
+                CORR(J,I) = CORR(I,J)
+  100      CONTINUE
+  110 CONTINUE
+      IF (IPRINT.GE.3) CALL PRINTM(6, CORR, P, P, P, IDUM, ID,
+     *     ID, ID)
+C ***
+C     COMPUTE SVD OF CENTERED, SCALED DATA MATRIX.
+C ***
+      IOPT = 1
+      CALL DSVDC(X, LDX, N, P, W, R, DUM, 1, X, LDX, WK, IOPT,
+     *     IERR)
+      IF (IERR.EQ.0) GO TO 120
+      CALL PRINTM(13, DUM, ID, ID, ID, IDUM, ID, ID, ID)
+      GO TO 600
+  120 DO 130 I=1,P
+           R(I,1) = W(I)
+           R(I,2) = (W(I)**2)/RNM1
+           W(I) = R(I,2)
+           R(I,3) = 100.D0
+           IF (W(I).GE..5D0) GO TO 130
+           R(I,3) = 100.D0*DSQRT(W(I)/(1.D0-W(I)))
+  130 CONTINUE
+      CALL PRINTM(7, R, P, P, 3, IDUM, ID, ID, ID)
+      TEMP = BIG
+      IF (R(P,1).NE.0.D0) TEMP = R(1,1)/R(P,1)
+      R(1,1) = TEMP
+      R(1,2) = BIG
+      IF (W(P).NE.0.D0) R(1,2) = W(1)/W(P)
+      CALL PRINTM(5, R, P, 1, 2, IDUM, ID, ID, ID)
+      IF (IPRINT.EQ.4) CALL PRINTM(8, X, LDX, P, P, IDUM, ID,
+     *     ID, ID)
+      IF (JOB.NE.1) GO TO 160
+C ***
+C     COMPUTE P2 FROM PER CENT ERROR.
+C ***
+      ENU2 = (PCERR/100.D0)**2
+      BOUND = ENU2/(1.D0+ENU2)
+      DO 140 I=1,P
+           II = P + 1 - I
+           IF (W(II).GT.BOUND) GO TO 150
+  140 CONTINUE
+  150 P2 = I - 1
+      R(1,1) = PCERR
+      R(2,1) = BOUND
+  160 IF (P2.GT.0) GO TO 170
+      CALL PRINTM(10, DUM, ID, ID, ID, IDUM, ID, ID, ID)
+      GO TO 600
+  170 IF (P2.LT.P) GO TO 180
+      CALL PRINTM(11, DUM, ID, ID, ID, IDUM, ID, ID, ID)
+      GO TO 600
+  180 P1 = P - P2
+      CALL PRINTM(12, R, P, 2, 1, IDUM, LMAX, JOB, P2)
+      IF (JOB.EQ.3) GO TO 310
+C ***
+C     COMPUTE NEARLY OPTIMAL SET OF ESTIMATED VARIABLES.
+C ***
+      DO 210 I=1,P2
+           II = P + 1 - I
+           DO 190 J=1,P
+                V(I,J) = X(J,II)
+  190      CONTINUE
+           DO 200 J=1,P2
+                R(I,J) = 0.D0
+  200      CONTINUE
+           R(I,I) = DSQRT(RNM1*W(II))
+  210 CONTINUE
+      DO 220 I=1,P
+           IVAR(I) = I
+  220 CONTINUE
+      IOPT = 0
+      IF (IPRINT.EQ.4) CALL PRINTM(29, V, P, P2, P, IDUM, ID,
+     *     ID, ID)
+      CALL PICVAR(P2, P, V, P, IOPT, IVAR, R, P, WK, WK2, RVAL)
+C ***
+C     COMPUTE ORDERED PREDICTOR VARIABLES.
+C ***
+      DO 240 J=1,P1
+           P2PJ = P2 + J
+           K = IVAR(P2PJ)
+           DO 230 I=1,P1
+                V(I,J) = X(K,I)
+  230      CONTINUE
+  240 CONTINUE
+      IOPT = 1
+      CALL PICVAR(P1, P1, V, P, IOPT, IVAR(P2+1), DUM, 1, WK,
+     *     WK2, DUMS)
+      DUM(1,1) = RVAL
+      CALL PRINTM(14, DUM, 1, 1, 1, IVAR, P, P2, 1)
+      IF (KALL.EQ.1) GO TO 270
+      CALL PRINTM(34, DUM, ID, ID, ID, IDUM, ID, ID, ID)
+      CRES = RVAL
+      DO 250 I=1,P
+           PVAR(I) = IVAR(I)
+  250 CONTINUE
+      DO 260 I=1,P2
+           IT1 = P2 + 1 - I
+           DVAR(I) = IVAR(IT1)
+  260 CONTINUE
+      LKNT = 0
+      GO TO 380
+C ***
+C     ORDER VARIABLES.
+C ***
+  270 IF (P1.EQ.1) GO TO 290
+      P12 = P1/2
+      DO 280 I=1,P12
+           IT1 = P2 + I
+           IT2 = P + 1 - I
+           K = IVAR(IT1)
+           IVAR(IT1) = IVAR(IT2)
+           IVAR(IT2) = K
+  280 CONTINUE
+C ***
+C     START SEQUENTIAL VARIABLE REMOVAL PROCESS.
+C ***
+  290 DO 300 I=1,P2
+           INT(I) = P + 1 - I
+  300 CONTINUE
+      IDUM(1,1) = 1
+      CALL PRINTM(32, DUM, ID, ID, ID, IDUM, 1, 1, 1)
+  310 LKNT = 0
+  320 CONTINUE
+      DO 330 I=1,P2
+           IT1 = INT(I)
+           DVAR(I) = IVAR(IT1)
+           IF (JOB.EQ.3) DVAR(I) = LVAR(I,LKNT+1)
+  330 CONTINUE
+      DO 360 I=1,P2
+           II = P + 1 - I
+           DO 340 J=1,P
+                V(I,J) = X(J,II)
+  340      CONTINUE
+           DO 350 J=1,P2
+                R(I,J) = 0.D0
+  350      CONTINUE
+           R(I,I) = DSQRT(RNM1*W(II))
+  360 CONTINUE
+      DO 370 I=1,P
+           PVAR(I) = I
+  370 CONTINUE
+      IF (IPRINT.GE.3) CALL PRINTM(15, DUM, ID, ID, ID, DVAR,
+     *     P, P2, 1)
+      CALL RESFLY(P2, P, V, P, PVAR, DVAR, JOB, KRES, R, P, WK,
+     *     WK2, RVAL, LRES, IPRINT)
+      CRES = WK(1)
+      IF (LRES.EQ.0 .AND. CRES.LT.RVAL) RVAL = CRES
+      IF (IPRINT.EQ.4) CALL PRINTM(26, DUM, ID, ID, ID, PVAR,
+     *     P, P, 1)
+      DUM(1,1) = CRES
+      IF (IPRINT.GE.3 .AND. LRES.EQ.0) CALL PRINTM(16, DUM, 1,
+     *     1, 1, IDUM, ID, ID, ID)
+C ***
+C     CHECK EIGENVALUE INEQUALITIES FOR SMALL RESIDUALS AND PROCEED.
+C ***
+      IF (JOB.EQ.3) GO TO 380
+      IF (LRES.NE.0) GO TO 540
+  380 DO 400 I=1,P
+           IE = P + 1 - I
+           IP = PVAR(IE)
+           DO 390 J=1,P
+                JE = P + 1 - J
+                JP = PVAR(JE)
+                V(I,J) = CORR(IP,JP)
+  390      CONTINUE
+  400 CONTINUE
+      IOPT = 0
+      CALL CHKEV(V, P, P, P1, IOPT, R, WK, WK2, PSIMIN, XLAMAX,
+     *     PSIK, IPRINT)
+C ***
+C     COMPUTE LIKELIHOOD RATIO.
+C ***
+      RLKDR = 0.D0
+      IF (N.LE.P) GO TO 430
+      DO 420 I=1,P2
+           IE = P2 + 1 - I
+           IP = PVAR(IE)
+           DO 410 J=I,P2
+                JE = P2 + 1 - J
+                JP = PVAR(JE)
+                R(I,J) = V(I,J)*DSQRT(COVD(IP)*COVD(JP))
+                R(J,I) = R(I,J)
+  410      CONTINUE
+           WK(I) = 1.D0/R(I,I)
+  420 CONTINUE
+      IF (IPRINT.EQ.4) CALL PRINTM(35, R, P, P2, P2, IDUM, ID,
+     *     ID, ID)
+      CALL SCPROD(WK, P2, PROD, ISC)
+      CALL DPOFA(R, P, P2, INFO)
+      IDUM(1,1) = INFO
+      IF (INFO.NE.0) CALL PRINTM(33, DUM, ID, ID, ID, IDUM, 1,
+     *     1, 1)
+      CALL DPODI(R, P, P2, DET, 10)
+      PROD = PROD*DET(1)
+      ISC = ISC + IFIX(SNGL(DET(2)+DSIGN(.1D0,DET(2))))
+      RLKDR = -RN*DLOG(PROD*10.D0**ISC)
+  430 LKNT = LKNT + 1
+C ***
+C     UPDATE ORDERED OUTPUT ARRAYS.
+C ***
+      LAST = LKNT - 1
+      IF (LKNT.GT.1) GO TO 440
+      LOC = 1
+      GO TO 510
+  440 IF (LKNT.LE.LMAX) GO TO 450
+      IF (CRES.GT.OUTPUT(LMAX,1)) GO TO 540
+      LAST = LMAX
+  450 DO 500 K=1,LAST
+           IF (CRES.GE.OUTPUT(K,1)) GO TO 500
+           KE = LKNT
+           IF (LKNT.GE.LMAX) KE = LMAX
+           IF (K.EQ.LMAX) GO TO 490
+           KP1 = K + 1
+           DO 480 I=KP1,KE
+                IT1 = KE + KP1 - I
+                IT2 = IT1 - 1
+                DO 460 J=1,5
+                     OUTPUT(IT1,J) = OUTPUT(IT2,J)
+  460           CONTINUE
+                DO 470 J=1,P2
+                     LVAR(J,IT1) = LVAR(J,IT2)
+  470           CONTINUE
+  480      CONTINUE
+  490      LOC = K
+           GO TO 510
+  500 CONTINUE
+      LOC = LKNT
+  510 DO 520 I=1,P2
+           II = P2 + 1 - I
+           LVAR(I,LOC) = DVAR(II)
+  520 CONTINUE
+      OUTPUT(LOC,1) = CRES
+      OUTPUT(LOC,2) = PSIK
+      TEMP = BIG
+      IF (XLAMAX.NE.0.D0) TEMP = PSIMIN/XLAMAX
+      OUTPUT(LOC,3) = TEMP
+      TEMP = 1.D0
+      IF (W(P1).NE.0.D0) TEMP = 0.D0
+      IF (W(P1+1).NE.0.D0) TEMP = OUTPUT(LOC,3)/(W(P1)/W(P1+1))
+      IF (XLAMAX.EQ.0.D0) TEMP = 1.D0
+      OUTPUT(LOC,4) = TEMP
+      OUTPUT(LOC,5) = RLKDR
+      IF (JOB.EQ.3) GO TO 530
+      IF (KALL.EQ.0) GO TO 570
+      GO TO 540
+  530 IF (LKNT.LT.LMAX) GO TO 320
+      GO TO 570
+C ***
+C     DETERMINE NEXT SET OF ESTIMATED VARIABLES TO TRY.
+C ***
+  540 DO 560 I=1,P2
+           IT1 = P2 + 1 - I
+           IF (LRES.NE.0 .AND. I.EQ.1) IT1 = LRES
+           IF (INT(IT1).EQ.I) GO TO 560
+           INT(IT1) = INT(IT1) - 1
+           IF (IT1.EQ.P2) GO TO 320
+           IT2 = IT1 + 1
+           DO 550 J=IT2,P2
+                IT3 = J + 1 - IT2
+                INT(J) = INT(IT1) - IT3
+  550      CONTINUE
+           GO TO 320
+  560 CONTINUE
+      IDUM(1,1) = 2
+      CALL PRINTM(32, DUM, ID, ID, ID, IDUM, 1, 1, 1)
+  570 LIST = LMAX
+      IF (LIST.GT.LKNT) LIST = LKNT
+      CALL PRINTM(17, OUTPUT, LMAX, LIST, 5, LVAR, LDL, P2,
+     *     LIST)
+C ***
+C     COMPUTE BETA FOR BEST LMAX RESIDUAL CASES.
+C ***
+      DO 590 I=1,P
+           DO 580 J=I,P
+                CORR(I,J) = CORR(I,J)*DSQRT(COVD(I)*COVD(J))
+                CORR(J,I) = CORR(I,J)
+  580      CONTINUE
+  590 CONTINUE
+      IF (IPRINT.EQ.4) CALL PRINTM(3, CORR, P, P, P, IDUM, ID,
+     *     ID, ID)
+      NO = LIST
+      CALL BETA(LVAR, LDL, NO, XSAVE, N, P, CORR, P, P2, XMU,
+     *     X, LDX, V, P, W, WK, WK2, PVAR, IPRINT)
+  600 CONTINUE
+      RETURN
+      END
+C                                                                       PIC   10
+C --------------------------------------------------------------        PIC   20
+C                                                                       PIC   30
+      SUBROUTINE PICVAR(P2, P, V, MV, IOPT, PVAR, RES, MR, WO,          PIC   40
+     *     WN, RNORM)
+C ***
+C     SUBROUTINE PICVAR COMPUTES THE BENCHMARK SOLUTION BY A QR
+C        FACTORIZATION. IF IOPT = 0, THE ESTIMATED VARIABLES ARE
+C        COMPUTED; IF IOPT = 1, THE PREDICTOR VARIABLES ARE COMPUTED.
+C ***
+      INTEGER I, IOPT, J, JP, K, KM1, L, LEN, LP1, MAXJ, MR,
+     *     MV, P, P2, P2P1
+      INTEGER PVAR(P)
+      DOUBLE PRECISION CNORM, FAC, GNORM, ONEPS, PROD, RNORM
+      DOUBLE PRECISION RES(MR,P2), V(MV,P), WN(P), WO(P)
+      DOUBLE PRECISION DABS, DDOT, DMAX1, DNRM2, DSIGN, DSQRT
+C ***
+C     COMPUTE COLUMN NORMS.
+C ***
+      DO 10 J=1,P
+           WN(J) = DNRM2(P2,V(1,J),1)
+           WO(J) = WN(J)
+   10 CONTINUE
+C ***
+C     REDUCE TO TRAPEZOIDAL FORM.
+C ***
+      DO 70 L=1,P2
+C ***
+C        PIVOT COLUMNS.
+C ***
+           GNORM = 0.D0
+           MAXJ = L
+           DO 20 J=L,P
+                IF (WN(J).LE.GNORM) GO TO 20
+                GNORM = WN(J)
+                MAXJ = J
+   20      CONTINUE
+           IF (MAXJ.EQ.L) GO TO 30
+           CALL DSWAP(P2, V(1,L), 1, V(1,MAXJ), 1)
+           WN(MAXJ) = WN(L)
+           WO(MAXJ) = WO(L)
+           JP = PVAR(MAXJ)
+           PVAR(MAXJ) = PVAR(L)
+           PVAR(L) = JP
+   30      CONTINUE
+           WN(L) = 0.D0
+           IF (L.EQ.P2) GO TO 70
+C ***
+C        REDUCE COLUMN L.
+C ***
+           LEN = P2 - L + 1
+           CNORM = DNRM2(LEN,V(L,L),1)
+           IF (CNORM.EQ.0.D0) GO TO 70
+           IF (V(L,L).NE.0.D0) CNORM = DSIGN(CNORM,V(L,L))
+           CALL DSCAL(LEN, 1.D0/CNORM, V(L,L), 1)
+           V(L,L) = 1.D0 + V(L,L)
+C ***
+C        APPLY TRANSFORMATION TO OTHER COLUMNS.
+C ***
+           LP1 = L + 1
+           DO 50 J=LP1,P
+                PROD = -DDOT(LEN,V(L,L),1,V(L,J),1)/V(L,L)
+                CALL DAXPY(LEN, PROD, V(L,L), 1, V(L,J), 1)
+                IF (WN(J).EQ.0.D0) GO TO 50
+                FAC = 1.D0 - (DABS(V(L,J))/WN(J))**2
+                FAC = DMAX1(FAC,0.D0)
+                ONEPS = 1.D0 + .05D0*FAC*(WN(J)/WO(J))**2
+                IF (ONEPS.EQ.1.D0) GO TO 40
+                WN(J) = WN(J)*DSQRT(FAC)
+                GO TO 50
+   40           CONTINUE
+                WN(J) = DNRM2(P2-L,V(L+1,J),1)
+                WO(J) = WN(J)
+   50      CONTINUE
+           IF (IOPT.EQ.1) GO TO 70
+C ***
+C        APPLY TRANSFORMATION TO RESIDUAL MATRIX.
+C ***
+           DO 60 J=1,P2
+                PROD = -DDOT(LEN,V(L,L),1,RES(L,J),1)/V(L,L)
+                CALL DAXPY(LEN, PROD, V(L,L), 1, RES(L,J), 1)
+   60      CONTINUE
+           WN(L) = V(L,L)
+           V(L,L) = -CNORM
+   70 CONTINUE
+      IF (IOPT.EQ.1) GO TO 140
+C ***
+C     COMPUTE DEPENDENCIES.
+C ***
+      P2P1 = P2 + 1
+      DO 90 J=P2P1,P
+           V(P2,J) = V(P2,J)/V(P2,P2)
+           DO 80 L=2,P2
+                K = P2 - L + 2
+                KM1 = K - 1
+                CALL DAXPY(KM1, -V(K,J), V(1,K), 1, V(1,J), 1)
+                V(KM1,J) = V(KM1,J)/V(KM1,KM1)
+   80      CONTINUE
+   90 CONTINUE
+C ***
+C     APPLY INVERSE TO RESIDUAL MATRIX.
+C ***
+      DO 110 J=1,P2
+           RES(P2,J) = RES(P2,J)/V(P2,P2)
+           DO 100 L=2,P2
+                K = P2 - L + 2
+                KM1 = K - 1
+                CALL DAXPY(KM1, -RES(K,J), V(1,K), 1, RES(1,J),
+     *               1)
+                RES(KM1,J) = RES(KM1,J)/V(KM1,KM1)
+  100      CONTINUE
+  110 CONTINUE
+C ***
+C     COMPUTE RESIDUAL NORM.
+C ***
+      RNORM = 0.D0
+      DO 130 I=1,P2
+           DO 120 J=1,P2
+                RNORM = RNORM + RES(I,J)**2
+  120      CONTINUE
+  130 CONTINUE
+      RNORM = DSQRT(RNORM)
+  140 CONTINUE
+      RETURN
+      END
+C                                                                       RES   10
+C --------------------------------------------------------------        RES   20
+C                                                                       RES   30
+      SUBROUTINE RESFLY(P2, P, V, MV, PVAR, DVAR, JOB, KRES,            RES   40
+     *     RES, MR, WN, VT, RMIN, LRES, IPRINT)
+C ***
+C     SUBROUTINE RESFLY COMPUTES THE REDUCED SPACE RESIDUAL FOR A
+C        PARTICULAR SET OF ESTIMATED VARIABLES BY A SEQUENTIAL VARIABLE
+C        DELECTION PROCESS. LARGE RESIDUALS ARE DETECTED EARLY IF
+C        POSSIBLE.
+C ***
+      INTEGER I, ID, IPRINT, J, JOB, JP, K, KRES, L, LEN, LL,
+     *     LM1, LM2, LMI, LMI1, LRES, MR, MV, NJ, P, P2
+      INTEGER DVAR(P2), PVAR(P), IDUM(1,1)
+      DOUBLE PRECISION CNORM, PROD, RMIN, RNORM, TEMP, TOOBIG
+      DOUBLE PRECISION RES(MR,P2), V(MV,P), VT(P2), WN(P),
+     *     DUM(1,1)
+      DOUBLE PRECISION DDOT, DNRM2, DSIGN, DSQRT
+      ID = 1
+      LRES = 0
+      IF (JOB.NE.3) TOOBIG = RMIN*(10.D0**KRES)
+C ***
+C     REDUCE TO TRAPEZOIDAL FORM WHILE UPDATING RESIDUALS.
+C ***
+      DO 160 L=1,P2
+           NJ = DVAR(L)
+           DO 10 LL=L,P
+                IF (NJ.EQ.PVAR(LL)) GO TO 20
+   10      CONTINUE
+   20      NJ = LL
+           IF (NJ.EQ.L) GO TO 30
+C ***
+C        PIVOT COLUMNS.
+C ***
+           CALL DSWAP(P2, V(1,L), 1, V(1,NJ), 1)
+           JP = PVAR(NJ)
+           PVAR(NJ) = PVAR(L)
+           PVAR(L) = JP
+   30      CONTINUE
+           IF (L.EQ.1) GO TO 50
+C ***
+C      APPLY PREVIOUS TRANSFORMATIONS TO COLUMN L OF V AND RES.
+C ***
+           LM1 = L - 1
+           DO 40 K=1,LM1
+                LEN = P2 - K + 1
+                TEMP = V(K,K)
+                V(K,K) = WN(K)
+                PROD = -DDOT(LEN,V(K,K),1,V(K,L),1)/V(K,K)
+                CALL DAXPY(LEN, PROD, V(K,K), 1, V(K,L), 1)
+                PROD = -DDOT(LEN,V(K,K),1,RES(K,L),1)/V(K,K)
+                CALL DAXPY(LEN, PROD, V(K,K), 1, RES(K,L), 1)
+                V(K,K) = TEMP
+   40      CONTINUE
+   50      CONTINUE
+           IF (L.LT.P2) GO TO 60
+           IF (V(L,L).EQ.0.D0) GO TO 170
+           GO TO 80
+C ***
+C        REDUCE COLUMN L.
+C ***
+   60      LEN = P2 - L + 1
+           CNORM = DNRM2(LEN,V(L,L),1)
+           IF (CNORM.EQ.0.D0) GO TO 170
+           IF (V(L,L).NE.0.D0) CNORM = DSIGN(CNORM,V(L,L))
+           CALL DSCAL(LEN, 1.D0/CNORM, V(L,L), 1)
+           V(L,L) = 1.D0 + V(L,L)
+C ***
+C        APPLY TRANSFORMATION TO FIRST L COLUMNS OF RES.
+C ***
+           DO 70 J=1,L
+                PROD = -DDOT(LEN,V(L,L),1,RES(L,J),1)/V(L,L)
+                CALL DAXPY(LEN, PROD, V(L,L), 1, RES(L,J), 1)
+   70      CONTINUE
+           WN(L) = V(L,L)
+           V(L,L) = -CNORM
+   80      CONTINUE
+C ***
+C        COMPUTE FIRST L COMPONENTS IN COLUMN L OF RESIDUAL MATRIX.
+C ***
+           RES(L,L) = RES(L,L)/V(L,L)
+           IF (L.EQ.1) GO TO 130
+           CALL DAXPY(LM1, -RES(L,L), V(1,L), 1, RES(1,L), 1)
+           RES(LM1,L) = RES(LM1,L)/V(LM1,LM1)
+           VT(LM1) = V(LM1,L)/V(LM1,LM1)
+           IF (L.EQ.2) GO TO 110
+           LM2 = L - 2
+           DO 90 I=1,LM2
+                VT(I) = V(I,L)
+   90      CONTINUE
+           DO 100 I=2,LM1
+                LMI1 = LM1 - I + 2
+                LMI = LMI1 - 1
+                CALL DAXPY(LMI, -RES(LMI1,L), V(1,LMI1), 1,
+     *               RES(1,L), 1)
+                RES(LMI,L) = RES(LMI,L)/V(LMI,LMI)
+                CALL DAXPY(LMI, -VT(LMI1), V(1,LMI1), 1, VT(1),
+     *               1)
+                VT(LMI) = VT(LMI)/V(LMI,LMI)
+  100      CONTINUE
+  110      CONTINUE
+C ***
+C        COMPUTE TOP LEFT L BY L-1 RESIDUAL SUBMATRIX.
+C ***
+           CALL DSCAL(LM1, 1.D0/V(L,L), RES(L,1), MR)
+           DO 120 I=1,LM1
+                CALL DAXPY(LM1, -VT(I), RES(L,1), MR, RES(I,1),
+     *               MR)
+  120      CONTINUE
+  130      CONTINUE
+C ***
+C        COMPUTE SIZE OF CURRENT RESIDUAL MATRIX.
+C ***
+           RNORM = 0.D0
+           DO 150 I=1,L
+                DO 140 J=1,L
+                     RNORM = RNORM + RES(I,J)**2
+  140           CONTINUE
+  150      CONTINUE
+           RNORM = DSQRT(RNORM)
+           IDUM(1,1) = L
+           DUM(1,1) = RNORM
+           IF (IPRINT.GE.3) CALL PRINTM(27, DUM, 1, 1, 1, IDUM,
+     *          1, 1, 1)
+           IF (JOB.EQ.3) GO TO 160
+           IF (RNORM.GT.TOOBIG) GO TO 180
+  160 CONTINUE
+      WN(1) = RNORM
+      GO TO 190
+  170 IF (JOB.NE.3) GO TO 180
+C ***
+C     THE FOLLOWING NUMBER REPRESENTS AN INFINITE RESIDUAL NORM. IT
+C         SHOULD NOT PRODUCE OVERFLOW ON MOST KNOWN COMPUTERS.
+C
+      WN(1) = 1.E+30
+C
+C ***
+      CALL PRINTM(37, DUM, ID, ID, ID, DVAR, P2, L, 1)
+  180 LRES = L
+      IDUM(1,1) = L
+      IF (IPRINT.GE.3) CALL PRINTM(28, DUM, ID, ID, ID, IDUM,
+     *     1, 1, 1)
+  190 CONTINUE
+      RETURN
+      END
+C                                                                       PRI   10
+C --------------------------------------------------------------        PRI   20
+C                                                                       PRI   30
+      SUBROUTINE PRINTM(KODE, A, LD, M, N, IA, LDI, IM, IN)             PRI   40
+C ***
+C     SUBROUTINE PRINTM PRINTS MOST OF THE OUTPUT FROM THE LINEAR
+C        DEPENDENCY ANALYSIS. (THE REMAINING OUTPUT IS PRINTED IN
+C        SUBROUTINES LDA AND BETA.)
+C ***
+      INTEGER I, IE, IEP1, IM, IMP, IN, ISKIP, ISYM, J, K,
+     *     KODE, LD, LDI, M, N, NCOLE, NCOLS, P1
+      INTEGER IA(LDI,IN)
+      DOUBLE PRECISION A(LD,N), CUM, SUM, XP
+      DATA IBLK /1H /, IAST /1H*/
+      GO TO (10, 20, 40, 50, 60, 70, 80, 100, 110, 120, 130,
+     *     140, 170, 180, 190, 200, 210, 210, 240, 250, 260,
+     *     270, 280, 290, 300, 310, 320, 330, 340, 350, 360,
+     *     370, 380, 390, 400, 410, 420), KODE
+C
+   10 WRITE (6,99998)
+      GO TO 470
+C
+   20 WRITE (6,99997)
+      DO 30 I=1,M
+           WRITE (6,99996) A(I,1)
+   30 CONTINUE
+      WRITE (6,99995)
+      GO TO 470
+C
+   40 WRITE (6,99994)
+      GO TO 430
+C
+   50 WRITE (6,99993)
+      GO TO 430
+C
+   60 WRITE (6,99992) A(1,1), A(1,2)
+      WRITE (6,99995)
+      GO TO 470
+C
+   70 WRITE (6,99991)
+      GO TO 430
+C
+   80 WRITE (6,99990)
+      XP = M
+      SUM = 0.D0
+      DO 90 I=1,M
+           SUM = SUM + A(I,2)
+           CUM = (SUM/XP)*100.D0
+           WRITE (6,99989) A(I,1), A(I,2), A(I,3), CUM
+   90 CONTINUE
+      WRITE (6,99995)
+      GO TO 470
+C
+  100 WRITE (6,99988)
+      GO TO 430
+C
+  110 IF (IA(1,1).EQ.1) WRITE (6,99987)
+      IF (IA(1,1).EQ.2) WRITE (6,99986)
+      IF (IA(1,1).EQ.3) WRITE (6,99985) IM, IN
+      GO TO 430
+C
+  120 WRITE (6,99984)
+      GO TO 470
+C
+  130 WRITE (6,99983)
+      GO TO 470
+C
+  140 WRITE (6,99982) IN
+      IF (IM.NE.1) GO TO 150
+      WRITE (6,99981) A(1,1), A(2,1)
+      GO TO 470
+  150 IF (IM.NE.2) GO TO 160
+      WRITE (6,99980)
+      GO TO 470
+  160 WRITE (6,99979) LDI
+      GO TO 470
+C
+  170 WRITE (6,99978)
+      GO TO 470
+C
+  180 WRITE (6,99977) IM
+      IE = IM
+      IF (IM.GT.33) IE = 33
+      WRITE (6,99976) (IA(I,1),I=1,IE)
+      IF (IM.GT.33) WRITE (6,99975) (IA(I,1),I=34,IM)
+      IMP = IM + 1
+      IE = LDI
+      P1 = LDI - IM
+      IF (P1.GT.33) IE = IM + 33
+      WRITE (6,99974) (IA(I,1),I=IMP,IE)
+      IEP1 = IE + 1
+      IF (P1.GT.33) WRITE (6,99975) (IA(I,1),I=IEP1,LDI)
+      WRITE (6,99973) A(1,1)
+      WRITE (6,99995)
+      GO TO 470
+C
+  190 IE = IM
+      IF (IM.GT.33) IE = 33
+      WRITE (6,99972) (IA(I,1),I=1,IE)
+      IF (IM.GT.33) WRITE (6,99975) (IA(I,1),I=34,IM)
+      GO TO 470
+C
+  200 WRITE (6,99971) A(1,1)
+      GO TO 470
+C
+  210 WRITE (6,99970)
+      ISKIP = 1
+      DO 230 I=1,M
+           ISYM = IBLK
+           IF (A(I,3).GT.1.D0) GO TO 220
+           ISYM = IAST
+           ISKIP = 0
+  220      IE = IM
+           IF (IM.GT.15) IE = 15
+           WRITE (6,99969) (A(I,J),J=1,3), ISYM,
+     *          (A(I,J),J=4,5), (IA(J,I),J=1,IE)
+           IF (IM.GT.15) WRITE (6,99967) (IA(J,I),J=16,IM)
+  230 CONTINUE
+      IF (ISKIP.EQ.0) WRITE (6,99968)
+      WRITE (6,99966)
+      GO TO 470
+C
+  240 WRITE (6,99965) IA(1,1)
+      GO TO 470
+C
+  250 WRITE (6,99964) IA(1,1)
+      GO TO 470
+C
+  260 WRITE (6,99963)
+      GO TO 430
+C
+  270 WRITE (6,99962)
+      GO TO 430
+C
+  280 WRITE (6,99961)
+      GO TO 430
+C
+  290 WRITE (6,99960)
+      WRITE (6,99996) (A(I,1),I=1,M)
+      GO TO 470
+C
+  300 WRITE (6,99959)
+      WRITE (6,99996) (A(I,1),I=1,M)
+      GO TO 470
+C
+  310 IE = IM
+      IF (IM.GT.30) IE = 30
+      WRITE (6,99958) (IA(I,1),I=1,IE)
+      IF (IM.GT.30) WRITE (6,99957) (IA(I,1),I=31,IM)
+      GO TO 470
+C
+  320 WRITE (6,99956) IA(1,1), A(1,1)
+      GO TO 470
+C
+  330 WRITE (6,99955) IA(1,1)
+      GO TO 470
+C
+  340 WRITE (6,99954)
+      GO TO 430
+C
+  350 IF (IA(1,1).EQ.1) WRITE (6,99953)
+      IF (IA(1,1).EQ.2) WRITE (6,99952)
+      GO TO 430
+C
+  360 WRITE (6,99951) A(1,1)
+      GO TO 470
+C
+  370 IF (IA(1,1).EQ.1) WRITE (6,99950)
+      IF (IA(1,1).EQ.2) WRITE (6,99949)
+      GO TO 470
+C
+  380 WRITE (6,99948) IA(1,1)
+      GO TO 470
+C
+  390 WRITE (6,99947)
+      GO TO 470
+C
+  400 WRITE (6,99946)
+      GO TO 430
+C
+  410 WRITE (6,99999) IA(1,1)
+      GO TO 470
+C
+  420 WRITE (6,99943)
+      WRITE (6,99975) (IA(I,1),I=1,IM)
+      GO TO 470
+C ***
+C     MATRIX PRINT UTILITY.
+C ***
+  430 DO 450 K=1,N,4
+           NCOLS = K
+           NCOLE = K + 3
+           IF (NCOLE.GT.N) NCOLE = N
+           WRITE (6,99945) NCOLS, NCOLE
+           DO 440 I=1,M
+                WRITE (6,99944) (A(I,J),J=NCOLS,NCOLE)
+  440      CONTINUE
+           IF (NCOLE.EQ.N) GO TO 460
+  450 CONTINUE
+  460 WRITE (6,99995)
+  470 RETURN
+99999 FORMAT (//9H VARIABLE, I3, 27H  IS CONSTANT FOR ALL OBSER,
+     *     7HVATIONS, 38H *** CODE TERMINATES AFTER CHECKING OT,
+     *     13HHER VARIABLES)
+99998 FORMAT (///1H1, 20X, 34H*** LINEAR DEPENDENCY ANALYSIS ***
+     *     ///)
+99997 FORMAT (28H THE VECTOR OF MEANS IS...../)
+99996 FORMAT (1PD16.6)
+99995 FORMAT (//)
+99994 FORMAT (30H THE COVARIANCE MATRIX IS.....)
+99993 FORMAT (33H THE ORIGINAL DATA MATRIX IS.....)
+99992 FORMAT (19H CONDITION NUMBERS., 4X, 18HCENTERED, SCALED X,
+     *     12H MATRIX....., 1PD12.5/30X, 19HCORRELATION MATRIX.,
+     *     4H...., 1PD12.5/)
+99991 FORMAT (31H THE CORRELATION MATRIX IS.....)
+99990 FORMAT (1X, 18HSINGULAR VALUES OF, 8X, 14HEIGENVALUES OF,
+     *     7X, 14HPERCENT ERRORS, 4X, 21HEIGENVALUE CUMULATIVE/
+     *     1X, 18HCENTERED, SCALED X, 6X, 18HCORRELATION MATRIX,
+     *     4X, 16H(DIAGONAL MODEL), 9X, 10HPERCENTAGE/)
+99989 FORMAT (2X, 1PD14.6, 10X, 1PD14.6, 12X, 0PF6.1, 15X, F6.1)
+99988 FORMAT (46H SINGULAR VECTORS OF CORRELATION MATRIX ARE...,
+     *     2H..)
+99987 FORMAT (/44H THE CENTERED AND SCALED DATA MATRIX IS.....)
+99986 FORMAT (/45H THE PERMUTED CENTERED AND SCALED DATA MATRIX,
+     *     8H IS.....)
+99985 FORMAT (/26H THE DATA ARRAY CONTAINING/4X, 10H THE FIRST,
+     *     I4, 32H COLUMNS OF PREDICTOR VARIABLES,/4X, 6H THE L,
+     *     4HAST , I4, 22H COLUMNS OF RESIDUALS.)
+99984 FORMAT (46H ERROR.  COMPUTED P2 LESS THAN OR EQUAL TO ZER,
+     *     2HO.)
+99983 FORMAT (46H ERROR.  COMPUTED P2 GREATER THAN OR EQUAL TO ,
+     *     2HP.)
+99982 FORMAT (/30H NUMBER OF DEPENDENCIES (P2) =, I3)
+99981 FORMAT (6X, 29HDETERMINED FROM USER SUPPLIED, 9H ALLOWABL,
+     *     21HE PERCENTAGE ERROR OF, F6.1/6X, 8HYIELDING,
+     *     34H A BOUND ON THE SINGULAR VALUES OF, 1PD14.6/)
+99980 FORMAT (6X, 17HSPECIFIED BY USER/)
+99979 FORMAT (6X, 28HSPECIFIED BY USER ALONG WITH, I3, 6H SETS ,
+     *     30HOF ESTIMATED VARIABLES TO TEST/)
+99978 FORMAT (18H ERROR FROM DSVDC./)
+99977 FORMAT (/28H BENCHMARK SOLUTION FOR P2 =, I3//6X,
+     *     13HTHE FOLLOWING, 31H TWO SETS OF VARIABLES ARE ORDE,
+     *     4HRED./6X, 15HTHE MOST LIKELY, 18H ONES TO BE IN THA,
+     *     23HT SET ARE LISTED FIRST./)
+99976 FORMAT (6X, 23HP2 ESTIMATED VARIABLES-, 2X, 33I3)
+99975 FORMAT (31X, 33I3)
+99974 FORMAT (6X, 23HP1 PREDICTOR VARIABLES-, 2X, 33I3)
+99973 FORMAT (/6X, 41HAPPROXIMATE (REDUCED SPACE) RESIDUAL IS..,
+     *     1H., 2H.., 1PD16.6)
+99972 FORMAT (//29H***** FOR ESTIMATED VARIABLES, 2X, 33I3/)
+99971 FORMAT (31H REDUCED SPACE RESIDUAL IS....., 1PD16.8/)
+99970 FORMAT (/////1X, 13HREDUCED SPACE, 4X, 13HPSI CONDITION,
+     *     22X, 10HPSI/LAMBDA/3X, 8HRESIDUAL, 11X, 6HNUMBER,
+     *     6X, 14HPSI/LAMBDA GAP, 3X, 14HNORMALIZED GAP, 2X,
+     *     16HLIKELIHOOD RATIO, 3X, 19HESTIMATED VARIABLES/)
+99969 FORMAT (1X, 2(1PD12.5, 5X), 1PD12.5, 1X, A1, 3X,
+     *     2(1PD12.5, 5X), 15I3)
+99968 FORMAT (/45H *  DENOTES CASES WHERE LARGEST EIGENVALUE OF,
+     *     1H , 42HLAMBDA EXCEEDS SMALLEST EIGENVALUE OF PSI.)
+99967 FORMAT (86X, 15I3)
+99966 FORMAT (///)
+99965 FORMAT (46H MATRIX NOT POSITIVE DEFINITE IN CHKEV.  IERR ,
+     *     1H=, I4)
+99964 FORMAT (44H ERROR RETURN FROM EISPACK IN CHKEV.  IERR =,
+     *     I4)
+99963 FORMAT (23H THE PSI MATRIX IS.....)
+99962 FORMAT (26H THE LAMBDA MATRIX IS.....)
+99961 FORMAT (46H THE PARTIALLY FACTORIZED SIGMA MATRIX IS.....)
+99960 FORMAT (35H THE EIGENVALUES OF LAMBDA ARE...../)
+99959 FORMAT (32H THE EIGENVALUES OF PSI ARE...../)
+99958 FORMAT (37H VARIABLE ORDERING OUT OF RESFLY....., 30I3)
+99957 FORMAT (37X, 30I3)
+99956 FORMAT (7H STEP =, I3, 10X, 10HRESIDUAL =, 1PD15.7)
+99955 FORMAT (32H LARGE RESIDUAL DETECTED AT STEP, I3)
+99954 FORMAT (46H THE SINGULAR VECTORS ENTERING PICVAR ARE.....)
+99953 FORMAT (40H THE PERMUTED CORRELATION MATRIX IS.....)
+99952 FORMAT (39H THE PERMUTED COVARIANCE MATRIX IS.....)
+99951 FORMAT (//17H RESIDUAL IS....., 1PD16.8/)
+99950 FORMAT (///43H BEGIN EXAMINING ALL POSSIBLE SUBSETS OF P2,
+     *     10H VARIABLES/)
+99949 FORMAT (/46H ALL POSSIBLE SUBSETS OF P2 VARIABLES EXAMINED
+     *     ///)
+99948 FORMAT (/8H ERROR =, I3, 3X, 25HFROM DPOFA IN LIKELIHOOD ,
+     *     6HRATIO , 11HCOMPUTATION)
+99947 FORMAT (/45H ONLY BENCHMARK SOLUTION REQUESTED. ALL POSSI,
+     *     3HBLE, 21H SUBSETS NOT EXAMINED///)
+99946 FORMAT (/35H THE UNSCALED LAMBDA MATRIX IS.....)
+99945 FORMAT (/8H COLUMNS, I5, 8H THROUGH, I5, 5H...../)
+99944 FORMAT (4(1PD16.6))
+99943 FORMAT (46H SINGULAR V22 RESULTS FROM ESTIMATED VARIABLES,
+     *     5H.....)
+      END
+C                                                                       CHK   10
+C --------------------------------------------------------------        CHK   20
+C                                                                       CHK   30
+      SUBROUTINE CHKEV(SIG, LDS, P, P1, IOPT, W, TEM1, TEM2,            CHK   40
+     *     PSIMIN, XLAMAX, PSIK, IPRINT)
+C ***
+C     SUBROUTINE CHKEV COMPUTES THE PSI AND LAMBDA MATRICES FOR A
+C        PARTICULAR SET OF ESTIMATED VARIABLES. THE MINIMUM EIGENVALUE
+C        OF PSI AND THE MAXIMUM EIGENVALUE OF LAMBDA ARE COMPUTED.
+C ***
+      INTEGER I, ID, IERR, IOPT, IP1, IPRINT, J, JM1, JP1, K,
+     *     LDS, LEN, MATZ, P, P1, P2
+      INTEGER IDUM(1,1)
+      DOUBLE PRECISION PSIK, PSIMIN, S, T, XLAMAX
+      DOUBLE PRECISION SIG(LDS,P), TEM1(P), TEM2(P), W(P),
+     *     DUM(1,1)
+      DOUBLE PRECISION DDOT, DSQRT
+      ID = 1
+      P2 = P - P1
+      IDUM(1,1) = 1
+      IF (IPRINT.EQ.4 .AND. IOPT.EQ.0) CALL PRINTM(30, SIG,
+     *     LDS, P, P, IDUM, 1, 1, 1)
+      IDUM(1,1) = 2
+      IF (IPRINT.EQ.4 .AND. IOPT.EQ.1) CALL PRINTM(30, SIG,
+     *     LDS, P, P, IDUM, 1, 1, 1)
+      MATZ = 0
+C ***
+C     COMPUTE PSI (CORRELATION MATRIX OF ORDER P1) AND
+C             LAMBDA (SCHUR COMPLEMENT OF PSI).
+C ***
+      DO 30 J=1,P
+           IERR = J
+           S = 0.D0
+           JM1 = J - 1
+           IF (JM1.LT.1) GO TO 20
+           DO 10 K=1,JM1
+                LEN = K - 1
+                IF (K.GT.P1) LEN = P1
+                T = SIG(K,J) - DDOT(LEN,SIG(1,K),1,SIG(1,J),1)
+                IF (K.LE.P1) T = T/SIG(K,K)
+                SIG(K,J) = T
+                IF (K.LE.P1) S = S + T*T
+   10      CONTINUE
+   20      S = SIG(J,J) - S
+           SIG(J,J) = S
+           IF (J.GT.P1) GO TO 30
+           IF (S.LE.0.D0) GO TO 40
+           SIG(J,J) = DSQRT(S)
+   30 CONTINUE
+      IERR = 0
+      IF (IPRINT.EQ.4) CALL PRINTM(23, SIG, LDS, P, P, IDUM,
+     *     ID, ID, ID)
+   40 IF (IERR.EQ.0) GO TO 50
+      IDUM(1,1) = IERR
+      CALL PRINTM(19, DUM, ID, ID, ID, IDUM, 1, 1, 1)
+      GO TO 110
+   50 IF (IOPT.EQ.1) GO TO 110
+C ***
+C     COMPUTE EIGENVALUESS OF PSI.
+C ***
+      DO 60 I=1,P1
+           SIG(I,I) = 1.D0
+   60 CONTINUE
+      IF (IPRINT.EQ.4) CALL PRINTM(21, SIG, LDS, P1, P1, IDUM,
+     *     ID, ID, ID)
+      CALL RS(LDS, P1, SIG, W, MATZ, DUM, TEM1, TEM2, IERR)
+      IF (IERR.EQ.0) GO TO 70
+      IDUM(1,1) = IERR
+      CALL PRINTM(20, DUM, ID, ID, ID, IDUM, 1, 1, 1)
+      GO TO 110
+   70 PSIMIN = W(1)
+      PSIK = W(P1)/W(1)
+      IF (IPRINT.EQ.4) CALL PRINTM(25, W, P1, P1, 1, IDUM, ID,
+     *     ID, ID)
+C ***
+C     COMPUTE EIGENVALUES OF LAMBDA.
+C ***
+      DO 90 I=1,P2
+           IP1 = I + P1
+           DO 80 J=I,P2
+                JP1 = J + P1
+                SIG(J,I) = SIG(IP1,JP1)
+                SIG(I,J) = SIG(J,I)
+   80      CONTINUE
+   90 CONTINUE
+      IF (IPRINT.EQ.4) CALL PRINTM(22, SIG, LDS, P2, P2, IDUM,
+     *     ID, ID, ID)
+      CALL RS(LDS, P2, SIG, W, MATZ, DUM, TEM1, TEM2, IERR)
+      IF (IERR.EQ.0) GO TO 100
+      IDUM(1,1) = IERR
+      CALL PRINTM(20, DUM, ID, ID, ID, IDUM, 1, 1, 1)
+      GO TO 110
+  100 XLAMAX = W(P2)
+      IF (IPRINT.EQ.4) CALL PRINTM(24, W, P2, P2, 1, IDUM, ID,
+     *     ID, ID)
+  110 RETURN
+      END
+C                                                                       BET   10
+C --------------------------------------------------------------        BET   20
+C                                                                       BET   30
+      SUBROUTINE BETA(LVAR, LDL, NO, XSAVE, N, P, CORR, LDC,            BET   40
+     *     P2, XMU, X, LDX, V, LDV, W, WK, WK2, PVAR, IPRINT)
+C ***
+C     SUBROUTINE BETA COMPUTES AND OUTPUTS FOR THE SELECTED SETS OF
+C        ESTIMATED VARIABLES THE BETA MATRIX OF COEFFICIENTS, THE BETA
+C        VECTOR OF INTERCEPTS, 95 PER CENT CONFIDENCE INTERVALS, THE
+C        ZERO/NONZERO STRUCTURE OF THE BETAS, AND THE FULL SPACE
+C        RESIDUAL.
+C ***
+      INTEGER I, ID, IE, IERR, IL, IOPT, IP, IPRINT, IS, J,
+     *     JIS, JJ, JL, JN, JP, JP1, K, KK, KP1, KT, L, LDC,
+     *     LDL, LDV, LDX, LEN, N, NO, P, P1, P2
+      INTEGER LSTR(36), LVAR(LDL,NO), PVAR(P), IDUM(1,1)
+      DOUBLE PRECISION CVAR, QUAD, RESID, RN, SRTN, SUM, DUM1,
+     *     DUM2, DUM3
+      DOUBLE PRECISION CORR(LDC,P), V(LDV,P), W(P), WK(N),
+     *     WK2(P), X(LDX,P), XMU(P), XSAVE(N,P), DUM(1,1)
+      DOUBLE PRECISION DABS, DSQRT
+      DATA IZERO /1H0/, IAST /1H*/
+      ID = 1
+      P1 = P - P2
+C ***
+      DO 350 K=1,NO
+           WRITE (6,99999)
+C ***
+C     DETERMINE VARIABLE ORDER.
+C ***
+           JP = 0
+           DO 20 J=1,P
+                DO 10 JJ=1,P2
+                     IF (J.EQ.LVAR(JJ,K)) GO TO 20
+   10           CONTINUE
+                JP = JP + 1
+                PVAR(JP) = J
+   20      CONTINUE
+           DO 30 J=1,P2
+                JL = P1 + J
+                JP = LVAR(J,K)
+                PVAR(JL) = JP
+   30      CONTINUE
+C ***
+C     COPY PERMUTED COVARIANCE MATRIX.
+C ***
+           DO 50 I=1,P
+                IP = PVAR(I)
+                DO 40 J=1,P
+                     JP = PVAR(J)
+                     V(I,J) = CORR(IP,JP)
+   40           CONTINUE
+   50      CONTINUE
+C ***
+C     COMPUTE LAMBDA MATRIX DIAGONALS.
+C ***
+           IOPT = 1
+           CALL CHKEV(V, LDV, P, P1, IOPT, W, WK2, WK, DUM1,
+     *          DUM2, DUM3, IPRINT)
+           DO 60 I=1,P2
+                IP = P1 + I
+                WK(I) = V(IP,IP)
+   60      CONTINUE
+C ***
+C     COMPUTE BETA BY PSI(INV)*(PSI*BETA).
+C ***
+           DO 80 I=1,P
+                IP = PVAR(I)
+                DO 70 J=1,P
+                     JP = PVAR(J)
+                     V(I,J) = CORR(IP,JP)
+   70           CONTINUE
+   80      CONTINUE
+           CALL DPOFA(V, LDV, P1, IERR)
+           IF (IERR.NE.0) WRITE (6,99998) IERR
+           DO 90 J=1,P2
+                JP = P1 + J
+                CALL DPOSL(V, LDV, P1, V(1,JP))
+   90      CONTINUE
+C ***
+C     COMPUTE QUADRATIC FORM FOR CONFIDENCE INTERVALS.
+C ***
+           DO 100 I=1,P1
+                IP = PVAR(I)
+                W(I) = XMU(IP)
+  100      CONTINUE
+           CALL DPOSL(V, LDV, P1, W)
+           QUAD = 0.D0
+           DO 110 I=1,P1
+                IP = PVAR(I)
+                QUAD = QUAD + XMU(IP)*W(I)
+  110      CONTINUE
+           QUAD = QUAD + 1.D0
+C ***
+C     COMPUTE DIAGONALS OF THE PSI INVERSE MATRIX.
+C ***
+           DO 130 I=1,P1
+                DO 120 J=1,P1
+                     W(J) = 0.D0
+  120           CONTINUE
+                W(I) = 1.D0
+                CALL DPOSL(V, LDV, P1, W)
+                WK2(I) = W(I)
+  130      CONTINUE
+C ***
+C     COMPUTE CONFIDENCE INTERVALS FOR BETA.
+C ***
+           RN = N
+           SRTN = DSQRT(RN)
+           DO 150 I=1,P2
+                IP = I + P1
+                DO 140 J=1,P1
+                     V(IP,J) = 1.96D0*DSQRT(WK2(J)*WK(I))/SRTN
+  140           CONTINUE
+  150      CONTINUE
+C ***
+C    COMPUTE CONFIDENCE INTERVALS FOR BETA0.
+C ***
+           DO 160 I=1,P2
+                IP = I + P1
+                W(I) = 1.96D0*DSQRT(QUAD*WK(I))/SRTN
+  160      CONTINUE
+C ***
+C    COMPUTE BETA0.
+C ***
+           DO 180 I=1,P2
+                SUM = 0.D0
+                IL = I + P1
+                DO 170 J=1,P1
+                     JP = PVAR(J)
+                     SUM = SUM + V(J,IL)*XMU(JP)
+  170           CONTINUE
+                IP = PVAR(IL)
+                WK2(I) = XMU(IP) - SUM
+  180      CONTINUE
+C ***
+C    OUTPUT RESULTS.
+C ***
+           WRITE (6,99997)
+           KT = (P1+7)/8
+           DO 220 KK=1,KT
+                IS = (KK-1)*8 + 1
+                IE = KK*8
+                IF (IE.GT.P1) IE = P1
+                IF (KK.GT.1) GO TO 200
+                WRITE (6,99996) (PVAR(I),I=IS,IE)
+                DO 190 I=1,P2
+                     J = I + P1
+                     WRITE (6,99995) PVAR(J), WK2(I),
+     *                    (V(L,J),L=IS,IE)
+                     WRITE (6,99994) W(I), (V(J,L),L=IS,IE)
+  190           CONTINUE
+                GO TO 220
+  200           WRITE (6,99993) (PVAR(I),I=IS,IE)
+                DO 210 I=1,P2
+                     J = I + P1
+                     WRITE (6,99992) PVAR(J), (V(L,J),L=IS,IE)
+                     WRITE (6,99991) (V(J,L),L=IS,IE)
+  210           CONTINUE
+  220      CONTINUE
+           WRITE (6,99990)
+           KT = (P1+34)/35
+           DO 280 KK=1,KT
+                IS = (KK-1)*35 + 1
+                IE = KK*35
+                IF (IE.GT.P1) IE = P1
+                IF (KK.GT.1) GO TO 250
+                WRITE (6,99989) (PVAR(I),I=IS,IE)
+                LEN = IE
+                KP1 = LEN + 1
+                DO 240 I=1,P2
+                     IP = I + P1
+                     LSTR(1) = IZERO
+                     IF (DABS(WK2(I)).GT.W(I)) LSTR(1) = IAST
+                     DO 230 J=1,LEN
+                          JP1 = J + 1
+                          LSTR(JP1) = IZERO
+                          IF (DABS(V(J,IP)).GT.V(IP,J))
+     *                         LSTR(JP1) = IAST
+  230                CONTINUE
+                     WRITE (6,99988) PVAR(IP), (LSTR(J),J=1,KP1)
+  240           CONTINUE
+                GO TO 280
+  250           WRITE (6,99987) (PVAR(I),I=IS,IE)
+                LEN = IE - IS + 1
+                DO 270 I=1,P2
+                     IP = I + P1
+                     DO 260 J=1,LEN
+                          JIS = J + IS - 1
+                          LSTR(J) = IZERO
+                          IF (DABS(V(JIS,IP)).GT.V(IP,JIS))
+     *                         LSTR(J) = IAST
+  260                CONTINUE
+                     WRITE (6,99986) PVAR(IP), (LSTR(J),J=1,LEN)
+  270           CONTINUE
+  280      CONTINUE
+C ***
+C     COMPUTE CENTERED AND SCALED BETA MATRIX.
+C ***
+           DO 300 I=1,P1
+                IP = PVAR(I)
+                CVAR = DSQRT(CORR(IP,IP))
+                DO 290 J=1,P2
+                     JN = P1 + J
+                     JP = PVAR(JN)
+                     V(I,JN) = V(I,JN)*(CVAR/DSQRT(CORR(JP,JP)))
+  290           CONTINUE
+  300      CONTINUE
+C ***
+C     PERMUTE COLUMNS OF CENTERED AND SCALED X.
+C ***
+           DO 310 J=1,P
+                JP = PVAR(J)
+                CALL DCOPY(N, XSAVE(1,JP), 1, X(1,J), 1)
+  310      CONTINUE
+           IDUM(1,1) = 2
+           IF (IPRINT.EQ.4) CALL PRINTM(9, X, LDX, N, P, IDUM,
+     *          1, 1, 1)
+C ***
+C     COMPUTE RESIDUAL (FULL SPACE RESIDUAL).
+C ***
+           RESID = 0.D0
+           DO 340 I=1,N
+                DO 330 J=1,P2
+                     JP = J + P1
+                     SUM = 0.D0
+                     DO 320 L=1,P1
+                          SUM = SUM + X(I,L)*V(L,JP)
+  320                CONTINUE
+                     X(I,JP) = X(I,JP) - SUM
+                     RESID = RESID + X(I,JP)**2
+  330           CONTINUE
+  340      CONTINUE
+           IDUM(1,1) = 3
+           IF (IPRINT.EQ.4) CALL PRINTM(9, X, LDX, N, P, IDUM,
+     *          1, P1, P2)
+           RESID = DSQRT(RESID)
+           DUM(1,1) = RESID
+           CALL PRINTM(31, DUM, 1, 1, 1, IDUM, ID, ID, ID)
+  350 CONTINUE
+      RETURN
+99999 FORMAT (///1X, 120(1H-))
+99998 FORMAT (27H IERR FROM DPOFA IN BETA IS, I3)
+99997 FORMAT (///43H BETA0 - BETA MATRIX / 95 PER CENT CONFIDEN,
+     *     3HCE , 9HINTERVALS//)
+99996 FORMAT (25X, 9HPREDICTOR/1X, 9HESTIMATED, 15X, 8HVARIABLE,
+     *     5HS..../1X, 9HVARIABLES, 3X, 9HINTERCEPT, 1X, 8(6X,
+     *     I3, 4X))
+99995 FORMAT (/4X, I3, 3X, 1P9D13.4)
+99994 FORMAT (10X, 1P9D13.4)
+99993 FORMAT (//25X, 9HPREDICTOR/1X, 9HESTIMATED, 15X, 6HVARIAB,
+     *     3HLES, 2X, 14H(CONTINUED).../1X, 9HVARIABLES, 13X,
+     *     8(6X, I3, 4X))
+99992 FORMAT (/4X, I3, 16X, 1P8D13.4)
+99991 FORMAT (23X, 1P8D13.4)
+99990 FORMAT (///1X, 39HDEPENDENCY STRUCTURE AT 95 PER CENT CON,
+     *     8HFIDENCE , 5HLEVEL/11X, 24H(* = NONZERO,  0 = ZERO)/
+     *     )
+99989 FORMAT (13X, 9HPREDICTOR/1X, 9HESTIMATED, 3X, 9HVARIABLES,
+     *     4H..../1X, 9HVARIABLES, 3H  I, 35(I3))
+99988 FORMAT (/4X, I3, 3X, 36(2X, A1))
+99987 FORMAT (13X, 9HPREDICTOR/1X, 9HESTIMATED, 3X, 9HVARIABLES,
+     *     1H , 14H(CONTINUED).../1X, 9HVARIABLES, 3X, 35I3)
+99986 FORMAT (/10X, 35(2X, A1))
+      END
+C                                                                       SCP   10
+C --------------------------------------------------------------        SCP   20
+C                                                                       SCP   30
+      SUBROUTINE SCPROD(X, N, PROD, ISC)                                SCP   40
+C ***
+C     SUBROUTINE SCPROD COMPUTES THE PRODUCT OF A SEQUENCE OF NUMBERS
+C        USING A SCALING PROCEDURE WHICH COMPUTES THE ANSWER AS A
+C        MANTISSA AND EXPONENT.
+C ***
+      INTEGER I, ISC, N
+      DOUBLE PRECISION PROD, SC, X(N)
+      DOUBLE PRECISION DABS
+      PROD = 1.D0
+      ISC = 0
+      SC = 10.D0
+      DO 30 I=1,N
+           PROD = X(I)*PROD
+           IF (PROD.EQ.0.D0) GO TO 40
+   10      IF (DABS(PROD).GE.1.D0) GO TO 20
+           PROD = SC*PROD
+           ISC = ISC - 1
+           GO TO 10
+   20      IF (DABS(PROD).LT.SC) GO TO 30
+           PROD = PROD/SC
+           ISC = ISC + 1
+           GO TO 20
+   30 CONTINUE
+   40 CONTINUE
+      RETURN
+      END
+      SUBROUTINE DPODI(A,LDA,N,DET,JOB)                                 00000010
+      INTEGER LDA,N,JOB
+      DOUBLE PRECISION A(LDA,1)
+      DOUBLE PRECISION DET(2)
+C
+C     DPODI COMPUTES THE DETERMINANT AND INVERSE OF A CERTAIN
+C     DOUBLE PRECISION SYMMETRIC POSITIVE DEFINITE MATRIX (SEE BELOW)
+C     USING THE FACTORS COMPUTED BY DPOCO, DPOFA OR DQRDC.
+C
+C     ON ENTRY
+C
+C        A       DOUBLE PRECISION(LDA, N)
+C                THE OUTPUT  A  FROM DPOCO OR DPOFA
+C                OR THE OUTPUT  X  FROM DQRDC.
+C
+C        LDA     INTEGER
+C                THE LEADING DIMENSION OF THE ARRAY  A .
+C
+C        N       INTEGER
+C                THE ORDER OF THE MATRIX  A .
+C
+C        JOB     INTEGER
+C                = 11   BOTH DETERMINANT AND INVERSE.
+C                = 01   INVERSE ONLY.
+C                = 10   DETERMINANT ONLY.
+C
+C     ON RETURN
+C
+C        A       IF DPOCO OR DPOFA WAS USED TO FACTOR  A  THEN
+C                DPODI PRODUCES THE UPPER HALF OF INVERSE(A) .
+C                IF DQRDC WAS USED TO DECOMPOSE  X  THEN
+C                DPODI PRODUCES THE UPPER HALF OF INVERSE(TRANS(X)*X)
+C                WHERE TRANS(X) IS THE TRANSPOSE.
+C                ELEMENTS OF  A  BELOW THE DIAGONAL ARE UNCHANGED.
+C                IF THE UNITS DIGIT OF JOB IS ZERO,  A  IS UNCHANGED.
+C
+C        DET     DOUBLE PRECISION(2)
+C                DETERMINANT OF  A  OR OF  TRANS(X)*X  IF REQUESTED.
+C                OTHERWISE NOT REFERENCED.
+C                DETERMINANT = DET(1) * 10.0**DET(2)
+C                WITH  1.0 .LE. DET(1) .LT. 10.0
+C                OR  DET(1) .EQ. 0.0 .
+C
+C     ERROR CONDITION
+C
+C        A DIVISION BY ZERO WILL OCCUR IF THE INPUT FACTOR CONTAINS
+C        A ZERO ON THE DIAGONAL AND THE INVERSE IS REQUESTED.
+C        IT WILL NOT OCCUR IF THE SUBROUTINES ARE CALLED CORRECTLY
+C        AND IF DPOCO OR DPOFA HAS SET INFO .EQ. 0 .
+C
+C     LINPACK.  THIS VERSION DATED 08/14/78 .
+C     CLEVE MOLER, UNIVERSITY OF NEW MEXICO, ARGONNE NATIONAL LAB.
+C
+C     SUBROUTINES AND FUNCTIONS
+C
+C     BLAS DAXPY,DSCAL
+C     FORTRAN MOD
+C
+C     INTERNAL VARIABLES
+C
+      DOUBLE PRECISION T
+      DOUBLE PRECISION S
+      INTEGER I,J,JM1,K,KP1
+C
+C     COMPUTE DETERMINANT
+C
+      IF (JOB/10 .EQ. 0) GO TO 70
+         DET(1) = 1.0D0
+         DET(2) = 0.0D0
+         S = 10.0D0
+         DO 50 I = 1, N
+            DET(1) = A(I,I)**2*DET(1)
+C        ...EXIT
+            IF (DET(1) .EQ. 0.0D0) GO TO 60
+   10       IF (DET(1) .GE. 1.0D0) GO TO 20
+               DET(1) = S*DET(1)
+               DET(2) = DET(2) - 1.0D0
+            GO TO 10
+   20       CONTINUE
+   30       IF (DET(1) .LT. S) GO TO 40
+               DET(1) = DET(1)/S
+               DET(2) = DET(2) + 1.0D0
+            GO TO 30
+   40       CONTINUE
+   50    CONTINUE
+   60    CONTINUE
+   70 CONTINUE
+C
+C     COMPUTE INVERSE(R)
+C
+      IF (MOD(JOB,10) .EQ. 0) GO TO 140
+         DO 100 K = 1, N
+            A(K,K) = 1.0D0/A(K,K)
+            T = -A(K,K)
+            CALL DSCAL(K-1,T,A(1,K),1)
+            KP1 = K + 1
+            IF (N .LT. KP1) GO TO 90
+            DO 80 J = KP1, N
+               T = A(K,J)
+               A(K,J) = 0.0D0
+               CALL DAXPY(K,T,A(1,K),1,A(1,J),1)
+   80       CONTINUE
+   90       CONTINUE
+  100    CONTINUE
+C
+C        FORM  INVERSE(R) * TRANS(INVERSE(R))
+C
+         DO 130 J = 1, N
+            JM1 = J - 1
+            IF (JM1 .LT. 1) GO TO 120
+            DO 110 K = 1, JM1
+               T = A(K,J)
+               CALL DAXPY(K,T,A(1,J),1,A(1,K),1)
+  110       CONTINUE
+  120       CONTINUE
+            T = A(J,J)
+            CALL DSCAL(J,T,A(1,J),1)
+  130    CONTINUE
+  140 CONTINUE
+      RETURN
+      END
+      SUBROUTINE DPOFA(A,LDA,N,INFO)                                    00000010
+      INTEGER LDA,N,INFO
+      DOUBLE PRECISION A(LDA,1)
+C
+C     DPOFA FACTORS A DOUBLE PRECISION SYMMETRIC POSITIVE DEFINITE
+C     MATRIX.
+C
+C     DPOFA IS USUALLY CALLED BY DPOCO, BUT IT CAN BE CALLED
+C     DIRECTLY WITH A SAVING IN TIME IF  RCOND  IS NOT NEEDED.
+C     (TIME FOR DPOCO) = (1 + 18/N)*(TIME FOR DPOFA) .
+C
+C     ON ENTRY
+C
+C        A       DOUBLE PRECISION(LDA, N)
+C                THE SYMMETRIC MATRIX TO BE FACTORED.  ONLY THE
+C                DIAGONAL AND UPPER TRIANGLE ARE USED.
+C
+C        LDA     INTEGER
+C                THE LEADING DIMENSION OF THE ARRAY  A .
+C
+C        N       INTEGER
+C                THE ORDER OF THE MATRIX  A .
+C
+C     ON RETURN
+C
+C        A       AN UPPER TRIANGULAR MATRIX  R  SO THAT  A = TRANS(R)*R
+C                WHERE  TRANS(R)  IS THE TRANSPOSE.
+C                THE STRICT LOWER TRIANGLE IS UNALTERED.
+C                IF  INFO .NE. 0 , THE FACTORIZATION IS NOT COMPLETE.
+C
+C        INFO    INTEGER
+C                = 0  FOR NORMAL RETURN.
+C                = K  SIGNALS AN ERROR CONDITION.  THE LEADING MINOR
+C                     OF ORDER  K  IS NOT POSITIVE DEFINITE.
+C
+C     LINPACK.  THIS VERSION DATED 08/14/78 .
+C     CLEVE MOLER, UNIVERSITY OF NEW MEXICO, ARGONNE NATIONAL LAB.
+C
+C     SUBROUTINES AND FUNCTIONS
+C
+C     BLAS DDOT
+C     FORTRAN DSQRT
+C
+C     INTERNAL VARIABLES
+C
+      DOUBLE PRECISION DDOT,T
+      DOUBLE PRECISION S
+      INTEGER J,JM1,K
+C     BEGIN BLOCK WITH ...EXITS TO 40
+C
+C
+         DO 30 J = 1, N
+            INFO = J
+            S = 0.0D0
+            JM1 = J - 1
+            IF (JM1 .LT. 1) GO TO 20
+            DO 10 K = 1, JM1
+               T = A(K,J) - DDOT(K-1,A(1,K),1,A(1,J),1)
+               T = T/A(K,K)
+               A(K,J) = T
+               S = S + T*T
+   10       CONTINUE
+   20       CONTINUE
+            S = A(J,J) - S
+C     ......EXIT
+            IF (S .LE. 0.0D0) GO TO 40
+            A(J,J) = DSQRT(S)
+   30    CONTINUE
+         INFO = 0
+   40 CONTINUE
+      RETURN
+      END
+      SUBROUTINE DPOSL(A,LDA,N,B)                                       00000010
+      INTEGER LDA,N
+      DOUBLE PRECISION A(LDA,1),B(1)
+C
+C     DPOSL SOLVES THE DOUBLE PRECISION SYMMETRIC POSITIVE DEFINITE
+C     SYSTEM A * X = B
+C     USING THE FACTORS COMPUTED BY DPOCO OR DPOFA.
+C
+C     ON ENTRY
+C
+C        A       DOUBLE PRECISION(LDA, N)
+C                THE OUTPUT FROM DPOCO OR DPOFA.
+C
+C        LDA     INTEGER
+C                THE LEADING DIMENSION OF THE ARRAY  A .
+C
+C        N       INTEGER
+C                THE ORDER OF THE MATRIX  A .
+C
+C        B       DOUBLE PRECISION(N)
+C                THE RIGHT HAND SIDE VECTOR.
+C
+C     ON RETURN
+C
+C        B       THE SOLUTION VECTOR  X .
+C
+C     ERROR CONDITION
+C
+C        A DIVISION BY ZERO WILL OCCUR IF THE INPUT FACTOR CONTAINS
+C        A ZERO ON THE DIAGONAL.  TECHNICALLY THIS INDICATES
+C        SINGULARITY BUT IT IS USUALLY CAUSED BY IMPROPER SUBROUTINE
+C        ARGUMENTS.  IT WILL NOT OCCUR IF THE SUBROUTINES ARE CALLED
+C        CORRECTLY AND  INFO .EQ. 0 .
+C
+C     TO COMPUTE  INVERSE(A) * C  WHERE  C  IS A MATRIX
+C     WITH  P  COLUMNS
+C           CALL DPOCO(A,LDA,N,RCOND,Z,INFO)
+C           IF (RCOND IS TOO SMALL .OR. INFO .NE. 0) GO TO ...
+C           DO 10 J = 1, P
+C              CALL DPOSL(A,LDA,N,C(1,J))
+C        10 CONTINUE
+C
+C     LINPACK.  THIS VERSION DATED 08/14/78 .
+C     CLEVE MOLER, UNIVERSITY OF NEW MEXICO, ARGONNE NATIONAL LAB.
+C
+C     SUBROUTINES AND FUNCTIONS
+C
+C     BLAS DAXPY,DDOT
+C
+C     INTERNAL VARIABLES
+C
+      DOUBLE PRECISION DDOT,T
+      INTEGER K,KB
+C
+C     SOLVE TRANS(R)*Y = B
+C
+      DO 10 K = 1, N
+         T = DDOT(K-1,A(1,K),1,B(1),1)
+         B(K) = (B(K) - T)/A(K,K)
+   10 CONTINUE
+C
+C     SOLVE R*X = Y
+C
+      DO 20 KB = 1, N
+         K = N + 1 - KB
+         B(K) = B(K)/A(K,K)
+         T = -B(K)
+         CALL DAXPY(K-1,T,A(1,K),1,B(1),1)
+   20 CONTINUE
+      RETURN
+      END
+      SUBROUTINE DSVDC(X,LDX,N,P,S,E,U,LDU,V,LDV,WORK,JOB,INFO)         00000010
+      INTEGER LDX,N,P,LDU,LDV,JOB,INFO
+      DOUBLE PRECISION X(LDX,1),S(1),E(1),U(LDU,1),V(LDV,1),WORK(1)
+C
+C
+C     DSVDC IS A SUBROUTINE TO REDUCE A DOUBLE PRECISION NXP MATRIX X
+C     BY ORTHOGONAL TRANSFORMATIONS U AND V TO DIAGONAL FORM.  THE
+C     DIAGONAL ELEMENTS S(I) ARE THE SINGULAR VALUES OF X.  THE
+C     COLUMNS OF U ARE THE CORRESPONDING LEFT SINGULAR VECTORS,
+C     AND THE COLUMNS OF V THE RIGHT SINGULAR VECTORS.
+C
+C     ON ENTRY
+C
+C         X         DOUBLE PRECISION(LDX,P), WHERE LDX.GE.N.
+C                   X CONTAINS THE MATRIX WHOSE SINGULAR VALUE
+C                   DECOMPOSITION IS TO BE COMPUTED.  X IS
+C                   DESTROYED BY DSVDC.
+C
+C         LDX       INTEGER.
+C                   LDX IS THE LEADING DIMENSION OF THE ARRAY X.
+C
+C         N         INTEGER.
+C                   N IS THE NUMBER OF ROWS OF THE MATRIX X.
+C
+C         P         INTEGER.
+C                   P IS THE NUMBER OF COLUMNS OF THE MATRIX X.
+C
+C         LDU       INTEGER.
+C                   LDU IS THE LEADING DIMENSION OF THE ARRAY U.
+C                   (SEE BELOW).
+C
+C         LDV       INTEGER.
+C                   LDV IS THE LEADING DIMENSION OF THE ARRAY V.
+C                   (SEE BELOW).
+C
+C         WORK      DOUBLE PRECISION(N).
+C                   WORK IS A SCRATCH ARRAY.
+C
+C         JOB       INTEGER.
+C                   JOB CONTROLS THE COMPUTATION OF THE SINGULAR
+C                   VECTORS.  IT HAS THE DECIMAL EXPANSION AB
+C                   WITH THE FOLLOWING MEANING
+C
+C                        A.EQ.0    DO NOT COMPUTE THE LEFT SINGULAR
+C                                  VECTORS.
+C                        A.EQ.1    RETURN THE N LEFT SINGULAR VECTORS
+C                                  IN U.
+C                        A.GE.2    RETURN THE FIRST MIN(N,P) SINGULAR
+C                                  VECTORS IN U.
+C                        B.EQ.0    DO NOT COMPUTE THE RIGHT SINGULAR
+C                                  VECTORS.
+C                        B.EQ.1    RETURN THE RIGHT SINGULAR VECTORS
+C                                  IN V.
+C
+C     ON RETURN
+C
+C         S         DOUBLE PRECISION(MM), WHERE MM=MIN(N+1,P).
+C                   THE FIRST MIN(N,P) ENTRIES OF S CONTAIN THE
+C                   SINGULAR VALUES OF X ARRANGED IN DESCENDING
+C                   ORDER OF MAGNITUDE.
+C
+C         E         DOUBLE PRECISION(P)
+C                   E ORDINARILY CONTAINS ZEROS.  HOWEVER SEE THE
+C                   DISCUSSION OF INFO FOR EXCEPTIONS.
+C
+C         U         DOUBLE PRECISION(LDU,K), WHERE LDU.GE.N.  IF
+C                                   JOBA.EQ.1 THEN K.EQ.N, IF JOBA.GE.2
+C                                   THEN K.EQ.MIN(N,P).
+C                   U CONTAINS THE MATRIX OF LEFT SINGULAR VECTORS.
+C                   U IS NOT REFERENCED IF JOBA.EQ.0.  IF N.LE.P
+C                   OR IF JOBA.EQ.2, THEN U MAY BE IDENTIFIED WITH X
+C                   IN THE SUBROUTINE CALL.
+C
+C         V         DOUBLE PRECISION(LDV,P), WHERE LDV.GE.P.
+C                   V CONTAINS THE MATRIX OF RIGHT SINGULAR VECTORS.
+C                   V IS NOT REFERENCED IF JOB.EQ.0.  IF P.LE.N,
+C                   THEN V MAY BE IDENTIFIED WITH X IN THE
+C                   SUBROUTINE CALL.
+C
+C         INFO      INTEGER.
+C                   THE SINGULAR VALUES (AND THEIR CORRESPONDING
+C                   SINGULAR VECTORS) S(INFO+1),S(INFO+2),...,S(M)
+C                   ARE CORRECT (HERE M=MIN(N,P)).  THUS IF
+C                   INFO.EQ.0, ALL THE SINGULAR VALUES AND THEIR
+C                   VECTORS ARE CORRECT.  IN ANY EVENT, THE MATRIX
+C                   B = TRANS(U)*X*V IS THE BIDIAGONAL MATRIX
+C                   WITH THE ELEMENTS OF S ON ITS DIAGONAL AND THE
+C                   ELEMENTS OF E ON ITS SUPER-DIAGONAL (TRANS(U)
+C                   IS THE TRANSPOSE OF U).  THUS THE SINGULAR
+C                   VALUES OF X AND B ARE THE SAME.
+C
+C     LINPACK. THIS VERSION DATED 08/14/78 .
+C     G.W. STEWART, UNIVERSITY OF MARYLAND, ARGONNE NATIONAL LAB.
+C
+C     DSVDC USES THE FOLLOWING FUNCTIONS AND SUBPROGRAMS.
+C
+C     EXTERNAL DROT
+C     BLAS DAXPY,DDOT,DSCAL,DSWAP,DNRM2,DROTG
+C     FORTRAN DABS,DMAX1,MAX0,MIN0,MOD,DSQRT
+C
+C     INTERNAL VARIABLES
+C
+      INTEGER I,ITER,J,JOBU,K,KASE,KK,L,LL,LLS,LM1,LP1,LS,LU,M,MAXIT,
+     *        MM,MM1,MP1,NCT,NCTP1,NCU,NRT,NRTP1
+      DOUBLE PRECISION DDOT,T
+      DOUBLE PRECISION B,C,CS,EL,EMM1,F,G,DNRM2,SCALE,SHIFT,SL,SM,SN,
+     *                 SMM1,T1,TEST,ZTEST
+      LOGICAL WANTU,WANTV
+C
+C
+C     SET THE MAXIMUM NUMBER OF ITERATIONS.
+C
+      MAXIT = 30
+C
+C     DETERMINE WHAT IS TO BE COMPUTED.
+C
+      WANTU = .FALSE.
+      WANTV = .FALSE.
+      JOBU = MOD(JOB,100)/10
+      NCU = N
+      IF (JOBU .GT. 1) NCU = MIN0(N,P)
+      IF (JOBU .NE. 0) WANTU = .TRUE.
+      IF (MOD(JOB,10) .NE. 0) WANTV = .TRUE.
+C
+C     REDUCE X TO BIDIAGONAL FORM, STORING THE DIAGONAL ELEMENTS
+C     IN S AND THE SUPER-DIAGONAL ELEMENTS IN E.
+C
+      INFO = 0
+      NCT = MIN0(N-1,P)
+      NRT = MAX0(0,MIN0(P-2,N))
+      LU = MAX0(NCT,NRT)
+      IF (LU .LT. 1) GO TO 170
+      DO 160 L = 1, LU
+         LP1 = L + 1
+         IF (L .GT. NCT) GO TO 20
+C
+C           COMPUTE THE TRANSFORMATION FOR THE L-TH COLUMN AND
+C           PLACE THE L-TH DIAGONAL IN S(L).
+C
+            S(L) = DNRM2(N-L+1,X(L,L),1)
+            IF (S(L) .EQ. 0.0D0) GO TO 10
+               IF (X(L,L) .NE. 0.0D0) S(L) = DSIGN(S(L),X(L,L))
+               CALL DSCAL(N-L+1,1.0D0/S(L),X(L,L),1)
+               X(L,L) = 1.0D0 + X(L,L)
+   10       CONTINUE
+            S(L) = -S(L)
+   20    CONTINUE
+         IF (P .LT. LP1) GO TO 50
+         DO 40 J = LP1, P
+            IF (L .GT. NCT) GO TO 30
+            IF (S(L) .EQ. 0.0D0) GO TO 30
+C
+C              APPLY THE TRANSFORMATION.
+C
+               T = -DDOT(N-L+1,X(L,L),1,X(L,J),1)/X(L,L)
+               CALL DAXPY(N-L+1,T,X(L,L),1,X(L,J),1)
+   30       CONTINUE
+C
+C           PLACE THE L-TH ROW OF X INTO  E FOR THE
+C           SUBSEQUENT CALCULATION OF THE ROW TRANSFORMATION.
+C
+            E(J) = X(L,J)
+   40    CONTINUE
+   50    CONTINUE
+         IF (.NOT.WANTU .OR. L .GT. NCT) GO TO 70
+C
+C           PLACE THE TRANSFORMATION IN U FOR SUBSEQUENT BACK
+C           MULTIPLICATION.
+C
+            DO 60 I = L, N
+               U(I,L) = X(I,L)
+   60       CONTINUE
+   70    CONTINUE
+         IF (L .GT. NRT) GO TO 150
+C
+C           COMPUTE THE L-TH ROW TRANSFORMATION AND PLACE THE
+C           L-TH SUPER-DIAGONAL IN E(L).
+C
+            E(L) = DNRM2(P-L,E(LP1),1)
+            IF (E(L) .EQ. 0.0D0) GO TO 80
+               IF (E(LP1) .NE. 0.0D0) E(L) = DSIGN(E(L),E(LP1))
+               CALL DSCAL(P-L,1.0D0/E(L),E(LP1),1)
+               E(LP1) = 1.0D0 + E(LP1)
+   80       CONTINUE
+            E(L) = -E(L)
+            IF (LP1 .GT. N .OR. E(L) .EQ. 0.0D0) GO TO 120
+C
+C              APPLY THE TRANSFORMATION.
+C
+               DO 90 I = LP1, N
+                  WORK(I) = 0.0D0
+   90          CONTINUE
+               DO 100 J = LP1, P
+                  CALL DAXPY(N-L,E(J),X(LP1,J),1,WORK(LP1),1)
+  100          CONTINUE
+               DO 110 J = LP1, P
+                  CALL DAXPY(N-L,-E(J)/E(LP1),WORK(LP1),1,X(LP1,J),1)
+  110          CONTINUE
+  120       CONTINUE
+            IF (.NOT.WANTV) GO TO 140
+C
+C              PLACE THE TRANSFORMATION IN V FOR SUBSEQUENT
+C              BACK MULTIPLICATION.
+C
+               DO 130 I = LP1, P
+                  V(I,L) = E(I)
+  130          CONTINUE
+  140       CONTINUE
+  150    CONTINUE
+  160 CONTINUE
+  170 CONTINUE
+C
+C     SET UP THE FINAL BIDIAGONAL MATRIX OF ORDER M.
+C
+      M = MIN0(P,N+1)
+      NCTP1 = NCT + 1
+      NRTP1 = NRT + 1
+      IF (NCT .LT. P) S(NCTP1) = X(NCTP1,NCTP1)
+      IF (N .LT. M) S(M) = 0.0D0
+      IF (NRTP1 .LT. M) E(NRTP1) = X(NRTP1,M)
+      E(M) = 0.0D0
+C
+C     IF REQUIRED, GENERATE U.
+C
+      IF (.NOT.WANTU) GO TO 300
+         IF (NCU .LT. NCTP1) GO TO 200
+         DO 190 J = NCTP1, NCU
+            DO 180 I = 1, N
+               U(I,J) = 0.0D0
+  180       CONTINUE
+            U(J,J) = 1.0D0
+  190    CONTINUE
+  200    CONTINUE
+         IF (NCT .LT. 1) GO TO 290
+         DO 280 LL = 1, NCT
+            L = NCT - LL + 1
+            IF (S(L) .EQ. 0.0D0) GO TO 250
+               LP1 = L + 1
+               IF (NCU .LT. LP1) GO TO 220
+               DO 210 J = LP1, NCU
+                  T = -DDOT(N-L+1,U(L,L),1,U(L,J),1)/U(L,L)
+                  CALL DAXPY(N-L+1,T,U(L,L),1,U(L,J),1)
+  210          CONTINUE
+  220          CONTINUE
+               CALL DSCAL(N-L+1,-1.0D0,U(L,L),1)
+               U(L,L) = 1.0D0 + U(L,L)
+               LM1 = L - 1
+               IF (LM1 .LT. 1) GO TO 240
+               DO 230 I = 1, LM1
+                  U(I,L) = 0.0D0
+  230          CONTINUE
+  240          CONTINUE
+            GO TO 270
+  250       CONTINUE
+               DO 260 I = 1, N
+                  U(I,L) = 0.0D0
+  260          CONTINUE
+               U(L,L) = 1.0D0
+  270       CONTINUE
+  280    CONTINUE
+  290    CONTINUE
+  300 CONTINUE
+C
+C     IF IT IS REQUIRED, GENERATE V.
+C
+      IF (.NOT.WANTV) GO TO 350
+         DO 340 LL = 1, P
+            L = P - LL + 1
+            LP1 = L + 1
+            IF (L .GT. NRT) GO TO 320
+            IF (E(L) .EQ. 0.0D0) GO TO 320
+               DO 310 J = LP1, P
+                  T = -DDOT(P-L,V(LP1,L),1,V(LP1,J),1)/V(LP1,L)
+                  CALL DAXPY(P-L,T,V(LP1,L),1,V(LP1,J),1)
+  310          CONTINUE
+  320       CONTINUE
+            DO 330 I = 1, P
+               V(I,L) = 0.0D0
+  330       CONTINUE
+            V(L,L) = 1.0D0
+  340    CONTINUE
+  350 CONTINUE
+C
+C     MAIN ITERATION LOOP FOR THE SINGULAR VALUES.
+C
+      MM = M
+      ITER = 0
+  360 CONTINUE
+C
+C        QUIT IF ALL THE SINGULAR VALUES HAVE BEEN FOUND.
+C
+C     ...EXIT
+         IF (M .EQ. 0) GO TO 620
+C
+C        IF TOO MANY ITERATIONS HAVE BEEN PERFORMED, SET
+C        FLAG AND RETURN.
+C
+         IF (ITER .LT. MAXIT) GO TO 370
+            INFO = M
+C     ......EXIT
+            GO TO 620
+  370    CONTINUE
+C
+C        THIS SECTION OF THE PROGRAM INSPECTS FOR
+C        NEGLIGIBLE ELEMENTS IN THE S AND E ARRAYS.  ON
+C        COMPLETION THE VARIABLES KASE AND L ARE SET AS FOLLOWS.
+C
+C           KASE = 1     IF S(M) AND E(L-1) ARE NEGLIGIBLE AND L.LT.M
+C           KASE = 2     IF S(L) IS NEGLIGIBLE AND L.LT.M
+C           KASE = 3     IF E(L-1) IS NEGLIGIBLE, L.LT.M, AND
+C                        S(L), ..., S(M) ARE NOT NEGLIGIBLE (QR STEP).
+C           KASE = 4     IF E(M-1) IS NEGLIGIBLE (CONVERGENCE).
+C
+         DO 390 LL = 1, M
+            L = M - LL
+C        ...EXIT
+            IF (L .EQ. 0) GO TO 400
+            TEST = DABS(S(L)) + DABS(S(L+1))
+            ZTEST = TEST + DABS(E(L))
+            IF (ZTEST .NE. TEST) GO TO 380
+               E(L) = 0.0D0
+C        ......EXIT
+               GO TO 400
+  380       CONTINUE
+  390    CONTINUE
+  400    CONTINUE
+         IF (L .NE. M - 1) GO TO 410
+            KASE = 4
+         GO TO 480
+  410    CONTINUE
+            LP1 = L + 1
+            MP1 = M + 1
+            DO 430 LLS = LP1, MP1
+               LS = M - LLS + LP1
+C           ...EXIT
+               IF (LS .EQ. L) GO TO 440
+               TEST = 0.0D0
+               IF (LS .NE. M) TEST = TEST + DABS(E(LS))
+               IF (LS .NE. L + 1) TEST = TEST + DABS(E(LS-1))
+               ZTEST = TEST + DABS(S(LS))
+               IF (ZTEST .NE. TEST) GO TO 420
+                  S(LS) = 0.0D0
+C           ......EXIT
+                  GO TO 440
+  420          CONTINUE
+  430       CONTINUE
+  440       CONTINUE
+            IF (LS .NE. L) GO TO 450
+               KASE = 3
+            GO TO 470
+  450       CONTINUE
+            IF (LS .NE. M) GO TO 460
+               KASE = 1
+            GO TO 470
+  460       CONTINUE
+               KASE = 2
+               L = LS
+  470       CONTINUE
+  480    CONTINUE
+         L = L + 1
+C
+C        PERFORM THE TASK INDICATED BY KASE.
+C
+         GO TO (490,520,540,570), KASE
+C
+C        DEFLATE NEGLIGIBLE S(M).
+C
+  490    CONTINUE
+            MM1 = M - 1
+            F = E(M-1)
+            E(M-1) = 0.0D0
+            DO 510 KK = L, MM1
+               K = MM1 - KK + L
+               T1 = S(K)
+               CALL DROTG(T1,F,CS,SN)
+               S(K) = T1
+               IF (K .EQ. L) GO TO 500
+                  F = -SN*E(K-1)
+                  E(K-1) = CS*E(K-1)
+  500          CONTINUE
+               IF (WANTV) CALL DROT(P,V(1,K),1,V(1,M),1,CS,SN)
+  510       CONTINUE
+         GO TO 610
+C
+C        SPLIT AT NEGLIGIBLE S(L).
+C
+  520    CONTINUE
+            F = E(L-1)
+            E(L-1) = 0.0D0
+            DO 530 K = L, M
+               T1 = S(K)
+               CALL DROTG(T1,F,CS,SN)
+               S(K) = T1
+               F = -SN*E(K)
+               E(K) = CS*E(K)
+               IF (WANTU) CALL DROT(N,U(1,K),1,U(1,L-1),1,CS,SN)
+  530       CONTINUE
+         GO TO 610
+C
+C        PERFORM ONE QR STEP.
+C
+  540    CONTINUE
+C
+C           CALCULATE THE SHIFT.
+C
+            SCALE = DMAX1(DABS(S(M)),DABS(S(M-1)),DABS(E(M-1)),
+     *                    DABS(S(L)),DABS(E(L)))
+            SM = S(M)/SCALE
+            SMM1 = S(M-1)/SCALE
+            EMM1 = E(M-1)/SCALE
+            SL = S(L)/SCALE
+            EL = E(L)/SCALE
+            B = ((SMM1 + SM)*(SMM1 - SM) + EMM1**2)/2.0D0
+            C = (SM*EMM1)**2
+            SHIFT = 0.0D0
+            IF (B .EQ. 0.0D0 .AND. C .EQ. 0.0D0) GO TO 550
+               SHIFT = DSQRT(B**2+C)
+               IF (B .LT. 0.0D0) SHIFT = -SHIFT
+               SHIFT = C/(B + SHIFT)
+  550       CONTINUE
+            F = (SL + SM)*(SL - SM) - SHIFT
+            G = SL*EL
+C
+C           CHASE ZEROS.
+C
+            MM1 = M - 1
+            DO 560 K = L, MM1
+               CALL DROTG(F,G,CS,SN)
+               IF (K .NE. L) E(K-1) = F
+               F = CS*S(K) + SN*E(K)
+               E(K) = CS*E(K) - SN*S(K)
+               G = SN*S(K+1)
+               S(K+1) = CS*S(K+1)
+               IF (WANTV) CALL DROT(P,V(1,K),1,V(1,K+1),1,CS,SN)
+               CALL DROTG(F,G,CS,SN)
+               S(K) = F
+               F = CS*E(K) + SN*S(K+1)
+               S(K+1) = -SN*E(K) + CS*S(K+1)
+               G = SN*E(K+1)
+               E(K+1) = CS*E(K+1)
+               IF (WANTU .AND. K .LT. N)
+     *            CALL DROT(N,U(1,K),1,U(1,K+1),1,CS,SN)
+  560       CONTINUE
+            E(M-1) = F
+            ITER = ITER + 1
+         GO TO 610
+C
+C        CONVERGENCE.
+C
+  570    CONTINUE
+C
+C           MAKE THE SINGULAR VALUE  POSITIVE.
+C
+            IF (S(L) .GE. 0.0D0) GO TO 580
+               S(L) = -S(L)
+               IF (WANTV) CALL DSCAL(P,-1.0D0,V(1,L),1)
+  580       CONTINUE
+C
+C           ORDER THE SINGULAR VALUE.
+C
+  590       IF (L .EQ. MM) GO TO 600
+C           ...EXIT
+               IF (S(L) .GE. S(L+1)) GO TO 600
+               T = S(L)
+               S(L) = S(L+1)
+               S(L+1) = T
+               IF (WANTV .AND. L .LT. P)
+     *            CALL DSWAP(P,V(1,L),1,V(1,L+1),1)
+               IF (WANTU .AND. L .LT. N)
+     *            CALL DSWAP(N,U(1,L),1,U(1,L+1),1)
+               L = L + 1
+            GO TO 590
+  600       CONTINUE
+            ITER = 0
+            M = M - 1
+  610    CONTINUE
+      GO TO 360
+  620 CONTINUE
+      RETURN
+      END
+C
+C     ------------------------------------------------------------------
+C
+C     TITLE:  RS
+C
+C
+C     THIS SUBROUTINE CALLS THE RECOMMENDED SEQUENCE OF
+C     SUBROUTINES FROM THE EIGENSYSTEM SUBROUTINE PACKAGE (EISPACK)
+C     TO FIND THE EIGENVALUES AND EIGENVECTORS (IF DESIRED)
+C     OF A REAL SYMMETRIC MATRIX.
+C
+C     ON INPUT:
+C
+C        NM  MUST BE SET TO THE ROW DIMENSION OF THE TWO-DIMENSIONAL
+C        ARRAY PARAMETERS AS DECLARED IN THE CALLING PROGRAM
+C        DIMENSION STATEMENT;
+C
+C        N  IS THE ORDER OF THE MATRIX  A;
+C
+C        A  CONTAINS THE REAL SYMMETRIC MATRIX;
+C
+C        MATZ  IS AN INTEGER VARIABLE SET EQUAL TO ZERO IF
+C        ONLY EIGENVALUES ARE DESIRED;  OTHERWISE IT IS SET TO
+C        ANY NON-ZERO INTEGER FOR BOTH EIGENVALUES AND EIGENVECTORS.
+C
+C     ON OUTPUT:
+C
+C        W  CONTAINS THE EIGENVALUES IN ASCENDING ORDER;
+C
+C        Z  CONTAINS THE EIGENVECTORS IF MATZ IS NOT ZERO;
+C
+C        IERR  IS AN INTEGER OUTPUT VARIABLE SET EQUAL TO AN
+C        ERROR COMPLETION CODE DESCRIBED IN SECTION 2B OF THE
+C        DOCUMENTATION.  THE NORMAL COMPLETION CODE IS ZERO;
+C
+C        FV1  AND  FV2  ARE TEMPORARY STORAGE ARRAYS.
+C
+C     QUESTIONS AND COMMENTS SHOULD BE DIRECTED TO B. S. GARBOW,
+C     APPLIED MATHEMATICS DIVISION, ARGONNE NATIONAL LABORATORY
+C
+C     ------------------------------------------------------------------
+C
+      SUBROUTINE RS(NM,N,A,W,MATZ,Z,FV1,FV2,IERR)
+C
+      INTEGER N,NM,IERR,MATZ
+      DOUBLE PRECISION A(NM,N),W(N),Z(NM,N),FV1(N),FV2(N)
+C
+      IF (N .LE. NM) GO TO 10
+      IERR = 10 * N
+      GO TO 50
+C
+   10 IF (MATZ .NE. 0) GO TO 20
+C
+C::::: FIND EIGENVALUES ONLY ::::::::::
+      CALL  TRED1(NM,N,A,W,FV1,FV2)
+      CALL  TQLRAT(N,W,FV2,IERR)
+      GO TO 50
+C
+C::::: FIND BOTH EIGENVALUES AND EIGENVECTORS
+C:::::
+   20 CALL  TRED2(NM,N,A,W,FV1,Z)
+      CALL  TQL2(NM,N,W,FV1,Z,IERR)
+   50 RETURN
+C
+C::::: LAST CARD OF RS
+C::
+      END
+C
+C     ------------------------------------------------------------------
+C
+      SUBROUTINE TRED1(NM,N,A,D,E,E2)
+C
+      INTEGER I,J,K,L,N,II,NM,JP1
+      DOUBLE PRECISION A(NM,N),D(N),E(N),E2(N)
+      DOUBLE PRECISION F,G,H,SCALE
+      DOUBLE PRECISION DSQRT,DABS,DSIGN
+C
+C     THIS SUBROUTINE IS A TRANSLATION OF THE ALGOL PROCEDURE TRED1,
+C     NUM. MATH. 11, 181-195(1968) BY MARTIN, REINSCH, AND WILKINSON.
+C     HANDBOOK FOR AUTO. COMP., VOL.II-LINEAR ALGEBRA, 212-226(1971).
+C
+C     THIS SUBROUTINE REDUCES A REAL SYMMETRIC MATRIX
+C     TO A SYMMETRIC TRIDIAGONAL MATRIX USING
+C     ORTHOGONAL SIMILARITY TRANSFORMATIONS.
+C
+C     ON INPUT:
+C
+C        NM MUST BE SET TO THE ROW DIMENSION OF TWO-DIMENSIONAL
+C          ARRAY PARAMETERS AS DECLARED IN THE CALLING PROGRAM
+C          DIMENSION STATEMENT;
+C
+C        N IS THE ORDER OF THE MATRIX;
+C
+C        A CONTAINS THE REAL SYMMETRIC INPUT MATRIX.  ONLY THE
+C          LOWER TRIANGLE OF THE MATRIX NEED BE SUPPLIED.
+C
+C     ON OUTPUT:
+C
+C        A CONTAINS INFORMATION ABOUT THE ORTHOGONAL TRANS-
+C          FORMATIONS USED IN THE REDUCTION IN ITS STRICT LOWER
+C          TRIANGLE.  THE FULL UPPER TRIANGLE OF A IS UNALTERED;
+C
+C        D CONTAINS THE DIAGONAL ELEMENTS OF THE TRIDIAGONAL MATRIX;
+C
+C        E CONTAINS THE SUBDIAGONAL ELEMENTS OF THE TRIDIAGONAL
+C          MATRIX IN ITS LAST N-1 POSITIONS.  E(1) IS SET TO ZERO;
+C
+C        E2 CONTAINS THE SQUARES OF THE CORRESPONDING ELEMENTS OF E.
+C          E2 MAY COINCIDE WITH E IF THE SQUARES ARE NOT NEEDED.
+C
+C     QUESTIONS AND COMMENTS SHOULD BE DIRECTED TO B. S. GARBOW,
+C     APPLIED MATHEMATICS DIVISION, ARGONNE NATIONAL LABORATORY
+C
+C     ------------------------------------------------------------------
+C
+      DO 100 I = 1, N
+  100 D(I) = A(I,I)
+C
+C::::: FOR I=N STEP -1 UNTIL 1 DO --
+C::::::
+      DO 300 II = 1, N
+         I = N + 1 - II
+         L = I - 1
+         H = 0.0D0
+         SCALE = 0.0D0
+         IF (L .LT. 1) GO TO 130
+C
+C::::: SCALE ROW (ALGOL TOL THEN NOT NEEDED)
+C::::
+         DO 120 K = 1, L
+  120    SCALE = SCALE + DABS(A(I,K))
+C
+         IF (SCALE .NE. 0.0D0) GO TO 140
+  130    E(I) = 0.0D0
+         E2(I) = 0.0D0
+         GO TO 290
+C
+  140    DO 150 K = 1, L
+            A(I,K) = A(I,K) / SCALE
+            H = H + A(I,K) * A(I,K)
+  150    CONTINUE
+C
+         E2(I) = SCALE * SCALE * H
+         F = A(I,L)
+         G = -DSIGN(DSQRT(H),F)
+         E(I) = SCALE * G
+         H = H - F * G
+         A(I,L) = F - G
+         IF (L .EQ. 1) GO TO 270
+         F = 0.0D0
+C
+         DO 240 J = 1, L
+            G = 0.0D0
+C
+C::::: FORM ELEMENT OF A*U
+C::::::
+            DO 180 K = 1, J
+  180       G = G + A(J,K) * A(I,K)
+C
+            JP1 = J + 1
+            IF (L .LT. JP1) GO TO 220
+C
+            DO 200 K = JP1, L
+  200       G = G + A(K,J) * A(I,K)
+C
+C::::: FORM ELEMENT OF P
+C::::
+  220       E(J) = G / H
+            F = F + E(J) * A(I,J)
+  240    CONTINUE
+C
+         H = F / (H + H)
+C
+C::::: FORM REDUCED A
+C:
+         DO 260 J = 1, L
+            F = A(I,J)
+            G = E(J) - H * F
+            E(J) = G
+C
+            DO 260 K = 1, J
+               A(J,K) = A(J,K) - F * E(K) - G * A(I,K)
+  260    CONTINUE
+C
+  270    DO 280 K = 1, L
+  280    A(I,K) = SCALE * A(I,K)
+C
+  290    H = D(I)
+         D(I) = A(I,I)
+         A(I,I) = H
+  300 CONTINUE
+C
+      RETURN
+C
+C::::: LAST CARD OF TRED1
+C:::::
+      END
+C
+C     ------------------------------------------------------------------
+C
+      SUBROUTINE TQLRAT(N,D,E2,IERR)
+C
+      INTEGER I,J,L,M,N,II,L1,MML,IERR
+      DOUBLE PRECISION D(N),E2(N)
+      DOUBLE PRECISION B,C,F,G,H,P,R,S,T,MACHEP
+      DOUBLE PRECISION DSQRT,DABS,DSIGN
+C
+C     THIS SUBROUTINE IS A TRANSLATION OF THE ALGOL PROCEDURE TQLRAT,
+C     ALGORITHM 464, COMM. ACM 16, 689(1973) BY REINSCH.
+C
+C     THIS SUBROUTINE FINDS THE EIGENVALUES OF A SYMMETRIC
+C     TRIDIAGONAL MATRIX BY THE RATIONAL QL METHOD.
+C
+C     ON INPUT:
+C
+C        N IS THE ORDER OF THE MATRIX;
+C
+C        D CONTAINS THE DIAGONAL ELEMENTS OF THE INPUT MATRIX;
+C
+C        E2 CONTAINS THE SQUARES OF THE SUBDIAGONAL ELEMENTS OF THE
+C          INPUT MATRIX IN ITS LAST N-1 POSITIONS.  E2(1) IS ARBITRARY.
+C
+C      ON OUTPUT:
+C
+C        D CONTAINS THE EIGENVALUES IN ASCENDING ORDER.  IF AN
+C          ERROR EXIT IS MADE, THE EIGENVALUES ARE CORRECT AND
+C          ORDERED FOR INDICES 1,2,...IERR-1, BUT MAY NOT BE
+C          THE SMALLEST EIGENVALUES;
+C
+C        E2 HAS BEEN DESTROYED;
+C
+C        IERR IS SET TO
+C          ZERO       FOR NORMAL RETURN,
+C          J          IF THE J-TH EIGENVALUE HAS NOT BEEN
+C                     DETERMINED AFTER 30 ITERATIONS.
+C
+C     QUESTIONS AND COMMENTS SHOULD BE DIRECTED TO B. S. GARBOW,
+C     APPLIED MATHEMATICS DIVISION, ARGONNE NATIONAL LABORATORY
+C
+C     ------------------------------------------------------------------
+C
+C
+C::::: MACHEP IS A MACHINE DEPENDENT PARAMETER SPECIFYING
+C                THE RELATIVE PRECISION OF FLOATING POINT ARITHMETIC.
+C                AN APPROXIMATION TO MACHEP IS COMPUTED BELOW.
+C
+C::::::
+      MACHEP = 1.D0 / 2.D0
+      DO 2 I=1,500
+         T = 1.D0 + MACHEP
+         IF (T .EQ. 1.D0) GO TO 3
+         MACHEP = MACHEP / 2.D0
+    2 CONTINUE
+C
+    3 IERR = 0
+      IF (N .EQ. 1) GO TO 1001
+C
+      DO 100 I = 2, N
+  100 E2(I-1) = E2(I)
+C
+      F = 0.0D0
+      B = 0.0D0
+      E2(N) = 0.0D0
+C
+      DO 290 L = 1, N
+         J = 0
+         H = MACHEP * (DABS(D(L)) + DSQRT(E2(L)))
+         IF (B .GT. H) GO TO 105
+         B = H
+         C = B * B
+C
+C::::: LOOK FOR SMALL SQUARED SUB-DIAGONAL ELEMENT
+C
+  105    DO 110 M = L, N
+            IF (E2(M) .LE. C) GO TO 120
+C
+C::::: E2(N) IS ALWAYS ZERO, SO THERE IS NO EXIT
+C                THROUGH THE BOTTOM OF THE LOOP
+C:::::::
+  110    CONTINUE
+C
+  120    IF (M .EQ. L) GO TO 210
+  130    IF (J .EQ. 30) GO TO 1000
+         J = J + 1
+C
+C::::: FORM SHIFT
+C:::::::
+         L1 = L + 1
+         S = DSQRT(E2(L))
+         G = D(L)
+         P = (D(L1) - G) / (2.0D0 * S)
+         R = DSQRT(P*P+1.0D0)
+         D(L) = S / (P + DSIGN(R,P))
+         H = G - D(L)
+C
+         DO 140 I = L1, N
+  140    D(I) = D(I) - H
+C
+         F = F + H
+C
+C::::: RATIONAL QL TRANSFORMATION
+C:::
+         G = D(M)
+         IF (G .EQ. 0.0D0) G = B
+         H = G
+         S = 0.0D0
+         MML = M - L
+C
+C::::: FOR I=M-1 STEP -1 UNTIL L DO -- ::::::::::
+         DO 200 II = 1, MML
+            I = M - II
+            P = G * H
+            R = P + E2(I)
+            E2(I+1) = S * R
+            S = E2(I) / R
+            D(I+1) = H + S * (H + D(I))
+            G = D(I) - E2(I) / G
+            IF (G .EQ. 0.0D0) G = B
+            H = G * P / R
+  200    CONTINUE
+C
+         E2(L) = S * G
+         D(L) = H
+C
+C::::: GUARD AGAINST UNDERFLOW IN CONVERGENCE TEST
+C
+         IF (H .EQ. 0.0D0) GO TO 210
+         IF (DABS(E2(L)) .LE. DABS(C/H)) GO TO 210
+         E2(L) = H * E2(L)
+         IF (E2(L) .NE. 0.0D0) GO TO 130
+  210    P = D(L) + F
+C
+C::::: ORDER EIGENVALUES
+C::::
+         IF (L .EQ. 1) GO TO 250
+C
+C::::: FOR I=L STEP -1 UNTIL 2 DO --
+C::::::
+         DO 230 II = 2, L
+            I = L + 2 - II
+            IF (P .GE. D(I-1)) GO TO 270
+            D(I) = D(I-1)
+  230    CONTINUE
+C
+  250    I = 1
+  270    D(I) = P
+  290 CONTINUE
+C
+      GO TO 1001
+C
+C::::: SET ERROR -- NO CONVERGENCE TO AN
+C                EIGENVALUE AFTER 30 ITERATIONS
+C:::::::
+ 1000 IERR = L
+ 1001 RETURN
+C
+C::::: LAST CARD OF TQLRAT
+C::::::
+      END
+C
+C     ------------------------------------------------------------------
+C
+      SUBROUTINE TRED2(NM,N,A,D,E,Z)
+C
+      INTEGER I,J,K,L,N,II,NM,JP1
+      DOUBLE PRECISION A(NM,N),D(N),E(N),Z(NM,N)
+      DOUBLE PRECISION F,G,H,HH,SCALE
+      DOUBLE PRECISION DSQRT,DABS,DSIGN
+C
+C     THIS SUBROUTINE IS A TRANSLATION OF THE ALGOL PROCEDURE TRED2,
+C     NUM. MATH. 11, 181-195(1968) BY MARTIN, REINSCH, AND WILKINSON.
+C     HANDBOOK FOR AUTO. COMP., VOL.II-LINEAR ALGEBRA, 212-226(1971).
+C
+C     THIS SUBROUTINE REDUCES A REAL SYMMETRIC MATRIX TO A
+C     SYMMETRIC TRIDIAGONAL MATRIX USING AND ACCUMULATING
+C     ORTHOGONAL SIMILARITY TRANSFORMATIONS.
+C
+C     ON INPUT:
+C
+C        NM MUST BE SET TO THE ROW DIMENSION OF TWO-DIMENSIONAL
+C          ARRAY PARAMETERS AS DECLARED IN THE CALLING PROGRAM
+C          DIMENSION STATEMENT;
+C
+C        N IS THE ORDER OF THE MATRIX;
+C
+C        A CONTAINS THE REAL SYMMETRIC INPUT MATRIX.  ONLY THE
+C          LOWER TRIANGLE OF THE MATRIX NEED BE SUPPLIED.
+C
+C     ON OUTPUT:
+C
+C        D CONTAINS THE DIAGONAL ELEMENTS OF THE TRIDIAGONAL MATRIX;
+C
+C        E CONTAINS THE SUBDIAGONAL ELEMENTS OF THE TRIDIAGONAL
+C          MATRIX IN ITS LAST N-1 POSITIONS.  E(1) IS SET TO ZERO;
+C
+C        Z CONTAINS THE ORTHOGONAL TRANSFORMATION MATRIX
+C          PRODUCED IN THE REDUCTION;
+C
+C        A AND Z MAY COINCIDE.  IF DISTINCT, A IS UNALTERED.
+C
+C     QUESTIONS AND COMMENTS SHOULD BE DIRECTED TO B. S. GARBOW,
+C     APPLIED MATHEMATICS DIVISION, ARGONNE NATIONAL LABORATORY
+C
+C     ------------------------------------------------------------------
+C
+      DO 100 I = 1, N
+C
+         DO 100 J = 1, I
+            Z(I,J) = A(I,J)
+  100 CONTINUE
+C
+      IF (N .EQ. 1) GO TO 320
+C
+C::::: FOR I=N STEP -1 UNTIL 2 DO --
+C::::::
+      DO 300 II = 2, N
+         I = N + 2 - II
+         L = I - 1
+         H = 0.0D0
+         SCALE = 0.0D0
+         IF (L .LT. 2) GO TO 130
+C
+C::::: SCALE ROW (ALGOL TOL THEN NOT NEEDED)
+C::::
+         DO 120 K = 1, L
+  120    SCALE = SCALE + DABS(Z(I,K))
+C
+         IF (SCALE .NE. 0.0D0) GO TO 140
+  130    E(I) = Z(I,L)
+         GO TO 290
+C
+  140    DO 150 K = 1, L
+            Z(I,K) = Z(I,K) / SCALE
+            H = H + Z(I,K) * Z(I,K)
+  150    CONTINUE
+C
+         F = Z(I,L)
+         G = -DSIGN(DSQRT(H),F)
+         E(I) = SCALE * G
+         H = H - F * G
+         Z(I,L) = F - G
+         F = 0.0D0
+C
+         DO 240 J = 1, L
+            Z(J,I) = Z(I,J) / H
+            G = 0.0D0
+C
+C::::: FORM ELEMENT OF A*U
+C::::::
+            DO 180 K = 1, J
+  180       G = G + Z(J,K) * Z(I,K)
+C
+            JP1 = J + 1
+            IF (L .LT. JP1) GO TO 220
+C
+            DO 200 K = JP1, L
+  200       G = G + Z(K,J) * Z(I,K)
+C
+C::::: FORM ELEMENT OF P
+C::::
+  220       E(J) = G / H
+            F = F + E(J) * Z(I,J)
+  240    CONTINUE
+C
+         HH = F / (H + H)
+C
+C::::: FORM REDUCED A
+C:
+         DO 260 J = 1, L
+            F = Z(I,J)
+            G = E(J) - HH * F
+            E(J) = G
+C
+            DO 260 K = 1, J
+               Z(J,K) = Z(J,K) - F * E(K) - G * Z(I,K)
+  260    CONTINUE
+C
+  290    D(I) = H
+  300 CONTINUE
+C
+  320 D(1) = 0.0D0
+      E(1) = 0.0D0
+C
+C::::: ACCUMULATION OF TRANSFORMATION MATRICES
+C::::::
+      DO 500 I = 1, N
+         L = I - 1
+         IF (D(I) .EQ. 0.0D0) GO TO 380
+C
+         DO 360 J = 1, L
+            G = 0.0D0
+C
+            DO 340 K = 1, L
+  340       G = G + Z(I,K) * Z(K,J)
+C
+            DO 360 K = 1, L
+               Z(K,J) = Z(K,J) - G * Z(K,I)
+  360    CONTINUE
+C
+  380    D(I) = Z(I,I)
+         Z(I,I) = 1.0D0
+         IF (L .LT. 1) GO TO 500
+C
+         DO 400 J = 1, L
+            Z(I,J) = 0.0D0
+            Z(J,I) = 0.0D0
+  400    CONTINUE
+C
+  500 CONTINUE
+C
+      RETURN
+C
+C::::: LAST CARD OF TRED2
+C:::::
+      END
+C
+C     ------------------------------------------------------------------
+C
+      SUBROUTINE TQL2(NM,N,D,E,Z,IERR)
+C
+      INTEGER I,J,K,L,M,N,II,L1,NM,MML,IERR
+      DOUBLE PRECISION D(N),E(N),Z(NM,N)
+      DOUBLE PRECISION B,C,F,G,H,P,R,S,T,MACHEP
+      DOUBLE PRECISION DSQRT,DABS,DSIGN
+C
+C     THIS SUBROUTINE IS A TRANSLATION OF THE ALGOL PROCEDURE TQL2,
+C     NUM. MATH. 11, 293-306(1968) BY BOWDLER, MARTIN, REINSCH, AND
+C     WILKINSON.
+C     HANDBOOK FOR AUTO. COMP., VOL.II-LINEAR ALGEBRA, 227-240(1971).
+C
+C     THIS SUBROUTINE FINDS THE EIGENVALUES AND EIGENVECTORS
+C     OF A SYMMETRIC TRIDIAGONAL MATRIX BY THE QL METHOD.
+C     THE EIGENVECTORS OF A FULL SYMMETRIC MATRIX CAN ALSO
+C     BE FOUND IF  TRED2  HAS BEEN USED TO REDUCE THIS
+C     FULL MATRIX TO TRIDIAGONAL FORM.
+C
+C     ON INPUT:
+C
+C        NM MUST BE SET TO THE ROW DIMENSION OF TWO-DIMENSIONAL
+C          ARRAY PARAMETERS AS DECLARED IN THE CALLING PROGRAM
+C          DIMENSION STATEMENT;
+C
+C        N IS THE ORDER OF THE MATRIX;
+C
+C        D CONTAINS THE DIAGONAL ELEMENTS OF THE INPUT MATRIX;
+C
+C        E CONTAINS THE SUBDIAGONAL ELEMENTS OF THE INPUT MATRIX
+C          IN ITS LAST N-1 POSITIONS.  E(1) IS ARBITRARY;
+C
+C        Z CONTAINS THE TRANSFORMATION MATRIX PRODUCED IN THE
+C          REDUCTION BY  TRED2, IF PERFORMED.  IF THE EIGENVECTORS
+C          OF THE TRIDIAGONAL MATRIX ARE DESIRED, Z MUST CONTAIN
+C          THE IDENTITY MATRIX.
+C
+C      ON OUTPUT:
+C
+C        D CONTAINS THE EIGENVALUES IN ASCENDING ORDER.  IF AN
+C          ERROR EXIT IS MADE, THE EIGENVALUES ARE CORRECT BUT
+C          UNORDERED FOR INDICES 1,2,...,IERR-1;
+C
+C        E HAS BEEN DESTROYED;
+C
+C        Z CONTAINS ORTHONORMAL EIGENVECTORS OF THE SYMMETRIC
+C          TRIDIAGONAL (OR FULL) MATRIX.  IF AN ERROR EXIT IS MADE,
+C          Z CONTAINS THE EIGENVECTORS ASSOCIATED WITH THE STORED
+C          EIGENVALUES;
+C
+C        IERR IS SET TO
+C          ZERO       FOR NORMAL RETURN,
+C          J          IF THE J-TH EIGENVALUE HAS NOT BEEN
+C                     DETERMINED AFTER 30 ITERATIONS.
+C
+C     QUESTIONS AND COMMENTS SHOULD BE DIRECTED TO B. S. GARBOW,
+C     APPLIED MATHEMATICS DIVISION, ARGONNE NATIONAL LABORATORY
+C
+C     ------------------------------------------------------------------
+C
+C
+C::::: MACHEP IS A MACHINE DEPENDENT PARAMETER SPECIFYING
+C                THE RELATIVE PRECISION OF FLOATING POINT ARITHMETIC.
+C                AN APPROXIMATION TO MACHEP IS COMPUTED BELOW.
+C
+C::::::
+      MACHEP = 1.D0 / 2.D0
+      DO 2 I=1,500
+         T = 1.D0 + MACHEP
+         IF (T .EQ. 1.D0) GO TO 3
+         MACHEP = MACHEP / 2.D0
+    2 CONTINUE
+C
+    3 IERR = 0
+      IF (N .EQ. 1) GO TO 1001
+C
+      DO 100 I = 2, N
+  100 E(I-1) = E(I)
+C
+      F = 0.0D0
+      B = 0.0D0
+      E(N) = 0.0D0
+C
+      DO 240 L = 1, N
+         J = 0
+         H = MACHEP * (DABS(D(L)) + DABS(E(L)))
+         IF (B .LT. H) B = H
+C
+C::::: LOOK FOR SMALL SUB-DIAGONAL ELEMENT
+C::
+         DO 110 M = L, N
+            IF (DABS(E(M)) .LE. B) GO TO 120
+C
+C::::: E(N) IS ALWAYS ZERO, SO THERE IS NO EXIT
+C                THROUGH THE BOTTOM OF THE LOOP
+C:::::::
+  110    CONTINUE
+C
+  120    IF (M .EQ. L) GO TO 220
+  130    IF (J .EQ. 30) GO TO 1000
+         J = J + 1
+C
+C::::: FORM SHIFT
+C:::::::
+         L1 = L + 1
+         G = D(L)
+         P = (D(L1) - G) / (2.0D0 * E(L))
+         R = DSQRT(P*P+1.0D0)
+         D(L) = E(L) / (P + DSIGN(R,P))
+         H = G - D(L)
+C
+         DO 140 I = L1, N
+  140    D(I) = D(I) - H
+C
+         F = F + H
+C
+C::::: QL TRANSFORMATION
+C::::
+         P = D(M)
+         C = 1.0D0
+         S = 0.0D0
+         MML = M - L
+C
+C::::: FOR I=M-1 STEP -1 UNTIL L DO -- ::::::::::
+         DO 200 II = 1, MML
+            I = M - II
+            G = C * E(I)
+            H = C * P
+            IF (DABS(P) .LT. DABS(E(I))) GO TO 150
+            C = E(I) / P
+            R = DSQRT(C*C+1.0D0)
+            E(I+1) = S * P * R
+            S = C / R
+            C = 1.0D0 / R
+            GO TO 160
+  150       C = P / E(I)
+            R = DSQRT(C*C+1.0D0)
+            E(I+1) = S * E(I) * R
+            S = 1.0D0 / R
+            C = C * S
+  160       P = C * D(I) - S * G
+            D(I+1) = H + S * (C * G + S * D(I))
+C
+C::::: FORM VECTOR ::::::::::
+            DO 180 K = 1, N
+               H = Z(K,I+1)
+               Z(K,I+1) = S * Z(K,I) + C * H
+               Z(K,I) = C * Z(K,I) - S * H
+  180       CONTINUE
+C
+  200    CONTINUE
+C
+         E(L) = S * P
+         D(L) = C * P
+         IF (DABS(E(L)) .GT. B) GO TO 130
+  220    D(L) = D(L) + F
+  240 CONTINUE
+C
+C::::: ORDER EIGENVALUES AND EIGENVECTORS
+C:
+      DO 300 II = 2, N
+         I = II - 1
+         K = I
+         P = D(I)
+C
+         DO 260 J = II, N
+            IF (D(J) .GE. P) GO TO 260
+            K = J
+            P = D(J)
+  260    CONTINUE
+C
+         IF (K .EQ. I) GO TO 300
+         D(K) = D(I)
+         D(I) = P
+C
+         DO 280 J = 1, N
+            P = Z(J,I)
+            Z(J,I) = Z(J,K)
+            Z(J,K) = P
+  280    CONTINUE
+C
+  300 CONTINUE
+C
+      GO TO 1001
+C
+C::::: SET ERROR -- NO CONVERGENCE TO AN
+C                EIGENVALUE AFTER 30 ITERATIONS
+C:::::::
+ 1000 IERR = L
+ 1001 RETURN
+C
+C::::: LAST CARD OF TQL2
+C::::
+      END
+      SUBROUTINE DAXPY(N,DA,DX,INCX,DY,INCY)
+C
+C     CONSTANT TIMES A VECTOR PLUS A VECTOR.
+C     USES UNROLLED LOOPS FOR INCREMENTS EQUAL TO ONE.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      DOUBLE PRECISION DX(1),DY(1),DA
+      INTEGER I,INCX,INCY,IXIY,M,MP1,N
+C
+      IF(N.LE.0)RETURN
+      IF (DA .EQ. 0.0D0) RETURN
+      IF(INCX.EQ.1.AND.INCY.EQ.1)GO TO 20
+C
+C        CODE FOR UNEQUAL INCREMENTS OR EQUAL INCREMENTS
+C          NOT EQUAL TO 1
+C
+      IX = 1
+      IY = 1
+      IF(INCX.LT.0)IX = (-N+1)*INCX + 1
+      IF(INCY.LT.0)IY = (-N+1)*INCY + 1
+      DO 10 I = 1,N
+        DY(IY) = DY(IY) + DA*DX(IX)
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      RETURN
+C
+C        CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,4)
+      IF( M .EQ. 0 ) GO TO 40
+      DO 30 I = 1,M
+        DY(I) = DY(I) + DA*DX(I)
+   30 CONTINUE
+      IF( N .LT. 4 ) RETURN
+   40 MP1 = M + 1
+      DO 50 I = MP1,N,4
+        DY(I) = DY(I) + DA*DX(I)
+        DY(I + 1) = DY(I + 1) + DA*DX(I + 1)
+        DY(I + 2) = DY(I + 2) + DA*DX(I + 2)
+        DY(I + 3) = DY(I + 3) + DA*DX(I + 3)
+   50 CONTINUE
+      RETURN
+      END
+      SUBROUTINE  DCOPY(N,DX,INCX,DY,INCY)
+C
+C     COPIES A VECTOR, X, TO A VECTOR, Y.
+C     USES UNROLLED LOOPS FOR INCREMENTS EQUAL TO ONE.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      DOUBLE PRECISION DX(1),DY(1)
+      INTEGER I,INCX,INCY,IX,IY,M,MP1,N
+C
+      IF(N.LE.0)RETURN
+      IF(INCX.EQ.1.AND.INCY.EQ.1)GO TO 20
+C
+C        CODE FOR UNEQUAL INCREMENTS OR EQUAL INCREMENTS
+C          NOT EQUAL TO 1
+C
+      IX = 1
+      IY = 1
+      IF(INCX.LT.0)IX = (-N+1)*INCX + 1
+      IF(INCY.LT.0)IY = (-N+1)*INCY + 1
+      DO 10 I = 1,N
+        DY(IY) = DX(IX)
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      RETURN
+C
+C        CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,7)
+      IF( M .EQ. 0 ) GO TO 40
+      DO 30 I = 1,M
+        DY(I) = DX(I)
+   30 CONTINUE
+      IF( N .LT. 7 ) RETURN
+   40 MP1 = M + 1
+      DO 50 I = MP1,N,7
+        DY(I) = DX(I)
+        DY(I + 1) = DX(I + 1)
+        DY(I + 2) = DX(I + 2)
+        DY(I + 3) = DX(I + 3)
+        DY(I + 4) = DX(I + 4)
+        DY(I + 5) = DX(I + 5)
+        DY(I + 6) = DX(I + 6)
+   50 CONTINUE
+      RETURN
+      END
+      DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
+C
+C     FORMS THE DOT PRODUCT OF TWO VECTORS.
+C     USES UNROLLED LOOPS FOR INCREMENTS EQUAL TO ONE.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      DOUBLE PRECISION DX(1),DY(1),DTEMP
+      INTEGER I,INCX,INCY,IX,IY,M,MP1,N
+C
+      DDOT = 0.0D0
+      DTEMP = 0.0D0
+      IF(N.LE.0)RETURN
+      IF(INCX.EQ.1.AND.INCY.EQ.1)GO TO 20
+C
+C        CODE FOR UNEQUAL INCREMENTS OR EQUAL INCREMENTS
+C          NOT EQUAL TO 1
+C
+      IX = 1
+      IY = 1
+      IF(INCX.LT.0)IX = (-N+1)*INCX + 1
+      IF(INCY.LT.0)IY = (-N+1)*INCY + 1
+      DO 10 I = 1,N
+        DTEMP = DTEMP + DX(IX)*DY(IY)
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      DDOT = DTEMP
+      RETURN
+C
+C        CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,5)
+      IF( M .EQ. 0 ) GO TO 40
+      DO 30 I = 1,M
+        DTEMP = DTEMP + DX(I)*DY(I)
+   30 CONTINUE
+      IF( N .LT. 5 ) GO TO 60
+   40 MP1 = M + 1
+      DO 50 I = MP1,N,5
+        DTEMP = DTEMP + DX(I)*DY(I) + DX(I + 1)*DY(I + 1) +
+     *   DX(I + 2)*DY(I + 2) + DX(I + 3)*DY(I + 3) + DX(I + 4)*DY(I + 4)
+   50 CONTINUE
+   60 DDOT = DTEMP
+      RETURN
+      END
+      DOUBLE PRECISION FUNCTION DNRM2 ( N, DX, INCX)
+      INTEGER          NEXT
+      DOUBLE PRECISION   DX(1), CUTLO, CUTHI, HITEST, SUM, XMAX,ZERO,ONE
+      DATA   ZERO, ONE /0.0D0, 1.0D0/
+C
+C     EUCLIDEAN NORM OF THE N-VECTOR STORED IN DX() WITH STORAGE
+C     INCREMENT INCX .
+C     IF    N .LE. 0 RETURN WITH RESULT = 0.
+C     IF N .GE. 1 THEN INCX MUST BE .GE. 1
+C
+C           C.L.LAWSON, 1978 JAN 08
+C
+C     FOUR PHASE METHOD     USING TWO BUILT-IN CONSTANTS THAT ARE
+C     HOPEFULLY APPLICABLE TO ALL MACHINES.
+C         CUTLO = MAXIMUM OF  DSQRT(U/EPS)  OVER ALL KNOWN MACHINES.
+C         CUTHI = MINIMUM OF  DSQRT(V)      OVER ALL KNOWN MACHINES.
+C     WHERE
+C         EPS = SMALLEST NO. SUCH THAT EPS + 1. .GT. 1.
+C         U   = SMALLEST POSITIVE NO.   (UNDERFLOW LIMIT)
+C         V   = LARGEST  NO.            (OVERFLOW  LIMIT)
+C
+C     BRIEF OUTLINE OF ALGORITHM..
+C
+C     PHASE 1    SCANS ZERO COMPONENTS.
+C     MOVE TO PHASE 2 WHEN A COMPONENT IS NONZERO AND .LE. CUTLO
+C     MOVE TO PHASE 3 WHEN A COMPONENT IS .GT. CUTLO
+C     MOVE TO PHASE 4 WHEN A COMPONENT IS .GE. CUTHI/M
+C     WHERE M = N FOR X() REAL AND M = 2*N FOR COMPLEX.
+C
+C     VALUES FOR CUTLO AND CUTHI..
+C     FROM THE ENVIRONMENTAL PARAMETERS LISTED IN THE IMSL CONVERTER
+C     DOCUMENT THE LIMITING VALUES ARE AS FOLLOWS..
+C     CUTLO, S.P.   U/EPS = 2**(-102) FOR  HONEYWELL.  CLOSE SECONDS ARE
+C                   UNIVAC AND DEC AT 2**(-103)
+C                   THUS CUTLO = 2**(-51) = 4.44089E-16
+C     CUTHI, S.P.   V = 2**127 FOR UNIVAC, HONEYWELL, AND DEC.
+C                   THUS CUTHI = 2**(63.5) = 1.30438E19
+C     CUTLO, D.P.   U/EPS = 2**(-67) FOR HONEYWELL AND DEC.
+C                   THUS CUTLO = 2**(-33.5) = 8.23181D-11
+C     CUTHI, D.P.   SAME AS S.P.  CUTHI = 1.30438D19
+C     DATA CUTLO, CUTHI / 8.232D-11,  1.304D19 /
+C     DATA CUTLO, CUTHI / 4.441E-16,  1.304E19 /
+      DATA CUTLO, CUTHI / 8.232D-11,  1.304D19 /
+C
+      IF(N .GT. 0) GO TO 10
+         DNRM2  = ZERO
+         GO TO 300
+C
+   10 ASSIGN 30 TO NEXT
+      SUM = ZERO
+      NN = N * INCX
+C                                                 BEGIN MAIN LOOP
+      I = 1
+   20    GO TO NEXT,(30, 50, 70, 110)
+   30 IF( DABS(DX(I)) .GT. CUTLO) GO TO 85
+      ASSIGN 50 TO NEXT
+      XMAX = ZERO
+C
+C                        PHASE 1.  SUM IS ZERO
+C
+   50 IF( DX(I) .EQ. ZERO) GO TO 200
+      IF( DABS(DX(I)) .GT. CUTLO) GO TO 85
+C
+C                                PREPARE FOR PHASE 2.
+      ASSIGN 70 TO NEXT
+      GO TO 105
+C
+C                                PREPARE FOR PHASE 4.
+C
+  100 I = J
+      ASSIGN 110 TO NEXT
+      SUM = (SUM / DX(I)) / DX(I)
+  105 XMAX = DABS(DX(I))
+      GO TO 115
+C
+C                   PHASE 2.  SUM IS SMALL.
+C                             SCALE TO AVOID DESTRUCTIVE UNDERFLOW.
+C
+   70 IF( DABS(DX(I)) .GT. CUTLO ) GO TO 75
+C
+C                     COMMON CODE FOR PHASES 2 AND 4.
+C                     IN PHASE 4 SUM IS LARGE.  SCALE TO AVOID OVERFLOW.
+C
+  110 IF( DABS(DX(I)) .LE. XMAX ) GO TO 115
+         SUM = ONE + SUM * (XMAX / DX(I))**2
+         XMAX = DABS(DX(I))
+         GO TO 200
+C
+  115 SUM = SUM + (DX(I)/XMAX)**2
+      GO TO 200
+C
+C
+C                  PREPARE FOR PHASE 3.
+C
+   75 SUM = (SUM * XMAX) * XMAX
+C
+C
+C     FOR REAL OR D.P. SET HITEST = CUTHI/N
+C     FOR COMPLEX      SET HITEST = CUTHI/(2*N)
+C
+   85 HITEST = CUTHI/FLOAT( N )
+C
+C                   PHASE 3.  SUM IS MID-RANGE.  NO SCALING.
+C
+      DO 95 J =I,NN,INCX
+      IF(DABS(DX(J)) .GE. HITEST) GO TO 100
+   95    SUM = SUM + DX(J)**2
+      DNRM2 = DSQRT( SUM )
+      GO TO 300
+C
+  200 CONTINUE
+      I = I + INCX
+      IF ( I .LE. NN ) GO TO 20
+C
+C              END OF MAIN LOOP.
+C
+C              COMPUTE SQUARE ROOT AND ADJUST FOR SCALING.
+C
+      DNRM2 = XMAX * DSQRT(SUM)
+  300 CONTINUE
+      RETURN
+      END
+      SUBROUTINE  DROT (N,DX,INCX,DY,INCY,C,S)                          00000010
+C
+C     APPLIES A PLANE ROTATION.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      DOUBLE PRECISION DX(1),DY(1),DTEMP,C,S
+      INTEGER I,INCX,INCY,IX,IY,N
+C
+      IF(N.LE.0)RETURN
+      IF(INCX.EQ.1.AND.INCY.EQ.1)GO TO 20
+C
+C       CODE FOR UNEQUAL INCREMENTS OR EQUAL INCREMENTS NOT EQUAL
+C         TO 1
+C
+      IX = 1
+      IY = 1
+      IF(INCX.LT.0)IX = (-N+1)*INCX + 1
+      IF(INCY.LT.0)IY = (-N+1)*INCY + 1
+      DO 10 I = 1,N
+        DTEMP = C*DX(IX) + S*DY(IY)
+        DY(IY) = C*DY(IY) - S*DX(IX)
+        DX(IX) = DTEMP
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      RETURN
+C
+C       CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+   20 DO 30 I = 1,N
+        DTEMP = C*DX(I) + S*DY(I)
+        DY(I) = C*DY(I) - S*DX(I)
+        DX(I) = DTEMP
+   30 CONTINUE
+      RETURN
+      END
+      SUBROUTINE DROTG(DA,DB,C,S)                                       00000010
+C
+C     CONSTRUCT GIVENS PLANE ROTATION.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      DOUBLE PRECISION DA,DB,C,S,ROE,SCALE,R,Z
+C
+      ROE = DB
+      IF( DABS(DA) .GT. DABS(DB) ) ROE = DA
+      SCALE = DABS(DA) + DABS(DB)
+      IF( SCALE .NE. 0.0D0 ) GO TO 10
+         C = 1.0D0
+         S = 0.0D0
+         R = 0.0D0
+         GO TO 20
+   10 R = SCALE*DSQRT((DA/SCALE)**2 + (DB/SCALE)**2)
+      R = DSIGN(1.0D0,ROE)*R
+      C = DA/R
+      S = DB/R
+   20 Z = 1.0D0
+      IF( DABS(DA) .GT. DABS(DB) ) Z = S
+      IF( DABS(DB) .GE. DABS(DA) .AND. C .NE. 0.0D0 ) Z = 1.0D0/C
+      DA = R
+      DB = Z
+      RETURN
+      END
+      SUBROUTINE  DSCAL(N,DA,DX,INCX)
+C
+C     SCALES A VECTOR BY A CONSTANT.
+C     USES UNROLLED LOOPS FOR INCREMENT EQUAL TO ONE.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      DOUBLE PRECISION DA,DX(1)
+      INTEGER I,INCX,M,MP1,N,NINCX
+C
+      IF(N.LE.0)RETURN
+      IF(INCX.EQ.1)GO TO 20
+C
+C        CODE FOR INCREMENT NOT EQUAL TO 1
+C
+      NINCX = N*INCX
+      DO 10 I = 1,NINCX,INCX
+        DX(I) = DA*DX(I)
+   10 CONTINUE
+      RETURN
+C
+C        CODE FOR INCREMENT EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,5)
+      IF( M .EQ. 0 ) GO TO 40
+      DO 30 I = 1,M
+        DX(I) = DA*DX(I)
+   30 CONTINUE
+      IF( N .LT. 5 ) RETURN
+   40 MP1 = M + 1
+      DO 50 I = MP1,N,5
+        DX(I) = DA*DX(I)
+        DX(I + 1) = DA*DX(I + 1)
+        DX(I + 2) = DA*DX(I + 2)
+        DX(I + 3) = DA*DX(I + 3)
+        DX(I + 4) = DA*DX(I + 4)
+   50 CONTINUE
+      RETURN
+      END
+      SUBROUTINE  DSWAP (N,DX,INCX,DY,INCY)
+C
+C     INTERCHANGES TWO VECTORS.
+C     USES UNROLLED LOOPS FOR INCREMENTS EQUAL ONE.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      DOUBLE PRECISION DX(1),DY(1),DTEMP
+      INTEGER I,INCX,INCY,IX,IY,M,MP1,N
+C
+      IF(N.LE.0)RETURN
+      IF(INCX.EQ.1.AND.INCY.EQ.1)GO TO 20
+C
+C       CODE FOR UNEQUAL INCREMENTS OR EQUAL INCREMENTS NOT EQUAL
+C         TO 1
+C
+      IX = 1
+      IY = 1
+      IF(INCX.LT.0)IX = (-N+1)*INCX + 1
+      IF(INCY.LT.0)IY = (-N+1)*INCY + 1
+      DO 10 I = 1,N
+        DTEMP = DX(IX)
+        DX(IX) = DY(IY)
+        DY(IY) = DTEMP
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      RETURN
+C
+C       CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+C
+C       CLEAN-UP LOOP
+C
+   20 M = MOD(N,3)
+      IF( M .EQ. 0 ) GO TO 40
+      DO 30 I = 1,M
+        DTEMP = DX(I)
+        DX(I) = DY(I)
+        DY(I) = DTEMP
+   30 CONTINUE
+      IF( N .LT. 3 ) RETURN
+   40 MP1 = M + 1
+      DO 50 I = MP1,N,3
+        DTEMP = DX(I)
+        DX(I) = DY(I)
+        DY(I) = DTEMP
+        DTEMP = DX(I + 1)
+        DX(I + 1) = DY(I + 1)
+        DY(I + 1) = DTEMP
+        DTEMP = DX(I + 2)
+        DX(I + 2) = DY(I + 2)
+        DY(I + 2) = DTEMP
+   50 CONTINUE
+      RETURN
+      END
+LONGLEY DATA EXAMPLE FROM JASA 1967 62 819-841
+ 16  6 10 30  1  2
+ 83.0 234289 2356 1590 107608 1947 60323
+ 88.5 259426 2325 1456 108632 1948 61122
+ 88.2 258054 3682 1616 109773 1949 60171
+ 89.5 284599 3351 1650 110929 1950 61187
+ 96.2 328975 2099 3099 112075 1951 63221
+ 98.1 346999 1932 3594 113270 1952 63639
+ 99.0 365385 1870 3547 115094 1953 64989
+100.0 363112 3578 3350 116219 1954 63761
+101.2 397469 2904 3048 117388 1955 66019
+104.6 419180 2822 2857 118734 1956 67857
+108.4 442769 2936 2798 120445 1957 68169
+110.8 444546 4681 2637 121950 1958 66513
+112.6 482704 3813 2552 123366 1959 68655
+114.2 502601 3931 2514 125368 1960 69564
+115.7 518173 4806 2572 127852 1961 69331
+116.9 554894 4007 2827 130081 1962 70551
+ 16  6 21  0  3  2

@@ -1,0 +1,511 @@
+C     ALGORITHM 608, COLLECTED ALGORITHMS FROM ACM.
+C     ALGORITHM APPEARED IN ACM-TRANS. MATH. SOFTWARE, VOL.9, NO. 3,
+C     DEC., 1983, P. 461-466.
+      SUBROUTINE HGW(N, C, F, D, NC, NF, ND, LOC3N, WORK4N)             HGW   10
+      DIMENSION C(NC,1), F(NF,1), D(ND,1), LOC3N(1), WORK4N(1)
+C
+C     D.WEST 6 MAY 83
+C     PURPOSE:
+C        THE ALGORITHM COMPUTES A PERMUTATION L OF 1:N TO APPROXIMATELY
+C        MINIMIZE THE OBJECTIVE FUNCTION:
+C        OBJ=SUM/I=1 TO N/(C(I,LI)+SUM/J=1 TO N/(F(I,J)*D(LI,LJ))
+C        WHERE LI,LJ ARE THE IMAGES OF I,J UNDER L. NEITHER F NOR D IS
+C        ASSUMED SYMMETRIC,BUT THEIR DIAGONAL ELEMENTS ARE ZERO.
+C     ARGUMENT DESCRIPTIONS:
+C        INPUT ONLY,UNCHANGED ON EXIT:
+C        N (>1) IS THE SIZE OF THE PROBLEM (SEE ABOVE).
+C        C F AND D ARE REAL ARRAYS CONTAINING THE COEFFICIENTS OF THE
+C               PROBLEM IN THEIR LEADING N BY N SUBMATRICES. THE FIRST
+C               N DIAGONAL ELEMENTS OF F AND D MUST BE ZERO.
+C        NC,NF AND ND ARE THE DECLARED LIMITS OF SUBSCRIPT 1 OF
+C               C F AND D RESPECTIVELY. THEY MUST  BE >= N.
+C        OUTPUT ONLY,IGNORED ON INPUT:
+C        LOC3N  IS AN INTEGER VECTOR OF LENGTH AT LEAST 3*N. ON EXIT
+C               IT CONTAINS IN ELEMENT I THE IMAGE OF I UNDER THE
+C               PERMUTATION CHOSEN AS SOLUTION FOR 1<=I<=N. THE
+C               REMAINDER OF LOC3N IS USED AS WORKSPACE.
+C        WORK4N IS A REAL VECTOR OF LENGTH AT LEAST 4*N. ON EXIT ELEMENT
+C               1 CONTAINS THE VALUE OF THE OBJECTIVE FUNCTION
+C               CORRESPONDING TO THE PERMUTATION IN LOC3N. THE
+C               REMAINDER OF WORK4N IS USED AS WORKSPACE.
+C     METHOD:
+C        THE ALGORITHM BUILDS THE FINAL PERMUTATION
+C        IN N STAGES. AFTER K STAGES.THE CURRENT PARTIAL PERMUTATION
+C        CONSISTS OF THE ORDERED SETS S' AND L',WHERE S'(I)<->L'(I) FOR
+C        I=1 TO K. THE CORRESPONDING UNORDERED COMPLEMENTARY SETS S AND
+C        L ARE EACH OF SIZE N-K. AT EACH STAGE WE CHOOSE I FROM S AND
+C        J FROM L SUCH THAT WHEN THESE ARE TRANSFERRED TO S' AND L'
+C        RESPECTIVELY,THE MEAN OBJECTIVE FUNCTION OVER ALL POSSIBLE
+C        COMPLETIONS OF THE RESULTING PARTIAL PERMUTATION IS MINIMIZED
+C        OVER ALL CHOICES OF I AND J.
+C        SEE C. HEIDER, NAV. RES. LOG. Q., VOL 20 (1973) 699
+C        ALL POSSIBLE PAIR EXCHANGES ARE THEN CONSIDERED,AND THE MOST
+C        ADVANTAGEOUS,IF ANY,IS EXECUTED. THIS PROCESS IS REPEATED UNTIL
+C        N PAIRS HAVE BEEN EXCHANGED,OR NO EXCHANGE GIVES IMPROVEMENT.
+C     EXTERNAL ROUTINES CALLED:
+C           INITRD,DELTA,UPDRD,DELTX.
+C        IF EITHER F OR D IS SYMMETRIC,THE ALTERNATIVE VERSIONS OF
+C        DELTA AND DELTX,WHICH EXPLOIT THIS SYMMETRY,MAY BE USED.
+C        SEE THE COMMENTS IN THESE ALTERNATIVE VERSIONS.
+C     DEFINITIONS OF INTERMEDIATE RESULTS:
+C           THE SET S' IS STORED IN LOC3N(N1+1)...LOC3N(N1+K)
+C           THE SET S  IS STORED IN LOC3N(N1+K+1)...LOC3N(N1+N)
+C           THE SET L' IS STORED IN LOC3N(N2+1)...LOC3N(N2+K)
+C           THE SET L  IS STORED IN LOC3N(N2+K+1)...LOC3N(N2+N)
+C        FOR I = 1 TO N:
+C           SUM /J IN S/ F(I,J)  IS STORED IN WORK4N(I)
+C           SUM /J IN L/ D(I,J)  IS STORED IN WORK4N(N1+I)
+C           SUM /J IN S/ F(J,I)  IS STORED IN WORK4N(N2+I)
+C           SUM /J IN L/ D(J,I)  IS STORED IN WORK4N(N3+I)
+C        IF I IS IN S',THE CORRESPONDING MEMBER OF L' IS DENOTED LI
+C        BELOW.  SIMILARLY LJ CORRESPONDS TO J. THEN:
+C          BP(1)=SUM/I,J IN S'/ F(I,J)*D(LI,LJ)
+C          BP(2)=SUM/I IN S',J IN S,M IN L/F(I,J)*D(LI,M)+F(J,I)*D(M,LI)
+C          BP(3)=BP(6)*BP(7)
+C          BP(4)=SUM /I IN S'/ C(I,LI)
+C          BP(5)=SUM /I IN S,J IN L/ C(I,J)
+C          BP(6)=SUM /I,J IN S/ F(I,J)
+C          BP(7)=SUM /I,J IN L/ D(I,J)
+C        THEN THE AVERAGE VALUE OF THE OBJECTIVE FUNCTION OVER ALL
+C        COMPLETIONS OF THE CURRENT PARTIAL PERMUTATION IS:
+C           OBJ=BP(1)+BP(2)/(N1-K)+BP(3)/((N1-K)*(N1-K-1))+
+C               BP(4)+BP(5)/(N1-K)
+C        WHEN K=N1-1 THE PERMUTATION HAS BEEN COMPLETED AND THIS
+C        DEFINITION BECOMES IDENTICAL TO THE ONE IN LINE 8.   THE ABOVE
+C        GROUP OF DEFINITIONS ARE ESSENTIALLY THE INVARIANT ASSERTIONS
+C        FOR THE DO 30 LOOP IN THIS SUBROUTINE.
+C
+      COMMON /HGWC/ BP(7), BPN(7), BPB(7), RFNK, RFNK1, RFNK2, K, N1,
+     * N2, N3
+C
+      IF (N.LE.1) RETURN
+      N1 = N
+      N2 = N + N
+      N3 = 3*N
+C     INITIALIZE RECURRENCE DATA
+      CALL INITRD(C, F, D, NC, NF, ND, PNORM, LOC3N(N1+1), LOC3N(N2+1),
+     * WORK4N(1), WORK4N(N1+1), WORK4N(N2+1), WORK4N(N3+1))
+      OBJ = (BP(3)*RFNK1+BP(5))*RFNK
+      NM1 = N - 1
+C
+      DO 30 KP1=1,NM1
+        K = KP1 - 1
+C        SELECT CANDIDATES FOR POSITION KP1 IN S' AND L' TO GIVE A
+C        MAXIMAL REDUCTION IN THE AVERAGE OBJECTIVE FUNCTION.
+        DELBST = PNORM
+C        DELBST NEED ONLY BE LARGER THAN THE ROUNDING ERROR IN DELTA
+C
+        DO 20 I=KP1,N
+          IS = N1 + I
+          IBAR = LOC3N(IS)
+C
+          DO 10 J=KP1,N
+            JL = N2 + J
+C              PRE-EVALUATE EFFECT ON OBJ OF ASSIGNMENT IBAR<->LOC3N(JL)
+            TEMP = DELTA(IBAR,LOC3N(JL),C,F,D,NC,NF,ND,LOC3N(N1+1),
+     *       LOC3N(N2+1),WORK4N(1),WORK4N(N1+1),WORK4N(N2+1),
+     *       WORK4N(N3+1))
+            IF (TEMP.GE.DELBST) GO TO 10
+C              GOT AN IMPROVEMENT,SO SAVE IT
+            IBEST = I
+            JBEST = J
+            DELBST = TEMP
+            BPB(1) = BPN(1)
+            BPB(2) = BPN(2)
+            BPB(3) = BPN(3)
+            BPB(4) = BPN(4)
+            BPB(5) = BPN(5)
+            BPB(6) = BPN(6)
+            BPB(7) = BPN(7)
+   10     CONTINUE
+C
+   20   CONTINUE
+C
+C        EXCHANGE BEST ITEMS INTO POSITION KP1
+        KP1S = N1 + KP1
+        KP1L = N2 + KP1
+        IBESTS = N1 + IBEST
+        JBESTL = N2 + JBEST
+        ITEMP = LOC3N(KP1S)
+        LOC3N(KP1S) = LOC3N(IBESTS)
+        LOC3N(IBESTS) = ITEMP
+        JTEMP = LOC3N(KP1L)
+        LOC3N(KP1L) = LOC3N(JBESTL)
+        LOC3N(JBESTL) = JTEMP
+        OBJ = OBJ + DELBST
+C        UPDATE RECURRENCE DATA
+        IF (KP1.NE.NM1) CALL UPDRD(F, D, NF, ND, LOC3N(N1+1),
+     *   LOC3N(N2+1), WORK4N(1), WORK4N(N1+1), WORK4N(N2+1),
+     *   WORK4N(N3+1))
+   30 CONTINUE
+C
+C     THE FINAL ITERATION, WITH K=N-1, IS NOT PERFORMED SINCE THERE
+C     IS ONLY ONE CANDIDATE PAIR AND IT IS ALREADY IN PLACE.
+C     NOW UNSCRAMBLE THE PERMUTATION.
+C
+      DO 40 I=1,N
+        IL = N2 + I
+        IS = N1 + I
+        LS = LOC3N(IS)
+        LOC3N(LS) = LOC3N(IL)
+   40 CONTINUE
+C
+C     THE CONSTRUCTION PHASE IS NOW COMPLETE.  THE REMAINING CODE TRIES
+C     TO IMPROVE THE CURRENT APPROXIMATE SOLUTION USING PAIR EXCHANGES.
+C     IF THE USER WISHES TO TRADE SOLUTION QUALITY FOR SPEED OF
+C     COMPUTATION, THE FOLLOWING STATEMENTS UP TO AND INCLUDING
+C     LABEL 90 MAY BE OMITTED.
+C
+      DO 70 M=1,N
+C        AT MOST N TIMES
+        DELBST = 0.
+C
+        DO 60 I=2,N
+          IM1 = I - 1
+C
+          DO 50 J=1,IM1
+            TEMP = DELTX(I,J,C,F,D,NC,NF,ND,LOC3N)
+            IF (TEMP.GE.DELBST) GO TO 50
+C              GOT AN IMPROVEMENT,SO SAVE IT
+            IBEST = I
+            JBEST = J
+            DELBST = TEMP
+   50     CONTINUE
+C
+   60   CONTINUE
+C
+        IF (DELBST.GE.0.) GO TO 80
+C        PERFORM EXCHANGE
+        LI = LOC3N(IBEST)
+        LJ = LOC3N(JBEST)
+        LOC3N(IBEST) = LJ
+        LOC3N(JBEST) = LI
+        OBJ = OBJ + DELBST
+   70 CONTINUE
+C
+   80 CONTINUE
+      WORK4N(1) = OBJ
+      RETURN
+      END
+      FUNCTION DELTA(IBAR, JBAR, C, F, D, NC, NF, ND, LS, LL, W1, W2,   DEL   10
+     * W3, W4)
+      DIMENSION C(NC,1), F(NF,1), D(ND,1), LS(1), LL(1), W1(1), W2(1),
+     * W3(1), W4(1)
+C
+C     CALLED BY THE QUADRATIC ASSIGNMENT HEURISTIC HGW.  SEE THE
+C     COMMENTS IN THAT ROUTINE FOR MORE INFORMATION.
+C     RETURNS THE CHANGE IN OBJ  (NEW - OLD) THAT WOULD BE PRODUCED
+C     BY TRANSFERRING IBAR FROM S TO S' AND JBAR FROM L TO L'.
+C     THESE TRANSFERS ARE ONLY VIRTUAL.  ON EXIT BPN CONTAINS THE
+C     CORRESPONDING NEW VALUES OF BP. F AND D ARE NOT ASSUMED SYMMETRIC.
+C     ASSERT:K.LE.N1-2
+C
+      COMMON /HGWC/ BP(7), BPN(7), BPB(7), RFNK, RFNK1, RFNK2, K, N1,
+     * N2, N3
+C
+      DB1 = 0.
+      DBP2 = W1(IBAR)*W2(JBAR) + W3(IBAR)*W4(JBAR)
+      IF (K.EQ.0) GO TO 20
+C
+      DO 10 M=1,K
+        M1 = LS(M)
+        LM1 = LL(M)
+        F1 = F(IBAR,M1)
+        F2 = F(M1,IBAR)
+        D1 = D(JBAR,LM1)
+        D2 = D(LM1,JBAR)
+        DB1 = DB1 + F1*D1 + F2*D2
+        DBP2 = DBP2 - F2*W2(LM1) - F1*W4(LM1) - W1(M1)*D2 - W3(M1)*D1
+   10 CONTINUE
+C
+      DBP2 = DBP2 + DB1
+   20 CONTINUE
+C
+C     THE AVERAGE OBJECTIVE FUNCTION, OBJ, FOR THE CURRENT PARTIAL
+C     PERMUTATION IS CALCULABLE FROM THE CONTENTS OF THE ARRAY BP,
+C     ALTHOUGH WE DO NOT DO SO EXPLICITLY.  WE NOW CONSTRUCT DELTA, THE
+C     ANTICIPATED CHANGE IN OBJ, FROM THE CORRESPONDING CHANGE IN BP.
+C
+      BPN(1) = BP(1) + DB1
+      BPN(2) = BP(2) + DBP2
+      BPN(6) = BP(6) - W1(IBAR) - W3(IBAR)
+      BPN(7) = BP(7) - W2(JBAR) - W4(JBAR)
+      BPN(3) = BPN(6)*BPN(7)
+      IF (K.GE.N1-2) BPN(3) = 0.
+      BPN(4) = BP(4) + C(IBAR,JBAR)
+      DBP5 = C(IBAR,JBAR)
+      KP1 = K + 1
+C
+      DO 30 M=KP1,N1
+        M1 = LS(M)
+        LM1 = LL(M)
+        DBP5 = DBP5 - C(IBAR,LM1) - C(M1,JBAR)
+   30 CONTINUE
+C
+      BPN(5) = BP(5) + DBP5
+      DELTA = DB1 + C(IBAR,JBAR) - RFNK*(BP(2)+BP(5)) +
+     * RFNK1*((BPN(3)*RFNK2-BP(3)*RFNK)+(BPN(2)+BPN(5)))
+      RETURN
+      END
+      FUNCTION DELTA(IBAR, JBAR, C, F, D, NC, NF, ND, LS, LL, W1, W2,   DEL   10
+     * W3, W4)
+      DIMENSION C(NC,1), F(NF,1), D(ND,1), LS(1), LL(1), W1(1), W2(1),
+     * W3(1), W4(1)
+C
+C     CALLED BY THE QUADRATIC ASSIGNMENT HEURISTIC HGW.  SEE THE
+C     COMMENTS IN THAT ROUTINE FOR MORE INFORMATION.
+C     SYMMETRIC VERSION. IF EITHER F OR D IS SYMMETRIC,THE OTHER
+C     CAN BE REPLACED BY THE AVERAGE OF ITSELF AND ITS TRANSPOSE
+C     WITHOUT CHANGING THE SOLUTION. THIS IS ASSUMED TO HAVE BEEN DONE.
+C
+C     RETURNS THE CHANGE IN OBJ  (NEW - OLD) THAT WOULD BE PRODUCED
+C     BY TRANSFERRING IBAR FROM S TO S' AND JBAR FROM L TO L'.
+C     ON EXIT,BPN CONTAINS THE CORRESPONDING NEW VALUES OF BP.
+C     ASSERT:K.LE.N1-2
+C
+      COMMON /HGWC/ BP(7), BPN(7), BPB(7), RFNK, RFNK1, RFNK2, K, N1,
+     * N2, N3
+C
+      DB1 = 0.
+      DBP2 = W1(IBAR)*W2(JBAR)
+      IF (K.EQ.0) GO TO 20
+C
+      DO 10 M=1,K
+        M1 = LS(M)
+        LM1 = LL(M)
+        F1 = F(IBAR,M1)
+        D1 = D(JBAR,LM1)
+        DB1 = DB1 + F1*D1
+        DBP2 = DBP2 - F1*W2(LM1) - W1(M1)*D1
+   10 CONTINUE
+C
+      DBP2 = DBP2 + DB1
+   20 CONTINUE
+C
+C     THE AVERAGE OBJECTIVE FUNCTION, OBJ, FOR THE CURRENT PARTIAL
+C     PERMUTATION IS CALCULABLE FROM THE CONTENTS OF THE ARRAY BP,
+C     ALTHOUGH WE DO NOT DO SO EXPLICITLY.  WE NOW CONSTRUCT DELTA, THE
+C     ANTICIPATED CHANGE IN OBJ, FROM THE CORRESPONDING CHANGE IN BP.
+C
+      DB1 = DB1 + DB1
+      DBP2 = DBP2 + DBP2
+      BPN(1) = BP(1) + DB1
+      BPN(2) = BP(2) + DBP2
+      BPN(6) = BP(6) - W1(IBAR) - W1(IBAR)
+      BPN(7) = BP(7) - W2(JBAR) - W2(JBAR)
+      BPN(3) = BPN(6)*BPN(7)
+      IF (K.GE.N1-2) BPN(3) = 0.
+      BPN(4) = BP(4) + C(IBAR,JBAR)
+      DBP5 = C(IBAR,JBAR)
+      KP1 = K + 1
+C
+      DO 30 M=KP1,N1
+        M1 = LS(M)
+        LM1 = LL(M)
+        DBP5 = DBP5 - C(IBAR,LM1) - C(M1,JBAR)
+   30 CONTINUE
+C
+      BPN(5) = BP(5) + DBP5
+      DELTA = DB1 + C(IBAR,JBAR) - RFNK*(BP(2)+BP(5)) +
+     * RFNK1*((BPN(3)*RFNK2-BP(3)*RFNK)+(BPN(2)+BPN(5)))
+      RETURN
+      END
+      SUBROUTINE INITRD(C, F, D, NC, NF, ND, PNORM, LS, LL, W1, W2, W3, INI   10
+     * W4)
+      DIMENSION C(NC,1), F(NF,1), D(ND,1), LS(1), LL(1), W1(1), W2(1),
+     * W3(1), W4(1)
+C     INITIALIZE RECURRENCE DATA
+C     CALLED BY THE QUADRATIC ASSIGNMENT HEURISTIC HGW.  SEE THE
+C     COMMENTS IN THAT ROUTINE FOR MORE INFORMATION.
+      COMMON /HGWC/ BP(7), BPN(7), BPB(7), RFNK, RFNK1, RFNK2, K, N1,
+     * N2, N3
+C
+C
+      SCSL = 0.
+      SFS = 0.
+      SDL = 0.
+      CMX = 0.
+      FMX = 0.
+      DMX = 0.
+      RFNK = 1./FLOAT(N1)
+      RFNK1 = 0.
+      RFNK1 = 1./FLOAT(N1-1)
+      RFNK2 = 0.
+      IF (N1.GT.2) RFNK2 = 1./FLOAT(N1-2)
+C
+      DO 20 I=1,N1
+        LS(I) = I
+        LL(I) = I
+C        INITIALIZE ROW AND COL SUMS
+        FR = 0.
+        FC = 0.
+        DR = 0.
+        DC = 0.
+C
+        DO 10 J=1,N1
+          SCSL = SCSL + C(I,J)
+          CMX = AMAX1(CMX,ABS(C(I,J)))
+          FR = FR + F(I,J)
+          FMX = AMAX1(FMX,ABS(F(I,J)))
+          FC = FC + F(J,I)
+          DR = DR + D(I,J)
+          DMX = AMAX1(DMX,ABS(D(I,J)))
+          DC = DC + D(J,I)
+   10   CONTINUE
+C
+        SFS = SFS + FR
+        SDL = SDL + DR
+        W1(I) = FR
+        W3(I) = FC
+        W2(I) = DR
+        W4(I) = DC
+   20 CONTINUE
+C
+      BP(1) = 0.
+      BP(2) = 0.
+      BP(3) = SFS*SDL
+      BP(4) = 0.
+      BP(5) = SCSL
+      BP(6) = SFS
+      BP(7) = SDL
+      PNORM = CMX + FMX*DMX
+C     PNORM IS AN UPPER BOUND ON THE ERROR IN EVALUATING OBJ IF N1 IS
+C     LESS THAN THE RECIPROCAL OF THE MACHINE PRECISION
+      RETURN
+      END
+      SUBROUTINE UPDRD(F, D, NF, ND, LS, LL, W1, W2, W3, W4)            UPD   10
+      DIMENSION F(NF,1), D(ND,1), LS(1), LL(1), W1(1), W2(1), W3(1),
+     * W4(1)
+C
+C     UPDATE RECURRENCE DATA JUST BEFORE K IS INCREMENTED
+C     CALLED BY THE QUADRATIC ASSIGNMENT HEURISTIC HGW.  SEE THE
+C     COMMENTS IN THAT ROUTINE FOR MORE INFORMATION.
+C     ASSERT: K<=N1-2
+C
+      COMMON /HGWC/ BP(7), BPN(7), BPB(7), RFNK, RFNK1, RFNK2, K, N1,
+     * N2, N3
+C
+      KP1 = K + 1
+      KP11 = LS(KP1)
+      LKP1 = LL(KP1)
+C
+      DO 10 I=1,N1
+        W1(I) = W1(I) - F(I,KP11)
+        W3(I) = W3(I) - F(KP11,I)
+        W2(I) = W2(I) - D(I,LKP1)
+        W4(I) = W4(I) - D(LKP1,I)
+   10 CONTINUE
+C
+      BP(1) = BPB(1)
+      BP(2) = BPB(2)
+      BP(3) = BPB(3)
+      BP(4) = BPB(4)
+      BP(5) = BPB(5)
+      BP(6) = BPB(6)
+      BP(7) = BPB(7)
+      RFNK = RFNK1
+      RFNK1 = RFNK2
+      RFNK2 = 0.
+      IF (KP1.LT.N1-2) RFNK2 = 1./FLOAT(N1-KP1-2)
+C     NEXT VALUE OF K IS KP1
+      RETURN
+      END
+      FUNCTION DELTX(I, J, C, F, D, NC, NF, ND, LOC3N)                  DEL   10
+      DIMENSION C(NC,1), F(NF,1), D(ND,1), LOC3N(1)
+C
+C     CALLED BY THE QUADRATIC ASSIGNMENT HEURISTIC HGW.  SEE THE
+C     COMMENTS IN THAT ROUTINE FOR MORE INFORMATION.
+C     RETURNS THE CHANGE (NEW - OLD) IN THE HGW OBJECTIVE FUNCTION THAT
+C     WOULD BE PRODUCED IF THE EXISTING ASSIGNMENT PAIRS (I<->LI) AND
+C     (J<->LJ) WERE REPLACED BY (I<->LJ) AND (J<->LI). I AND J ARE IN
+C     S',LI AND LJ ARE IN L'. F AND D ARE NOT ASSUMED SYMMETRIC.
+C
+      COMMON /HGWC/ BP(7), BPN(7), BPB(7), RFNK, RFNK1, RFNK2, K, N1,
+     * N2, N3
+      LI = LOC3N(I)
+      LJ = LOC3N(J)
+      DELTX = C(I,LJ) - C(I,LI) + C(J,LI) - C(J,LJ) +
+     * (F(I,J)-F(J,I))*(D(LJ,LI)-D(LI,LJ))
+C
+      DO 10 M=1,N1
+        IF (M.EQ.I) GO TO 10
+        IF (M.EQ.J) GO TO 10
+        LM = LOC3N(M)
+        DELTX = DELTX + (F(I,M)-F(J,M))*(D(LJ,LM)-D(LI,LM)) +
+     *   (F(M,I)-F(M,J))*(D(LM,LJ)-D(LM,LI))
+   10 CONTINUE
+C
+      RETURN
+      END
+      FUNCTION DELTX(I, J, C, F, D, NC, NF, ND, LOC3N)                  DEL   10
+      DIMENSION C(NC,1), F(NF,1), D(ND,1), LOC3N(1)
+C
+C     CALLED BY THE QUADRATIC ASSIGNMENT HEURISTIC HGW.  SEE THE
+C     COMMENTS IN THAT ROUTINE FOR MORE INFORMATION.
+C     SYMMETRIC VERSION. IF EITHER F OR D IS SYMMETRIC,THE OTHER
+C     CAN BE REPLACED BY THE AVERAGE OF ITSELF AND ITS TRANSPOSE
+C     WITHOUT CHANGING THE SOLUTION. THIS IS ASSUMED TO HAVE BEEN DONE.
+C
+C     RETURNS THE CHANGE (NEW - OLD) IN THE HGW OBJECTIVE FUNCTION THAT
+C     WOULD BE PRODUCED IF THE EXISTING ASSIGNMENT PAIRS (I<->LI) AND
+C     (J<->LJ) WERE REPLACED BY (I<->LJ) AND (J<->LI). I AND J ARE IN
+C     S',LI AND LJ ARE IN L'.
+C
+      COMMON /HGWC/ BP(7), BPN(7), BPB(7), RFNK, RFNK1, RFNK2, K, N1,
+     * N2, N3
+      LI = LOC3N(I)
+      LJ = LOC3N(J)
+      DELTX = 0.
+C
+      DO 10 M=1,N1
+        IF (M.EQ.I) GO TO 10
+        IF (M.EQ.J) GO TO 10
+        LM = LOC3N(M)
+        DELTX = DELTX + (F(I,M)-F(J,M))*(D(LJ,LM)-D(LI,LM))
+   10 CONTINUE
+C
+      DELTX = DELTX + DELTX + (C(I,LJ)-C(I,LI)+C(J,LI)-C(J,LJ))
+      RETURN
+      END
+C     PROGRAM MAIN(OUTPUT,TAPE6=OUTPUT)                                 MAN   10
+C     MAIN PROG TO TEST THE QUADRATIC ASSIGNMENT HEURISTIC HGW ON       MAN   20
+C     A VARIANT OF GAVETT AND PLYTER'S 4-DIMENSIONAL TEST EXAMPLE.      MAN   30
+C     SEE OPERATIONS RESEARCH VOL 14 (1966) P210  FOR ORIGINAL PROBLEM  MAN   40
+C     SOLUTION IS: OBJ=406, ASSIGNMENTS: 4,1,3,2                        MAN   50
+      DIMENSION C(5,5), F(5,5), D(5,5), LOC3N(12), WORK4N(16)           MAN   60
+      LOGICAL GOOD                                                      MAN   70
+      DATA F(1,1) /0./, F(1,2) /10./, F(1,3) /20./, F(1,4) /5./, F(2,1) MAN   80
+     * /18./, F(2,2) /0./, F(2,3) /9./, F(2,4) /4./, F(3,1) /8./,       MAN   90
+     * F(3,2) /6./, F(3,3) /0./, F(3,4) /8./, F(4,1) /8./, F(4,2) /0./, MAN  100
+     * F(4,3) /15./, F(4,4) /0./                                        MAN  110
+      DATA D(1,1) /0./, D(1,2) /6./, D(1,3) /7./, D(1,4) /2./, D(2,1)   MAN  120
+     * /6./, D(2,2) /0./, D(2,3) /5./, D(2,4) /6./, D(3,1) /7./, D(3,2) MAN  130
+     * /5./, D(3,3) /0./, D(3,4) /1./, D(4,1) /2./, D(4,2) /6./, D(4,3) MAN  140
+     * /1./, D(4,4) /0./                                                MAN  150
+      N = 4                                                             MAN  160
+      NC = 5                                                            MAN  170
+      NF = 5                                                            MAN  180
+      ND = 5                                                            MAN  190
+      DO 20 I=1,N                                                       MAN  200
+        DO 10 J=1,N                                                     MAN  210
+          C(I,J) = 0.                                                   MAN  220
+C        SYMMETRIZE F FOR COMPATIBILITY WITH SYMMETRIC CODE             MAN  230
+          IF (I.GE.J) GO TO 10                                          MAN  240
+          F(I,J) = 0.5*(F(I,J)+F(J,I))                                  MAN  250
+          F(J,I) = F(I,J)                                               MAN  260
+   10   CONTINUE                                                        MAN  270
+   20 CONTINUE                                                          MAN  280
+      CALL HGW(N, C, F, D, NC, NF, ND, LOC3N, WORK4N)                   MAN  290
+      WRITE (6,99999) WORK4N(1), (LOC3N(I),I=1,N)                       MAN  300
+99999 FORMAT (5H OBJ=, F10.2, 12H ASSIGNMENT=, 4I3)                     MAN  310
+      GOOD = (LOC3N(1).EQ.4) .AND. (LOC3N(2).EQ.1) .AND.                MAN  320
+     * (LOC3N(3).EQ.3) .AND. (LOC3N(4).EQ.2) .AND. (ABS(WORK4N(1)-406.) MAN  330
+     * .LT.0.5)                                                         MAN  340
+      IF (.NOT.GOOD) GO TO 30                                           MAN  350
+      WRITE (6,99998)                                                   MAN  360
+99998 FORMAT (8H CORRECT)                                               MAN  370
+      STOP                                                              MAN  380
+   30 WRITE (6,99997)                                                   MAN  390
+99997 FORMAT (6H ERROR)                                                 MAN  400
+      STOP                                                              MAN  410
+      END                                                               MAN  420

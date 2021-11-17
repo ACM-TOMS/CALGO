@@ -1,0 +1,638 @@
+% acmtr.tex
+% revised 1/20/97
+% updated 06/01/01
+% $Header: acmtr.tex,v 1.5 2/14/96 11:07:57 boyland Exp $
+
+\documentclass[acmtoms]{acmtrans2m}
+%&t&{\tt #}&
+%&v&\verb|#|&
+
+%\acmVolume{2}
+%\acmNumber{3}
+%\acmYear{01}
+%\acmMonth{09}
+\usepackage{amssymb}
+\usepackage{array}
+\usepackage{alltt}
+\usepackage[reqno]{amsmath}
+\usepackage{alltt}
+\usepackage{fancyvrb}
+\usepackage{graphicx}
+\usepackage{epsfig}
+\usepackage{color}
+\usepackage{subfigure}
+
+%\usepackage[active,new,old]{correct} % \Add and \Del Corrections
+%\usepackage[active]{correct} % Only Additions- in blue colors
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{conjecture}[theorem]{Conjecture}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newdef{definition}[theorem]{Definition}
+\newdef{remark}[theorem]{Remark}
+\newcommand{\BibTeX}{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\markboth{M. Mehra and K. Goyal}{}
+
+\title{ User Manual for the paper titled `A Wavelet Differentiation Matrix Suite'}
+\author{MANI MEHRA \and KAVITA GOYAL}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\begin{document}
+\setcounter{page}{111}
+
+\begin{bottomstuff}
+Author's address: M. Mehra (mmehra@maths.iitd.ac.in) and K. Goyal
+(goyalkavita9@gmail.com), Indian Institute of Technology Delhi, Hauz
+Khas, New Delhi-110 016
+\end{bottomstuff}
+\maketitle
+\section{} \verb#cascade.m#\\
+ The function {\tt cascade.m} computes the scaling function $\phi$ and the wavelet function $\psi$ at dyadic
+rationals. The calling command for this function is
+\begin{alltt}
+>>[x, phi, psi]=cascade(D,q);
+\end{alltt}
+where \verb#phi# and \verb#psi# stands for $\phi$ and $\psi$ respectively. $D$ and $q$ are the wavelet genus and the desired dyadic resolution respectively. The implementation goes like this:\\
+An inbuilt function in Matlab, {\tt wfilters.m}, computes low pass
+filter coefficients $h_k$ and high pass filter coefficients $g_k$
+as
+\begin{alltt}
+>>[h_k, g_k] = wfilters([`db' num2str(D/2)],`r');
+\end{alltt}
+
+Using these $h_k$, the matrices $A_0$ and $A_1$ are constructed such that 
+\[\Phi(0)=A_0\Phi(0) \mbox{ and } \Phi(\frac{1}{2})=A_1 \Phi(0),\]
+where
+\[\Phi(x)=[\phi(x) \phi(x+1) \cdots \phi(x+D-1)]^T\]
+
+ These matrices are initialized as zero matrices of order $(D-1)$ using
+the following Matlab command
+\begin{alltt}
+>>A_0= A_1= zeros(D-1,D-1);
+\end{alltt}
+Next, the following loop of {\tt cascade.m} constructs the matrices $A_0$ and $A_1$
+\\\hrule
+\begin{verbatim}
+>>E = hk(1:2:D-1);     %Even numbered low pass filter coefficients h0,h2,h4,...
+>>O = hk(2:2:D);       %Odd numbered low pass filter coefficients h1,h3,h5,...
+>>Firstrow = 1;        % Matrix A0
+>>Lastrow  = D/2;
+>>A0(Firstrow:Lastrow,1)= E;
+>>for j=2:2:D-1
+  >>Firstrow = Firstrow+1;
+  >>Lastrow  = Lastrow+1;
+  >>A0(Firstrow:Lastrow,j)   = O;
+  >>A0(Firstrow:Lastrow,j+1) = E;
+>>end;
+>>A0 = sqrt(2)*A0;
+>>Firstrow = 1;        % Matrix A1
+>>Lastrow  = D/2;
+>>for j=1:2:D-3
+  >>A1(Firstrow:Lastrow,j)   = O;
+  >>A1(Firstrow:Lastrow,j+1) = E;
+  >>Firstrow = Firstrow+1;
+  >>Lastrow = Lastrow+1;
+>>end;
+>>A1(Firstrow:Lastrow,D-1)   = O;
+>>A1 = sqrt(2)*A1;
+\end{verbatim}
+\hrule\vspace{.5cm}
+
+Now we need to find out the eigenvector of $A_0$ corresponding to the eigenvalue
+$1$ which is its maximum eigenvalue and this eigenvector is nothing but $\Phi(0)$. This is done by following code
+\\\hrule
+\begin{verbatim}
+>>[V,Dia]=eig(A0);                % Get eigenvectors and values of matrix A0
+>>[maxeig,index]=max(diag(Dia));  % Find largest eigenvalue (=1)
+>>v = V(:,index);                 % Pick corresponding eigen vector
+>>v = v/sum(v);                   % Normalize s.t. sum(v) = 1, (sum(\phi_{k})=1)
+>>for k=0:D-2
+  >>phi(k*2^q + 1) = v(k+1);      % Initialize phi at integers
+>>end
+\end{verbatim}
+\hrule \vspace{.5cm}
+The inbuilt function \verb#eig.m# is used to obtain the eigenvalues and eigenvectors of $A_0$. After calculation of $\Phi(0)$, {\tt cascade.m} calculate $\Phi\left(\frac{1}{2}\right)$. Last step of {\tt cascade.m} is calculation of $\psi$ using $\phi$ using following commands
+\\\hrule
+\begin{verbatim}
+>>psi = zeros(size(phi));
+>>if q > 0                  % q is required resolution
+  >>L2   = L/2;             % L=(D-1)*2^q
+  >>phi2 = phi(1:2:L);       % Phi at even numerators
+  >>first = 1;
+  >>for k=1:D
+    >>psi(first:first+L2-1) = psi(first:first+L2-1) + sqrt(2)*hp(k)*phi2;
+    >>first = first + 2^q/2;
+  >>end;
+>>else                       % q = 0  (a special case)
+  >>for m=0:D-1
+    >>for k=0:D-1
+      >>index = 2*m-k;
+      >>if (index >= 0) & (index <= D-1)
+     >>psi(m+1) = psi(m+1) + sqrt(2)*hp(k+1)*phi(index+1);
+      >>end;
+    >>end;
+  >>end;
+>>end;
+\end{verbatim}
+\hrule
+\vspace{.5cm}
+
+
+ %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ \section{} {\tt dstmat.m}, {\tt dst.m} and {\tt idst.m} 
+\begin{itemize}
+\item[$\bullet$] The {\tt dstmat.m} computes the matrix $T_{r,j}$ required for discrete scaling function transformation and inverse discrete scaling function transformation.
+\item[$\bullet$] The {\tt dst.m} and {\tt idst.m} perform the required calculations for discrete
+and inverse discrete scaling function transformation respectively.
+\end{itemize}
+ The function {\tt dstmat.m} first initializes the required
+matrix $T_{r,j}$ using
+\begin{verbatim}
+ >> T = spalloc(K*2^r,K*2^j,(D-1)*2^(r-j));
+\end{verbatim}
+The {\tt spalloc.m} is an inbuilt Matlab routine, {\tt spalloc(M,N,Nz)} creates an $M \times N$ sparse matrix with  all entries zero and with room to eventually hold $Nz$ non zero elements. After initialization step, following is the main loop of {\tt dstmat.m}
+\\\hrule
+\begin{verbatim}
+>>N=K*2^r;                  % Number of samples
+>>P=K*2^j;                  % Number of coefficients
+>>Q=2^q;                    % The resolution of phi
+>>S = P*Q/N;                % step between values needed in phi is 2^(j-r+q)
+>>phi_s = phi(1:S:length(phi));
+>>len   = length(phi_s);
+>>if len < N                % phi_s fits into a column
+  >>for l=0:P-1
+    >>firstrow = l*N/P;
+    >>lastrow  = firstrow + len-1;
+    >>wrap = lastrow - (N-1);
+    >>if wrap > 0,
+    >>lastrow = lastrow - wrap;
+    >>T(0+shift:wrap-1+shift, l+shift) = phi_s(len-wrap+1:len);
+  >>else
+    >>wrap=0;
+  >>end;
+    >>T(firstrow+shift:lastrow+shift, l+shift) = phi_s(1:len-wrap);
+  >>end;
+>>else
+  >>for l=0:P-1             % For each column
+    >>firstrow = rem(l*N/P,N);
+    >>for k=0:len-1         % For element in phi_s
+      >>row = rem(firstrow + k, N);
+      >>T(row+shift, l+shift) = T(row+shift, l+shift) + phi_s(k+shift);
+    >>end;
+  >>end;
+>>end;
+>>T=2^(j/2)*T;
+\end{verbatim}
+\hrule \vspace{.5cm} 
+Both \verb#dst.m# and \verb#idst.m# call \verb#dstmat.m# using the command
+\begin{verbatim}
+>> T=dstmat(wavelet,r,j,q,K);
+\end{verbatim}
+ The calling
+commands for \verb#dst.m# and \verb#idst.m # are
+\begin{verbatim}
+>>c=dst(f, D);
+>>f=idst(c, D, q);
+\end{verbatim}
+Main commands for \verb#dst.m# are:
+\\
+\hrule
+\begin{verbatim}
+>>T = dstmat(D,r,j,q,L);
+>>c = T\f;
+\end{verbatim}
+\hrule
+\vspace{.5cm}
+\section{} \verb#moments.m# and \verb#tmoments.m# 
+\begin{itemize}
+\item[$\bullet$] The function \verb#moments.m# is called by the command
+\begin{alltt} 
+>>moments = moments (h_k, pmax);
+\end{alltt}
+where \verb#moments# and \verb#h_k# stands for $M_0^p$ and vector containing the low pass filter
+coefficients respectively, \verb#pmax# is the number of moments to be
+computed.  
+\item[$\bullet$] The function \verb#tmoments.m# computes the translated moments $M_l^p$.
+\end{itemize}
+\section{} {\tt conn.m}, \verb#gal_difmatrix_periodic.m# and \verb#gal_diff_periodic.m#
+\begin{itemize}
+\item[$\bullet$]
+The function {\tt conn.m} implements the algorithm for the computation of the connection coefficients. The calling command for {\tt conn.m} is
+\begin{alltt}
+>>Gamma = conn (d, D);
+\end{alltt}
+where \verb#Gamma# stands for ${\bf \Gamma^d}$, $d$ is the order of differentiation and $D$ is the
+wavelet genus. First of all it uses the Matlab inbuilt function
+{\tt wfilters} to calculate low pass and high pass filter
+coefficients. Then using these low pass filter coefficients it
+constructs the matrix ${\bf A}$ of the equation 
+\begin{equation}\label{eq1}
+({\bf A}-2^{-d}{\bf I})\Gamma^d=0. 
+\end{equation}
+Next it
+uses the following command
+\begin{verbatim}
+>>A = A - eye(M)/2^(d);
+\end{verbatim}
+The {\tt eye} is an inbuilt function to construct the identity matrix. It then uses Matlab inbuilt function {\tt svd} to
+find the solution of (\ref{eq1}). The command
+\begin{verbatim}
+ [U,S,V] = svd(A);
+\end{verbatim}
+produces a diagonal matrix $S$, of the same size as that of $A$ and
+with nonnegative diagonal elements in decreasing order, and unitary
+matrices $U$ and $V$ such that $A = USV^{'}$. The $(2D-3)^{th}$
+column of $V$ will serve the purpose i.e. it is the required
+solution of (\ref{eq1}). The normalization is done by
+following set of commands
+\\\hrule
+\begin{verbatim}
+>>if d == 0
+  >>Mrow = ones (1,2D-3);
+>>else
+  >>Mom  = moments (hk, d);
+  >>Mrow = zeros (1,2D-3);
+  >>for c=1:2D-3,
+    >>l       = c-(D-1);
+    >>TMom    = tmoments (Mom,l);
+    >>Mrow(c) = TMom(d);
+  >>end
+>>end;
+>>c = (-1)^d * fac(d) / (Mrow * V(:,M));
+>>Gamma = c * V(:,M);
+\end{verbatim}
+\hrule\vspace{.5cm}
+\item[$\bullet$]
+The function \verb#gal_difmatrix_periodic.m# is the Matlab function in the suite which
+constructs the differentiation matrix for the Galerkin approach in periodic case. The
+calling command for it is
+\begin{alltt}
+ >>difmatrix=gal_difmatrix_periodic(d,N,L,D);
+\end{alltt}
+where \verb#difmatrix# stands for $\mathcal{D}^{(d)}$, $d$ is the order of differentiation, $N=2^j$ is
+the size of differentiation matrix, $L$ is the period of the
+function which is to be differentiated and $D$ is the wavelet genus.
+\item[$\bullet$]
+The function \verb#gal_diff_periodic.m# will differentiate a given function $f$ using the differentiation matrix produced by \verb#gal_difmatrix_periodic.m#. The calling command is
+\begin{alltt}
+>>[derivative, error] = gal_diff_periodic(j,d,D,L);
+\end{alltt}
+where \verb#derivative# and \verb#error# stands for $\mathcal{D}^{(d)}f$ and $E^{(d)}(f,j)$ respectively. $L$ is the period of the function to be differentiated. This function will ask for the function to be differentiated.
+\end{itemize}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{}\verb#cascade_der.m#, \verb#collo_difmatrix_periodic.m# and \verb#collo_diff_periodic.m#
+\begin{itemize}
+\item[$\bullet$] The function \verb#cascade_der.m# computes the values of $\phi^{(d)}$ and $\psi^{(d)}$ at dyadic rationals. The calling command for it is
+\begin{alltt}
+>>[x, phi_d, psi_d]=cascade_der(D,q,d);
+\end{alltt}
+where \verb#phi_d# and \verb#psi_d# stands for $\phi^{(d)}(x)$ and $\psi^{(d)}(x)$ respectively. The {\tt moments.m} and {\tt tmoments.m} are called by \verb#cascade_der.m#.
+\item[$\bullet$] Matlab function \verb#collo_difmatrix_periodic.m# calls \verb#cascade_der.m# and then constructs the matrix
+$\mathcal{D}^{(d)}$ in case of collocation approach in periodic case. The calling command for \verb#collo_difmatrix_periodic.m# is
+\begin{alltt}
+T=collo_difmatrix_periodic(D,r,j,q,d);
+\end{alltt}
+\item[$\bullet$]
+The function \verb#collo_diff_periodic.m# will differentiate a given function $f$ using the differentiation matrix produced by \verb#collo_difmatrix_periodic.m#. The calling command for it is
+\begin{alltt}
+>>[derivative, error] = collo_diff_periodic(j,D,L,d);
+\end{alltt}
+where \verb#derivative# and \verb#error# stands for $\mathcal{D}^{(d)}$ and $E^{(d)}(f,j)$ respectively. It will ask for a function to be differentiated and will return the value of derivative of
+the function at the nodal points and the error.
+\end{itemize}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{} \verb#L_daubfilt.m# and \verb#R_daubfilt.m# 
+\begin{itemize}
+\item[$\bullet$]
+The function \verb#L_daubfilt.m# computes the left low pass filter coefficients
+$h^L$. The calling command is:
+\begin{alltt}
+>>[h_L]=L_daubfilt(k,D);
+\end{alltt}
+where \verb#h_L# stands for $h^L$.
+\item[$\bullet$]
+The function \verb#R_daubfilt.m# computes the right low pass filter coefficients $h^R$. The calling command is:
+\begin{alltt}
+>>[h_R]=R_daubfilt(k,D);
+\end{alltt}
+where \verb#h_R# stands for $h^R$.
+\end{itemize}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{} \verb#L_moments.m# and \verb#R_moments.m#
+\begin{itemize}
+\item[$\bullet$]
+The function \verb#L_moments.m# calculates the moments of left hand side boundary scaling functions. The calling command is
+\begin{alltt}
+>>[moments_Lp]=L_moments(D,p);
+\end{alltt}
+where \verb#moments_Lp# stands for $m^{L,p}=\{m^{L,p}_k, \quad k=0,\cdots,M-1\}$.
+\item[$\bullet$] 
+The function \verb#R_moments.m# calculates the moments of right hand side boundary scaling functions. The calling command for it is
+\begin{alltt}
+>>[moments_Rp]=R_moments(D,p);
+\end{alltt}
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{} \verb#dstmat_nonper.m# \\
+The function \verb#dstmat_nonper.m# constructs the quadrature matrix $C$ in non-periodic case of Galerkin approach. The calling command is
+\begin{verbatim}
+>>[C]=dstmat_nonper(D,N);
+\end{verbatim}
+The \verb#dstmat_nonper.m# calls the functions \verb#L_momoments.m#, \verb#R_moments.m#. The main Matlab commands used in \verb#dstmat_nonper.m# are
+\hrule
+\begin{verbatim}
+>>ind=0;
+>>st=0;
+>>for k=0:N-1
+    >>if(k>=0 & k<=M-1)
+      >>for m=0:M-1
+        >>for l=0:M-1
+          >>a(m+1,l+1)=x_1(k+l+1)^(m);
+        >>end
+        >>[L_mo]=L_moments(D,k);
+        >>b(m+1)=L_mo(m+1);
+      >>end
+      >>sol=a\b' ;
+      >>for j=0:M-1
+        >>C(k+1,j+1)=sol(j+1);
+      >>end
+    >>elseif((k>=M & k<=N-2*M+1))
+      >>for m=0:M-1
+        >>for l=0:M-1
+          >>a(m+1,l+1)=l^m;
+        >>end
+        >>[L_mo]=mom1(D);
+        >>b(m+1)=L_mo(m+1);
+      >>end
+      >>sol=a\b' ;
+      >>for j=M+ind:M+ind+(M-1)
+        >>C(k+1,j+1)=sol(j-(M+ind)+1);
+      >>end
+      >>ind=ind+1;
+    >>else
+      >>for m=0:M-1
+        >>for l=0:M-1
+          >>a(m+1,l+1)=x_1(N-M+l+1)^(m);
+        >>end
+        >>[R_mo]=R_mom(D,st);
+        >>b(m+1)=R_mo(m+1);
+      >>end
+      >>if(st<M-1)
+        >>st=st+1;
+      >>end
+      >>sol=a\b' ;
+        >>for j=N-M:N-1
+          >>C(k+1,j+1)=sol(j-(N-M)+1);
+        >>end
+    >>end
+  >>end
+\end{verbatim}
+\hrule
+\vspace{.5cm}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{} \verb#L_alpha.m# and \verb#R_alpha.m# \\
+\begin{itemize}
+\item[$\bullet$]
+The function \verb#L_alpha.m# implements the algorithm for the calculation of $\alpha^L_{m,i}$. The
+calling command is
+\begin{alltt}
+>> [alpha_L_mi]=L_alpha(m,i,D,N);
+\end{alltt}
+where \verb#alpha_L_mi# stands for $\alpha^{L}_{m,i}$, $D$ is wavelet genus and $N$ is the dimension of the subspace i.e. $2^j$. The functions \verb#L_firstsum_alpha.m# and \verb#conn.m# are called by \verb#L_alpha.m#.
+\item[$\bullet$]
+The Matlab function
+\verb#R_alpha.m# (which calls \verb#R_firstsum_alpha.m# and \verb#conn.m#) works on the same line as its left counterpart. The calling command is
+\begin{alltt}
+>> [alpha_R_mi]=R_alpha(m,i,D,N);
+\end{alltt}
+where \verb#alpha_R_mi# stands for $\alpha^{R}_{m,i}$.
+\end{itemize}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{} \verb#L_phi.m#, \verb#L_phi_origin.m#, \verb#L_ro.m#, \verb#R_phi.m#, \verb#R_phi_origin.m# and  \verb#R_ro.m# 
+\begin{itemize}
+\item[$\bullet$]
+The function
+\verb#L_phi.m# computes the value of $\phi_k^L(x)$ for any
+$x$ other than $0$. The calling command is
+\begin{alltt}
+>>[phi_Lk]=L_phi(k,x,D,h,supp,phi);
+\end{alltt}
+where \verb#phi_Lk# stands for $\phi^{L}_{k}(x)$, and \verb#h#, \verb#phi# and \verb#supp# are obtained  using the function \verb#cascade.m# as follows
+\begin{verbatim}
+>>[y,phi,psi]=cascade(D,q);
+>>h=y(2)-y(1);
+>>supp=(D-1)*(1/h)+1;
+\end{verbatim}
+The functions \verb#L_daubfilt.m# and \verb#L_firstsum_phi.m# are called by \verb#L_phi.m#.
+\item[$\bullet$]
+The function \verb#L_phi_origin.m# calculates $\phi_k^L(0)$ and $\rho_{k,k}^L$ for $D=4$ and $D=8$. The calling command for this function is
+\begin{alltt}
+>>[phi_Lk0, rho_Lkk]=L_phi_origin(k,D,h,supp,phi);
+\end{alltt}
+where \verb#phi_Lk0# and \verb#rho_Lkk# stands for $\phi_{k}^{L}(0)$ and $\rho_{k,k}^{L}$ respectively.
+The function \verb#L_phi_origin.m# for $D=4$ uses following Matlab commands
+\\\hrule
+\begin{verbatim}
+>>x(1)=1/2;
+>>x(2)=1;
+>>y(1)=L_phi(k,x(1),D,h,supp,phi);
+>>y(2)=L_phi(k,x(2),D,h,supp,phi);
+>>p=polyfit(x,y,N-1);
+>>x1=0;
+>>y1=polyval(p,x1);
+>>ro=-(y1^2)/2;
+\end{verbatim}
+\hrule\vspace{.5cm}
+It is clear from above that \verb#L_phi_origin.m# calls the function \verb#L_phi.m# two times to calculate
+$\phi_k^L(1/2)$ and $\phi_k^L(1)$. Moreover, it uses the inbuilt Matlab function \verb#polyfit# to interpolate the function
+$\phi_k^L(x)$ and then use the inbuilt function \verb#polyval# to calculate $\phi_k^L(0)$. The Matlab function \verb#polyfit# is called by the command
+\begin{verbatim}
+>>P = polyfit(X,Y,N);
+\end{verbatim}
+It finds the coefficients of a polynomial \verb#P(X)# of
+degree \verb#N# that fits the data \verb#Y# best in a least-squares sense. \verb#P# is a
+row vector of length \verb#N+1# containing the polynomial coefficients in
+descending powers. The Matlab function \verb#polyval# is called by the command
+\begin{verbatim}
+>>Y = polyval(P,X);
+\end{verbatim}
+It returns the value of a polynomial
+\verb#P# evaluated at \verb#X#. \verb#P#
+is a vector of length \verb#N+1# whose elements are the coefficients of the polynomial in descending powers.
+\item[$\bullet$] For the calculations of $\rho_{k,p}^L$ when $k \neq p$, the function \verb#L_ro.m# is available in the suite. The calling command for it is
+\begin{alltt}
+>>[rho_Lkp]=L_ro(D,L,h,supp,phi);
+\end{alltt}
+where \verb#rho_Lkp# stands for the vector $\{\rho_{k,p}^L | k \neq p\}$. The functions \verb#L_partialsum_ro.m#, \verb#L_daubfilt.m#, \verb#conn.m#,
+\verb#L_phi_origin.m# and \verb#L_alpha.m# are called by  \verb#L_ro.m#.
+\item[$\bullet$] The Matlab functions
+\verb#R_phi.m#, \verb#R_phi_origin.m# and \verb#R_ro.m# are available in the suite which all work
+on the similar lines as their left counterparts.
+\end{itemize}
+\section{} \verb#gal_difmatrix_nonper.m# and \verb#gal_diff_nonper.m#
+\begin{itemize}
+\item[$\bullet$]
+The function \verb#gal_difmatrix_nonper.m# constructs the differentiation projection matrix $D^{(1)}$ in non-periodic case of Galerkin approach.
+The calling command is
+\begin{alltt}
+>>[difmatrix]=gal_difmatrix_nonper(D,N);
+\end{alltt}
+where \verb#difmatrix# stands for $\mathcal{D}^{(1)}$. The function \verb#gal_difmatrix_nonper.m# has two \verb#for# loops for the row index \verb#l# and column index \verb#k#.
+The main Matlab commands of the function \verb#gal_difmatrix_nonper.m# are
+\\\hrule
+\begin{verbatim}
+L_sol=L_ro(D,L,h,supp,phi);
+R_sol= R_ro(D,L,h,supp,phi);
+con_1=conn(1,D);
+>>for l=0:N-1
+    >>for k=0:N-1
+***********************************************************************
+>>if(l>=0 & l<=M-1)
+***********************************************************************
+ >>if(k>=0 & k<=M-1)
+   >>if(k==l)
+     >>[y,ro]=L_phi2(k,D,h,supp,phi) ;
+     >>D(l+1,k+1)=ro;
+   >>else
+     >>ind=(l)*M+k;
+     >>D(l+1,k+1)=L_sol(ind);
+   >>end
+ >>elseif(k>=M & k<=N-2*M+1)
+   >>D(l+1,k+1)=L_alpha(k,l,D,L);
+ >>end
+*************************************************************************
+>>elseif(l>=M & l<=N-2*M+1)
+*************************************************************************
+ >>if(k>=0 & k<=M-1)
+  >>D(l+1,k+1)=-L_alpha(l,k,D,L);
+ >>elseif(k>=M & k<=(N-2*M+1))
+  >>ind=l-k+(D-1);
+  >>if(ind>=1 & ind<=2*(D-2)+1)
+    >>D(l+1,k+1)=con_1(ind);
+  >>end
+ >>elseif(k>=(N-2*M+2) & k<=N-1)
+  >>if(-(l-(N-2*M+1) )>=0 & -(l-(N-2*M+1))<=M-1...
+        & -(k-(N-1))>=0 & -(k-(N-1))<=M-1)
+   >>D(l+1,k+1)=-R_alpha(-(l-(N-1)),-(k-(N-1)),D,L);
+  >>else
+   >>D(l+1,k+1)=0;
+  >>end
+ >>end
+*************************************************************************
+>>elseif(l>=(N-2*M+2) & l<=N-1)
+*************************************************************************
+  >>if(k>=M & k<=N-2*M+1)
+   >>if(-(l-(N-1) )>=0 & -(l-(N-1))<=M-1 & -(k-(N-2*M+1))>=0...
+        & -(k-(N-2*M+1))<=M-1)
+    >>D(l+1,k+1)=R_alpha(-(k-(N-1)),-(l-(N-1)),D,L);
+   >>else
+    >>D(l+1,k+1)=0;
+   >>end
+  >>elseif(k>=(N-2*M+2) & k<=N-1)
+   >>if(k==l)
+    >>[y,ro]=R_phi_origin(-(k-(N-1)),D,h,supp,phi);
+    >>D(l+1,k+1)=ro;
+   >>else
+    >>ind=(l-(N-2*M+2))*(2*M-2)+(k-(N-2*M+2));
+    >>if(ind<=length(R_sol))
+     >>D(l+1,k+1)=R_sol(ind);
+    >>end
+   >>end
+  >>end
+****************************************************************************
+>>end
+****************************************************************************
+    >>end
+>>end
+\end{verbatim}
+\hrule\vspace{.5cm}
+\item[$\bullet$]
+The function \verb#gal_diff_nonper.m# is included in our suite to construct the differentiation matrix $\mathcal{D}^{(1)}=C^{-1}D^{(1)}C$ in the non-periodic case of Galerkin approach. The calling command for it is
+\begin{alltt}
+>>[difmatrix]=gal_diff_nonper(D,N);
+\end{alltt}
+where \verb#difmatrix# stands for $\mathcal{D}^{(1)}$. The Matlab commands for \verb#gal_diff_nonper.m# are\\
+\hrule
+\begin{verbatim}
+function [difmatrix]=gal_diff_nonper(D,N)
+D_matrix=gal_difmatrix_nonper(D,N);
+C=dstmat_nonper(D,N);
+difmatrix=inv(C)*D_matrix*C;
+\end{verbatim}
+\hrule
+\vspace{.5cm}
+\end{itemize}
+\section{} \verb#Bn_spline.m# \\
+The calling command for the function
+\verb#Bn_spline.m# is
+\begin{alltt}
+>>[beta_nxk]=Bn_spline(x,n,k);
+\end{alltt}
+where \verb#beta_nxk# stands for $\beta^n(x-k)$. The code is\\
+\hrule
+\begin{verbatim}
+>>function [beta]=Bn_spline(x,n,k)
+>>x=x-k;
+>>sum=0;
+>>for j=0:n+1
+        >>if(j~=0)
+            >>combos=combntns(1:n+1,j);
+            >>tem=size(combos,1);
+        >>else
+            >>tem=1;
+        >>end
+     >>sum=sum+(((-1)^j)/factorial(n))*tem*pow_fun(n,x+((n+1)/2)-j);
+>>end
+>>beta=sum;
+>>beta=beta*factorial(n);
+\end{verbatim}
+\hrule \vspace{.5cm} 
+This function evaluates the value of
+$\beta^n(x-k)$. The function \verb#pow_fun.m#
+is available in the suite which computes $[x]_+^n=\mbox{max}\{0,x\}^n$.
+
+
+\end{document}

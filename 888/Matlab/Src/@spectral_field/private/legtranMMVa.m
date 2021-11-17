@@ -1,0 +1,62 @@
+function x = legtranMMa(sf,nj,mm,nn,kk,P) 
+% Compute a Legendre transform synthesis
+%  Input: 
+%    sf - complex Fourier coeffecients ordered (m,j) 
+%    nj = number of Gauss latitudes
+%    mm, nn,kk are the truncation parameters
+%    P - associated Legendre functions ordered (j,n,m)
+% Output:
+%    x - matrix of spectral coefficients ordered (n,m)
+% Local:
+%  S matrix of Fourier coeffients, augmented (j/2,2,m)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Written by John Drake
+% Based on Spherical harmonic transform formulation as matrix multiply
+% of Ren-Cang Lee.  
+% Date: Oct. 2002
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+njo2=nj/2;
+%Pack the S vectors
+
+use_conj = 0;
+
+% Preallocate
+st = zeros(njo2, size(sf, 1));
+if (use_conj),
+  s=(sf(:,1:njo2) )';   
+  j=1:njo2;
+  st(j,:)=sf(:,nj+1-j)';     %this is reversed
+else
+  s=transpose(sf(:,1:njo2) );   
+  % for j=1:njo2
+  %  st(j,:)=transpose(xf(:,nj+1-j));     %this is reversed
+  % end
+  j = 1:njo2;
+  st(j,:) = transpose( sf(:,nj+1-j) );
+end;
+
+%Matrix multiply to get Legendre transform P*X
+x = zeros(nn+1,mm+1);
+timtota = 0.0;
+for m=0:mm
+    Pm = P(:,m+1:mm+1,m+1);
+    Sm = [s(:,m+1) st(:,m+1)];   
+    timmatrix = cputime;
+    Xm = Pm'*Sm;  % here is the famous matrix-matrix multiply
+    timtota = timtota + (cputime-timmatrix);
+
+    use_original = 0;
+    if (use_original),
+       n=m:nn;
+       sgn= (-1).^(n-m);
+       x(n+1,m+1) = Xm(n-m+1,1) + sgn.*Xm(n-m+1,2);
+    else
+	    n=m:2:nn;
+	    x(n+1,m+1) = Xm(n-m+1,1) + Xm(n-m+1,2);
+	    n=(m+1):2:nn;
+	    x(n+1,m+1) = Xm(n-m+1,1) - Xm(n-m+1,2);
+    end;
+
+
+end
+timtota            %print the time spent in matrix multiply

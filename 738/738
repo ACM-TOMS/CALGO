@@ -1,0 +1,4074 @@
+C      ALGORITHM 738, COLLECTED ALGORITHMS FROM ACM.
+C      THIS WORK PUBLISHED IN TRANSACTIONS ON MATHEMATICAL SOFTWARE,
+C      VOL. 20, NO. 4, DECEMBER, 1994, P. 494-495.
+
+GUIDE TO GENERAL-BASE PROGRAMS
+------------------------------
+
+These routines generate well-spaced sets of points
+for use in multidimensional integration and in
+global optimization.
+
+
+The programs are written in Fortran 77.
+There are three sets, with main routines
+
+     GFARIT
+     GFPLYS
+     GENIN
+
+respectively.  The subroutines associated with these main
+routines are listed in the respective comments to those routines
+and in the the program directory.
+
+For the first time these routines are used --
+
+   1.  Compile all main routines and subroutines.
+   2.  Link each main routine with its respective subroutines.
+   3.  Run the main routines GFARIT, GFPLYS, GENIN in that order.
+   4.  Save the files gftabs.dat and irrtabs.dat produced
+       by GFARIT and GFPLYS.
+
+*****
+*****   The procedure above works on the Vax.
+*****   For your computer, it may have to be modified slightly.
+*****
+
+*****   The Unix version has common blocks FIELD.inc and
+*****   COMM.inc which are incorporated by an extended FORTRAN
+*****   compiler automatically.  For the Vax versions, these
+*****   blocks have already been included in the respective
+*****   routines; the user need do nothing about them.
+*****
+
+Subsequently --
+
+       It is necessary only to run GENIN.
+
+          &&&&&&  GENIN is a driver skeleton.  It offers the
+          &&&&&&  user a menu, asking him to choose the
+          &&&&&&  number of an integrand [assuming that TESTF
+          &&&&&&  has an integrand with that number], the
+          &&&&&&  dimension, the base, and the skip value.
+          &&&&&&  It tells the user what the "optimal" base is,
+          &&&&&&  without requiring him to choose it.  It also
+          &&&&&&  suggests possible skip values.  Various
+          &&&&&&  combinations of integrals, dimensions, bases,
+          &&&&&&  and skip values can be tried before choosing
+          &&&&&&  to quit GENIN.
+
+
+With the exception of note 3 below,
+the general-base programs do not use extended FORTRAN functions
+(in contrast to the programs tailored for base 2).  However, if
+you wish to use base 2, the base-2 programs will run much faster
+than the general-base programs.
+
+The general-base programs are portable with the following
+possible exceptions:
+
+   1.  OPEN statements are system dependent.
+   2.  The parameter NBITS is these programs is 
+       the number of bits per word, excluding sign.
+       It is currently set to 31.  If not appropriate for
+       your computer, modify the PARAMETER statements giving
+       the value of NBITS throughout.
+   3.  The Unix version contains system-dependent timing
+       statements, which can be deleted or modified.  The
+       Vax version has no timing statements, but these can be
+       added, in a system-dependent way, if desired.
+
+
+GUIDE TO BASE-2 PROGRAMS
+------------------------
+ 
+These programs generate well-spaced points for use
+in multidimensional integration and in global optimization.
+
+The programs are written in Fortran 77.
+
+  *****  To run this set of programs on the VAX,
+ 
+  *****  first -
+  *****  compile GENIN2, INLO2, GOLO2, CALCC2, CALCV,
+                 SETFLD, PLYMUL, CHARAC, TESTF
+
+            &&&&&  Our VAX program does not measure elapsed
+            &&&&&  time.  It can be modified in a system
+            &&&&&  - dependent way to do so.  
+
+            &&&&&  On the other hand, our Unix version does
+            &&&&&  measure elapsed time, in a system-dependent
+            &&&&&  way.  See the comments on the Unix version
+            &&&&&  of GENIN2.
+
+            &&&&&  In our VAX programs, the files FIELD.INC
+            &&&&&  and COMM2.INC have already been incorporated
+            &&&&&  where needed.  The user needs do to nothing
+            &&&&&  about them.
+
+            &&&&&  On the other hand, our Unix version processes
+            &&&&&  these two files directly, using extended
+            &&&&&  FORTRAN.
+ 
+            &&&&&&  The user can replace our TESTF,
+            &&&&&&  which contains four test integrals,
+            &&&&&&  by his own TESTF with up to four
+            &&&&&&  integrals of interest to him.
+ 
+ 
+  *****  second -
+  *****  link these compiled routines
+ 
+  *****  third -
+  *****  run GENIN2
+ 
+           &&&&&&   GENIN2 is a driver skeleton.  It gives
+           &&&&&&   the user a menu, asking him to choose
+           &&&&&&   the number of the integral to be estimated
+           &&&&&&   [assuming that TESTF has an integral with
+           &&&&&&   the corresponding number], the dimension,
+           &&&&&&   and the skip value -- offering
+           &&&&&&   a suggested value.  Various combinations
+           &&&&&&   of integrals, dimensions, and skip values
+           &&&&&&   can be tried before choosing to quit GENIN2.
+
+
+The procedure for other computers is similar.
+ 
+  *****  For the VAX, we use the extended FORTRAN
+  *****  IEOR [for bitwise exclusive-or].  Its name
+  *****  and format may differ on other computers.
+  *****  IEOR is used in INLO2 and GOLO2.
+ 
+  *****  Under Unix, we use the extended Fortran function
+  *****  XOR for IEOR.
+ 
+  *****  OPEN statements may well have to be modified
+  *****  to conform to local computer-center requirements.
+  *****  For the base-2 programs, the only OPEN statement
+  *****  is in GENIN2.  Interactive input-output is normally
+  *****  from and to the user's terminal.  Batch output
+  *****  goes to the file called OUTFIL.DAT.
+
+ 
+===========================================================
+ 
+
+
+ 
+ 
+ 
+ 
+ 
+ 
+There are several auxiliary subroutines.
+Calling structure :
+  GENIN2  calls  INLO2 and GOLO2.
+  INLO2   calls  CALCC2.
+  CALCC2  calls  CALCV and SETFLD.
+  CALCV   calls  PLYMUL.
+  SETFLD  calls  CHARAC.
+  GOLO2,  PLYMUL, and CHARAC are self-contained.
+ 
+The subroutines share a number of parameters and two common
+blocks, which are described below.
+ 
+The principal parameters :
+  MAXDIM  - The maximum dimension that will be used.  An
+    irreducible polynomial must be available for each
+    dimension :  see subroutine CALCC2.
+  NBITS   - The number of bits (not counting the sign) in
+    a fixed-point integer.
+*****
+*****  Currently, NBITS is set to 31.  If your computer
+*****  does not have 31 bits per word, excluding sign,
+*****  modify the value of NBITS in each corrsponding
+*****  PARAMETER statement.
+*****
+  DEG     - -1 :  see the comments on polynomials below.
+ 
+Common block /COMM2/
+  CJ    - The packed values of Niedderreiter's C(I,J,R).
+  DIM   - The dimension of the sequence to be generated.
+  COUNT - The index of the current item in the sequence.
+  NEXTQ - The numerators of the next item in the sequence.
+          These are like Niederreiter's XI(N) (page 54),
+          except that N is implicit, afd the NEXTQ are
+          integers.  To obtain the values of XI(N),
+          multiply by RECIP (see GOLO2).
+ 
+Array CJ of common block /COMM2/ is set up by subroutine
+CALCC2.  The other members of this common block are set
+up by subroutine INLO2.
+ 
+Common block /FIELD/
+  P   - The characteristic of the field in use.
+  Q   - The order of the field in use.
+  ADD, MUL, and SUB - Arithmetic tables for the field in use.
+ 
+The values of the common block FIELD are set by SETFLD.
+ 
+Polynomials :
+  A polynomial POLY (say) is held in an array POLY(-1:MAXDEG).
+  The coefficient of x**n is held in POLY(N), and the degree
+  of the polynomial is held in POLY(-1).  The parameter
+  DEG = -1 reminds us of this when necessary ;  that is,
+  the degree of POLY is given by POLY(DEG).
+ 
+Further comments accompany each subroutine.
+
+
+c*** genin.f
+      PROGRAM GENIN
+C
+C        *****  This is the driver for the general base programs.
+C        *****  More accurately, it is a driver skeleton.
+C        *****  There is a default set of test integrals
+C        *****  in TESTF.  The user can replace TESTF with
+C        *****  another subroutine called TESTF containing
+C        *****  integrals of interest to him.
+C
+C   This version :  14 Aug 1992
+C
+C   This program tests the accuracy of numerical integration
+C   using the low-discrepancy binary sequences of
+C   H. Niederreiter (1988) as implemented in INLO, GOLO, and
+C   related programs.  Various possible test integrals are
+C   provided by the function TESTF.
+C
+C   Interactive input and output go through the Fortran units
+C   denoted by * ;  at most installations, * corresponds to
+C   the user's terminal.  For a prime-power base, Fortran unit 1
+C   is used to read field arithmetic tables ;  for any base, it
+C   is used to read irreducible polynomials.
+C   Fortran unit 2 is used to save the output.
+C
+C   Our VAX implementation does not measure elapsed time.
+C   It can be modified, in a system-dependent way, to do so.
+C
+C   GENIN and its associated subroutines are listed below.
+C   An asterisk denotes a subroutine also used by GFARIT
+C   (to set up the field-arithmetic tables gftabs.dat) and
+C   by GFPLYS (to set up the irreducible polynomials in
+C   irrtabs.dat).  
+C
+C       GENIN
+C          INLO
+C          CALCC
+C          CALCV          %
+C          CHARAC *       %
+C          SETFLD *       %
+C          PLYMUL *       %
+C          GOLO
+C          TESTF          %
+C
+C      A percent sign above denotes a routine also used
+C      in the set of programs tailored for base 2.
+C
+C
+C     Both the general-base and base-2 programs assume that
+C     your computer's word length is 31 bits, excluding sign.
+C     If this is not the case, modify the parameter NBITS
+C     throughout the PARAMETER statements in this set of
+C     programs accordingly.
+C
+      INTEGER MAXDIM, OUTUNT, MAXBAS, READY
+      PARAMETER (MAXDIM=12, OUTUNT=2, MAXBAS = 13)
+C
+C   The parameter MAXDIM gives the maximum dimension that will
+C   be used.  OUTUNT is the unit to save the output.
+C   MAXBAS gives the maximum asymptotically-optimal base
+C   used up to MAXDIM.  The user enters an appropriate value
+C   of READY depending on whether or not the required files
+C   indicated above have been set up.
+C
+      INTEGER I, NUM, DIMEN, SEQLEN, SKIP, STEP, BASE, CHARAC
+      INTEGER OPTBAS(2:MAXDIM), PBASE, POWER(2:MAXBAS)
+      REAL QUASI(MAXDIM), TESTF, EXACTF
+      DOUBLE PRECISION SUM
+C
+C     The DATA statement below gives the asymptotically-optimal
+C     base for the respective dimension.
+C
+      DATA  (OPTBAS(I), I = 2,MAXDIM) / 2,3,3,5,7,7,9,9,11,11,13 /
+C
+C
+C     The data statement below gives values used in a possible
+C     warm-up calculation.
+C
+      DATA  (POWER(I), I = 2,MAXBAS) / 12,8,8,6,6,6,4,4,4,4,4,4 /
+C
+C     There are theoretical reasons to believe that BASE ** e,
+C     where e is defined for example in Bratley, Fox, and
+C     Niederreiter (1991), would be a good choice.  However,
+C     we don't want to come anywhere near the largest possible
+C     machine-representable integer; hence, the compromise
+C     exponents above.  Note: subject to this conditon,
+C     it can't hurt to take an exponent greater than e, because
+C     warm-up skipping of initial values is done implicitly
+C     in O(1) time.  The maximum value of e for a fixed dimension
+C     s grows like log s.  We allow some "fat" for the implicit
+C     constant in our choice of POWER.
+C
+      WRITE (*,*) ' This is program GENIN'
+C
+      WRITE(*,*) ' If you wish to use the base 2, the '
+      WRITE(*,*) ' alternative set of programs tailored for '
+      WRITE(*,*) ' base 2 will run much faster. '
+C
+      WRITE (*,*) ' If the files gftabs.dat and irrtab.dat '
+      WRITE (*,*) ' have not already been set up, then '
+      WRITE (*,*) ' consult the guide to the programs for '
+      WRITE (*,*) ' how to do so, set up those files per '
+      WRITE (*,*) ' the guide, and [temporarily] quit this '
+      WRITE (*,*) ' set of programs by entering the integer 0 '
+      WRITE (*,*) ' below; otherwise, enter any other integer. '
+      WRITE (*,*) ' ENTER an appropriate integer. '
+      READ  (*,*)   READY
+      IF (READY .EQ. 0) THEN
+          WRITE (*,*) ' Set up gftabs.dat and irrtab.dat now. '
+          WRITE (*,*) ' Exit GENIN. '
+          STOP
+      ENDIF
+C
+      WRITE (*,*)  'If the number of bit per word, excluding sign'
+      WRITE (*,*)  'is not 31, enter the integer 0 below '
+      WRITE (*,*)  'and fix the parameter NBITS everywhere; '
+      WRITE (*,*)  'otherwise, enter a positive integer below.'
+      WRITE (*,*)  'ENTER an appropriate integer. '
+      READ  (*,*)   READY
+      IF (READY .EQ. 0) THEN
+          WRITE(*,*) 'Fix NBITS.'
+          WRITE(*,*) 'Exit GENIN.'
+          STOP
+      ENDIF
+C
+      WRITE (*,*) ' Output file name is OUTFIL.DAT'
+      OPEN (unit = OUTUNT, file = 'OUTFIL.DAT', status = 'UNKNOWN')
+C
+C     *****  OPEN statements are system-dependent.
+C     *****  Therefore the statement above may have to be
+C     *****  modified for use at your computer center.
+C
+C
+    5 WRITE (*,*) ' Choose a test integral (1 to 4) or 0 to quit :'
+      READ (*,*) NUM
+      IF (NUM.LE.0) THEN
+        WRITE (*,*) ' End of program GENIN'
+        CLOSE (OUTUNT)
+        STOP
+      ENDIF
+      IF (NUM.GT.4) THEN
+        WRITE (*,*) ' No such test integral'
+        GOTO 5
+      ENDIF
+C
+C       *****  Each test integral is parameterized by
+C       *****  its dimension.
+C
+   10 WRITE (*,*) ' Enter dimension :'
+      READ (*,*) DIMEN
+      IF (DIMEN.GT.MAXDIM) THEN
+        WRITE (*,*) ' Dimension may not exceed', MAXDIM
+        GOTO 10
+      ENDIF
+C
+   12 WRITE (*,*) ' Choose a prime or prime-power base .'
+      WRITE (*,*) ' The asymptotically-optimal base '
+      WRITE (*,*) ' for this dimension is OPTBAS(DIMEN) = '
+      WRITE (*,*)   OPTBAS(DIMEN)
+      WRITE (*,*) ' This base may not be empirically optimal. '
+      WRITE (*,*) ' Enter BASE: '
+C
+      READ (*,*) BASE
+      IF (CHARAC(BASE) .EQ. 0) THEN
+        WRITE (*,*) ' Out of range or bad value :  try again'
+        GOTO 12
+      ENDIF
+C
+C
+C        *****  The sequence length is the number of
+C        *****  quasi-random points used to estimate the
+C        *****  integral, excluding warm-up.
+C        *****  The number of initial quasi-random points
+C        *****  deleted during warm-up is given by SKIP,
+C        *****  chosen below.
+C
+C        *****  Some users may wish to rewrite
+C        *****  the driver to test a [heuristic] "convergence"
+C        *****  criterion, stopping the generation of points
+C        *****  when it is passed or when a specified number of
+C        *****  points have been generated  -- whichever occurs
+C        *****  first.
+C
+   15 WRITE (*,*) ' Choose sequence length :'
+      WRITE (*,*) ' A power of the base is recommended; e.g.,  '
+      WRITE (*,*) BASE ** POWER(BASE)
+      WRITE (*,*) BASE ** ((POWER(BASE) + 1))
+      WRITE (*,*) BASE ** ((POWER(BASE) + 2)) 
+      WRITE (*,*) BASE ** ((POWER(BASE) + 3))
+      WRITE (*,*) ' Enter SEQLEN '
+      READ (*,*) SEQLEN
+      IF (SEQLEN.LE.0) THEN
+        WRITE (*,*) ' Length must be strictly positive'
+        GOTO 15
+      ENDIF
+C
+   20 WRITE (*,*) ' Choose the number of values to skip.'
+      WRITE (*,*) ' One possibility is given by the heuristic '
+      WRITE (*,*) ' formula SKIP = BASE ** POWER(BASE) '
+      WRITE (*,*) ' when BASE <= MAXBAS, = 10000 otherwise '
+      IF (BASE .LE. MAXBAS) THEN
+          SKIP = BASE ** POWER(BASE)
+        ELSE
+          SKIP = 10000
+      ENDIF
+      WRITE (*,*) ' Numerically, this equals ', SKIP
+      WRITE (8,*) ' Enter SKIP (not necessarily the value above) : '            C
+      READ (*,*) SKIP
+      IF (SKIP.LT.0) THEN
+        WRITE (*,*) ' Number must be nonnegative'
+        GOTO 20
+      ENDIF
+C
+C
+C
+      CALL INLO (DIMEN, BASE, SKIP)
+      WRITE (*,*) ' GENIN :  Initialization complete'
+C
+C Write title and the exact value of the integral
+C
+      WRITE (OUTUNT,27) NUM
+   27 FORMAT (/,' Test integral ',I2)
+      WRITE (OUTUNT,28) DIMEN, BASE, SEQLEN, SKIP
+   28 FORMAT (/,' Dimension ',I6,',    Base ', I9,
+     1 /,' Sequence ',I8,',    Skipped ',I7)
+      WRITE (OUTUNT,29) EXACTF(NUM, DIMEN)
+   29 FORMAT (/,' Correct value is ',G16.7)
+      WRITE (OUTUNT,30)
+   30 FORMAT(/,'      Iteration     Estimate of integral',/)
+C
+C Now estimate the integral
+C
+      WRITE (*,*)  ' The odd-looking iteration numbers '
+      WRITE (*,*)  ' in the output are powers of the base.  '
+C
+      PBASE = BASE
+      SUM = 0
+      STEP = 500
+      DO 100 I = 1, SEQLEN
+        CALL GOLO (QUASI)
+        SUM = SUM + TESTF(NUM, DIMEN, QUASI)
+        IF (MOD(I,STEP).EQ.0) THEN
+          WRITE (OUTUNT,99) I, SUM/I
+        ENDIF
+        IF (MOD(I,PBASE) .EQ. 0)  THEN
+              WRITE (OUTUNT,99) I, SUM/I
+              PBASE = PBASE * BASE
+C
+C         This finds the next power of the base.
+C         There is reason to believe that convergenence
+C         properties of the sequence of estimates is
+C         better along the subsequence corrsponding to
+C         powers of the base.
+C
+        ENDIF
+   99     FORMAT (I12,G24.7)
+          IF (I .EQ. 5000) STEP = 1000
+          IF (I .EQ. 10000) STEP = 5000
+  100 CONTINUE
+C
+      WRITE (*,*) ' GENIN :  iteration ends'
+      GOTO 5
+C
+      END
+C
+C     ***** end of PROGRAM GENIN
+      SUBROUTINE INLO (DIM, BASE, SKIP)
+C
+C   This version :  12 February 1992
+C
+C   See the general comments on implementing Niederreiter's
+C   low-discrepancy sequences.
+C
+C   This subroutine calculates the values of Niederreiter's
+C   C(I,J,R) and performs other initialization necessary
+C   before calling GOLO.
+C
+C INPUT :
+C   DIMEN - The dimension of the sequence to be generated.
+C      {In the argument of INLO, DIMEN is called DIM because
+C      DIMEN is subsequently passed via COMMON and is called
+C      DIMEN there.}
+C
+C   BASE  - The prime or prime-power base to be used.
+C   SKIP  - The number of values to throw away at the beginning
+C           of the sequence.
+C
+C OUTPUT :
+C   To GOLO, labelled common /COMM/.
+C
+C USES :
+C   Calls CALCC to calculate the values of CJ.
+C   Calls SETFLD to set up field arithmetic tables.
+C   Calls CHARAC to check that base is a prime or prime-power
+C     in the range we can handle.
+C
+C   -------------------------------------------------------------
+C
+C
+C   This segment defines the common block /COMM/ and some
+C   associated parameters.  These are for use in the general base
+C   version of the generator.
+C
+      INTEGER MAXDIM, MAXFIG, NBITS
+      PARAMETER (MAXDIM=12, MAXFIG=20, NBITS=31)
+C
+C   The parameter MAXDIM is the maximum dimension that will be used.
+C   MAXFIG is the maximum number of base-Q digits we can handle.
+C   MAXINT is the largest fixed point integer we can represent.
+C   NBITS is the number of bits in a fixed-point integer, not
+C     counting the sign.
+C     ***** NBITS is machine dependent *****
+C
+      INTEGER C(MAXDIM, MAXFIG, 0:MAXFIG-1)
+      INTEGER COUNT(0:MAXFIG-1), D(MAXDIM, MAXFIG)
+      INTEGER NEXTQ(MAXDIM), QPOW(MAXFIG)
+      INTEGER DIMEN, NFIGS
+      REAL    RECIP
+      COMMON  /COMM/ C, COUNT, D, NEXTQ, QPOW, DIMEN, NFIGS, RECIP
+      SAVE    /COMM/
+C
+C   The common block /COMM/ :
+C     C     - Contains the values of Niederreiter's C(I,J,R)
+C     COUNT - The index of the current item in the sequence,
+C             expressed as an array of base-Q digits.  COUNT(R)
+C             is the same as Niederreiter's AR(N) (page 54)
+C             except that N is implicit.
+C     D     - The values of D(I,J).
+C     NEXTQ - The numerators of the next item in the series.  These
+C             are like Niederreiter's XI(N) (page 54) except that
+C             N is implicit, and the NEXTQ are integers.  To obtain
+C             the values of XI(N), multiply by RECIP.
+C     QPOW  - To speed things up a bit. QPOW(I) = Q ** (NFIGS-I).
+C     DIMEN   - The dimension of the sequence to be generated
+C     NFIGS - The number of base-Q digits we are using.
+C     RECIP - 1.0 / (Q ** NFIGS)
+C
+C   Array C of the common block is set up by subroutine CALCC.
+C   The other items in the common block are set up by INLO.
+C
+C   ------------------------------------------------------------
+C
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication, and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER I, J, NQ, R, DIM, SKIP , BASE, CHARAC
+      REAL    TEMP
+C
+      DIMEN = DIM
+C
+C     This assignment just relabels the variable
+C     for subsequent use.
+C
+      IF (DIMEN.LE.0 .OR. DIMEN.GT.MAXDIM) THEN
+        WRITE (*,*) ' INLO :  Bad dimension'
+        STOP
+      ENDIF
+C
+C
+      IF (CHARAC(BASE) .EQ. 0) THEN
+        WRITE (*,*) ' INLO : Base not prime power or out of range'
+        STOP
+      ENDIF
+C
+      CALL SETFLD (BASE)
+C
+C   Calculate how many figures to use in base Q = BASE
+C
+      TEMP = LOG(2.0 ** NBITS - 1)/LOG(REAL(Q))
+      NFIGS = MIN(MAXFIG, INT(TEMP))
+C
+      CALL CALCC
+C
+C   Set up RECIP and QPOW(I) = Q ** (NFIGS-I)
+C
+      RECIP = 1.0 / (Q ** NFIGS)
+      QPOW(NFIGS) = 1
+      DO 5 I = NFIGS-1, 1, -1
+    5   QPOW(I) = Q * QPOW(I+1)
+C
+C   Initialize COUNT
+C
+      I = SKIP
+      DO 10 R = 0, NFIGS-1
+        COUNT(R) = MOD(I, Q)
+        I = I / Q
+   10 CONTINUE
+      IF (I .NE. 0) THEN
+        WRITE (*,*) ' INLO :  SKIP too long'
+        STOP
+      ENDIF
+C
+C   Initialize D
+C
+      DO 20 I = 1, DIMEN
+        DO 20 J = 1, NFIGS
+   20     D(I,J) = 0
+C
+      DO 50 R = 0, NFIGS-1
+        IF (COUNT(R) .NE. 0) THEN
+          DO 40 I = 1, DIMEN
+            DO 30 J = 1, NFIGS
+              D(I,J) = ADD (D(I,J), MUL (C(I,J,R), COUNT(R)))
+   30       CONTINUE
+   40     CONTINUE
+        ENDIF
+   50 CONTINUE
+C
+C   Initialize NEXTQ
+C
+      DO 70 I = 1, DIMEN
+        NQ = 0
+        DO 60 J = 1, NFIGS
+          NQ = NQ + D(I,J) * QPOW(J)
+   60   CONTINUE
+        NEXTQ(I) = NQ
+   70 CONTINUE
+C
+      RETURN
+      END
+C
+C     *****  end of SUBROUTINE INLO
+      SUBROUTINE CALCC
+C
+C    This version : 12 February 1992
+C
+C    See the general comments on implementing Niederreiter's
+C    low-discrepancy sequences.
+C
+C    This routine calculates the values of the constants C(I,J,R).
+C    As far as possible, we use Niederreiter's notation.
+C    We calculate the values of C for each I in turn.
+C    When all the values of C have been calculated, we return
+C    this array to the calling program.
+C
+C    Irreducible polynomials are read from file 'irrtabs.dat'
+C    through Fortran unit 1.  These polys must have been put on
+C    the file beforehand by GFPOLYS.  Unit 1 is closed before
+C    entry to CALCC and after returning from the subroutine.
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication, and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+C
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C   -------------------------------------------------------------
+C
+C
+C   This segment defines the common block /COMM/ and some
+C   associated parameters.  These are for use in the general base
+C   version of the generator.
+C
+      INTEGER MAXDIM, MAXFIG, NBITS
+      PARAMETER (MAXDIM=12, MAXFIG=20, NBITS=31)
+C
+C   The parameter MAXDIM is the maximum dimension that will be used.
+C   MAXFIG is the maximum number of base-Q digits we can handle.
+C   MAXINT is the largest fixed point integer we can represent.
+C   NBITS is the number of bits in a fixed-point integer, not
+C     counting the sign.
+C     ***** NBITS is machine dependent *****
+C
+      INTEGER C(MAXDIM, MAXFIG, 0:MAXFIG-1)
+      INTEGER COUNT(0:MAXFIG-1), D(MAXDIM, MAXFIG)
+      INTEGER NEXTQ(MAXDIM), QPOW(MAXFIG)
+      INTEGER DIMEN, NFIGS
+      REAL    RECIP
+      COMMON  /COMM/ C, COUNT, D, NEXTQ, QPOW, DIMEN, NFIGS, RECIP
+      SAVE    /COMM/
+C
+C   The common block /COMM/ :
+C     C     - Contains the values of Niederreiter's C(I,J,R)
+C     COUNT - The index of the current item in the sequence,
+C             expressed as an array of base-Q digits.  COUNT(R)
+C             is the same as Niederreiter's AR(N) (page 54)
+C             except that N is implicit.
+C     D     - The values of D(I,J).
+C     NEXTQ - The numerators of the next item in the series.  These
+C             are like Niederreiter's XI(N) (page 54) except that
+C             N is implicit, and the NEXTQ are integers.  To obtain
+C             the values of XI(N), multiply by RECIP.
+C     QPOW  - To speed things up a bit. QPOW(I) = Q ** (NFIGS-I).
+C     DIMEN   - The dimension of the sequence to be generated
+C     NFIGS - The number of base-Q digits we are using.
+C     RECIP - 1.0 / (Q ** NFIGS)
+C
+C   Array C of the common block is set up by subroutine CALCC.
+C   The other items in the common block are set up by INLO.
+C
+C   ------------------------------------------------------------
+C
+C
+C
+C
+C
+C   MAXE   - We need MAXDIM irreducible polynomials over GF(Q).
+C            MAXE is the highest degree among these.
+C   MAXV   - The maximum index used in V.
+C   GFUNIT - The unit number to read field tables.
+C   NPOLS  - The number of precalculated irreducible polys.
+C
+      INTEGER MAXE, MAXV, GFUNIT, NPOLS
+      PARAMETER (MAXE=5,  GFUNIT=1, NPOLS=25)
+      PARAMETER (MAXV = MAXFIG + MAXE)
+C
+C INPUT :
+C   DIMEN, the number of dimensions in use, and NFIGS, the number
+C   of base-Q figures to be used, are passed in through common COMM.
+C   Necessary field arithmetic tables are passed through common
+C   FIELD.
+C
+C OUTPUT
+C   The array C is returned to the calling program.
+C
+C USES
+C   Subroutine CALCV is used for the auxiliary calculation
+C   of the values V needed to get the Cs.
+C
+      INTEGER PX(-1:MAXE), B(-1:MAXDEG)
+      INTEGER V(0:MAXV)
+      INTEGER E, I, J, R, U
+C
+C   Prepare to read irreducible polynomials on unit 1.
+C
+      OPEN (UNIT=GFUNIT, FILE='irrtabs.dat', STATUS='old')
+C
+C      *****  OPEN statements are system dependent
+C
+   10 READ (GFUNIT, 900, END=500) I
+  900 FORMAT (20I3)
+      IF (I .NE. Q) THEN
+        DO 20 J = 1, NPOLS
+   20     READ (GFUNIT, 900)
+        GOTO 10
+      ENDIF
+C
+      DO 1000 I = 1, DIMEN
+C
+C For each dimension, we need to calculate powers of an
+C appropriate irreducible polynomial :  see Niederreiter
+C page 65, just below equation (19).
+C   Read the appropriate irreducible polynomial into PX,
+C and its degree into E.  Set polynomial B = PX ** 0 = 1.
+C M is the degree of B.  Subsequently B will hold higher
+C powers of PX.
+C   The polynomial PX is stored in file 'irrtabs.dat' in the
+C format
+C   n  a0  a1  a2  ... an
+C where n is the degree of the polynomial and the ai are
+C its coefficients.
+C
+        READ (GFUNIT, 900) E, (PX(J), J = 0,E)
+        PX(DEG) = E
+        B(DEG) = 0
+        B(0) = 1
+C
+C Niederreiter (page 56, after equation (7), defines two
+C variables Q and U.  We do not need Q explicitly, but we
+C do need U.
+C
+        U = 0
+C
+        DO 90 J = 1, NFIGS
+C
+C  If U = 0, we need to set B to the next power of PX
+C  and recalculate V.  This is done by subroutine CALCV.
+C
+          IF (U .EQ. 0) CALL CALCV (PX, B, V, MAXV)
+C
+C Now C is obtained from V.  Neiderreiter
+C obtains A from V (page 65, near the bottom), and
+C then gets C from A (page 56, equation (7)).
+C However this can be done in one step.
+C
+          DO 50 R = 0, NFIGS-1
+            C(I,J,R) = V(R+U)
+   50     CONTINUE
+C
+C Increment U.  If U = E, then U = 0 and in Niederreiter's
+C paper Q = Q + 1.  Here, however, Q is not used explicitly.
+C
+          U = U + 1
+          IF (U .EQ. E) U = 0
+  90    CONTINUE
+C
+ 1000 CONTINUE
+C
+      CLOSE (GFUNIT)
+      RETURN
+C
+  500 WRITE (*,*) ' CALCC :  Tables for q =', Q, ' not found'
+      STOP
+      END
+C
+C     ***** end of SUBROUTINE CALCC
+      SUBROUTINE CALCV (PX, B, V, MAXV)
+C
+C   This version :  12 February 1991
+C
+C   See the general comments on implementing Niederreiter's
+C   low-discrepancy sequences.
+C
+C   This program calculates the values of the constants V(J,R) as
+C   described in BFN section 3.3.  It is called from either CALCC or
+C   CALCC2.  The values transmitted through common /FIELD/ determine
+C   which field we are working in.
+C
+C INPUT :
+C   PX is the appropriate irreducible polynomial for the dimension
+C     currently being considered.  The degree of PX will be called E.
+C   B is the polynomial defined in section 2.3 of BFN.  On entry to
+C     the subroutine, the degree of B implicitly defines the parameter
+C     J of section 3.3, by degree(B) = E*(J-1).
+C   MAXV gives the dimension of the array V.
+C   On entry, we suppose that the common block /FIELD/ has been set
+C     up correctly (using SETFLD).
+C
+C OUTPUT :
+C   On output B has been multiplied by PX, so its degree is now E*J.
+C   V contains the values required.
+C
+C USES :
+C   The subroutine PLYMUL is used to multiply polynomials.
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication, and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER MAXV, E, I, J, KJ, M, BIGM, R, TERM
+      INTEGER PX(-1:MAXDEG), B(-1:MAXDEG), V(0:MAXV)
+      INTEGER H(-1:MAXDEG)
+C
+      INTEGER ARBIT, NONZER
+      ARBIT() = 1
+C
+C   We use ARBIT() to indicate where the user can place
+C   an arbitrary element of the field of order Q, while NONZER
+C   shows where he must put an arbitrary non-zero element
+C   of the same field.  For the code,
+C   this means 0 <= ARBIT < Q and 0 < NONZER < Q.  Within these
+C   limits, the user can do what he likes.  ARBIT is declared as
+C   a function as a reminder that a different arbitrary value may
+C   be returned each time ARBIT is referenced.
+C
+C    BIGM is the M used in section 3.3.
+C    It differs from the [little] m used in section 2.3,
+C    denoted here by M.
+C
+      NONZER = 1
+C
+      E = PX(DEG)
+C
+C   The poly H is PX**(J-1), which is the value of B on arrival.
+C   In section 3.3, the values of Hi are defined with a minus sign :
+C   don't forget this if you use them later !
+C
+      DO 10 I = -1, B(DEG)
+   10   H(I) = B(I)
+      BIGM = H(DEG)
+C
+C   Now multiply B by PX so B becomes PX**J.
+C   In section 2.3, the values of Bi are defined with a minus sign :
+C   don't forget this if you use them later !
+C
+      CALL PLYMUL (PX, B, B)
+      M = B(DEG)
+C
+C   We don't use J explicitly anywhere, but here it is just in case.
+C
+      J = M / E
+C
+C   Now choose a value of Kj as defined in section 3.3.
+C   We must have 0 <= Kj < E*J = M.
+C   The limit condition on Kj does not seem very relevant
+C   in this program.
+C
+      KJ = BIGM
+C
+C   Now choose values of V in accordance with the conditions in
+C   section 3.3
+C
+      DO 20 R = 0, KJ-1
+   20   V(R) = 0
+      V(KJ) = 1
+C
+      IF (KJ .LT. BIGM) THEN
+C
+        TERM = SUB (0, H(KJ))
+C
+        DO 30 R = KJ+1, BIGM-1
+          V(R) = ARBIT()
+C
+C         Check the condition of section 3.3,
+C         remembering that the H's have the opposite sign.
+C
+          TERM = SUB (TERM, MUL (H(R), V(R)))
+   30   CONTINUE
+C
+C         Now V(BIGM) is anything but TERM
+C
+          V(BIGM) = ADD (NONZER, TERM)
+C
+        DO 40 R = BIGM+1, M-1
+   40     V(R) = ARBIT()
+C
+      ELSE
+C       This is the case KJ .GE. BIGM
+C
+        DO 50 R = KJ+1, M-1
+   50     V(R) = ARBIT()
+C
+      ENDIF
+C
+C   Calculate the remaining V's using the recursion of section 2.3,
+C   remembering that the B's have the opposite sign.
+C
+      DO 70 R = 0, MAXV-M
+        TERM = 0
+        DO 60 I = 0, M-1
+          TERM = SUB (TERM, MUL (B(I), V(R+I)))
+   60   CONTINUE
+        V(R+M) = TERM
+   70 CONTINUE
+C
+      RETURN
+      END
+C
+C     ***** end of SUBROUTINE CALCV
+      INTEGER FUNCTION CHARAC (QIN)
+C
+C   This version :  12 December 1991
+C
+C   This function gives the characteristic for a field of
+C   order QIN.  If no such field exists, or if QIN is out of
+C   the range we can handle, returns 0.
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER QIN, CH(MAXQ)
+      SAVE CH
+C
+      DATA CH  / 0,  2,  3,  2,  5,  0,  7,  2,  3,  0,
+     1          11,  0, 13,  0,  0,  2, 17,  0, 19,  0,
+     2           0,  0, 23,  0,  5,  0,  3,  0, 29,  0,
+     3          31,  2,  0,  0,  0,  0, 37,  0,  0,  0,
+     4          41,  0, 43,  0,  0,  0, 47,  0,  7,  0/
+C
+      IF (QIN .LE. 1 .OR. QIN .GT. MAXQ) THEN
+        CHARAC = 0
+      ELSE
+        CHARAC = CH(QIN)
+      ENDIF
+C
+      END
+C
+C     ***** end of INTEGER FUNCTION CHARAC
+      SUBROUTINE SETFLD (QIN)
+      INTEGER QIN
+C
+C   This version : 12 December 1991
+C
+C   This subroutine sets up addition, multiplication, and
+C   subtraction tables for the finite field of order QIN.
+C   If necessary, it reads precalculated tables from the file
+C   'gftabs.dat' using unit 1.  These precalculated tables
+C   are supposed to have been put there by GFARIT.
+C
+C      *****  For the base-2 programs, these precalculated
+C      *****  tables are not needed and, therefore, neither
+C      *****  is GFARIT.
+C
+C
+C   Unit 1 is closed both before and after the call of SETFLD.
+C
+C USES
+C   Integer function CHARAC gets the characteristic of a field.
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER I, J, N, CHARAC
+C
+      IF (QIN .LE. 1 .OR. QIN .GT. MAXQ) THEN
+        WRITE (*,*) ' SETFLD :  Bad value of Q'
+        STOP
+      ENDIF
+C
+      Q = QIN
+      P = CHARAC(Q)
+C
+      IF (P .EQ. 0) THEN
+        WRITE (*,*) ' SETFLD :  There is no field of order', Q
+        STOP
+      ENDIF
+C
+C Set up to handle a field of prime order :  calculate ADD and MUL.
+C
+      IF (P .EQ. Q) THEN
+        DO 10 I = 0, Q-1
+          DO 10 J = 0, Q-1
+            ADD(I,J) = MOD(I+J, P)
+            MUL(I,J) = MOD(I*J, P)
+   10   CONTINUE
+C
+C Set up to handle a field of prime-power order :  tables for
+C ADD and MUL are in the file 'gftabs.dat'.
+C
+      ELSE
+        OPEN (UNIT=1, FILE='gftabs.dat', STATUS='old')
+C
+C    *****  OPEN statements are system dependent.
+C
+   20   READ (1, 900, END=500) N
+  900   FORMAT (20I3)
+        DO 30 I = 0, N-1
+          READ (1, 900) (ADD(I,J), J = 0, N-1)
+   30   CONTINUE
+        DO 40 I = 0, N-1
+          READ (1, 900) (MUL(I,J), J = 0, N-1)
+   40   CONTINUE
+        IF (N .NE. Q) GOTO 20
+        CLOSE (1)
+      ENDIF
+C
+C Now use the addition table to set the subtraction table.
+C
+      DO 60 I = 0, Q-1
+        DO 50 J = 0, Q-1
+          SUB(ADD(I,J), I) = J
+   50   CONTINUE
+   60 CONTINUE
+      RETURN
+C
+  500 WRITE (*,*) ' SETFLD :  Tables for q =', Q, ' not found'
+      STOP
+C
+      END
+C
+C     ***** end of SUBROUTINE SETFLD
+      SUBROUTINE PLYMUL (PA, PB, PC)
+C
+C   This version :  12 December 1991
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER I, J, DEGA, DEGB, DEGC, TERM
+      INTEGER PA(-1:MAXDEG), PB(-1:MAXDEG), PC(-1:MAXDEG)
+      INTEGER PT(-1:MAXDEG)
+C
+C   Multiplies polynomial PA by PB putting the result in PC.
+C   Coefficients are elements of the field of order Q.
+C
+      DEGA = PA(DEG)
+      DEGB = PB(DEG)
+      IF (DEGA .EQ. -1 .OR. DEGB .EQ. -1) THEN
+        DEGC = -1
+      ELSE
+        DEGC = DEGA + DEGB
+      ENDIF
+      IF (DEGC .GT. MAXDEG) THEN
+        WRITE (*,*) ' PLYMUL :  Degree of product exceeds MAXDEG'
+        STOP
+      ENDIF
+C
+      DO 20 I = 0, DEGC
+        TERM = 0
+        DO 10 J = MAX(0, I-DEGA), MIN(DEGB, I)
+   10     TERM = ADD(TERM, MUL(PA(I-J), PB(J)))
+   20   PT(I) = TERM
+C
+      PC(DEG) = DEGC
+      DO 30 I = 0, DEGC
+   30   PC(I) = PT(I)
+      DO 40 I = DEGC+1, MAXDEG
+   40   PC(I) = 0
+      RETURN
+      END
+C
+C     *****   end of SUBROUTINE PLYMUL
+      SUBROUTINE GOLO (QUASI)
+      REAL QUASI(*)
+C
+C This version : 21 February 1992
+C
+C See the general comments on implementing Niederreiter's
+C low-discrepancy sequences.
+C
+C Call subroutine INLO before calling GOLO.  Thereafter
+C GOLO generates a new quasi-random vector on each call,
+C
+C INPUT
+C   From INLO, labelled common /COMM/ and labelled common
+C     /FIELD/, properly initialized.  (INLO calls SETFLD
+C     to initialize /FIELD/).
+C
+C OUTPUT
+C   To the user's program, the next vector in the sequence in
+C     array QUASI.
+C
+C   -------------------------------------------------------------
+C
+C
+C   This segment defines the common block /COMM/ and some
+C   associated parameters.  These are for use in the general base
+C   version of the generator.
+C
+      INTEGER MAXDIM, MAXFIG, NBITS
+      PARAMETER (MAXDIM=12, MAXFIG=20, NBITS=31)
+C
+C   The parameter MAXDIM is the maximum dimension that will be used.
+C   MAXFIG is the maximum number of base-Q digits we can handle.
+C   MAXINT is the largest fixed point integer we can represent.
+C   NBITS is the number of bits in a fixed-point integer, not
+C     counting the sign.
+C     ***** NBITS is machine dependent *****
+C
+      INTEGER C(MAXDIM, MAXFIG, 0:MAXFIG-1)
+      INTEGER COUNT(0:MAXFIG-1), D(MAXDIM, MAXFIG)
+      INTEGER NEXTQ(MAXDIM), QPOW(MAXFIG)
+      INTEGER DIMEN, NFIGS
+      REAL    RECIP
+      COMMON  /COMM/ C, COUNT, D, NEXTQ, QPOW, DIMEN, NFIGS, RECIP
+      SAVE    /COMM/
+C
+C   The common block /COMM/ :
+C     C     - Contains the values of Niederreiter's C(I,J,R)
+C     COUNT - The index of the current item in the sequence,
+C             expressed as an array of base-Q digits.  COUNT(R)
+C             is the same as Niederreiter's AR(N) (page 54)
+C             except that N is implicit.
+C     D     - The values of D(I,J).
+C     NEXTQ - The numerators of the next item in the series.  These
+C             are like Niederreiter's XI(N) (page 54) except that
+C             N is implicit, and the NEXTQ are integers.  To obtain
+C             the values of XI(N), multiply by RECIP.
+C     QPOW  - To speed things up a bit. QPOW(I) = Q ** (NFIGS-I).
+C     DIMEN   - The dimension of the sequence to be generated
+C     NFIGS - The number of base-Q digits we are using.
+C     RECIP - 1.0 / (Q ** NFIGS)
+C
+C   Array C of the common block is set up by subroutine CALCC.
+C   The other items in the common block are set up by INLO.
+C
+C   ------------------------------------------------------------
+C
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER I, J, R, OLDCNT, DIFF, NQ
+C
+C Multiply the numerators in NEXTQ by RECIP to get the next
+C quasi-random vector
+C
+      DO 5 I = 1, DIMEN
+        QUASI(I) = NEXTQ(I) * RECIP
+    5 CONTINUE
+C
+C Update COUNT, treated as a base-Q integer.  Instead of
+C recalculating the values of D from scratch, we update
+C them for each digit of COUNT which changes.  In terms of
+C Niederreiter page 54, NEXTQ(I) corresponds to XI(N), with
+C N being implicit, and D(I,J) corresponds to XI(N,J), again
+C with N implicit.  Finally COUNT(R) corresponds to AR(N).
+C
+      R = 0
+   10 IF (R .EQ. NFIGS) THEN
+        WRITE (*,*) ' Too many calls on subroutine GOLO'
+        STOP
+      ENDIF
+      OLDCNT = COUNT(R)
+      IF (COUNT(R) .LT. Q-1) THEN
+        COUNT(R) = COUNT(R) + 1
+      ELSE
+        COUNT(R) = 0
+      ENDIF
+      DIFF = SUB(COUNT(R), OLDCNT)
+C
+C Digit R has just changed.  DIFF says how much it changed
+C by.  We use this to update the values of array D.
+C
+      DO 40 I = 1, DIMEN
+        DO 30 J = 1, NFIGS
+          D(I,J) = ADD(D(I,J), MUL(C(I,J,R), DIFF))
+   30   CONTINUE
+   40 CONTINUE
+C
+C If COUNT(R) is now zero, we must propagate the carry
+C
+      IF (COUNT(R).EQ.0) THEN
+        R = R + 1
+        GOTO 10
+      ENDIF
+C
+C Now use the updated values of D to calculate NEXTQ.
+C Array QPOW helps to speed things up a little :
+C   QPOW(J) is Q ** (NFIGS-J).
+C
+      DO 60 I = 1, DIMEN
+        NQ = 0
+        DO 50 J = 1, NFIGS
+          NQ = NQ + D(I,J) * QPOW(J)
+   50   CONTINUE
+        NEXTQ(I) = NQ
+   60 CONTINUE
+C
+      RETURN
+      END
+C
+C     ***** end of SUBROUTINE GOLO
+      REAL FUNCTION TESTF (N, DIMEN, QUASI)
+      INTEGER I, N, DIMEN
+      REAL X, EXACTF, QUASI(*)
+C
+C This version :  4 Mar 1992
+C
+C Provides a variety of test integrals for quasi-random
+C sequences.  A call on TESTF computes an estimate of the
+C integral ;  a call on EXACTF computes the exact value.
+C
+      GOTO (100, 200, 300, 400) N
+C
+      ENTRY EXACTF (N, DIMEN)
+      GOTO (1100, 1200, 1300, 1400) N
+C
+C Test integral 1
+C
+  100 TESTF = 1.0
+      DO 110 I = 1, DIMEN
+        TESTF = TESTF * ABS(4 * QUASI(I) - 2)
+  110 CONTINUE
+      RETURN
+C
+ 1100 EXACTF = 1.0
+      RETURN
+C
+C Test integral 2
+C
+  200 TESTF = 1.0
+      DO 210 I = 1, DIMEN
+        TESTF = TESTF * I * COS(I * QUASI(I))
+  210 CONTINUE
+      RETURN
+C
+ 1200 EXACTF = 1.0
+      DO 1210 I = 1, DIMEN
+        EXACTF = EXACTF * SIN(FLOAT(I))
+ 1210 CONTINUE
+      RETURN
+C
+C Test integral 3
+C
+  300 TESTF = 1.0
+      DO 350 I = 1, DIMEN
+        X = 2 * QUASI(I) - 1
+        GOTO (310, 320, 330, 340) MOD(I, 4)
+  310   TESTF = TESTF * X
+        GOTO 350
+  320   TESTF = TESTF * (2*X*X - 1)
+        GOTO 350
+  330   TESTF = TESTF * (4*X*X - 3) * X
+        GOTO 350
+  340   X = X * X
+        TESTF = TESTF * (8*X*X - 8*X + 1)
+  350 CONTINUE
+      RETURN
+C
+ 1300 EXACTF = 0.0
+      RETURN
+C
+C Test integral 4
+C
+  400        TESTF = 0
+             X = 1
+             DO 410   I = 1, DIMEN
+                  X = - X * QUASI(I)
+                  TESTF = TESTF + X
+  410        CONTINUE
+             RETURN
+C
+C
+ 1400 X = 1.0 / (2 ** (DIMEN ))
+      IF (MOD(DIMEN, 2) .EQ. 0) THEN
+        EXACTF = (X - 1) / 3
+      ELSE
+        EXACTF = (X + 1) / 3
+      ENDIF
+      RETURN
+C
+      END
+
+c*** gfarit.f
+      PROGRAM GFARIT
+C
+C   This version :  12 December 1991
+C
+C   The program calculates addition and multiplication tables
+C   for arithmetic in finite fields, and writes them out to
+C   the file 'gftabs.dat'.  Tables are only calculated for fields
+C   of prime-power order Q, the other cases being trivial.
+C   For each value of Q, the file contains first Q, then the
+C   addition table, and lastly the multiplication table.
+C
+C
+C   GFARIT and its associated subroutines below must be
+C   run to set up the file gftabs.dat [on unit 1].  
+C   After gftabs.dat has been set up, run GFPLYS with its
+C   associated subroutine to set up the file irrtabs.dat
+C   [on unit 2]; this requires
+C   reading gftabs.dat from unit 1.  The files gftabs.dat
+C   and irrtabs.dat can be saved for future use.  Thus, each
+C   user [or set of users with access to these files] needs to
+C   run the respective sets of programs associated with GFARIT
+C   and GFPLYS just once.  This must be done before running the
+C   set of programs associated with GENIN.  The set of programs
+C   tailored for base 2, using the driver GENIN2, requires
+C   neither gftabs.dat nor irrtabs.dat, hence neither GFARIT 
+C   nor GFPLYS.
+C
+C   Below we list [the main program] GFARIT and its associated
+C   subroutines.  An asterisk indicates a subroutine also used
+C   by GFPLYS and by GENIN.  An ampersand denotes a subroutine
+C   also used by GFPLYS but not by GENIN.
+C
+C       GFARIT
+C          GFTAB           (writes unit 1)
+C          CHARAC *
+C          SETFLD *
+C          ITOP   &
+C          PTOI   &
+C          PLYADD 
+C          PLYMUL *
+C          PLYDIV
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER I
+C
+      OPEN (UNIT=1, FILE='gftabs.dat', STATUS = 'unknown')
+C
+C       ******  OPEN statements are system dependent
+C
+      WRITE (*,*) ' This is GFARIT'
+      DO 10 I = 2, MAXQ
+        CALL GFTAB(I)
+        WRITE (*,*) ' GFARIT :  Case ', I, ' done'
+   10 CONTINUE
+C
+      WRITE (*,*) ' GFARIT ends'
+      STOP
+      END
+C
+C     *****  end of PROGRAM GFARIT
+      SUBROUTINE GFTAB (QIN)
+C
+C   This version :  12 December 1991
+C
+C
+C    This routine writes gftabs.dat onto unit 1.
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication, and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+C   The common /FIELD/ will be set up to work modulo P, the
+C   characteristic of field QIN.  We construct the tables for
+C   the field of order QIN in GFADD and GFMUL.
+C
+      INTEGER QIN, I, J, PTOI, CHARAC
+      INTEGER PI(-1:MAXDEG), PJ(-1:MAXDEG), PK(-1:MAXDEG)
+      INTEGER GFADD(0:MAXQ-1, 0:MAXQ-1), GFMUL(0:MAXQ-1, 0:MAXQ-1)
+C
+C   IRRPLY holds irreducible polynomials for constructing
+C   prime-power fields.  IRRPLY(-2,I) says which field this
+C   row is used for, and then the rest of the row is a
+C   polynomial (with the degree in IRRPLY(-1,I) as usual).
+C   The chosen irreducible poly is copied into MODPLY for use.
+C
+      INTEGER IRRPLY(8, -2:MAXDEG), MODPLY(-1:MAXDEG)
+      SAVE IRRPLY
+C
+      DATA (IRRPLY(1,J), J=-2,2) /4, 2, 1, 1, 1/
+      DATA (IRRPLY(2,J), J=-2,3) /8, 3, 1, 1, 0, 1/
+      DATA (IRRPLY(3,J), J=-2,2) /9, 2, 1, 0, 1/
+      DATA (IRRPLY(4,J), J=-2,4) /16, 4, 1, 1, 0, 0, 1/
+      DATA (IRRPLY(5,J), J=-2,2) /25, 2, 2, 0, 1/
+      DATA (IRRPLY(6,J), J=-2,3) /27, 3, 1, 2, 0, 1/
+      DATA (IRRPLY(7,J), J=-2,5) /32, 5, 1, 0, 1, 0, 0, 1/
+      DATA (IRRPLY(8,J), J=-2,2) /49, 2, 1, 0, 1/
+C
+      IF (QIN .LE. 1 .OR. QIN .GT. MAXQ) THEN
+        WRITE (*,*) ' ARITH :  Bad value of Q'
+        RETURN
+      ENDIF
+C
+      P = CHARAC(QIN)
+C
+C   If QIN is not a prime-power, we are not interested.
+C
+      IF (P .EQ. 0 .OR. P .EQ. QIN) RETURN
+C
+C   Otherwise, we set up the elements of the common /FIELD/
+C   ready to do arithmetic mod P, the characteristic of QIN.
+C
+      CALL SETFLD (P)
+C
+C   Next find a suitable irreducible polynomial and copy it
+C   to array MODPLY.
+C
+      I = 1
+   20 IF (IRRPLY(I,-2) .NE. QIN) THEN
+        I = I + 1
+        GOTO 20
+      ENDIF
+      DO 30 J = -1, IRRPLY(I, DEG)
+   30   MODPLY(J) = IRRPLY(I, J)
+      DO 40 J = IRRPLY(I,DEG)+1, MAXDEG
+   40   MODPLY(J) = 0
+C
+C   Deal with the trivial cases ...
+C
+      DO 60 I = 0, QIN-1
+        GFADD(I,0) = I
+        GFADD(0,I) = I
+        GFMUL(I,0) = 0
+   60   GFMUL(0,I) = 0
+      DO 70 I = 1, QIN-1
+        GFMUL(I,1) = I
+   70   GFMUL(1,I) = I
+C
+C   ... and now deal with the rest.  Each integer from 1 to QIN-1
+C   is treated as a polynomial with coefficients handled mod P.
+C   Multiplication of polynomials is mod MODPLY.
+C
+      DO 80 I = 1, QIN-1
+        CALL ITOP (I, PI)
+        DO 80 J = 1, I
+          CALL ITOP (J, PJ)
+          CALL PLYADD (PI, PJ, PK)
+          GFADD(I,J) = PTOI (PK)
+          GFADD(J,I) = GFADD(I,J)
+          IF (I .GT. 1 .AND. J .GT. 1) THEN
+            CALL PLYMUL (PI, PJ, PK)
+            CALL PLYDIV (PK, MODPLY, PJ, PK)
+            GFMUL(I,J) = PTOI (PK)
+            GFMUL(J,I) = GFMUL(I,J)
+          ENDIF
+   80 CONTINUE
+C
+C   Write the newly-calculated tables out to unit 1
+C
+      WRITE (1, 900) QIN
+C
+C   This is the table gftabs.dat.
+C   SETFLD opens unit 1, reads gftabs.dat, and then closes unit 1.
+C
+      DO 100 I = 0, QIN-1
+  100   WRITE (1, 900) (GFADD(I,J), J = 0, QIN-1)
+      DO 110 I = 0, QIN-1
+  110   WRITE (1, 900) (GFMUL(I,J), J = 0, QIN-1)
+  900 FORMAT (20I3)
+C
+      RETURN
+      END
+C
+C     *****  end of SUBROUTINE GFTAB
+      INTEGER FUNCTION CHARAC (QIN)
+C
+C   This version :  12 December 1991
+C
+C   This function gives the characteristic for a field of
+C   order QIN.  If no such field exists, or if QIN is out of
+C   the range we can handle, returns 0.
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER QIN, CH(MAXQ)
+      SAVE CH
+C
+      DATA CH  / 0,  2,  3,  2,  5,  0,  7,  2,  3,  0,
+     1          11,  0, 13,  0,  0,  2, 17,  0, 19,  0,
+     2           0,  0, 23,  0,  5,  0,  3,  0, 29,  0,
+     3          31,  2,  0,  0,  0,  0, 37,  0,  0,  0,
+     4          41,  0, 43,  0,  0,  0, 47,  0,  7,  0/
+C
+      IF (QIN .LE. 1 .OR. QIN .GT. MAXQ) THEN
+        CHARAC = 0
+      ELSE
+        CHARAC = CH(QIN)
+      ENDIF
+C
+      END
+C
+C     ***** end of INTEGER FUNCTION CHARAC
+      SUBROUTINE SETFLD (QIN)
+      INTEGER QIN
+C
+C   This version : 12 December 1991
+C
+C   This subroutine sets up addition, multiplication, and
+C   subtraction tables for the finite field of order QIN.
+C   If necessary, it reads precalculated tables from the file
+C   'gftabs.dat' using unit 1.  These precalculated tables
+C   are supposed to have been put there by GFARIT.
+C
+C      *****  For the base-2 programs, these precalculated
+C      *****  tables are not needed and, therefore, neither
+C      *****  is GFARIT.
+C
+C
+C   Unit 1 is closed both before and after the call of SETFLD.
+C
+C USES
+C   Integer function CHARAC gets the characteristic of a field.
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER I, J, N, CHARAC
+C
+      IF (QIN .LE. 1 .OR. QIN .GT. MAXQ) THEN
+        WRITE (*,*) ' SETFLD :  Bad value of Q'
+        STOP
+      ENDIF
+C
+      Q = QIN
+      P = CHARAC(Q)
+C
+      IF (P .EQ. 0) THEN
+        WRITE (*,*) ' SETFLD :  There is no field of order', Q
+        STOP
+      ENDIF
+C
+C Set up to handle a field of prime order :  calculate ADD and MUL.
+C
+      IF (P .EQ. Q) THEN
+        DO 10 I = 0, Q-1
+          DO 10 J = 0, Q-1
+            ADD(I,J) = MOD(I+J, P)
+            MUL(I,J) = MOD(I*J, P)
+   10   CONTINUE
+C
+C Set up to handle a field of prime-power order :  tables for
+C ADD and MUL are in the file 'gftabs.dat'.
+C
+      ELSE
+        OPEN (UNIT=1, FILE='gftabs.dat', STATUS='old')
+C
+C    *****  OPEN statements are system dependent.
+C
+   20   READ (1, 900, END=500) N
+  900   FORMAT (20I3)
+        DO 30 I = 0, N-1
+          READ (1, 900) (ADD(I,J), J = 0, N-1)
+   30   CONTINUE
+        DO 40 I = 0, N-1
+          READ (1, 900) (MUL(I,J), J = 0, N-1)
+   40   CONTINUE
+        IF (N .NE. Q) GOTO 20
+        CLOSE (1)
+      ENDIF
+C
+C Now use the addition table to set the subtraction table.
+C
+      DO 60 I = 0, Q-1
+        DO 50 J = 0, Q-1
+          SUB(ADD(I,J), I) = J
+   50   CONTINUE
+   60 CONTINUE
+      RETURN
+C
+  500 WRITE (*,*) ' SETFLD :  Tables for q =', Q, ' not found'
+      STOP
+C
+      END
+C
+C     ***** end of SUBROUTINE SETFLD
+      SUBROUTINE ITOP (IN, POLY)
+C
+C   This version :  12 December 1991
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication, and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER IN, I, J, POLY(-1:MAXDEG)
+C
+C   Converts an integer to a polynomial with coefficients in the
+C   field of order Q.
+C
+      DO 10 J = -1, MAXDEG
+   10   POLY(J) = 0
+C
+      I = IN
+      J = -1
+   20 IF (I .GT. 0) THEN
+        J = J + 1
+        IF (J .GT. MAXDEG) THEN
+          WRITE (*,*) ' ITOP :  Polynomial exceeds MAXDEG'
+          STOP
+        ENDIF
+        POLY(J) = MOD (I, Q)
+        I = I / Q
+        GOTO 20
+      ENDIF
+      POLY(DEG) = J
+      RETURN
+      END
+C
+C     *****  end of SUBROUTINE ITOP
+      INTEGER FUNCTION PTOI (POLY)
+C
+C   This version :  12 December 1991
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER I, J, POLY(-1:MAXDEG)
+C
+C   Converts a polynomial with coefficients in the field of
+C   order Q to an integer.
+C
+      I = 0
+      DO 10 J = POLY(DEG), 0, -1
+   10   I = Q * I + POLY(J)
+      PTOI = I
+      RETURN
+      END
+C
+C     *****  end of INTEGER FUNCTION PTOI
+      SUBROUTINE PLYADD (PA, PB, PC)
+C
+C   This version :  12 December 1991
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER I, MAXAB, DEGC
+      INTEGER PA(-1:MAXDEG), PB(-1:MAXDEG), PC(-1:MAXDEG)
+C
+C   Adds polynomials PA and PB putting result in PC.
+C   Coefficients are elements of the field of order Q.
+C
+      MAXAB = MAX (PA(DEG), PB(DEG))
+      DEGC = -1
+      DO 10 I = 0, MAXAB
+        PC(I) = ADD (PA(I), PB(I))
+        IF (PC(I) .NE. 0) DEGC = I
+   10 CONTINUE
+      PC(DEG) = DEGC
+      DO 20 I = MAXAB+1, MAXDEG
+   20   PC(I) = 0
+      RETURN
+      END
+C
+C     *****   end of SUBROUTINE PLYADD
+      SUBROUTINE PLYMUL (PA, PB, PC)
+C
+C   This version :  12 December 1991
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER I, J, DEGA, DEGB, DEGC, TERM
+      INTEGER PA(-1:MAXDEG), PB(-1:MAXDEG), PC(-1:MAXDEG)
+      INTEGER PT(-1:MAXDEG)
+C
+C   Multiplies polynomial PA by PB putting the result in PC.
+C   Coefficients are elements of the field of order Q.
+C
+      DEGA = PA(DEG)
+      DEGB = PB(DEG)
+      IF (DEGA .EQ. -1 .OR. DEGB .EQ. -1) THEN
+        DEGC = -1
+      ELSE
+        DEGC = DEGA + DEGB
+      ENDIF
+      IF (DEGC .GT. MAXDEG) THEN
+        WRITE (*,*) ' PLYMUL :  Degree of product exceeds MAXDEG'
+        STOP
+      ENDIF
+C
+      DO 20 I = 0, DEGC
+        TERM = 0
+        DO 10 J = MAX(0, I-DEGA), MIN(DEGB, I)
+   10     TERM = ADD(TERM, MUL(PA(I-J), PB(J)))
+   20   PT(I) = TERM
+C
+      PC(DEG) = DEGC
+      DO 30 I = 0, DEGC
+   30   PC(I) = PT(I)
+      DO 40 I = DEGC+1, MAXDEG
+   40   PC(I) = 0
+      RETURN
+      END
+C
+C     *****   end of SUBROUTINE PLYMUL
+      SUBROUTINE PLYDIV (PA, PB, PQ, PR)
+C
+C   This version :  12 December 1991
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication, and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER I, J, D, M, BINV, DEGB, DEGR, DEGQ
+      INTEGER PA(-1:MAXDEG), PB(-1:MAXDEG), PQ(-1:MAXDEG)
+      INTEGER PR(-1:MAXDEG)
+      INTEGER PTQ(-1:MAXDEG), PTR(-1:MAXDEG)
+C
+C   Divides polynomial PA by PB, putting the quotient in PQ
+C   and the remainder in PR.
+C   Coefficients are elements of the field of order Q.
+C
+      IF (PB(DEG) .EQ. -1) THEN
+        WRITE (*,*) ' PLYDIV :  Divide by zero'
+        STOP
+      ENDIF
+C
+      DO 10 I = -1, MAXDEG
+        PTQ(I) = 0
+   10   PTR(I) = PA(I)
+      DEGR = PA(DEG)
+      DEGB = PB(DEG)
+      DEGQ = DEGR - DEGB
+      IF (DEGQ .LT. 0) DEGQ = -1
+C
+C   Find the inverse of the leading coefficient of PB.
+C
+      J = PB(DEGB)
+      DO 15 I = 1, P-1
+        IF (MUL(I,J) .EQ. 1) BINV = I
+   15 CONTINUE
+C
+      DO 30 D = DEGQ, 0, -1
+        M = MUL (PTR(DEGR), BINV)
+        DO 20 I = DEGB, 0, -1
+   20     PTR(DEGR+I-DEGB) = SUB (PTR(DEGR+I-DEGB), MUL (M, PB(I)))
+        DEGR = DEGR - 1
+   30   PTQ(D) = M
+C
+      DO 40 I = 0, MAXDEG
+        PQ(I) = PTQ(I)
+   40   PR(I) = PTR(I)
+      PQ(DEG) = DEGQ
+   50 IF (PR(DEGR) .EQ. 0 .AND. DEGR .GE. 0) THEN
+        DEGR = DEGR - 1
+        GOTO 50
+      ENDIF
+      PR(DEG) = DEGR
+C
+      RETURN
+      END
+C
+C     *****  end of SUBROUTINE PLYDIV
+
+c*** gfplys.f
+      PROGRAM GFPLYS
+C
+C This version :  12 December 1991
+C
+C   The program calculates irreducible polynomials for various
+C   finite fields, and writes them out to the file 'irrtabs.dat'.
+C   Finite field arithmetic is carried out with the help of
+C   precalculated addition and multiplication tables found on
+C   the file 'gftabs.dat'.  The format of the irreducible polys on
+C   the output file is
+C       Q
+C       d1   a1  a2 ... a(d1)
+C       d2   b1  b2 ... b(d2)
+C           etc
+C   where Q is the order of the field, d1 is the degree of the
+C   first irreducible poly, a1, a2, ..., a(d1) are its
+C   coefficients, and so on.
+C
+C   The file 'gftabs.dat' is read on unit 1.  GFPLYS and the
+C   associated subroutines assume that GFARIT has been run previously
+C   to put the required data in this file.  GFPLYS writes its
+C   output on file 'irrtabs.dat' using unit 2.
+C
+C   GFPLYS and its associated subroutines are listed below.
+C   An asterisk indicates a subroutine also used by GFARIT
+C   and by GENIN.  An ampersand indicates a subroutine also
+C   used by GFARIT but not by GENIN.
+C
+C      GFPLYS
+C         IRRED       (reads unit 1, writes unit 2)
+C         CHARAC *
+C         SETFLD *
+C         ITOP   &
+C         PTOI   &
+C         PLYMUL *
+C         FIND   
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication, and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER I
+C
+      OPEN (UNIT=1, FILE='gftabs.dat', STATUS = 'old')
+      OPEN (UNIT=2, FILE='irrtabs.dat', STATUS = 'unknown')
+C
+C      *****  OPEN statements are system dependent
+C
+      WRITE (*,*) ' This is GFPLYS'
+      DO 10 I = 2, MAXQ
+        CALL IRRED(I)
+        WRITE (*,*) ' GFPLYS :  Case ', I, ' done'
+   10 CONTINUE
+C
+      END
+C
+C     *****  end of PROGRAM GFPLYS
+      SUBROUTINE IRRED (QIN)
+C
+C   This version :  12 December 1991
+C
+C
+C   This routine reads the file gftabs.dat from unit 1
+C   and writes the file irrtabs.dat onto unit 2.
+C   GFPLYS opens units 1 and 2.
+C   SETFLD opens unit 1, reads gftabs.dat, and then closes unit 1
+C   on each call.
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication, and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER NPOLS, MAXS
+      PARAMETER (NPOLS=25, MAXS=400)
+      LOGICAL SEIVE(MAXS)
+      INTEGER MONPOL(MAXS)
+C
+C   The parameter NPOLS says how many irreducible polys are to
+C   be calculated for each field.
+C   We find the irreducible polys using a seive.  Parameter
+C   MAXS gives the size of this seive.  Array MONPOL holds monic
+C   polys, array SEIVE says whether the poly is still OK.
+C
+      INTEGER QIN, I, J, K, N, PTOI, FIND, CHARAC
+      INTEGER PI(-1:MAXDEG), PJ(-1:MAXDEG), PK(-1:MAXDEG)
+C
+      IF (QIN .LE. 1 .OR. QIN .GT. MAXQ) THEN
+        WRITE (*,*) ' IRRED :  Bad value of Q'
+        RETURN
+      ENDIF
+C
+      P = CHARAC(QIN)
+C
+C   If no field of order QIN exists, there is nothing to do.
+C
+      IF (P .EQ. 0) RETURN
+C
+C   Otherwise, set up the field arithmetic tables.
+C
+      CALL SETFLD (QIN)
+C
+C   Set up seive containing only monic polys
+C
+      I = 0
+      J = 1
+      K = Q
+      DO 50 N = 1, MAXS
+        I = I + 1
+        IF (I .EQ. J) THEN
+          I = K
+          J = 2 * K
+          K = Q * K
+        ENDIF
+        MONPOL(N) = I
+        SEIVE(N) = .TRUE.
+   50 CONTINUE
+C
+C   Write out irreducible polys as they are found
+C
+      N = 0
+      WRITE (2, 900) QIN
+  900 FORMAT (20I3)
+      DO 200 I = 1, MAXS
+        IF (SEIVE(I)) THEN
+          CALL ITOP (MONPOL(I), PI)
+          K = PI(DEG)
+          WRITE (2, 900) K, (PI(J), J = 0, K)
+          N = N + 1
+          IF (N .EQ. NPOLS) RETURN
+C
+          DO 100 J = I, MAXS
+            CALL ITOP (MONPOL(J), PJ)
+            CALL PLYMUL (PI, PJ, PK)
+            K = FIND (PTOI (PK), MONPOL, J, MAXS)
+            IF (K .NE. 0) SEIVE(K) = .FALSE.
+  100     CONTINUE
+        ENDIF
+  200 CONTINUE
+C
+      WRITE (*,*) ' IRRED :  Seive too small'
+      WRITE (*,*) ' Only', N, ' irreducible polys were found'
+      RETURN
+C
+      END
+C
+C     *****   end of SUBROUTINE IRRED
+      INTEGER FUNCTION CHARAC (QIN)
+C
+C   This version :  12 December 1991
+C
+C   This function gives the characteristic for a field of
+C   order QIN.  If no such field exists, or if QIN is out of
+C   the range we can handle, returns 0.
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER QIN, CH(MAXQ)
+      SAVE CH
+C
+      DATA CH  / 0,  2,  3,  2,  5,  0,  7,  2,  3,  0,
+     1          11,  0, 13,  0,  0,  2, 17,  0, 19,  0,
+     2           0,  0, 23,  0,  5,  0,  3,  0, 29,  0,
+     3          31,  2,  0,  0,  0,  0, 37,  0,  0,  0,
+     4          41,  0, 43,  0,  0,  0, 47,  0,  7,  0/
+C
+      IF (QIN .LE. 1 .OR. QIN .GT. MAXQ) THEN
+        CHARAC = 0
+      ELSE
+        CHARAC = CH(QIN)
+      ENDIF
+C
+      END
+C
+C     ***** end of INTEGER FUNCTION CHARAC
+      SUBROUTINE SETFLD (QIN)
+      INTEGER QIN
+C
+C   This version : 12 December 1991
+C
+C   This subroutine sets up addition, multiplication, and
+C   subtraction tables for the finite field of order QIN.
+C   If necessary, it reads precalculated tables from the file
+C   'gftabs.dat' using unit 1.  These precalculated tables
+C   are supposed to have been put there by GFARIT.
+C
+C      *****  For the base-2 programs, these precalculated
+C      *****  tables are not needed and, therefore, neither
+C      *****  is GFARIT.
+C
+C
+C   Unit 1 is closed both before and after the call of SETFLD.
+C
+C USES
+C   Integer function CHARAC gets the characteristic of a field.
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER I, J, N, CHARAC
+C
+      IF (QIN .LE. 1 .OR. QIN .GT. MAXQ) THEN
+        WRITE (*,*) ' SETFLD :  Bad value of Q'
+        STOP
+      ENDIF
+C
+      Q = QIN
+      P = CHARAC(Q)
+C
+      IF (P .EQ. 0) THEN
+        WRITE (*,*) ' SETFLD :  There is no field of order', Q
+        STOP
+      ENDIF
+C
+C Set up to handle a field of prime order :  calculate ADD and MUL.
+C
+      IF (P .EQ. Q) THEN
+        DO 10 I = 0, Q-1
+          DO 10 J = 0, Q-1
+            ADD(I,J) = MOD(I+J, P)
+            MUL(I,J) = MOD(I*J, P)
+   10   CONTINUE
+C
+C Set up to handle a field of prime-power order :  tables for
+C ADD and MUL are in the file 'gftabs.dat'.
+C
+      ELSE
+        OPEN (UNIT=1, FILE='gftabs.dat', STATUS='old')
+C
+C    *****  OPEN statements are system dependent.
+C
+   20   READ (1, 900, END=500) N
+  900   FORMAT (20I3)
+        DO 30 I = 0, N-1
+          READ (1, 900) (ADD(I,J), J = 0, N-1)
+   30   CONTINUE
+        DO 40 I = 0, N-1
+          READ (1, 900) (MUL(I,J), J = 0, N-1)
+   40   CONTINUE
+        IF (N .NE. Q) GOTO 20
+        CLOSE (1)
+      ENDIF
+C
+C Now use the addition table to set the subtraction table.
+C
+      DO 60 I = 0, Q-1
+        DO 50 J = 0, Q-1
+          SUB(ADD(I,J), I) = J
+   50   CONTINUE
+   60 CONTINUE
+      RETURN
+C
+  500 WRITE (*,*) ' SETFLD :  Tables for q =', Q, ' not found'
+      STOP
+C
+      END
+C
+C     ***** end of SUBROUTINE SETFLD
+      SUBROUTINE ITOP (IN, POLY)
+C
+C   This version :  12 December 1991
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication, and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER IN, I, J, POLY(-1:MAXDEG)
+C
+C   Converts an integer to a polynomial with coefficients in the
+C   field of order Q.
+C
+      DO 10 J = -1, MAXDEG
+   10   POLY(J) = 0
+C
+      I = IN
+      J = -1
+   20 IF (I .GT. 0) THEN
+        J = J + 1
+        IF (J .GT. MAXDEG) THEN
+          WRITE (*,*) ' ITOP :  Polynomial exceeds MAXDEG'
+          STOP
+        ENDIF
+        POLY(J) = MOD (I, Q)
+        I = I / Q
+        GOTO 20
+      ENDIF
+      POLY(DEG) = J
+      RETURN
+      END
+C
+C     *****  end of SUBROUTINE ITOP
+      INTEGER FUNCTION PTOI (POLY)
+C
+C   This version :  12 December 1991
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER I, J, POLY(-1:MAXDEG)
+C
+C   Converts a polynomial with coefficients in the field of
+C   order Q to an integer.
+C
+      I = 0
+      DO 10 J = POLY(DEG), 0, -1
+   10   I = Q * I + POLY(J)
+      PTOI = I
+      RETURN
+      END
+C
+C     *****  end of INTEGER FUNCTION PTOI
+      SUBROUTINE PLYMUL (PA, PB, PC)
+C
+C   This version :  12 December 1991
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER I, J, DEGA, DEGB, DEGC, TERM
+      INTEGER PA(-1:MAXDEG), PB(-1:MAXDEG), PC(-1:MAXDEG)
+      INTEGER PT(-1:MAXDEG)
+C
+C   Multiplies polynomial PA by PB putting the result in PC.
+C   Coefficients are elements of the field of order Q.
+C
+      DEGA = PA(DEG)
+      DEGB = PB(DEG)
+      IF (DEGA .EQ. -1 .OR. DEGB .EQ. -1) THEN
+        DEGC = -1
+      ELSE
+        DEGC = DEGA + DEGB
+      ENDIF
+      IF (DEGC .GT. MAXDEG) THEN
+        WRITE (*,*) ' PLYMUL :  Degree of product exceeds MAXDEG'
+        STOP
+      ENDIF
+C
+      DO 20 I = 0, DEGC
+        TERM = 0
+        DO 10 J = MAX(0, I-DEGA), MIN(DEGB, I)
+   10     TERM = ADD(TERM, MUL(PA(I-J), PB(J)))
+   20   PT(I) = TERM
+C
+      PC(DEG) = DEGC
+      DO 30 I = 0, DEGC
+   30   PC(I) = PT(I)
+      DO 40 I = DEGC+1, MAXDEG
+   40   PC(I) = 0
+      RETURN
+      END
+C
+C     *****   end of SUBROUTINE PLYMUL
+      INTEGER FUNCTION FIND (N, TAB, I, MAXTAB)
+C
+C   This version :  12 December 1991
+C
+      INTEGER N, I, MAXTAB, TAB(MAXTAB), J
+C
+C   Look up N in ordered TAB(I) to TAB(MAXTAB)
+C
+      FIND = 0
+      IF (N .GT. TAB(MAXTAB)) RETURN
+      DO 10 J = I, MAXTAB
+        IF (TAB(J) .EQ. N) THEN
+          FIND = J
+          RETURN
+        ENDIF
+   10 CONTINUE
+      RETURN
+      END
+C
+C     *****  end of INTEGER FUNCTION FIND
+
+c*** genin2.f
+      PROGRAM GENIN2
+C
+C        *****  This is the driver for the base-2 programs.
+C        *****  More accurately, it is a driver skeleton.
+C        *****  There is a default set of test integrals
+C        *****  in TESTF.  The user can replace TESTF with
+C        *****  another subroutine called TESTF containing
+C        *****  integrals of interest to him.
+C
+C   This version :  2 Feb 1992
+C
+C   This program tests the accuracy of numerical integration
+C   using the low-discrepancy binary sequences of
+C   H. Niederreiter (1988) as implemented in INLO2, GOLO2, and
+C   related programs.  Various possible test integrals are
+C   provided by the function TESTF.  GENIN2 generates only
+C   sequences with base 2.
+C
+C   Interactive input and output go through the Fortran units
+C   denoted by * ;  at most installations, * corresponds to
+C   the user's terminal.  Fortran unit 2 is used to save the output.
+C
+C   These programs assume that your computer's word length
+C   is 31 bits, excluding sign.  If this is not the case,
+C   modify the parameter NBITS throughout accordingly.
+C
+C
+C
+C    GENIN2 and its associated subroutines are listed below.
+C
+C       GENIN2
+C          INLO2
+C          GOLO2
+C          CALCC2
+C          CALCV
+C          CHARAC
+C          SETFLD
+C          PLYMUL
+C          TESTF
+C
+C    The suffix 2 indicates  routines for use only by
+C    the set of programs tailored for base 2.  
+C
+C    The other routines are also used by the general-base programs.
+C
+      INTEGER MAXDIM, OUTUNT, POWER
+      PARAMETER (MAXDIM=12, OUTUNT=2, POWER  = 12)
+C
+C   The parameter MAXDIM gives the maximum dimension that will
+C   be used.  OUTUNT is the unit to save the output.
+C   POWER is used in a possible warm-up formula.
+C
+      INTEGER I, NUM, DIMEN, SEQLEN, SKIP, STEP, PBASE
+      REAL QUASI(MAXDIM), TESTF, EXACTF 
+      DOUBLE PRECISION SUM
+C
+      WRITE (*,*) ' This is program GENIN2'
+      WRITE (*,*) ' Output file name is OUTFIL.DAT '
+      OPEN (unit = OUTUNT, file = 'OUTFIL.DAT', status = 'UNKNOWN')
+C
+C      *****   OPEN statements may well have to be modified
+C      *****   to conform to local computer-center requirements.
+C
+C
+    5 WRITE (*,*) ' Choose a test integral (1 to 4) or 0 to quit :'
+      READ (*,*) NUM
+      IF (NUM.LE.0) THEN
+        WRITE (*,*) ' End of program GENIN2'
+        CLOSE (OUTUNT)
+        STOP
+      ENDIF
+      IF (NUM.GT.4) THEN
+        WRITE (*,*) ' No such test integral'
+        GOTO 5
+      ENDIF
+C
+C       *****  Each test integral is parameterized by
+C       *****  its dimension.
+C
+   10 WRITE (*,*) ' Enter dimension :'
+      READ (*,*) DIMEN
+      IF (DIMEN.GT.MAXDIM) THEN
+        WRITE (*,*) ' Dimension may not exceed', MAXDIM
+        GOTO 10
+      ENDIF
+C
+C        *****  The sequence length is the number of
+C        *****  quasi-random points used to estimate the
+C        *****  integral, excluding warm-up.
+C
+C        *****  Some users may wish to rewrite
+C        *****  the driver to test a [heuristic] "convergence"
+C        *****  criterion, stopping the generation of points
+C        *****  when it is passed or when a specified number of
+C        *****  points have been generated  -- whichever occurs
+C        *****  first.
+C
+   15 WRITE (*,*) ' Choose sequence length :'
+C
+C         *****  Except when comparing results with other
+C         *****  bases, we suggest taking SEQLEN to be a power
+C         *****  of 2.  Examples:
+C
+      WRITE (*,*) ' 2 ** 10 =  ',  2 ** 10
+      WRITE (*,*) ' 2 ** 15 =  ',  2 ** 15
+      WRITE (*,*) ' 2 ** 20 =  ',  2 ** 20
+      WRITE (*,*) ' Enter SEQLEN  (possibly a power of 2 above) '
+      READ (*,*) SEQLEN
+      IF (SEQLEN.LE.0) THEN
+        WRITE (*,*) ' Length must be strictly positive'
+        GOTO 15
+      ENDIF
+C
+   20 WRITE (*,*) ' Choose the number of values to skip :'
+      WRITE (*,*) ' There is reason to believe that BASE * e, '
+      WRITE (*,*) ' where e is defined for example in '
+      WRITE (*,*) ' Bratley, Fox, and Niederreiter [1991], '
+      WRITE (*,*) ' would be a good choice.  Our formula has '
+      WRITE (*,*) ' has the form  SKIP = 2 ** POWER, where '
+      WRITE (*,*) ' POWER is  chosen so that SKIP comes nowhere '
+      WRITE (*,*) ' near the largest possible machine-representable'
+      WRITE (*,*) ' integer.  It does not hurt to choose '
+      WRITE (*,*) ' POWER larger than e, because skipping is '
+      WRITE (*,*) ' done implicitly in O(1) time. '
+      WRITE (*,*) ' The maximum value of e for a fixed dimension '
+      WRITE (*,*) ' s grows like log s.  We allow some "fat" for '
+      WRITE (*,*) ' the implicit constant. '
+      WRITE (*,*) ' Numerically, 2 ** POWER = ', 2 ** POWER
+      WRITE (*,*) ' Enter SKIP (not necessarily the value above)'
+      READ (*,*) SKIP
+      IF (SKIP.LT.0) THEN
+        WRITE (*,*) ' Number must be nonnegative'
+        GOTO 20
+      ENDIF
+C
+C
+      CALL INLO2 (DIMEN, SKIP)
+      WRITE (*,*) ' GENIN2 :  Initialization complete'
+C
+C Write titles and the exact value of the integral
+C
+      WRITE (OUTUNT,27) NUM
+   27 FORMAT (/,' Test integral ',I2)
+      WRITE (OUTUNT,28) DIMEN, SEQLEN, SKIP
+   28 FORMAT (/,' Dimension ',I6,',    Base 2 (GENIN2)',
+     1 /,' Sequence ',I7,',    Skipped ',I4)
+      WRITE (OUTUNT,29) EXACTF(NUM, DIMEN)
+   29 FORMAT (/,' Correct value is ',G16.7)
+      WRITE (OUTUNT,30)
+   30 FORMAT(/,'      Iteration     Estimate of integral',/)
+C
+C Now estimate the integral
+C
+      SUM = 0
+      PBASE = 2 ** 6
+      WRITE (*,*) ' Odd-looking iteration numbers are powers of 2 '
+      STEP = 500
+      DO 100 I = 1, SEQLEN
+        CALL GOLO2 (QUASI)
+        SUM = SUM + TESTF(NUM, DIMEN, QUASI)
+        IF (MOD(I,STEP).EQ.0) THEN
+          WRITE (OUTUNT,99) I, SUM/I
+        ENDIF
+        IF (MOD(I,PBASE) .EQ. 0) THEN
+          WRITE (OUTUNT,99) I, SUM/I
+          PBASE = 2 * PBASE
+C
+C            There is reason to believe that the subsequence
+C            of estimates along powers of the base [here 2]
+C            converges faster than the original sequence or
+C            the subsequence corresponding to STEP.
+C
+        ENDIF
+C
+   99     FORMAT (I12,G24.7)
+          IF (I .EQ. 5000) STEP = 1000
+          IF (I .EQ. 10000) STEP = 5000
+  100 CONTINUE
+C
+      WRITE (*,*) ' GENIN2 :  iteration ends'
+      GOTO 5
+C
+      END
+C
+C     ***** end of PROGRAM GENIN2
+      SUBROUTINE INLO2 (DIM, SKIP)
+C
+C   This version :  12 February 1992
+C
+C   See the general comments on implementing Niederreiter's
+C   low-discrepancy sequences.
+C
+C   This subroutine calculates the values of Niederreiter's
+C   C(I,J,R) and performs other initialisation necessary
+C   before calling GOLO2.
+C
+C INPUT :
+C   DIMEN - The dimension of the sequence to be generated.
+C        {DIMEN is called DIM in the argument of INLO2,
+C        because DIMEN is subsequently passed via COMMON
+C        and is called DIMEN there.}
+C
+C   SKIP  - The number of values to throw away at the beginning
+C           of the sequence.
+C
+C OUTPUT :
+C   To GOLO2, labelled common /COMM2/.
+C
+C USES :
+C   Calls CALCC2 to calculate the values of CJ.
+C   ***** A non-standard function is used to compute *****
+C   ***** bitwise exclusive-ors.                     *****
+C
+C
+C   ------------------------------------------------------------
+C
+C
+C   This file defines the common block /COMM2/ and some
+C   associated parameters.  These are for use in the base 2
+C   version of the generator.
+C
+      INTEGER MAXDIM, NBITS
+      PARAMETER (MAXDIM=12, NBITS=31)
+C
+C   The parameter MAXDIM is the maximum dimension that will be used.
+C   NBITS is the number of bits (not counting the sign) in a
+C   fixed-point integer.
+C
+      INTEGER CJ(MAXDIM, 0:NBITS - 1), DIMEN, COUNT
+      INTEGER NEXTQ(MAXDIM)
+      COMMON /COMM2/ CJ, DIMEN, COUNT, NEXTQ
+      SAVE   /COMM2/
+C
+C   The common block /COMM2/ :
+C     CJ    - Contains the packed values of Niederreiter's C(I,J,R)
+C     DIMEN   - The dimension of the sequence to be generated
+C     COUNT - The index of the current item in the sequence,
+C             expressed as an array of bits.  COUNT(R) is the same
+C             as Niederreiter's AR(N) (page 54) except that N is
+C             implicit.
+C     NEXTQ - The numerators of the next item in the series.  These
+C             are like Niederreiter's XI(N) (page 54) except that
+C             N is implicit, and the NEXTQ are integers.  To obtain
+C             the values of XI(N), multiply by RECIP (see GOLO2).
+C
+C   Array CJ of the common block is set up by subroutine CALCC2.
+C   The other items in the common block are set up by INLO2.
+C
+C   ------------------------------------------------------------
+C
+C
+C
+      INTEGER I, R, DIM, SKIP, GRAY
+C
+      DIMEN = DIM
+C
+C       This assignment just relabels the variable for
+C       subsequent use.
+C
+      IF (DIMEN.LE.0 .OR. DIMEN.GT.MAXDIM) THEN
+        WRITE (*,*) ' INLO2 :  Bad dimension'
+        STOP
+      ENDIF
+C
+      CALL CALCC2
+C
+C   Translate SKIP into Gray code
+C
+C   ***** The bitwise exclusive-or is not standard in Fortran
+C   ***** This is the Vax version :
+      GRAY = IEOR (SKIP, SKIP/2)
+C   ***** THIS is the Unix version
+C     GRAY = XOR (SKIP, SKIP/2)
+C
+C   Now set up NEXTQ appropriately for this value of the Gray code
+C
+      DO 5 I = 1, DIMEN
+    5   NEXTQ(I) = 0
+C
+      R = 0
+   10 IF (GRAY .NE. 0) THEN
+        IF (MOD(GRAY,2) .NE. 0) THEN
+          DO 20 I = 1, DIMEN
+C           ***** This is the non-standard exclusive-or again
+C           ***** Vax version :
+            NEXTQ(I) = IEOR(NEXTQ(I), CJ(I,R))
+C           ***** Unix version :
+C           NEXTQ(I) = XOR(NEXTQ(I), CJ(I,R))
+   20     CONTINUE
+        ENDIF
+        GRAY = GRAY / 2
+        R = R + 1
+        GOTO 10
+      ENDIF
+C
+      COUNT = SKIP
+      RETURN
+      END
+C
+C     *****  end of SUBROUTINE INLO2
+      SUBROUTINE GOLO2 (QUASI)
+C
+C   This version :  21 February 1992
+C
+C        This routine is for base 2 only.  The driver, GENIN2,
+C        calls it after proper set-up.
+C
+C See the general comments on implementing Niederreiter's
+C low-discrepancy sequences.
+C
+C This subroutine generates a new quasi-random vector
+C on each call.
+C
+C INPUT
+C   From INLO2, labelled common /COMM2/, properly initialized.
+C
+C OUTPUT
+C   To the caller, the next vector in the sequence in the
+C   array QUASI.
+C
+C USES
+C   ***** A non-standard function is used to compute *****
+C   ***** bitwise exclusive-ors.                     *****
+C
+C
+C   ------------------------------------------------------------
+C
+C
+C   This file defines the common block /COMM2/ and some
+C   associated parameters.  These are for use in the base 2
+C   version of the generator.
+C
+      INTEGER MAXDIM, NBITS
+      PARAMETER (MAXDIM=12, NBITS=31)
+C
+C   The parameter MAXDIM is the maximum dimension that will be used.
+C   NBITS is the number of bits (not counting the sign) in a
+C   fixed-point integer.
+C
+      INTEGER CJ(MAXDIM, 0:NBITS-1), DIMEN, COUNT, NEXTQ(MAXDIM)
+      COMMON /COMM2/ CJ, DIMEN, COUNT, NEXTQ
+      SAVE   /COMM2/
+C
+C   The common block /COMM2/ :
+C     CJ    - Contains the packed values of Niederreiter's C(I,J,R)
+C     DIMEN   - The dimension of the sequence to be generated
+C     COUNT - The index of the current item in the sequence,
+C             expressed as an array of bits.  COUNT(R) is the same
+C             as Niederreiter's AR(N) (page 54) except that N is
+C             implicit.
+C     NEXTQ - The numerators of the next item in the series.  These
+C             are like Niederreiter's XI(N) (page 54) except that
+C             N is implicit, and the NEXTQ are integers.  To obtain
+C             the values of XI(N), multiply by RECIP (see GOLO2).
+C
+C   Array CJ of the common block is set up by subroutine CALCC2.
+C   The other items in the common block are set up by INLO2.
+C
+C   ------------------------------------------------------------
+C
+C
+C
+      REAL RECIP
+      PARAMETER (RECIP=2.0**(-NBITS))
+C
+C   The parameter RECIP is the multiplier which changes the
+C   integers in NEXTQ into the required real values in QUASI.
+C
+      INTEGER I, R
+      REAL    QUASI(*)
+C
+C Multiply the numerators in NEXTQ by RECIP to get the next
+C quasi-random vector
+C
+      DO 5 I = 1, DIMEN
+        QUASI(I) = NEXTQ(I) * RECIP
+    5 CONTINUE
+C
+C Find the position of the right-hand zero in COUNT.  This
+C is the bit that changes in the Gray-code representation as
+C we go from COUNT to COUNT+1.
+C
+      R = 0
+      I = COUNT
+   10 IF (MOD(I,2).NE.0) THEN
+        R = R + 1
+        I = I/2
+        GOTO 10
+      ENDIF
+C
+C Check that we have not passed 2**NBITS calls on GOLO2
+C
+      IF (R .GE. NBITS) THEN
+        WRITE (*,*) ' GOLO2 :  Too many calls'
+        STOP
+      ENDIF
+C
+C Compute the new numerators in vector NEXTQ
+C
+      DO 20 I = 1, DIMEN
+C       ***** Bitwise exclusive-or is not standard in Fortran
+C       ***** This is the Vax version :
+       NEXTQ(I) = IEOR(NEXTQ(I), CJ(I,R))
+C       ***** This is the Unix version
+C      NEXTQ(I) = XOR(NEXTQ(I), CJ(I,R))
+   20 CONTINUE
+C
+      COUNT = COUNT + 1
+      RETURN
+      END
+C
+C     *****   end of PROCEDURE GOLO2
+      SUBROUTINE CALCC2
+C
+C   This version :  12 February 1992
+C
+C      *****  For base-2 only.
+C
+C   See the general comments on implementing Niederreiter's
+C   low-discrepancy sequences.
+C
+C   This program calculates the values of the constants C(I,J,R).
+C   As far as possible, we use Niederreiter's notation.
+C   For each value of I, we first calculate all the corresponding
+C   values of C :  these are held in the array CI.  All these
+C   values are either 0 or 1.  Next we pack the values into the
+C   array CJ, in such a way that CJ(I,R) holds the values of C
+C   for the indicated values of I and R and for every value of
+C   J from 1 to NBITS.  The most significant bit of CJ(I,R)
+C   (not counting the sign bit) is C(I,1,R) and the least
+C   significant bit is C(I,NBITS,R).
+C     When all the values of CJ have been calculated, we return
+C   this array to the calling program.
+C
+C  --------------------------------------------------------------
+C
+C   We define the common block /COMM2/ and some
+C   associated parameters.  These are for use in the base 2
+C   version of the generator.
+C
+      INTEGER MAXDIM, NBITS
+      PARAMETER (MAXDIM=12, NBITS=31)
+C
+C   The parameter MAXDIM is the maximum dimension that will be used.
+C   NBITS is the number of bits (not counting the sign) in a
+C   fixed-point integer.
+C
+      INTEGER CJ(MAXDIM, 0:NBITS-1), DIMEN, COUNT, NEXTQ(MAXDIM)
+      COMMON /COMM2/ CJ, DIMEN, COUNT, NEXTQ
+      SAVE   /COMM2/
+C
+C   The common block /COMM2/ :
+C     CJ    - Contains the packed values of Niederreiter's C(I,J,R)
+C     DIMEN   - The dimension of the sequence to be generated
+C     COUNT - The index of the current item in the sequence,
+C             expressed as an array of bits.  COUNT(R) is the same
+C             as Niederreiter's AR(N) (page 54) except that N is
+C             implicit.
+C     NEXTQ - The numerators of the next item in the series.  These
+C             are like Niederreiter's XI(N) (page 54) except that
+C             N is implicit, and the NEXTQ are integers.  To obtain
+C             the values of XI(N), multiply by RECIP (see GOLO2).
+C
+C   Array CJ of the common block is set up by subroutine CALCC2.
+C   The other items in the common block are set up by INLO2.
+C
+C   --------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   ---------------------------------------------------------------
+C
+C
+C
+C   MAXE   - We need MAXDIM irreducible polynomials over Z2.
+C            MAXE is the highest degree among these.
+C   MAXV   - The maximum possible index used in V.
+C
+      INTEGER MAXE, MAXV
+      PARAMETER (MAXE=5, MAXV=NBITS+MAXE)
+C
+C INPUT :
+C   The array CJ to be initialised, and DIMEN the number of
+C   dimensions we are using, are transmitted through /COMM2/.
+C
+C OUTPUT :
+C   The array CJ is returned to the calling program.
+C
+C USES :
+C   Subroutine SETFLD is used to set up field arithmetic tables.
+C   (Although this is a little heavy-handed for the field of
+C   order 2, it makes for uniformity with the general program.)
+C   Subroutine CALCV is used to for the auxiliary calculation
+C   of the values V needed to get the Cs.
+C
+      INTEGER PX(-1:MAXDEG), B(-1:MAXDEG)
+      INTEGER V(0:MAXV), CI(NBITS, 0:NBITS-1)
+      INTEGER E, I, J, R, U, TERM
+C
+      INTEGER IRRED(MAXDIM, -1:MAXE)
+      SAVE IRRED
+C
+C   This DATA statement supplies the coefficients and the
+C   degrees of the first 12 irreducible polynomials over Z2.
+C   They are taken from Lidl and Niederreiter, FINITE FIELDS,
+C   Cambridge University Press (1984), page 553.
+C   The order of these polynomials is the same as the order in
+C   file 'irrtabs.dat' used by the general program.
+C
+C   In this block PX(I, -1) is the degree of the Ith polynomial,
+C   and PX(I, N) is the coefficient of x**n in the Ith polynomial.
+C
+      DATA (IRRED(1,I), I=-1,1)  / 1,0,1 /
+      DATA (IRRED(2,I), I=-1,1)  / 1,1,1 /
+      DATA (IRRED(3,I), I=-1,2)  / 2,1,1,1 /
+      DATA (IRRED(4,I), I=-1,3)  / 3,1,1,0,1 /
+      DATA (IRRED(5,I), I=-1,3)  / 3,1,0,1,1 /
+      DATA (IRRED(6,I), I=-1,4)  / 4,1,1,0,0,1 /
+      DATA (IRRED(7,I), I=-1,4)  / 4,1,0,0,1,1 /
+      DATA (IRRED(8,I), I=-1,4)  / 4,1,1,1,1,1 /
+      DATA (IRRED(9,I), I=-1,5)  / 5,1,0,1,0,0,1 /
+      DATA (IRRED(10,I), I=-1,5) / 5,1,0,0,1,0,1 /
+      DATA (IRRED(11,I), I=-1,5) / 5,1,1,1,1,0,1 /
+      DATA (IRRED(12,I), I=-1,5) / 5,1,1,1,0,1,1 /
+C
+C   Prepare to work in Z2
+C
+      CALL SETFLD (2)
+C
+      DO 1000 I = 1, DIMEN
+C
+C   For each dimension, we need to calculate powers of an
+C   appropriate irreducible polynomial :  see Niederreiter
+C   page 65, just below equation (19).
+C     Copy the appropriate irreducible polynomial into PX,
+C   and its degree into E.  Set polynomial B = PX ** 0 = 1.
+C   M is the degree of B.  Subsequently B will hold higher
+C   powers of PX.
+C
+        E = IRRED(I, DEG)
+        DO 10 J = -1, E
+          PX(J) = IRRED(I,J)
+   10   CONTINUE
+        B(DEG) = 0
+        B(0) = 1
+C
+C   Niederreiter (page 56, after equation (7), defines two
+C   variables Q and U.  We do not need Q explicitly, but we
+C   do need U.
+C
+        U = 0
+C
+        DO 90 J = 1, NBITS
+C
+C   If U = 0, we need to set B to the next power of PX
+C   and recalculate V.  This is done by subroutine CALCV.
+C
+          IF (U .EQ. 0) CALL CALCV (PX, B, V, MAXV)
+C
+C Now C is obtained from V.  Niederreiter
+C obtains A from V (page 65, near the bottom), and then gets
+C C from A (page 56, equation (7)).  However this can be done
+C in one step.  Here CI(J,R) corresponds to
+C Niederreiter's C(I,J,R).
+C
+          DO 50 R = 0, NBITS-1
+            CI(J,R) = V(R+U)
+   50     CONTINUE
+C
+C Increment U.  If U = E, then U = 0 and in Niederreiter's
+C paper Q = Q + 1.  Here, however, Q is not used explicitly.
+C
+          U = U + 1
+          IF (U .EQ. E) U = 0
+  90    CONTINUE
+C
+C  The array CI now holds the values of C(I,J,R) for this value
+C  of I.  We pack them into array CJ so that CJ(I,R) holds all
+C  the values of C(I,J,R) for J from 1 to NBITS.
+C
+        DO 120 R = 0, NBITS-1
+          TERM = 0
+          DO 110 J = 1, NBITS
+            TERM = 2 * TERM + CI(J,R)
+  110     CONTINUE
+          CJ(I,R) = TERM
+  120   CONTINUE
+C
+ 1000 CONTINUE
+      END
+C
+C      *****  end of CALCC2
+      SUBROUTINE CALCV (PX, B, V, MAXV)
+C
+C   This version :  12 February 1991
+C
+C   See the general comments on implementing Niederreiter's
+C   low-discrepancy sequences.
+C
+C   This program calculates the values of the constants V(J,R) as
+C   described in BFN section 3.3.  It is called from either CALCC or
+C   CALCC2.  The values transmitted through common /FIELD/ determine
+C   which field we are working in.
+C
+C INPUT :
+C   PX is the appropriate irreducible polynomial for the dimension
+C     currently being considered.  The degree of PX will be called E.
+C   B is the polynomial defined in section 2.3 of BFN.  On entry to
+C     the subroutine, the degree of B implicitly defines the parameter
+C     J of section 3.3, by degree(B) = E*(J-1).
+C   MAXV gives the dimension of the array V.
+C   On entry, we suppose that the common block /FIELD/ has been set
+C     up correctly (using SETFLD).
+C
+C OUTPUT :
+C   On output B has been multiplied by PX, so its degree is now E*J.
+C   V contains the values required.
+C
+C USES :
+C   The subroutine PLYMUL is used to multiply polynomials.
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication, and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER MAXV, E, I, J, KJ, M, BIGM, R, TERM
+      INTEGER PX(-1:MAXDEG), B(-1:MAXDEG), V(0:MAXV)
+      INTEGER H(-1:MAXDEG)
+C
+      INTEGER ARBIT, NONZER
+      ARBIT() = 1
+C
+C   We use ARBIT() to indicate where the user can place
+C   an arbitrary element of the field of order Q, while NONZER
+C   shows where he must put an arbitrary non-zero element
+C   of the same field.  For the code,
+C   this means 0 <= ARBIT < Q and 0 < NONZER < Q.  Within these
+C   limits, the user can do what he likes.  ARBIT is declared as
+C   a function as a reminder that a different arbitrary value may
+C   be returned each time ARBIT is referenced.
+C
+C    BIGM is the M used in section 3.3.
+C    It differs from the [little] m used in section 2.3,
+C    denoted here by M.
+C
+      NONZER = 1
+C
+      E = PX(DEG)
+C
+C   The poly H is PX**(J-1), which is the value of B on arrival.
+C   In section 3.3, the values of Hi are defined with a minus sign :
+C   don't forget this if you use them later !
+C
+      DO 10 I = -1, B(DEG)
+   10   H(I) = B(I)
+      BIGM = H(DEG)
+C
+C   Now multiply B by PX so B becomes PX**J.
+C   In section 2.3, the values of Bi are defined with a minus sign :
+C   don't forget this if you use them later !
+C
+      CALL PLYMUL (PX, B, B)
+      M = B(DEG)
+C
+C   We don't use J explicitly anywhere, but here it is just in case.
+C
+      J = M / E
+C
+C   Now choose a value of Kj as defined in section 3.3.
+C   We must have 0 <= Kj < E*J = M.
+C   The limit condition on Kj does not seem very relevant
+C   in this program.
+C
+      KJ = BIGM
+C
+C   Now choose values of V in accordance with the conditions in
+C   section 3.3
+C
+      DO 20 R = 0, KJ-1
+   20   V(R) = 0
+      V(KJ) = 1
+C
+      IF (KJ .LT. BIGM) THEN
+C
+        TERM = SUB (0, H(KJ))
+C
+        DO 30 R = KJ+1, BIGM-1
+          V(R) = ARBIT()
+C
+C         Check the condition of section 3.3,
+C         remembering that the H's have the opposite sign.
+C
+          TERM = SUB (TERM, MUL (H(R), V(R)))
+   30   CONTINUE
+C
+C         Now V(BIGM) is anything but TERM
+C
+          V(BIGM) = ADD (NONZER, TERM)
+C
+        DO 40 R = BIGM+1, M-1
+   40     V(R) = ARBIT()
+C
+      ELSE
+C       This is the case KJ .GE. BIGM
+C
+        DO 50 R = KJ+1, M-1
+   50     V(R) = ARBIT()
+C
+      ENDIF
+C
+C   Calculate the remaining V's using the recursion of section 2.3,
+C   remembering that the B's have the opposite sign.
+C
+      DO 70 R = 0, MAXV-M
+        TERM = 0
+        DO 60 I = 0, M-1
+          TERM = SUB (TERM, MUL (B(I), V(R+I)))
+   60   CONTINUE
+        V(R+M) = TERM
+   70 CONTINUE
+C
+      RETURN
+      END
+C
+C     ***** end of SUBROUTINE CALCV
+      INTEGER FUNCTION CHARAC (QIN)
+C
+C   This version :  12 December 1991
+C
+C   This function gives the characteristic for a field of
+C   order QIN.  If no such field exists, or if QIN is out of
+C   the range we can handle, returns 0.
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER QIN, CH(MAXQ)
+      SAVE CH
+C
+      DATA CH  / 0,  2,  3,  2,  5,  0,  7,  2,  3,  0,
+     1          11,  0, 13,  0,  0,  2, 17,  0, 19,  0,
+     2           0,  0, 23,  0,  5,  0,  3,  0, 29,  0,
+     3          31,  2,  0,  0,  0,  0, 37,  0,  0,  0,
+     4          41,  0, 43,  0,  0,  0, 47,  0,  7,  0/
+C
+      IF (QIN .LE. 1 .OR. QIN .GT. MAXQ) THEN
+        CHARAC = 0
+      ELSE
+        CHARAC = CH(QIN)
+      ENDIF
+C
+      END
+C
+C     ***** end of INTEGER FUNCTION CHARAC
+      SUBROUTINE SETFLD (QIN)
+      INTEGER QIN
+C
+C   This version : 12 December 1991
+C
+C   This subroutine sets up addition, multiplication, and
+C   subtraction tables for the finite field of order QIN.
+C   If necessary, it reads precalculated tables from the file
+C   'gftabs.dat' using unit 1.  These precalculated tables
+C   are supposed to have been put there by GFARIT.
+C
+C      *****  For the base-2 programs, these precalculated
+C      *****  tables are not needed and, therefore, neither
+C      *****  is GFARIT.
+C
+C
+C   Unit 1 is closed both before and after the call of SETFLD.
+C
+C USES
+C   Integer function CHARAC gets the characteristic of a field.
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER I, J, N, CHARAC
+C
+      IF (QIN .LE. 1 .OR. QIN .GT. MAXQ) THEN
+        WRITE (*,*) ' SETFLD :  Bad value of Q'
+        STOP
+      ENDIF
+C
+      Q = QIN
+      P = CHARAC(Q)
+C
+      IF (P .EQ. 0) THEN
+        WRITE (*,*) ' SETFLD :  There is no field of order', Q
+        STOP
+      ENDIF
+C
+C Set up to handle a field of prime order :  calculate ADD and MUL.
+C
+      IF (P .EQ. Q) THEN
+        DO 10 I = 0, Q-1
+          DO 10 J = 0, Q-1
+            ADD(I,J) = MOD(I+J, P)
+            MUL(I,J) = MOD(I*J, P)
+   10   CONTINUE
+C
+C Set up to handle a field of prime-power order :  tables for
+C ADD and MUL are in the file 'gftabs.dat'.
+C
+      ELSE
+        OPEN (UNIT=1, FILE='gftabs.dat', STATUS='old')
+C
+C    *****  OPEN statements are system dependent.
+C
+   20   READ (1, 900, END=500) N
+  900   FORMAT (20I3)
+        DO 30 I = 0, N-1
+          READ (1, 900) (ADD(I,J), J = 0, N-1)
+   30   CONTINUE
+        DO 40 I = 0, N-1
+          READ (1, 900) (MUL(I,J), J = 0, N-1)
+   40   CONTINUE
+        IF (N .NE. Q) GOTO 20
+        CLOSE (1)
+      ENDIF
+C
+C Now use the addition table to set the subtraction table.
+C
+      DO 60 I = 0, Q-1
+        DO 50 J = 0, Q-1
+          SUB(ADD(I,J), I) = J
+   50   CONTINUE
+   60 CONTINUE
+      RETURN
+C
+  500 WRITE (*,*) ' SETFLD :  Tables for q =', Q, ' not found'
+      STOP
+C
+      END
+C
+C     ***** end of SUBROUTINE SETFLD
+      SUBROUTINE PLYMUL (PA, PB, PC)
+C
+C   This version :  12 December 1991
+C
+C
+C   ------------------------------------------------------------
+C
+C   The following COMMON block, used by many subroutines,
+C   gives the order Q of a field, its characteristic P, and its
+C   addition, multiplication and subtraction tables.
+C   The parameter MAXQ gives the order of the largest field to
+C   be handled.
+C
+      INTEGER MAXQ
+      PARAMETER (MAXQ=50)
+ 
+      INTEGER P, Q, ADD(0:MAXQ-1,0:MAXQ-1)
+      INTEGER MUL(0:MAXQ-1, 0:MAXQ-1), SUB(0:MAXQ-1, 0:MAXQ-1)
+      COMMON /FIELD/ P, Q, ADD, MUL, SUB
+      SAVE /FIELD/
+C
+C   The following definitions concern the representation of
+C   polynomials.
+C
+      INTEGER MAXDEG, DEG
+      PARAMETER (MAXDEG=50, DEG=-1)
+C
+C   The parameter MAXDEG gives the highest degree of polynomial
+C   to be handled.  Polynomials stored as arrays have the
+C   coefficient of degree n in POLY(N), and the degree of the
+C   polynomial in POLY(-1).  The parameter DEG is just to remind
+C   us of this last fact.  A polynomial which is identically 0
+C   is given degree -1.
+C
+C   A polynomial can also be stored in an integer I, with
+C        I = AN*Q**N + ... + A0.
+C   Routines ITOP and PTOI convert between these two formats.
+C
+C   -----------------------------------------------------------
+C
+C
+C
+      INTEGER I, J, DEGA, DEGB, DEGC, TERM
+      INTEGER PA(-1:MAXDEG), PB(-1:MAXDEG), PC(-1:MAXDEG)
+      INTEGER PT(-1:MAXDEG)
+C
+C   Multiplies polynomial PA by PB putting the result in PC.
+C   Coefficients are elements of the field of order Q.
+C
+      DEGA = PA(DEG)
+      DEGB = PB(DEG)
+      IF (DEGA .EQ. -1 .OR. DEGB .EQ. -1) THEN
+        DEGC = -1
+      ELSE
+        DEGC = DEGA + DEGB
+      ENDIF
+      IF (DEGC .GT. MAXDEG) THEN
+        WRITE (*,*) ' PLYMUL :  Degree of product exceeds MAXDEG'
+        STOP
+      ENDIF
+C
+      DO 20 I = 0, DEGC
+        TERM = 0
+        DO 10 J = MAX(0, I-DEGA), MIN(DEGB, I)
+   10     TERM = ADD(TERM, MUL(PA(I-J), PB(J)))
+   20   PT(I) = TERM
+C
+      PC(DEG) = DEGC
+      DO 30 I = 0, DEGC
+   30   PC(I) = PT(I)
+      DO 40 I = DEGC+1, MAXDEG
+   40   PC(I) = 0
+      RETURN
+      END
+C
+C     *****   end of SUBROUTINE PLYMUL
+      REAL FUNCTION TESTF (N, DIMEN, QUASI)
+      INTEGER I, N, DIMEN
+      REAL X, EXACTF, QUASI(*)
+C
+C This version :  4 Mar 1992
+C
+C Provides a variety of test integrals for quasi-random
+C sequences.  A call on TESTF computes an estimate of the
+C integral ;  a call on EXACTF computes the exact value.
+C
+      GOTO (100, 200, 300, 400) N
+C
+      ENTRY EXACTF (N, DIMEN)
+      GOTO (1100, 1200, 1300, 1400) N
+C
+C Test integral 1
+C
+  100 TESTF = 1.0
+      DO 110 I = 1, DIMEN
+        TESTF = TESTF * ABS(4 * QUASI(I) - 2)
+  110 CONTINUE
+      RETURN
+C
+ 1100 EXACTF = 1.0
+      RETURN
+C
+C Test integral 2
+C
+  200 TESTF = 1.0
+      DO 210 I = 1, DIMEN
+        TESTF = TESTF * I * COS(I * QUASI(I))
+  210 CONTINUE
+      RETURN
+C
+ 1200 EXACTF = 1.0
+      DO 1210 I = 1, DIMEN
+        EXACTF = EXACTF * SIN(FLOAT(I))
+ 1210 CONTINUE
+      RETURN
+C
+C Test integral 3
+C
+  300 TESTF = 1.0
+      DO 350 I = 1, DIMEN
+        X = 2 * QUASI(I) - 1
+        GOTO (310, 320, 330, 340) MOD(I, 4)
+  310   TESTF = TESTF * X
+        GOTO 350
+  320   TESTF = TESTF * (2*X*X - 1)
+        GOTO 350
+  330   TESTF = TESTF * (4*X*X - 3) * X
+        GOTO 350
+  340   X = X * X
+        TESTF = TESTF * (8*X*X - 8*X + 1)
+  350 CONTINUE
+      RETURN
+C
+ 1300 EXACTF = 0.0
+      RETURN
+C
+C Test integral 4
+C
+  400        TESTF = 0
+             X = 1
+             DO 410   I = 1, DIMEN
+                  X = - X * QUASI(I)
+                  TESTF = TESTF + X
+  410        CONTINUE
+             RETURN
+C
+C
+ 1400 X = 1.0 / (2 ** (DIMEN ))
+      IF (MOD(DIMEN, 2) .EQ. 0) THEN
+        EXACTF = (X - 1) / 3
+      ELSE
+        EXACTF = (X + 1) / 3
+      ENDIF
+      RETURN
+C
+      END

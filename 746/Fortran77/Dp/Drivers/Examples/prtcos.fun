@@ -1,0 +1,16 @@
+C
+C     PROBLEM: PRODUCT OF COSINE
+C
+*     PARAMETER
+      N=100
+C
+*     SET OF INDICES
+      IND=1..N
+C
+*     VARIABLE
+      X(I),I IN IND
+C
+*     FUNCTION F
+      F=PROD(COS(X(I)),I IN IND)
+C
+*     END

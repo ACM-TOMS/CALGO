@@ -1,0 +1,304 @@
+In this section we present an inventory management example to illustrate the
+process of modeling and solving an MDP with the \codeln{jMDP} module of
+jMarkov. We also show how a user can implement an MDP model using \jMDP and
+then, due to jMarkov's flexibility, call this implementation from a different
+software program and use a different tool to solve it.
+
+\subsubsection{An inventory management model}
+\label{sec:mdp_example}
+Consider the following problem. A car dealership sells only one type of car and uses a
+weekly (periodic) inventory review system. Each car is bought at a cost $c$ and
+sold at a price $p$. The dealership must pay a fee $K$ per truck for carrying
+the cars from the distributor to its location, and each truck can carry at most
+$L$ cars. The dealership has a maximum capacity of $M$ cars, and orders arrive
+instantly. If a customer places an order and there are no cars available, the
+sale is lost. We assume a fixed inventory holding cost of $h$ per car and week.
+The demands for cars each week, $D_n$, are independent, identically distributed
+Poisson random variables with a mean of $\lambda$ cars per week. The objective
+is to find an optimal ordering policy that maximizes weekly profits.
+
+The problem is an infinite-horizon, discrete-time stochastic decision-making
+problem, and the objective is to minimize the long run average cost. The time
+periods are weeks because the inventory review occurs weekly. We model it as
+DTMDP with events, as this description is more natural than without events
+(\codeln{jMDP} supports both options). In the following we describe the
+step-by-step mathematical modeling process and the implementation in
+\codeln{jMDP}.
+
+
+\emph{Define the states.} Let  $X_n$ be the level of physical inventory at the
+end of week $n$. The state space is $\mathcal{S}=\{0,1,...,M\}$. In the code
+below we declare the class \codeln{InvLevel}, which represents the state. It
+extends \codeln{PropertiesState} which is used to represent states as arrays of
+integers (in this case the array has only one entry).  In line 2 we provide a
+constructor for the class. In the interest of space, we will only include key
+portions of the code. Ellipses (...) indicate that further code is used; in
+this case for example, the class includes methods such as \codeln{getLevel} to
+return the inventory level.
+
+
+\begin{lstlisting}
+public class InvLevel extends PropertiesState {
+	public InvLevel(int k) {super(new int[] {k});}
+(...) }
+ \end{lstlisting}
+		
+
+\emph{Define the potential actions.}
+Let $a_n$ represent the size of the order placed at the start of week $n$. 
+In the code below we create the class \codeln{Order}, which represents the
+actions and extends \codeln{Action}. We define the field \codeln{size} in line
+2 to represent the amount ordered, and in line 3 we provide an appropriate
+constructor.
+
+
+\begin{lstlisting}
+public class Order extends Action {
+	private int size;
+	Order(int k) {size = k;}
+(...) }						
+\end{lstlisting}
+				
+\emph{Define the events.} 
+Here the events are the random demands $e_n$ that occur each week. Notice
+that events occur after action $a_n$ is taken. 	The event definition below
+includes two variables. An integer \codeln{d}, represents the size of the
+demand. And a boolean variable \codeln{greaterThan}, which takes the value
+``true'' if the demand \codeln{d} is greater than or equal to the total
+inventory $X_{n-1}+a_n$ at the beginning of the period, and ``false''
+otherwise.  
+Here we extend the class \codeln{PropertiesEvent}, which represents events as arrays of integers.  In lines 3-5 we provide an appropriate
+constructor. 
+	
+\begin{lstlisting}
+public class DemandEvent extends PropertiesEvent {				
+	private boolean greaterThan;				
+	public DemandEvent(int d, boolean greater) {
+		super(new int[] { d });
+		greaterThan = greater;}				
+(...)}							
+\end{lstlisting}
+
+\emph{Define the MDP.} 
+This is a DTMDP, therefore we extend the class \codeln{DTMDPev}. When extending
+this class, we use the corresponding classes that represent the states, actions
+and events. In our example, \codeln{InvLevel}, \codeln{Order} and
+\codeln{DemandEvent} represent the states, actions, and events, respectively.
+In the following code \codeln{CarDealerProblem} is the class representing the
+problem, and it includes fields, not shown for brevity, for each problem
+parameter, namely \codeln{maxInventory}, \codeln{truckSize}, \codeln{fixedCost}, \codeln{lambda}, \codeln{price},
+\codeln{cost}, \codeln{holdCost}, and \codeln{truckCost}.
+
+
+\begin{lstlisting}
+public class CarDealerProblem extends DTMDPEv<InvLevel, Order, DemandEvent> {(...)}
+\end{lstlisting}
+
+\emph{Define the feasible actions.} 
+For each state $i$ the feasible actions are those that do not exceed the
+dealership's capacity. The maximum feasible order in state $i$ is thus $M-i$,
+an amount that we calculate in line 2 in the code below, and the feasible set
+of actions is $\mA(i) =\{0,\ldots,M-i\}$. The method \codeln{feasibleActions}
+receives the state $i$ as a parameter. In line 3 we create an empty set of
+actions. In the loop in lines 4-6 we add each of these actions to the set.
+
+\begin{lstlisting}
+public Actions<Order> feasibleActions(InvLevel i){
+	int max = maxInventory - i.getLevel();
+	ActionsSet<Order> actionSet = new ActionsSet<Order>();
+	for (int n = 0; n <= max; n++){
+		actionSet.add(new Order(n));
+	}
+	return actionSet;}
+\end{lstlisting}
+
+\emph{Define the active events.} For each state $i$, and given that action $a$
+is taken, we have to define the events that can occur. For example, the
+zero-demand event is active in every state, while a demand equal to $i+a$ is
+indistinguishable from larger demands as it empties the available inventory.
+We define the method \codeln{activeEvents}, which starts by creating an empty
+set of events \codeln{eventSet} in line 2, to which we add the active events.
+Since each event is defined by both the amount demanded and the boolean
+\codeln{greaterThan} indicating whether the demand empties the inventory or
+not, we specify each event with these two parameters. In line 3 we add the
+event where the demand is at least equal to $i+a$ and \codeln{greaterThan} is
+true. The loop in lines 4-6 adds events where the demands is less than $i+a$,
+and set \codeln{greaterThan} to false as the inventory remains positive after
+the demand event.
+\begin{lstlisting}
+public Events<DemandEvent> activeEvents(InvLevel i, Order a) {
+	EventsSet<DemandEvent> eventSet = new EventsSet<DemandEvent>();
+	eventSet.add(new DemandEvent(i.getLevel() + a.getSize(), true));
+	for (int n = 0; n < i.getLevel() + a.getSize(); n++) {
+		eventSet.add(new DemandEvent(n, false));
+	}
+  return eventSet;}
+\end{lstlisting}
+
+
+\emph{Define the set of reachable states} Here we define the states that the
+MDP can transition to from state $i$, given that action $a$ is taken and event
+$e$ occurs. In the method \codeln{reachable}, displayed below, we create a new
+set of states in line 2. If the demand event is greater than $(i+a)$ the new
+state is $0$, as depicted in line 4. Otherwise, if the demand is $d$, the only
+reachable state is ($i+a-d$), as set in line 6.
+
+\begin{lstlisting}
+public States<InvLevel> reachable(InvLevel i, Order a, DemandEvent e) {
+	StatesSet<InvLevel> stSet = new StatesSet<InvLevel>();
+	if (e.getGreaterThan())
+		stSet.add(new InvLevel(0));
+	else
+		stSet.add(new InvLevel(i.getLevel() + a.getSize() - e.getDemand()));
+	return stSet;}
+\end{lstlisting}
+
+\emph{Define the event probabilities.} We condition on the event $d<i+a$. The
+probability of going from state $i$ to a reachable state $j$ when action $a$ is
+taken is given by
+\begin{equation}
+\label{eq:p}p_{ij}(a)=\left\{
+    \begin{array}{ll}
+      P\{D_n = d\} 			& \textrm{if $j= i+a-d$, $d<i+a$},\\
+      P\{D_n \geq i+a\} & \textrm{if $j=0$, $d\geq i+a$},\\
+      0 & \textrm{otherwise}.
+    \end{array} \right.
+\end{equation}
+In the code below, \codeln{demCCDF} denotes the cumulative distribution
+function of the demand, and \codeln{demPMF} its probability mass function.
+These values have been previously generated and correspond to a Poisson
+distribution. The condition in line 2 is equivalent to the second case
+in~\eqref{eq:p}, while the complementary case in line 4 is equivalent to the
+first case in~\eqref{eq:p}.
+\begin{lstlisting}
+public double prob(InvLevel i, DemandEvent e) {
+	if (e.getGreaterThan())
+		return demCCDF[e.getDemand()];
+	return demPMF[e.getDemand()];}
+\end{lstlisting}
+
+\emph{Define the immediate cost}
+As \jMDP assumes a minimization objective function, we minimize the negative of
+the net profit, defined in the method \codeln{immediateCost} in the code below.
+The profit has three major components. First, the revenues, which are
+calculated as the selling price times the expected sales $p \times
+(\E[D_n]-L_{D_n}[i+a])$, where $L_{D_n}$ is the first-order loss function of
+the demand distribution~\cite{zipk00}. The expected sales are calculated in
+lines 2 and 3 of the code below. Second, the ordering cost includes a charge
+per truck and a charge per car, and when the truck is only partially occupied
+the whole truck is charged, thus it is given by $K\left\lceil
+\frac{a}{L}\right\rceil+ca$. This cost is computed in lines 7 and 8 below.
+Third, the holding cost, which depends only on the state and is charged only
+when the stock is positive. Hence, it can be calculated as $h \times i$. The
+immediate cost is therefore given by:
+  \[c(i,a)= -\left(p \times (\E[D_n]-L_{D_n}[i+a])-K\left\lceil \frac{a}{L}\right\rceil-c\times a -h\times i \right)\]
+  as calculated in lines 4 and 5 below.
+\begin{lstlisting}
+public double immediateCost(InvLevel i, Order a) {
+	int maxSale = i.getLevel() + a.getSize();
+	double expectedSales = expDemand - demandLoss1[maxSale];
+	double netProfit = price * expectedSales - orderCost(a.getSize())- holdCost*i.getLevel();
+	return -netProfit;
+}
+double orderCost(int x) {
+	return truckCost * Math.ceil((double) x / truckSize) + x * cost;}
+\end{lstlisting}
+
+\emph{Generate and solve the model}. In this method we set the values of the
+parameters to define a specific instance of the problem. As an example, the
+values of the parameters for this instance are $M=10$, $L=4$, $\lambda = 9$,
+$p=1100$, $c=500$, $h=50$, $K=1000$, which are set in lines 2 and 3 below. In
+the next lines we generate an instance of the problem with the given parameters
+and solve it. This is where the state-space search algorithm is executed to
+build the whole state space $\mS$.  
+Finally, we call the solver, and print the solution. We use the default
+Relative Value Iteration Algorithm, the solver takes the model object as input.
+
+\begin{lstlisting}
+public static void main(String a[]) throws SolverException {
+	int maxInventory = 10; int truckSize = 4; double lambda = 9; double price = 1100; 
+	double cost = 500; double holdCost = 50; int truckCost = 1000;
+	CarDealerProblem prob = new CarDealerProblem(maxInventory, truckSize, fixedCost, 
+		lambda, price, cost, holdCost, truckCost);
+	prob.solve();
+	prob.printSolution();
+}
+\end{lstlisting}
+
+The results for this problem are stored as a \codeln{Solution} object, and the
+last line above prints the following optimal policy.
+
+
+\begin{lstlisting} [basicstyle=\scriptsize\ttfamily]
+STATE      ------> ACTION
+LEVEL 0    ------> ORDER 8 UNITS
+LEVEL 1    ------> ORDER 8 UNITS
+LEVEL 2    ------> ORDER 8 UNITS
+LEVEL 3    ------> ORDER 7 UNITS
+LEVEL 4    ------> ORDER 4 UNITS
+(...)
+\end{lstlisting}
+This policy contains the optimal action to be taken in each possible state. 
+For instance, if the current inventory level is 4 then it is optimal to order 4
+cars. This example can be found  in \cite{jMarkovWeb}. In fact, a finite
+horizon variation of this example is included as a one of the 
+\codeln{jUnit} tests used to test the framework for correctness. 
+
+
+%====================================================================
+\subsubsection{Modeling with jMarkov and solving with another tool}
+The flexibility of jMarkov, coupled with the fact that it is implemented in
+Java, provides the user with multiple alternatives for solving larger problems.
+The user can choose to model and solve the problem using only \jMDP as in the
+previous section.  Alternatively, the user can build the model with \jMDP, 
+exploiting the modeling capabilities of the module, 
+and then use a different tool for the solution step. 
+This option can be carried out in three ways: 
+(i) by generating the
+model in \jMDP, exporting the parameters and then importing them to another tool; 
+or, 
+(ii) by writing a solver class in Java using the jMarkov
+framework, which invokes the desired solver tool (this is the way LP solvers
+work in \jMDP); 
+or, 
+(iii) by importing a model constructed with \jMDP into
+another tool in order to solve it. In Section~\ref{sc:numerics} we followed
+the third option to use SMCSolver in MATLAB to solve a QBD model built with jMarkov. 
+Here we follow a similar procedure to import the \jMDP model developed in the previous section into MATLAB and use
+MDPtoolbox~\cite{chad.chap.ea2014} to solve it. 
+
+The code below shows how to import a \jMDP model into MATLAB and use the
+functions provided by MDPtoolbox to find a solution. Line 1 imports the model
+class \codeln{CarDealerProblem}, which we described in detail in Section~\ref{sec:mdp_example}. 
+Lines 3 and 4 define the model parameters, and Line 6 creates the model object.
+Lines 7 and 8 generate the model parameters that the MDPtoolbox solver uses as
+input. Specifically, the method \codeln{getTheP} generates a 3-dimensional
+array of transition probabilities $p_{ij}(a)$, whereas the method \codeln{getTheR}
+generates a matrix of immediate costs $c(i,a)$. 
+Notice that the cost matrix is multiplied by $-1$ because the default setting of MDPtoolbox is maximization, while the costs
+are calculated for a minimization problem. Finally, line 10 calls one of the
+MDPtoolbox solver functions to solve the problem and return the optimal policy,
+long-run average cost and solution time. 
+
+\begin{lstlisting}
+import examples.jmdp.CarDealerProblem;
+
+maxInventory = 10; truckSize = 4; lambda = 7.0; truckCost = 800.0;
+price = 1100.0; cost = 500.0; holdCost = 50.0;
+
+model=CarDealerProblem(maxInventory, truckSize, truckCost, price, cost, holdCost, lambda);
+P=model.getTheP();
+R=-1*model.getTheR();
+
+[policy, cost, cpu_time] = mdp_relative_value_iteration (P, R);
+\end{lstlisting}
+This example illustrates how the modeling capabilities of jMarkov can be
+exploited to build a complex model using events and to solve it
+with a tool that does not support MDP models with events. 
+But, because \jMDP automatically converts the event-dependent model 
+into a DTMDP without events and automatically calculates the
+non-event-dependent version of the parameters, the process is completely
+seamless for the user. This could not have been achieved without jMarkov. 
+If the user only had MDPtoolbox available, she would have had to manually generate
+the parameters for the MDP with events and transform it into a DTMDP without
+events in order to solve it. 

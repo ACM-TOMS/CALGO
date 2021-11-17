@@ -1,0 +1,397 @@
+C ACM ALGORITHM 571
+C
+C STATISTICS FOR VON MISES' AND FISCHER'S DISTRIBUTIONS
+C
+C BY G.W. HILL
+C
+C ACM TRANSACTIONS ON MATHEMATICAL SOFTWARE, JUNE 1981
+C
+C THE NON-ANSI CDC PROGRAM CARD SHOULD BE REGARDED AS PART OF THE       MAN   10
+C JOB CONTROL LANGUAGE AND REPLACED FOR DIFFERENT PROCESSORS.           MAN   20
+C                                                                       MAN   30
+      CALL TABUL8                                                       MAN   40
+      CALL AIDRAM                                                       MAN   50
+      STOP                                                              MAN   60
+      END                                                               MAN   70
+      SUBROUTINE TABUL8                                                 TAB   10
+C   ********************************************************************
+C   THIS TEST CODE TABULATES VKAPPA(R) AND BESRAT(V) TO 8D.
+C   COMPARISON WITH TABLES B,C TO 5S IN BATSCHELET(1965), AMER. INST.
+C   BIOL. SCIENCES MONOGRAPH, OR WITH TABLES TO 5-6S IN APPENDICES 2.3,
+C   2.2 OF MARDIA (1972), STATISTICS OF DIRECTIONAL DATA, ACADEMIC
+C   PRESS, LONDON AND NEW YORK, OR, FOR R UP TO 0.87, IN TABLE 2 OF
+C   GUMBEL ET AL. (1953) J. A. S. A. 48, REVEALS INCORRECT TABLE
+C   VALUES FOR R = 0.94(0.01)0.99 IN BATSCHELET'S
+C   EXTENSION OF GUMBEL'S TABLE AND THENCE COPIED BY MARDIA (APP. 2.3).
+C   INCORRECT VALUES, R(12) = 0.95730, R(24) = 0.97937 AND R(40) =
+C   0.98739 OCCUR IN MARDIA'S (APPENDIX 2.2) EXTENSION OF BATSCHELET'S
+C   TABLE C.
+C   USING A VARIABLE PRECISION VERSION OF BESRAT THE ACTUAL NUMBER OF
+C   CORRECT DECIMAL DIGITS FOR VKAPPA(R) IS ALSO TABULATED TO SHOW
+C   ACHIEVMENT OF AT LEAST 8S PRECISION.
+C   THE ACTUAL PRECISION OF BESRAT VERSIONS FOR A RANGE OF TARGET
+C   PRECISIONS IS ALSO TABULATED TO DEMONSTRATE VALIDITY OF FORMULAE
+C   FOR FORMING DATA CONSTANTS C1 AND C2.
+C   ********************************************************************
+C
+      DIMENSION X(16)
+      DATA EPS /1.0E-6/
+      N = 14
+      K = N + 1
+      WRITE  (6,99999) (J,J=5,N)
+      DO 20 J=1,101
+        X(1) = FLOAT(J-1)*0.01
+        X(2) = VKAPPA(X(1))
+        T = BESRA2(X(2),16)
+        D = EPS + X(2)
+        U = BESRA2(D,16)
+C ****** LINEARLY INVERSE INTERPOLATE TO MORE PRECISE VKAPPA VALUE = E.
+        E = X(2) + (T-X(1))/(T-U)*EPS
+        X(3) = PRECIS(X(2),E)
+        IF (X(2).NE.-1.0) X(2) = E
+C ****** GENERATE ARGUMENTS IN X(4) TO MATCH TABLE ENTRIES.
+        X(4) = FLOAT(J-1)*0.1
+        IF (J.GT.80) X(4) = FLOAT(J-41)*0.2
+        IF (J.EQ.92) X(4) = 12.0
+        IF (J.EQ.93) X(4) = 15.0
+        IF (J.GT.93) X(4) = 120.0/(FLOAT(101-J)+EPS*EPS)
+        T = BESRA2(X(4),16)
+        X(5) = BESRAT(X(4))
+        DO 10 L=5,N
+          X(L+1) = PRECIS(BESRA2(X(4),L),T)
+   10   CONTINUE
+        WRITE  (6,99998) (X(L),L=1,K)
+   20 CONTINUE
+      WRITE  (6,99997)
+      RETURN
+99999 FORMAT (1H1, 20X, 32HTABLE OF VKAPPA(R) AND BESRAT(V)/8H0COMPARE,
+     * 4X, 8HTABLE B,, 4X, 16HBATSCHELET(1965), 4X, 8HTABLE C./
+     * 8X12HAPPENDIX2.3, 6X, 12HMARDIA(1972), 6X, 12HAPPENDIX 2.210X,
+     * 50HTABULATED PRECISION OF BESRAT SHOULD EXCEED       /8H0      R,
+     * 24H       VKAPPA(R)  PRECIS, 24H       V       BESRAT(V), 2X,
+     * 11(I5, 1HS))
+99998 FORMAT (F8.3, F16.8, 2F8.2, F16.8, 4X, 11F6.2)
+99997 FORMAT (14X, 10HERROR FLAG/24H   ACTUAL PRECISION .GE., 7H    8.1,
+     * 1H1, 30X, 51H5.07  6.08  7.08  8.07  9.10 10.12 11.17 12.20 13.4,
+     * 5H5   -/)
+      END
+      FUNCTION BESRAT(V)                                                BES   10
+C ----------------------------------------------------------------
+C RETURNS BESRAT = A(K) FOR K = ABS(V), WHERE A(K) IS THE EXPECTED
+C MODULUS OF THE MEAN VECTOR SUM OF UNIT VECTORS SAMPLED FROM THE
+C VON MISES DISTRIBUTION OF DIRECTIONS IN 2D WITH PARAMETER = K.
+C A(V) = THE RATIO OF MODIFIED BESSEL FUNCTIONS OF THE FIRST KIND
+C OF ORDERS 1 AND 0, I.E., A(V) = I1(V)/I0(V).
+C ----------------------------------------------------------------
+C
+C  ADJUST TO S DECIMAL DIGIT PRECISION BY SETTING DATA CONSTANTS -
+C     C1 = (S+9.0-8.0/S)*0.0351
+C     C2 = ((S-5.0)**3/180.0+S-5.0)/10.0
+C     CX = S*0.5 + 11.0
+C  FOR S IN RANGE (5,14).  THUS FOR S = 9.3 :
+      DATA C1 /0.613/, C2 /0.475/, CX /15.65/
+C
+      Y = 0.0
+      X = ABS(V)
+      IF (X.GT.CX) GO TO 20
+C
+C  FOR SMALL X, RATIO = X/(2+X*X/(4+X*X/(6+X*X/(8+ ... )))
+      N = INT((X+16.0-16.0/(X+C1+0.75))*C1)
+      X = X*0.5
+      XX = X*X
+      DO 10 J=1,N
+        Y = XX/(FLOAT(N-J+2)+Y)
+   10 CONTINUE
+      BESRAT = X/(1.0+Y)
+      RETURN
+C
+C  FOR LARGE X, RATIO = 1-2/(4X-1-1/(4X/3-2-1/(4X/5-2- ... )))
+   20 N = INT((68.0/X+1.0)*C2) + 1
+      X = X*4.0
+      XX = FLOAT(N*2+1)
+      DO 30 J=1,N
+        Y = XX/((-2.0-Y)*XX+X)
+        XX = XX - 2.0
+   30 CONTINUE
+      BESRAT = 1.0 - 2.0/(X-1.0-Y)
+      RETURN
+      END
+      FUNCTION VKAPPA(R)                                                VKA   10
+C ----------------------------------------------------------------
+C RETURNS VKAPPA = THE MAXIMUM LIKELIHOOD ESTIMATE OF 'KAPPA', THE
+C CONCENTRATION PARAMETER OF VON MISES' DISTRIBUTION OF DIRECTIONS
+C IN 2 DIMENSIONS, CORRESPONDING TO A SAMPLE MEAN VECTOR MODULUS R.
+C VKAPPA = K(A), THE INVERSE FUNCTION OF  A(K) = RATIO OF MODIFIED
+C BESSEL FUNCTIONS OF THE FIRST KIND, VIZ., A(K) = I1(K)/I0(K).
+C ----------------------------------------------------------------
+C
+C  FOR 8S (SIGNIFICANT DECIMAL DIGITS) PRECISION AUXILIARY ROUTINE
+C  FUNCTION BESRAT(V) MUST BE SET TO AT LEAST 9.3S
+      DATA V1 /0.642/, V2 /0.95/
+      A = R
+      S = -1.0
+C
+C   ERROR SIGNAL: VALUE -1.0 RETURNED IF ARGUMENT -VE OR 1.0 OR MORE.
+      IF (A.LT.0.0 .OR. A.GE.1.0) GO TO 30
+      Y = 2.0/(1.0-A)
+      IF (A.GT.0.85) GO TO 10
+C
+C   FOR R BELOW 0.85 USE ADJUSTED INVERSE TAYLOR SERIES.
+      X = A*A
+      S = (((A-5.6076)*A+5.0797)*A-4.6494)*Y*X - 1.0
+      S = ((((S*X+15.0)*X+60.0)*X/360.0+1.0)*X-2.0)*A/(X-1.0)
+      IF (V1-A) 20, 20, 30
+C
+C   FOR R ABOVE 0.85 USE CONTINUED FRACTION APPROXIMATION.
+   10 IF (A.GE.0.95) X = 32.0/(120.0*A-131.5+Y)
+      IF (A.LT.0.95) X = (-2326.0*A+4317.5526)*A - 2001.035224
+      S = (Y+1.0+3.0/(Y-5.0-12.0/(Y-10.0-X)))*0.25
+      IF (A.GE.V2) GO TO 30
+C
+C   FOR R IN (0.642,0.95) APPLY NEWTON-RAPHSON, TWICE IF R IN
+C   (0.75,0.875), FOR 8S PRECISION, USING APPROXIMATE DERIVATIVE -
+   20 Y = ((0.00048*Y-0.1589)*Y+0.744)*Y - 4.2932
+      IF (A.LE.0.875) S = (BESRAT(S)-A)*Y + S
+      IF (A.GE.0.75) S = (BESRAT(S)-A)*Y + S
+   30 VKAPPA = S
+      RETURN
+      END
+      FUNCTION BESRA2(V, K)                                             BES   10
+C   K DECIMAL DIGIT VERSION OF BESRAT - C1, C2 AS IN COMMENT CARDS OF BE
+      D = FLOAT(K)
+      C1 = (D+9.0-8.0/D)*0.0351
+      C2 = ((D-5.0)**3/180.0+D-5.0)/10.0
+      CX = D*0.5 + 11.0
+      Y = 0.0
+      X = V
+      IF (X.GT.CX) GO TO 20
+      N = INT((X+16.0-16.0/(X+C1+0.75))*C1)
+      X = X*0.5
+      S = X*X
+      DO 10 J=1,N
+        Y = S/(FLOAT(N-J+2)+Y)
+   10 CONTINUE
+      BESRA2 = X/(1.0+Y)
+      RETURN
+   20 N = INT((68.0/X+1.0)*C2) + 1
+      X = X*4.0
+      XX = FLOAT(N*2+1)
+      DO 30 J=1,N
+        Y = XX/((-2.0-Y)*XX+X)
+        XX = XX - 2.0
+   30 CONTINUE
+      BESRA2 = 1.0 - 2.0/(X-1.0-Y)
+      RETURN
+      END
+      FUNCTION PRECIS(A, B)                                             PRE   10
+C   RETURNS NUMBER OF DECIMAL DIGITS MATCHING BETWEEN A AND B.
+C   DEFAULT VALUE 20.0 IF PERFECT MATCH.
+      DATA C /-0.4342944819/
+      PRECIS = 20.0
+      IF (B.EQ.0.0) RETURN
+      X = ABS(1.0-A/B)
+      IF (X.NE.0.0) PRECIS = ALOG(X)*C
+      RETURN
+      END
+      SUBROUTINE AIDRAM                                                 AID   10
+C   ********************************************************************
+C   VALIDATION CODE FOR FUNCTIONS SPHERR(CAPPA) AND CAPPA3(R).
+C   FIRST DEMONSTRATE FOR PRECISIONS 5S - 20S THAT UPPER BOUND OF
+C   LEVEL OF RECURSION FOR CONTINUED FRACTION IN SPHERR ACHIEVES
+C   AT LEAST TARGET PRECISION FOR ARGUMENT UP TO 1.0 AND SPHERR
+C   PRECISION OVER 14 DECIMALS FOR 48B PRECISION CDC7600.
+C   SECONDLY, DEMONSTRATE 48B PRECISION PERFORMANCE OF CAPPA3 AND
+C   THE 8D, 16D, AND 25D VERSIONS; CHECKING ERROR CONDITIONS AND
+C   PRECISION FOR EXACT ARGUMENTS NEAR UNITY.
+C   ********************************************************************
+C
+      DOUBLE PRECISION AA, BB, CC, DD, DSPHER, DAPPA3
+      DIMENSION P(16)
+      WRITE  (6,99999) (K,K=5,20)
+99999 FORMAT(51H1TEST PRECISION OF CONTINUED FRACTION TO LEVEL L =
+     * 30H S/4(X+0.88)+2 FOR D =         /7X,16I7,9X6HSPHERR)
+      DO 20 J=1,100
+        X = FLOAT(J)*0.01
+        D = 0.0
+        BB = X
+        AA = DSPHER(BB,D)
+        DO 10 K=1,16
+          D = FLOAT(INT((X+0.88)*FLOAT(K+4)*0.25+2.0))
+          CC = DSPHER(BB,D)
+          P(K) = DRECIS(CC,AA)
+   10   CONTINUE
+        C = SPHERR(X)
+        CC = C
+        D = DRECIS(CC,AA)
+        WRITE  (6,99998) X, P, D
+   20 CONTINUE
+      WRITE  (6,99997) (J,J=1,4)
+      DO 50 J=1,105
+        X = FLOAT(J-1)*0.01
+        IF (J.EQ.102) X = 1023.0/1024.0
+        IF (J.EQ.103) X = 0.9999
+        IF (J.EQ.104) X = 0.0001
+        IF (J.EQ.105) X = -0.0001
+        C = CAPPA3(X)
+        IF (C.EQ.-1.0) GO TO 40
+        BB = X
+        AA = DAPPA3(BB,30.0)
+        DD = C
+        P(1) = DRECIS(AA,DD)
+        B = SPHERR(C)
+        CC = DSPHER(DD,0.0)
+        DD = B
+        E = DRECIS(DD,CC)
+        DO 30 K=1,4
+          D = FLOAT(K-1)*8.0
+          DD = DAPPA3(BB,D)
+          P(K+1) = DRECIS(AA,DD)
+   30   CONTINUE
+   40   WRITE  (6,99996) X, C, (P(K),K=1,5), B, E
+   50 CONTINUE
+      RETURN
+99998 FORMAT (F5.2, 5X, 16F7.2, F12.2)
+99997 FORMAT (48H1TEST PRECISION OF CAPPA3 AND SPHERR PROCEDURES
+     * /5H0   X, 16X, 18HCAPPA3  ITS PRECIS, 4X, 6HAPPROX, I2, 3I7,
+     * 20H   SPHERR(CAPPA3(X)), 12H  ITS PRECIS/)
+99996 FORMAT (F7.4, F20.10, 2F12.2, 3F7.2, F20.10, F12.2)
+      END
+      FUNCTION SPHERR(CAPPA)                                            SPH   10
+C ---------------------------------------------------------------
+C RETURNS SPHERR = B(K) FOR K = ABS(CAPPA).  B(K) IS THE EXPECTED
+C MODULUS OF THE MEAN VECTOR SUM OF UNIT VECTORS SAMPLED FROM THE
+C FISHER DISTRIBUTION OF DIRECTIONS IN 3D WITH PARAMETER = CAPPA.
+C B(K) = THE RATIO OF MODIFIED BESSEL FUNCTIONS OF THE FIRST KIND
+C OF ORDERS 3/2 AND 1/2, EQUIVALENT TO COTH(K) - 1/K.
+C ---------------------------------------------------------------
+C
+C FOR S DECIMAL DIGIT PRECISION AND TO AVOID EXPONENTIAL OVERFLOW
+C SET SON4 = S/4 AND BIGX = 1.1513*S+0.4, E.G., FOR 48B = 14.45S;
+      DATA SON4 /3.61/, BIGX /17.0/
+C
+      T = 0.0
+      X = ABS(CAPPA)
+      IF (X.GT.1.0) GO TO 20
+C
+C FOR SMALL X EVALUATE GAUSS CONTINUED FRACTION X/(3+X*X/(5+...))
+C UP FROM J-TH LEVEL, WHERE N=2*J+1 YIELDS S DECIMALS PRECISION.
+      N = INT((X+0.88)*SON4)*2 + 5
+      XX = X*X
+   10 T = XX/(FLOAT(N)+T)
+      N = N - 2
+      IF (N.GT.3) GO TO 10
+      SPHERR = X/(T+3.0)
+      RETURN
+C
+C FOR LARGE X USE EXPONENTIAL FORM OF COTH(X) - 1/X
+   20 IF (X.LT.BIGX) T = 2.0/(EXP(2.0*X)-1.0)
+      SPHERR = T + 1.0 - 1.0/X
+      RETURN
+      END
+      FUNCTION CAPPA3(R)                                                CAP   10
+C ----------------------------------------------------------------
+C RETURNS CAPPA3 = THE MAXIMUM LIKELIHOOD ESTIMATE OF 'KAPPA', THE
+C CONCENTRATION PARAMETER OF THE FISHER DISTRIBUTION OF DIRECTIONS
+C IN 3 DIMENSIONS, CORRESPONDING TO A SAMPLE MEAN VECTOR MODULUS R.
+C CAPPA3 = K(B), THE INVERSE FUNCTION OF  B(K) = RATIO OF MODIFIED
+C BESSEL FUNCTIONS OF THE FIRST KIND OF ORDERS 3/2 AND 1/2.
+C ----------------------------------------------------------------
+C
+C FOR PRECISION UP TO 8S (SIGNIFICANT DECIMAL DIGITS) OMIT THREE
+C LINES FOLLOWING STATEMENT LABELED 20. FOR GREATER PRECISION UP
+C TO 16S THE AUXILIARY SUBPROGRAM, FUNCTION SPHERR(X), IS NEEDED
+C WITH PRECISION ONE DECIMAL DIGIT GREATER THAN FOR CAPPA3(R).
+C TO AVOID EXPONENTIAL OVERFLOW SET BIGX = 1.1513*S + 0.4; FOR 48B
+      DATA BIGX /17.0/, W1 /10.0/, W2 /0.01/
+      Y = R
+      X = -1.0
+C
+C ERROR SIGNAL: VALUE -1.0 RETURNED IF ARGUMENT -VE OR 1.0 OR MORE
+      IF (Y.LT.0.0 .OR. Y.GE.1.0) GO TO 30
+      IF (Y.LT.0.5) GO TO 10
+C
+C FOR LARGE R APPROX. INVERSE OF R = COTH(K) - 1/K. (YIELDS 8.1S)
+      X = 1.0/(1.0-Y)
+      IF (X.GT.BIGX) GO TO 30
+      S = 2.0*X
+      T = EXP(S) - S*S - 1.0
+      IF (Y.LT.0.8) T = (((0.00254*S-0.071042)*S+0.6943388)*S-2.3816184)
+     * *S + 0.1508478 - 0.14789*Y + T
+      X = T*X/(T+S)
+      IF (X-W1) 20, 20, 30
+C
+C FOR SMALL R USE INVERSE GAUSS CONTINUED FRACTION. (YIELDS 8.4S)
+   10 X = 3.0*Y
+      S = X*X
+      T = 12.375
+      IF (X.GT.0.7) T = ((5.0*X-14.74)*X+16.5198)*X + 6.2762
+      X = X/(1.0-S/(15.0-4.0*S/(7.0-S/(5.0-S/T))))
+C
+C ONE STAGE NEWTON-RAPHSON INVERSION DOUBLES PRECISION.
+   20 IF (X.LT.W2) GO TO 30
+      S = EXP(X)
+      S = S*2.0/(S*S-1.0)
+      X = X + (Y-SPHERR(X))/(1.0/(X*X)-S*S)
+C
+   30 CAPPA3 = X
+      RETURN
+      END
+      DOUBLE PRECISION FUNCTION DSPHER(DCAPPA, D)                       DSP   10
+      DOUBLE PRECISION X, DCAPPA, S, XX, DEXP
+      X = DCAPPA
+      S = 0.0
+      XX = X*X
+      IF (D.LE.0.0) GO TO 30
+      N = INT(D)*2 + 1
+   10 IF (N.LE.3) GO TO 20
+      S = XX/(FLOAT(N)+S)
+      N = N - 2
+      GO TO 10
+   20 DSPHER = X/(S+3.0)
+      RETURN
+   30 N = 31
+      IF (X.LE.1.0) GO TO 10
+      IF (X.GT.34.0) GO TO 40
+      DSPHER = 2.0/(DEXP(2.0*X)-1.0) - 1.0/X + 1.0
+      RETURN
+   40 DSPHER = 1.0 - 1.0/X
+      RETURN
+      END
+      DOUBLE PRECISION FUNCTION DAPPA3(R, D)                            DAP   10
+      DOUBLE PRECISION R, T, S, X, Y, DEXP, DSPHER
+      Y = R
+      IF (Y.LT.0.5) GO TO 10
+      X = 1.0/(1.0-Y)
+      IF (X.GT.25.0) GO TO 40
+      S = 2.0*X
+      T = DEXP(S) - S*S - 1.0
+      IF (Y.LT.0.8) T = (((0.00254*S-0.071042)*S+0.6943388)*S-2.3816184)
+     * *S + 0.1508478 - 0.14789*Y + T
+      X = T*X/(T+S)
+      IF (X-100.0) 20, 20, 40
+   10 X = 3.0*Y
+      S = X*X
+      T = 12.375
+      IF (X.GT.0.7) T = ((5.0*X-14.74)*X+16.5198)*X + 6.2762
+      X = X/(1.0-S/(15.0-4.0*S/(7.0-S/(5.0-S/T))))
+   20 J = INT(D/8.0)
+      IF (J.EQ.0 .OR. X.LT.0.01) GO TO 40
+      S = DEXP(X)
+      S = S*2.0/(S*S-1.0)
+      DO 30 L=1,J
+        X = X + (Y-DSPHER(X,0.0))/(1.0/(X*X)-S*S)
+   30 CONTINUE
+   40 DAPPA3 = X
+      RETURN
+      END
+      FUNCTION DRECIS(A, B)                                             DRE   10
+C   RETURNS NUMBER OF DECIMAL DIGITS MATCHING BETWEEN A AND B.
+C   DEFAULT VALUE 30.0 IF PERFECT MATCH.
+      DOUBLE PRECISION A, B
+      DATA C /-0.4342944819/
+      DRECIS = 30.0
+      IF (B.EQ.0.0) RETURN
+      X = 1.0 - A/B
+      IF (X.NE.0.0) DRECIS = ALOG(ABS(X))*C
+      RETURN
+      END

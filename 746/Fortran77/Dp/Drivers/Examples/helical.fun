@@ -1,0 +1,22 @@
+C
+C    PROBLEM: HELICAL VALLEY IN X3 DIRECTION (TP247)
+C
+*     VARIABLE
+      X1,X2,X3
+C
+*     REAL CONSTANT
+      ZERO=0.0D0
+      PI=DASIN(1.0D0)*2.0D0
+C
+*     FUNCTION F      
+      IF (X1 .GT. ZERO) THEN
+      THETA=DATAN(X2/X1)/(2.0D0*PI)
+      ELSE IF (X1.LT.ZERO) THEN
+      THETA=DATAN(X2/X1)/(2.0D0*PI)+0.5D0
+      ENDIF
+      IF (X1 .NE. ZERO) THEN
+      F=1.0D2*((X3-1.0D1*THETA)**2+
+     1  (DSQRT(X1**2+X2**2)-1.0D0)**2)+X3**2
+      ENDIF
+C
+*     END

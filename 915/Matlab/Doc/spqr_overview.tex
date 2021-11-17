@@ -1,0 +1,331 @@
+\documentclass[12pt]{article}
+\usepackage{hyperref}
+
+\topmargin -0.5in
+\textheight 9.0in
+\oddsidemargin 0pt
+\evensidemargin 0pt
+\textwidth 6.5in
+
+%-------------------------------------------------------------------------------
+% get epsf.tex file, for encapsulated postscript files:
+\input epsf
+%-------------------------------------------------------------------------------
+% macro for Postscript figures the easy way
+% usage:  \postscript{file.ps}{scale}
+% where scale is 1.0 for 100%, 0.5 for 50% reduction, etc.
+%
+\newcommand{\postscript}[2]
+{\setlength{\epsfxsize}{#2\hsize}
+\centerline{\epsfbox{#1}}}
+%-------------------------------------------------------------------------------
+
+\title{Overview of SuiteSparseQR, a multifrontal multithreaded sparse
+QR factorization package}
+\author{Timothy A. Davis\thanks{
+Dept.~of Computer and Information Science and Engineering,
+Univ.~of Florida, Gainesville, FL, USA.
+email: davis@cise.ufl.edu, DrTimothyAldenDavis@gmail.com.
+http://www.cise.ufl.edu/$\sim$davis.
+Portions of this work were supported by the National
+Science Foundation, under grants 0203270, 0620286, and 0619080.}}
+
+\date{May 20, 2011}
+
+%-------------------------------------------------------------------------------
+\begin{document}
+%-------------------------------------------------------------------------------
+\maketitle
+
+%-------------------------------------------------------------------------------
+\section{The SuiteSparseQR subset}
+%-------------------------------------------------------------------------------
+
+The SuiteSparseQR meta-package is a subset of the SuiteSparse meta-package,
+and includes following packages:
+
+\begin{itemize}
+\item SPQR: SuiteSparseQR itself
+\item CHOLMOD: which SPQR relies on for its symbolic QR analysis
+\item AMD: approximate minimum degre ordering
+\item CAMD: constrained approximate minimum degre ordering, for use with METIS
+\item COLAMD: column approximate minimum degre ordering
+\item CAMD: constrained column approximate minimum degre ordering,
+    for use with METIS
+\item UFconfig: configuration parameters for all SuiteSparse packages
+\end{itemize}
+
+An overview of SuiteSparseQR (SPQR) is given below.
+Details of each package are described in full user manuals
+in the \verb'Doc' directories.  In particular, refer to
+\verb'SuiteSparseQR/SPQR/Doc' for more details on SuiteSparseQR.
+
+% This section highlights the use of SuiteSparseQR via its MATLAB and C/C++
+% interfaces.
+
+\newpage
+%-------------------------------------------------------------------------------
+\section{Using SuiteSparseQR in MATLAB}
+%-------------------------------------------------------------------------------
+
+The simplest way to use SuiteSparseQR is via MATLAB.  To compile for
+MATLAB, use these commands in the MATLAB Command Window:
+
+\begin{verbatim}
+    cd SuiteSparseQR/SPQR/MATLAB
+    spqr_install
+    spqr_demo
+\end{verbatim}
+
+MATLAB R2009a (and later versions) include SuiteSparseQR as the built-in sparse
+QR method.  The following features are new to the sparse \verb'qr' in R2009a:
+
+\begin{enumerate}
+
+    \item The prior MATLAB \verb'qr' does not exploit singletons.  It uses
+    COLMMD, which is slower than COLAMD and provides lower quality orderings.
+
+    \item For rank-deficient matrices, \verb'R=qr(A)' returns \verb'R' in a
+    ``squeezed'' form that can be difficult to use in subsequent MATLAB
+% --- R3 --- [
+    operations.  Let \verb'r' be the estimated rank.  SuiteSparseQR can also
+% --- R3 --- ]
+    return \verb'R' in upper trapezoidal form as \verb"[R11 R12 ; 0 0]" where
+% --- R3 --- [
+    \verb'R11' is \verb'r'-by-\verb'r' upper triangular, via
+% --- R3 --- ]
+    \verb'[Q,R,E]=qr(A)'.  Computing \verb'condest(R(1:r,1:r))' is simple with
+    the upper trapezoidal \verb'R'.
+
+    \item SuiteSparseQR fully supports sparse complex rectangular matrices; the
+    prior MATLAB \verb'qr' and \verb'x=A\b' do not.
+
+    \item SuiteSparseQR exploits parallelism.  The prior
+    MATLAB sparse \verb'qr' does not.
+
+\end{enumerate}
+
+MATLAB R2009a does not expose all of the new features of SuiteSparseQR.  These
+features are available only if SuiteSparseQR is installed by the end user:
+
+\begin{enumerate}
+
+    \item A more efficient representation of \verb'Q' as a MATLAB
+    \verb'struct', with a set of Householder vectors, \verb'Q.H', coefficients
+    \verb'Q.Tau', and a permutation \verb'Q.P'.  This takes much less space
+    than representing \verb'Q' as a sparse matrix.  It is often the case that
+    \verb'nnz(Q.H)' is less than \verb'nnz(R)'.
+
+    \item The MATLAB statement \verb'x=A\b' when \verb'A' is under-determined
+    computes a basic solution.  SuiteSparseQR can do this too, but it can also
+    compute a minimum 2-norm solution far more efficiently than MATLAB can.
+    With the MATLAB \verb'qr' this can only be done with \verb'Q' in its matrix
+    form, which is costly.
+
+    \item Default parameters can be modified, which can:
+
+    \begin{itemize}
+    
+        \item change the rank-detection tolerance $\tau$,
+
+        \item request the return of the complete QR, the ``economy QR,'' (where
+        \verb'R' has \verb'min(m,n)' rows and \verb'Q' has \verb'min(m,n)'
+        columns) or the ``rank-sized QR'' (where \verb'R' has \verb'r' rows and
+        \verb'Q' has \verb'r' columns, with \verb'r' being the estimated rank
+        of \verb'A').
+
+        \item change the default ordering (COLAMD, AMD, METIS, and
+        strategies where multiple orderings are tried and the one with
+        the least \verb"nnz(R)" is chosen),
+
+        \item and control the degree of parallelism exploited by TBB and the
+        BLAS.
+
+    \end{itemize}
+
+\end{enumerate}
+
+%-------------------------------------------------------------------------------
+\section{Using SuiteSparseQR in C and C++}
+%-------------------------------------------------------------------------------
+
+SuiteSparseQR relies on CHOLMOD for its basic sparse matrix data structure: a
+compressed sparse column format.  CHOLMOD provides interfaces to the AMD,
+COLAMD, and METIS ordering methods, supernodal symbolic Cholesky factorization
+(namely, \verb'symbfact' in MATLAB), functions for converting between different
+data structures, and for basic operations such as transpose, matrix multiply,
+reading a matrix from a file, writing a matrix to a file, and many other
+functions.
+
+For Linux/Unix/Mac users who want to use the C++ callable library:
+
+\begin{itemize}
+\item
+    To compile the C++ library and run a short demo, just type \verb'make' in
+        the Unix shell, in the top-level directory.
+
+\item
+    To compile the SuiteSparseQR C++ library, in the Unix shell, do:
+        \verb'cd SPQR/Lib ; make'
+
+\item
+    To compile and test an exhaustive test, edit the Tcov/Makefile to select
+    the LAPACK and BLAS libraries, and then do (in the Unix shell):
+        \verb'cd SPQR/Tcov ; make'
+
+\item
+    Compilation options in \verb'UFconfig/UFconfig.mk', \verb'SPQR/*/Makefile',
+    or \\ \verb'SPQR/MATLAB/spqr_make.m':
+
+    \begin{itemize}
+    \item
+        \verb'-DNPARTITION'  to compile without METIS (default is to use METIS)
+
+    \item
+        \verb'-DNEXPERT'
+            to compile without the min 2-norm solution option
+                        (default is to include the Expert routines)
+
+    \item
+        \verb'-DHAVE_TBB'
+            to compile with Intel's Threading Building Blocks
+                        (default is to not use Intel TBB)
+
+    \item
+        \verb'-DTIMING' 
+            to compile with timing and exact flop counts enabled
+                        (default is to not compile with timing and flop counts)
+    \end{itemize}
+\end{itemize}
+
+
+%-------------------------------------------------------------------------------
+% \subsubsection{C/C++ Example}
+%-------------------------------------------------------------------------------
+
+The C++ interface is written using templates for handling both real and complex
+matrices.  The simplest function computes the MATLAB equivalent of
+\verb'x=A\b':
+
+{\footnotesize
+\begin{verbatim}
+    #include "SuiteSparseQR.hpp"
+    X = SuiteSparseQR <double> (A, B, cc) ;
+\end{verbatim}
+}
+
+The C version of this function is almost identical:
+
+{\footnotesize
+\begin{verbatim}
+    #include "SuiteSparseQR_C.h"
+    X = SuiteSparseQR_C_backslash_default (A, B, cc) ;
+\end{verbatim}
+}
+
+Below is a simple C++ program that illustrates the use of SuiteSparseQR.  The
+program reads in a least-squares problem in Matrix Market format
+solves it, and prints the norm
+of the residual and the estimated rank of \verb'A'.
+
+{\footnotesize
+\begin{verbatim}
+#include "SuiteSparseQR.hpp"
+int main (int argc, char **argv)
+{
+    cholmod_common Common, *cc ;
+    cholmod_sparse *A ;
+    cholmod_dense *X, *B, *Residual ;
+    double rnorm, one [2] = {1,0}, minusone [2] = {-1,0} ;
+    int mtype ;
+    cc = &Common ;                                      // start CHOLMOD
+    cholmod_l_start (cc) ;
+    A = (cholmod_sparse *) cholmod_l_read_matrix (stdin, 1, &mtype, cc) ;
+    B = cholmod_l_ones (A->nrow, 1, A->xtype, cc) ;     // B = ones (size (A,1),1)
+    X = SuiteSparseQR <double> (A, B, cc) ;             // X = A\B
+
+    Residual = cholmod_l_copy_dense (B, cc) ;           // rnorm = norm (B-A*X)
+    cholmod_l_sdmult (A, 0, minusone, one, X, Residual, cc) ;
+    rnorm = cholmod_l_norm_dense (Residual, 2, cc) ;
+    printf ("2-norm of residual: %8.1e\n", rnorm) ;
+    printf ("rank %ld\n", cc->SPQR_istat [4]) ;
+
+    cholmod_l_free_dense (&Residual, cc) ;              // free everything and finish
+    cholmod_l_free_sparse (&A, cc) ;
+    cholmod_l_free_dense (&X, cc) ;
+    cholmod_l_free_dense (&B, cc) ;
+    cholmod_l_finish (cc) ;
+    return (0) ;
+}
+\end{verbatim}
+}
+
+%-------------------------------------------------------------------------------
+% \subsubsection{C++ Syntax}
+%-------------------------------------------------------------------------------
+
+All features available to the MATLAB user are also available to both the C and
+C++ interfaces using a syntax that is not much more complicated than the MATLAB
+syntax.  Additional features not available via the MATLAB interface include the
+ability to compute the symbolic and numeric factorizations separately.  The
+following is a list of user-callable C++ functions and what they can do:
+
+\begin{enumerate}
+
+    \item \verb'SuiteSparseQR': an overloaded function that provides functions
+    equivalent to \verb'qr' and \verb'x=A\b' in MATLAB.
+
+    \item \verb'SuiteSparseQR_factorize': performs both the symbolic and
+    numeric factorizations and returns a QR factorization object such that
+    \verb'A*P=Q*R'.
+% --- R3 --- [
+    % It always exploits singletons.
+% --- R3 --- ]
+
+    \item \verb'SuiteSparseQR_symbolic': performs the symbolic factorization
+    and returns a QR factorization object to be passed to
+    \verb'SuiteSparseQR_numeric'.  To permit the reuse of this object,
+    singletons are not exploited.
+
+    \item \verb'SuiteSparseQR_numeric': performs the numeric factorization on a
+    QR factorization object, either one constructed by
+    \verb'SuiteSparseQR_symbolic', or reusing one from a prior call to
+    \verb'SuiteSparseQR_numeric' for a matrix \verb'A' with the same pattern as
+    the first one, but with different numerical values.
+
+    \item \verb'SuiteSparseQR_solve': solves a linear system \verb"x=R\b",
+    \verb"x=P*R\b", \verb"x=R'\b", or \verb"x=R'\(P'*b)", using the object
+    returned by \verb'SuiteSparseQR_factorize' or \newline
+    \verb'SuiteSparseQR_numeric'.
+
+    \item \verb'SuiteSparseQR_qmult': computes \verb"Q*x", \verb"Q'*x",
+    \verb"x*Q", or \verb"x*Q'" using the Householder representation of
+    \verb'Q'.
+
+    \item \verb'SuiteSparseQR_min2norm': finds the minimum 2-norm solution to
+    an under\-determined linear system.
+
+    \item \verb'SuiteSparseQR_free': frees the QR factorization object.
+
+\end{enumerate}
+
+%-------------------------------------------------------------------------------
+\section{License}
+%-------------------------------------------------------------------------------
+
+SuiteSparseQR is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation; either version 2 of the License, or (at your option) any later
+version.
+
+SuiteSparseQR is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this Module; if not, write to the Free Software Foundation, Inc., 51 Franklin
+Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+A non-GPL license is also available.  Contact the author for details.
+
+\end{document}

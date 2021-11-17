@@ -1,0 +1,5 @@
+readprob
+minim
+writesol
+stop
+

@@ -1,0 +1,2728 @@
+C      ALGORITHM 753, COLLECTED ALGORITHMS FROM ACM.
+C      THIS WORK PUBLISHED IN TRANSACTIONS ON MATHEMATICAL SOFTWARE,
+C      VOL. 22, NO. 1, March, 1996, P.  24--29.
+C
+C This file contains 2 files separated by lines of the form
+C         C*** filename
+C
+C The filenames in this file are:
+C
+C tenpack.f            tentest.f                                
+C
+C*** tenpack.f
+**********************************************************************
+*
+* TENPACK  -- a package for manipulating tensor products of matrices
+*
+* Author: Paul Buis
+* Date: Spring, 1994
+* Location: Ball State University Computer Science Department
+*
+* Main Data Structure:
+*       A tensor product of matrices can be thought of abstactly as
+*       an array of matrices, each potentially of different sizes
+*       and formats.  For convienece we would like to be able to use
+*       a minimal number of subroutine parameters when passing tensor
+*       products, hence each tensor product will be represented by only
+*       two arrays TPA and ITP.  TPA holds a set of matrices stored in
+*       LAPACK or BLAS format. These LAPACK format matrices are packed
+*       together end to end.  ITP holds a descriptor for each matrix
+*       consisting of the matrice's size, type, lower bandwidth,
+*       upper bandwidth, and offset from the beginning of TPA.  ITP is a
+*       matrix with 8 rows, the first holding the sizes of the matrices 
+*       packed into TPA, the second holding the format codes, the third
+*       holding lower bandwidths, the fourth holding the upper
+*       bandwidths, and the fifth holding the offsets.
+*       The sixth row is used to store potentially useful offsets into
+*       an IPVT array used for pivoting in LAPACK.
+*
+*       For example:
+*       Suppose A1 is 3x3 with upper and lower bandwith 2, A2 is 4x4
+*       with lower bandwith 2 and upper bandwith 1, and A3 is 5x5 with
+*       lower bandwidth 2 and upper bandwith 3.  ITP is a 8 by 3 matrix,
+*       the first 4 rows of which are:
+*               3 4 5
+*               2 2 2
+*               2 2 2
+*               2 1 3
+*       Once this much of ITP is initialized a CALL TPDESC(ITP, 3) will
+*       initialize the elements of fourth and fifth row to their
+*       appropriate values.
+*                                                                         
+*       The user is expected to be sufficiently familiar with LAPACK to
+*       determine the correct size of TPA and IPVT.
+*
+*
+*       TENPACK contains three routines for user interface:
+*
+*       SUBROUTINE TPMULT(TPA, ITP, NMAT, X, WORK)
+*       multiplies a tensor product matrix and a vector
+*
+*       SUBROUTINE TPFACT(TPA, ITP, IPVT, NMAT, INFO)
+*       replaces components of TPA with their LU factorization
+*
+*       SUBROUTINE TPSOLV(TPA, ITP, IPVT, NMAT, X, WORK)
+*       solves linear equations when matrix of system is a tensor product
+*
+*       REAL TPA(*)        -- tensor product matrix, format above (input)
+*       INTEGER ITP(8,NMAT) -- descriptor for TPA (input)
+*       INTEGER IPVT(*)     -- pivot vectors in packed format
+*       INTEGER NMAT        -- number of matrices in TPA
+*       REAL X(*)           -- input and output vector
+*       REAL WORK(*)        -- scratch space, same size as X
+*       INTEGER INFO        -- error flag
+*
+*       TENPACK also contains the following routines for manipulation of
+*       matrices stored in tensor product format:
+*
+*       SUBROUTINE TPDESC (ITP, NMAT)
+*       given first 4 rows of matrix descriptor, computes the fifth and
+*       sixth 
+*
+*       SUBROUTINE TPTOLP (TPA, ITP, IMAT, ALP, LDLPA)
+*       copies the IMAT component of TPA into a LAPACK format matrix ALP
+*
+*       SUBROUTINE LPTOTP (ALP, LDALP, IMAT, TPA, ITP)
+*       copies the LAPACK format matrix ALP
+*       into the IMAT component of TPA
+*
+*       SUBROUTINE TPPUT (AVAL, TPA, ITP, IMAT, I, J)
+*       sets the (I,J)th element of the matrix
+*       of the IMAT component of TPA
+*
+*       REAL FUNCTION TPGET(TPA, ITP, IMAT, I, J)
+*       returns the (I,J)th element of the matrix
+*       of the IMAT component of TPA
+*
+*       Other routines are included, but are not intended for the user
+*       to access and all have a digit as the second character of their
+*       names to help avoid name clashes with user-written routines
+*
+*       LAPACK and BLAS routines must be linked to TENPACK after
+*       compilation
+*
+**********************************************************************
+ 
+
+
+
+      subroutine tpdesc (itp, nmat)
+**********************************************************************
+*
+* Computes indices into tensor product array so that tpa(itp(5,i)) is
+* start of storage for the ith component of the tensor product and
+* tpa(itp(6,i)) is the index for the pivot vector.
+*
+* INTEGER ITP(8,nmat) -- descriptor for a tensor product array such
+* that:
+*                 ITP(1,i) -- size of ith matrix
+*                 ITP(2,i) -- matrix type (see below)
+*                 ITP(3,i) -- ith lower bandwidth
+*                 ITP(4,i) -- ith upper bandwidth
+*                  if these are initialized then this routine computes
+*                 ITP(5,i) and ITP(6,i) as described above
+*
+* matrix types:
+*      0  -- identity matrix
+*      1  -- general full
+*      2  -- general banded
+*      3  -- (symmetric) positive definite
+*      4  -- positive definite packed
+*      5  -- positive definite band
+*      6  -- symmetric indefinite
+*      7  -- symmetric indefinite packed
+*      8  -- upper triangular
+*      9  -- lower triangular
+*      10 -- upper triangular band
+*      11 -- lower triangular band
+*      12 -- upper triangular packed
+*      13 -- lower triangular packed
+*
+**********************************************************************
+      integer nmat, itp(8,nmat)
+ 
+      integer i, n, mtype
+ 
+      itp(5,1) = 1
+      itp(6,1) = 1
+* this do loop is not parallelizable (even with if-then factored out)
+      do 10 i = 1, nmat-1
+         n = itp(1,i)
+         mtype = itp(2,i)
+         if (mtype.eq.0) then
+            itp(5,i+1) = itp(5,i)
+
+* general or positive definite or symmetric indefinte or triangular
+         else if ((mtype.eq.1).or.(mtype.eq.3).or.(mtype.eq.6)
+     *   .or.(mtype.eq.8).or.(mtype.eq.9)) then
+            itp(5,i+1) = itp(5,i) + n*n
+
+* general banded matrix
+         else if (mtype .eq. 2) then
+            itp(5,i+1) = itp(5,i) + n*(2*itp(3,i)+itp(4,i)+1)
+
+* positive definite packed or symmetric indefinite packed or
+* triangular packed
+         else if ((mtype .eq. 4) .or. (mtype .eq. 7) .or.
+     *           (mtype .eq. 12) .or. (mtype .eq. 13)) then
+            itp(5,i+1) = itp(5,i) + (n*(n+1))/2
+
+* positive definite band 
+         else if (mtype .eq. 5) then
+            itp(5,i+1) = itp(5,i) + n*(itp(3,i)+1)
+
+* triangular band
+         else if ((mtype .eq. 10).or.(mtype .eq. 11)) then
+            itp(5,i+1) = itp(5,i) + n * (itp(3,i)+1)
+
+         endif
+
+
+         if ((mtype .eq. 1) .or. (mtype .eq. 2) .or. (mtype .eq. 6)
+     *                      .or. (mtype .eq. 7)) then
+            itp(6,i+1) = itp(6,i) + n
+         else
+            itp(6,i+1) = itp(6,i)
+         endif
+ 10   continue
+ 
+      return
+      end
+
+
+
+
+      subroutine tpput (aval, tpa, itp, imat, i, j)
+**********************************************************************
+*
+* This routine places AVAL directly into the packed representation of
+* a tensor product matrix.
+*
+* REAL AVAL        -- value to be inserted into component IMAT
+*                     of the tensor product matrix.
+* REAL TPA(*)      -- the packed representation of the tensor
+*                     product matrix
+* INTEGER ITP(8,*) -- the descriptor of the tensor product matrix
+* INTEGER IMAT     -- the component into which we wish to insert
+* INTEGER I,J      -- the row and column, respectively, of the element
+*                     of the component into which AVAL will be placed
+*
+**********************************************************************
+      integer itp(8,*), imat, i, j
+      real aval, tpa(*)
+
+      integer d, n, mu,ml, mtype, ioff
+
+      n = itp(1, imat)
+      mtype = itp(2, imat)
+      d = i - j
+      ioff = itp(5, imat)
+
+      if ((i .ge. 1).and.(j .ge. 1).and.(i .le. n).and.(j .le. n)) then
+
+* general (full) matrix 
+      if (mtype .eq. 1) then
+         tpa(ioff + (j-1)*n + i-1) = aval
+
+* general banded matrix
+      else if (mtype .eq. 2) then
+         ml = itp(3, imat)
+         mu = itp(4, imat)
+         if ((d .le. ml) .and. (-d .le.mu)) then
+            tpa(ioff + d+ml+mu + (j-1)*(2*ml+mu+1)) = aval
+         endif
+
+* positive definite or symmetric indefinite matrix
+      else if ((mtype .eq. 3) .or. (mtype .eq. 6)) then
+         if (d .le. 0) then
+             tpa(ioff + (j-1)*n + i-1) = aval
+             tpa(ioff + (i-1)*n + j-1) = aval
+         else
+             tpa(ioff + (j-1)*n + i-1) = aval
+             tpa(ioff + (i-1)*n + j-1) = aval
+         endif
+
+* positive definite packed or symmetric indefinite packed matrix
+      else if ((mtype .eq. 4).or.(mtype.eq.7)) then
+         if (d .le. 0) then
+            tpa(ioff + j*(j+1)/2 + d-1 ) = aval
+         else
+            tpa(ioff + i*(i+1)/2 - d-1 ) = aval
+         endif
+
+* positive definite band matrix
+      else if (mtype .eq. 5) then
+         ml = itp(3, imat)
+         if ((d.le.0).and.(-d.le.ml))  then
+            tpa(ioff + (ml+1)*(j-1) + d+ml) = aval
+         else if ((d.gt.0).and.(d.le.ml)) then
+            tpa(ioff + (ml+1)*(i-1) + ml-d) = aval
+         endif
+
+* upper triagnular matrix
+      else if (mtype .eq. 8) then
+         if (d.le.0) then
+            tpa(ioff + (j-1)*n + i-1) = aval
+         endif
+
+* lower triagnular matrix
+      else if (mtype .eq. 9) then
+         if (d.ge.0) then
+            tpa(ioff + (j-1)*n + i-1) = aval
+         endif
+
+* upper triangular band matrix
+      else if (mtype .eq. 10) then
+         ml = itp(3, imat)
+         if ((d.le.0) .and. (-d.le.ml)) then
+            tpa(ioff + (ml+1)*(j-1) + d+ml ) = aval
+         endif
+
+* lower triangular band matrix
+      else if (mtype .eq. 11) then
+         ml = itp(3, imat)
+         if ((d .ge. 0) .and. (d .le. ml)) then
+            tpa(ioff + (ml+1)*(j-1) + d ) = aval
+         endif
+
+* upper triangular packed matrix
+      else if (mtype .eq. 12) then
+         if (d .le. 0) tpa(ioff + j*(j+1)/2 + d-1) = aval
+
+* lower triangular packed matrix
+      else if (mtype .eq. 13) then
+         if (d .ge. 0) tpa(ioff + (j-1)*n+i-1-(j*(j-1))/2) = aval
+
+      endif
+      endif
+
+      return
+      end
+
+
+
+
+      real function tpget (tpa, itp, imat, i, j)
+**********************************************************************
+*
+* This routine returns a value from the packed representation of a
+* tensor product matrix.
+*
+* REAL TPA(*)      -- the packed representation of the tensor product
+*                     matrix
+* INTEGER ITP(8,*) -- the descriptor of the tensor product matrix
+* INTEGER IMAT     -- the component from which we wish to obtain the
+*                     value
+* INTEGER I,J      -- the row and column, respectively, of the element
+*                     of the component from which we wish to obtain
+*                     the value
+*
+**********************************************************************
+      integer itp(8,*), imat, i, j
+      real tpa(*)
+
+      integer d, n, ml, mu, mtype, ioff
+
+      n = itp(1, imat)
+      mtype = itp(2, imat)
+      d = i - j
+      ioff = itp(5, imat)
+      tpget = 0.0
+
+      if ((i .ge. 1).and.(j .ge. 1).and.(i .le. n).and.(j .le. n)) then
+* identity matrix
+      if (mtype .eq. 0) then
+         if (i.eq.j) tpget = 1.0
+
+* general (full) matrix 
+      else if (mtype .eq. 1) then
+         tpget = tpa(ioff + (j-1)*n + i-1)
+
+* general banded matrix
+      else if (mtype .eq. 2) then
+         ml = itp(3, imat)
+         mu = itp(4, imat)
+         if (d.le.ml .and. -d.le.mu) then
+           tpget = tpa(ioff + d+ml+mu + (j-1)*(2*ml+mu+1))
+         endif
+
+* positive definite or symmetric indefinite matrix
+      else if ((mtype .eq. 3) .or. (mtype .eq. 6)) then
+         if (d .le. 0) then
+             tpget = tpa(ioff + (j-1)*n + i-1)
+         else
+             tpget = tpa(ioff + (i-1)*n + j-1)
+         endif
+
+* positive definite packed or symmetric indefinite packed matrix
+      else if ((mtype.eq.4).or.(mtype.eq.7)) then
+         if (d .le. 0) then
+            tpget = tpa(ioff + j*(j+1)/2 + d-1 )
+         else
+            tpget = tpa(ioff + i*(i+1)/2 - d-1 )
+         endif
+
+* positive definite band matrix
+      else if (mtype .eq. 5) then
+         ml = itp(3, imat)
+         if ((d.le.0).and.(-d.le.ml))  then
+            tpget = tpa(ioff + (ml+1)*(j-1) + d+ml)
+         else if ((d.gt.0).and.(d.le.ml)) then
+            tpget = tpa(ioff + (ml+1)*(i-1) + ml-d)
+         endif
+
+* upper triangular matrix
+      else if (mtype .eq. 8) then
+         if (d.le.0) then
+            tpget = tpa(ioff + (j-1)*n + i-1)
+         endif
+
+* lower triangular matrix
+      else if (mtype .eq. 9) then
+         if (d.ge.0) then
+            tpget = tpa(ioff + (j-1)*n + i-1)
+         endif
+
+* upper triangular band matrix
+      else if (mtype .eq. 10) then
+         ml = itp(3, imat)
+         if ((d.le.0) .and. (-d.le.ml)) then
+            tpget = tpa(ioff + (ml+1)*(j-1) + d+ml )
+         endif
+
+* lower triangular band matrix
+      else if (mtype .eq. 11) then
+         ml = itp(3, imat)
+         if ((d .ge. 0) .and. (d .le. ml)) then
+            tpget = tpa(ioff + (ml+1)*(j-1) + d )
+         endif
+
+* upper triangular packed matrix
+      else if (mtype .eq. 12) then
+         if (d .le. 0) tpget = tpa(ioff + j*(j+1)/2 + d-1)
+
+* lower triangular packed matrix
+      else if (mtype .eq. 13) then
+         if (d .ge. 0) tpget = tpa(ioff + (j-1)*n+i-1-(j*(j-1))/2)
+
+      endif
+      endif
+ 
+      return
+      end
+
+
+
+
+      subroutine lptotp (alp, ldalp, imat, tpa, itp)
+**********************************************************************
+*
+* This routine copies a component of the tensor product matrix into
+* a LAPACK banded format matrix.  The inverse of this is handled by
+* subroutine TPTOLP
+*
+* REAL ALP(LDALP,*) -- the LAPACK banded format matrix to be copied
+*                      into
+* INTEGER LDALP     -- the leading declared dimension of the LAPACK
+*                      matrix
+* INTEGER IMAT      -- the component to be copied
+* REAL TPA(*)       -- the packed representation of the tensor product
+*                      matrix
+* INTEGER ITP(8,*)  -- the descriptor for the tensor product matix
+*
+**********************************************************************
+      integer itp(8,*), imat, ldalp
+      real tpa(*), alp(*)
+ 
+      integer j, n, mtype, it, isize
+      external scopy
+      
+      n = itp(1, imat)
+      mtype = itp(2, imat)
+      it = itp(5, imat)
+
+* general (full) matrix
+      if (mtype .eq. 1) then
+         do 10 j=0, n-1
+            call scopy(n, alp(ldalp*j+1), 1, tpa(it+n*j), 1)
+ 10      continue
+
+* general banded matrix
+      else if (mtype .eq. 2) then
+         isize = 2*itp(3, imat)+itp(4, imat)+1
+         do 20 j=0, n-1
+            call scopy(isize, alp(ldalp*j+1), 1, tpa(it+isize*j), 1)
+ 20      continue
+            
+* positive definite or symmetric indefinite or upper triangular matrix
+      else if ((mtype.eq.3).or.(mtype.eq.6).or.(mtype.eq.8)) then
+         do 30 j=0, n-1
+            isize = n-(n-j)+1 
+            call scopy(isize, alp(ldalp*j+1), 1, tpa(it+n*j), 1)
+ 30      continue
+
+* positive definite packed or symmetric indefinite packed or
+* triangular packed
+      else if ((mtype.eq.4).or.(mtype.eq.7).or.(mtype.eq.12)
+     *                     .or.(mtype.eq.13)) then
+         isize = (n*(n+1))/2
+         call scopy(isize, alp, 1, tpa(it), 1)
+
+* positive definite banded matrix
+      else if (mtype .eq. 5) then
+         isize = itp(3, imat)+1
+         do 50 j=0, n-1
+            call scopy(isize, alp(ldalp*j+1), 1, tpa(it+isize*j), 1)
+ 50      continue
+            
+
+* lower triangular matrix
+      else if (mtype .eq. 9) then
+         do 90 j=0, n-1
+            isize = n-j 
+            call scopy(isize, alp(ldalp*j+j+1), 1, tpa(it+(n+1)*j), 1)
+ 90      continue
+
+* upper/lower triangular banded matrix
+      else if ((mtype .eq. 10).or.(mtype .eq. 11)) then
+         do 100 j=0, n-1
+            isize = itp(3, imat)+1
+            call scopy(isize, alp(ldalp*j+1), 1, tpa(it+isize*j), 1)
+ 100     continue
+
+      endif
+
+      return
+      end
+
+
+
+
+      subroutine tptolp (tpa, itp, imat, alp, ldalp)
+**********************************************************************
+*
+* This routine copies a component of the tensor product matrix into
+* a LAPACK banded format matrix.  The inverse of this is handled by
+* subroutine LPTOTP
+*
+* REAL TPA(*)       -- the packed representation of the tensor product
+*                      matrix
+* INTEGER ITP(8,*)  -- the descriptor for the tensor product matrix
+* INTEGER IMAT      -- the component to be copied
+* REAL ALP(LDALP,*) -- the LAPACK banded format matrix to be copied into
+* INTEGER LDALP     -- the leading declared dimension of the LAPACK
+*                      matrix (if applicable)
+*
+**********************************************************************
+      integer itp(8,*), imat, ldalp
+      real tpa(*), alp(*)
+ 
+      integer j, n, mtype, it, isize
+      external scopy
+      
+      n = itp(1, imat)
+      mtype = itp(2, imat)
+      it = itp(5, imat)
+
+* general (full) matrix
+      if (mtype .eq. 1) then
+         do 10 j=0, n-1
+            call scopy(n, tpa(it+n*j), 1, alp(ldalp*j+1), 1)
+ 10      continue
+
+* general banded matrix
+      else if (mtype .eq. 2) then
+         isize = 2*itp(3, imat)+itp(4, imat)+1
+         do 20 j=0, n-1
+            call scopy(isize,tpa(it+isize*j),1,alp(ldalp*j+1),1)
+ 20      continue
+            
+* positive definite or symmetric indefinite or upper triangular matrix
+      else if ((mtype.eq.3).or.(mtype.eq.6).or.(mtype.eq.8)) then
+         do 30 j=0, n-1
+            isize = n-(n-j)+1 
+            call scopy(isize, tpa(it+n*j), 1, alp(ldalp*j+1), 1)
+ 30      continue
+
+* positive definite packed or symmetric indefinite packed or
+* triangular packed
+      else if ((mtype.eq.4).or.(mtype.eq.7).or.(mtype.eq.12)
+     *                     .or.(mtype.eq.13)) then
+         isize = (n*(n+1))/2
+         call scopy(isize, tpa(it), 1, alp, 1)
+
+* positive definite banded matrix
+      else if (mtype .eq. 5) then
+         isize = itp(3, imat)+1
+         do 50 j=0, n-1
+            call scopy(isize, tpa(it+isize*j), 1, alp(ldalp*j+1), 1)
+ 50      continue
+            
+
+* lower triangular matrix
+      else if (mtype .eq. 9) then
+         do 90 j=0, n-1
+            isize = n-j 
+            call scopy(isize, tpa(it+(n+1)*j), 1, alp(ldalp*j+j+1), 1)
+ 90      continue
+
+* upper/lower triangular banded matrix
+      else if ((mtype .eq. 10).or.(mtype .eq. 11)) then
+         do 100 j=0, n-1
+            isize = itp(3, imat)+1
+            call scopy(isize, tpa(it+isize*j), 1, alp(ldalp*j+1), 1)
+ 100     continue
+
+      endif
+
+      return
+      end
+
+
+
+
+      subroutine tpmult (tpa, itp, nmat, x, work)
+**********************************************************************
+*
+* This routine carries out the matrix-vector product when the matrix
+* is a tensor product.
+*
+* REAL TPA(*) -- packed representation of the tensor product matrix
+* INTEGER ITP(8,*) -- descriptor of tensor product matrix
+* INTEGER NMAT     -- number of matrix in the tensor product
+* REAL X(*)        -- input/output vector
+* REAL WORK(*)     -- scratch vector, same size as i/o vector
+*
+* Local Variables:
+* INTEGER I     -- current matrix number
+* INTEGER N     -- number of rows in current right matrix
+* INTEGER M     -- number of columnts in current right matrix
+* INTEGER NVECT -- total size of matrix on right of multiply (N*M)    
+* INTEGER IT    -- offset of current matrix in TPA
+* INTEGER MTYPE -- type of current matrix
+* INTEGER J     -- current column from X
+* LOGICAL LINX  -- true if data currently in x (if not,
+*                  then it's in work)
+**********************************************************************
+      real tpa(*), x(*), work(*)
+      integer itp(8,*), nmat
+
+      integer i, n, m, nvect, it, mtype
+      logical linx
+
+      external t1mult, t0pose, scopy
+
+      nvect = 1
+      do 10 i = 1, nmat
+         nvect = nvect*itp(1,i)
+ 10   continue
+      linx = .true.
+
+      do 20 i = nmat, 1, -1
+         n = itp(1,i)
+         m = nvect/n
+         mtype = itp(2,i)
+         it = itp(5,i)
+
+         if (linx) then
+            call t1mult(tpa(it), x, work, n, m, mtype
+     +                  , itp(3,i), itp(4,i))
+         else
+            call t1mult(tpa(it), work, x, n, m, mtype, 
+     +                  itp(3,i), itp(4,i))
+         endif
+         if ((mtype .gt. 0) .and. (mtype .lt. 8)) linx = .not. linx
+         if (linx) then
+            call t0pose(x, work, n, m)
+         else
+            call t0pose(work, x, n, m)
+         endif
+         linx = .not. linx
+ 20   continue
+
+      if (.not. linx) then
+         call scopy(nvect, work, 1, x, 1)
+      endif
+
+      return
+      end
+
+
+
+
+      subroutine tpfact(tpa, itp, ipvt, nmat, info)
+**********************************************************************
+*
+*  This routine replaces each component of the tensor product with
+*  its factorization.
+*  Typically, this routine is much less CPU intense than tpmult or
+*  tpsolv.
+*
+*  REAL TPA(*) -- packed representation of tensor product matrix
+*  INTEGER ITP(8,*) -- descriptor of tensor product matrix
+*  INTEGER IPVT(*)  -- packed representation of pivot vectors
+*  INTEGER NMAT     -- number of matrices in tensor product matrix
+*  INTEGER INFO     -- set to number of the first singular matrix,
+*                      0 if none
+*
+**********************************************************************
+      real tpa(*)
+      integer itp(8,*), ipvt(*), nmat, info
+
+      integer i, ierr, n, it, ip, mtype
+      external t1fact
+
+      info = 0
+      do 10 i = 1, nmat
+         n = itp(1, i)
+         mtype = itp(2, i)
+         if ((mtype.gt.0).and.(mtype.lt.8)) then
+            it = itp(5, i)
+            ip = itp(6, i)
+            call t1fact(tpa(it), n, mtype, itp(3, i), itp(4, i)
+     +                  , ipvt(ip), ierr)
+            if (ierr .ne. 0) then
+               print*, 't1fact returns ierr=', ierr
+               info = i
+               return
+            endif
+         endif
+ 10   continue
+ 
+      return
+      end
+
+
+
+
+      subroutine tpsolv(tpa, itp, ipvt, nmat, x, work)
+**********************************************************************
+*
+* This routine computes the solution of a linear system where the
+* matrix is a tensor product.
+*
+* REAL TPA(*) -- packed representation of tensor product matrix
+* INTEGER ITP(8,*) -- descriptor of tensor product matrix
+* INTEGER IPVT(*)  -- packed pivot vector
+* INTEGER NMAT     -- number of matrices in tensor product
+* REAL X(*)        -- input/output vector
+* REAL WORK(*)     -- scratch vector
+*
+**********************************************************************
+      real tpa(*), x(*), work(*)
+      integer itp(8,*), ipvt(*), nmat
+
+      integer i, n, it, ip
+      integer nvect, mtype, m
+      external t1solv, t0pose, scopy
+
+      nvect = 1
+      do 10 i = 1, nmat
+         nvect = nvect*itp(1,i)
+ 10   continue
+      
+      do 20 i = nmat, 2, -2
+*
+* on odd numbered passes data moves from x to work
+*
+         n  = itp(1,i)
+         m  = nvect/n
+         mtype = itp(2,i)
+         it = itp(5,i)
+         ip = itp(6,i)
+         call t1solv(tpa(it), n, ipvt(ip), x, m, mtype, 
+     +               itp(3,i), itp(4,i))
+         call t0pose(x, work, n, m)
+
+*
+* on even numbered passes data moves from work to x
+*
+         n  = itp(1,i-1)
+         m  = nvect/n
+         mtype = itp(2,i-1)
+         it = itp(5,i-1)
+         ip = itp(6,i-1)
+         call t1solv(tpa(it), n, ipvt(ip), work, m, mtype,
+     +               itp(3,i-1), itp(4,i-1))
+         call t0pose(work, x, n, m)
+ 20   continue
+
+*
+* need to perform cleanup if there are an odd number of matrices
+*
+      if (mod(nmat,2) .ne. 0) then
+         n  = itp(1,1)
+         m  = nvect/n
+         mtype = itp(2,1)
+         it = itp(5,1)
+         ip = itp(6,1)
+         call t1solv(tpa(it), n, ipvt(ip), x, m, mtype,
+     +               itp(3,1), itp(4,1))
+         call t0pose(x, work, n, m)
+
+         call scopy(nvect, work, 1, x, 1)
+      endif
+      return
+      end
+
+
+
+      subroutine t1mult (alp, x, work, n, m, mtype, kl, ku)
+**********************************************************************
+*
+* This routine carries out the matrix-vector product when the matrix
+* is a tensor product.
+*
+* REAL X(*)        -- input/output vector
+* REAL WORK(*)     -- scratch vector, same size as i/o vector
+*
+* Local Variables:
+* INTEGER N     -- number of rows in right matrix
+* INTEGER M     -- number of columns in right matrix
+* INTEGER MTYPE -- type of current matrix
+* INTEGER J     -- current column from X
+*
+**********************************************************************
+      integer n, m, mtype, kl, ku
+      real alp(*), x(n,*), work(n,*)
+* Local variables:
+      integer j
+      real rone, zero
+      integer ixone, iwone, lda, ldx, ldw
+      character*1 lower, normal, upper, nonuni, left
+
+* Level 3 BLAS routines called:
+      external sgemm, ssymm
+* Level 2 BLAS routines called:
+      external sgbmv, sspmv, ssbmv, strmv, stbmv, stpmv
+
+      rone = 1.0
+      zero = 0.0
+      ixone = 1
+      iwone = 1
+      lower  = 'L'
+      normal = 'N'
+      nonuni = 'N'
+      upper  = 'U'
+      left   = 'L'
+      ldx = n
+      ldw = n
+
+*   general (full) matrix
+       if (mtype .eq. 1) then 
+          lda = n
+          call sgemm(normal, normal, n, m, n, rone, alp, lda, x, ldx,
+     *              zero, work, ldw)
+* Alternate code if Level 3 BLAS not available / not optimized
+*        do 10 j = 1, m
+*           call sgemv(normal, n, n, rone, alp, lda, x(1,j), ixone,
+*    *                zero, work(1,j), iwone)
+*10      continue
+
+*   general band matrix 
+      else if (mtype .eq. 2) then
+         lda = 2*kl+ku+1
+         do 20 j = 1, m
+            call sgbmv(normal, n, n, kl, ku, rone, alp(kl+1), lda, 
+     *                 x(1,j), ixone, zero, work(1,j), iwone)
+ 20      continue
+
+
+* positive definite or  symmetric indefinite matrix
+      else if ((mtype .eq. 3) .or. (mtype .eq. 6)) then
+         lda = n
+         call ssymm(left, upper, n, m, rone, alp, lda, x, ldx, zero,
+     *              work, ldw)
+* Alternate code if Level 3 BLAS not available / not optimized
+*       do 30 j = 1, m
+*          call ssymv(upper, n, rone, alp, lda, x(1,j), ixone, zero, 
+*    *                 work(1,j), iwone)
+*30      continue
+
+* positive definite packed or symmetric indefinite packed matrix
+      else if ((mtype .eq. 4) .or. (mtype .eq. 7)) then
+         do 40 j = 1, m
+            call sspmv(upper, n, rone, alp, x(1,j), ixone, zero,
+     *                 work(1,j), iwone)
+ 40      continue
+
+* positive definite band matrix
+      else if (mtype .eq. 5) then
+         lda = kl+1
+         do 50 j = 1, m
+            call ssbmv(upper, n, kl, rone, alp, lda, x(1,j), ixone,
+     *                 zero, work(1,j), iwone)
+ 50      continue
+
+* upper triangular matrix
+      else if (mtype .eq. 8) then
+         lda = n
+         do 80 j = 1, m
+            call strmv(upper, normal, nonuni, n, alp, lda,
+     *                 x(1,j), ixone) 
+ 80      continue
+
+* lower triangular matrix
+      else if (mtype .eq. 9) then
+         lda = n
+         do 90 j = 1, m
+            call strmv(lower, normal, nonuni, n, alp, lda,
+     *                 x(1,j), ixone) 
+ 90      continue
+
+* upper triangular band matrix
+      else if (mtype .eq. 10) then
+         lda = kl+1
+         do 100 j = 1, m
+            call stbmv(upper, normal, nonuni, n, kl, alp, lda,
+     *                 x(1,j), ixone) 
+100      continue
+
+* lower triangular band matrix
+      else if (mtype .eq. 11) then
+         lda = kl+1
+         do 110 j = 1, m
+            call stbmv(lower, normal, nonuni, n, kl, alp, lda,
+     *                 x(1,j), ixone) 
+110      continue
+
+* upper triangular packed  matrix
+      else if (mtype .eq. 12) then
+         do 120 j = 1, m
+            call stpmv(upper, normal, nonuni, n, alp, x(1,j), ixone) 
+120      continue
+
+* lower triangular packed  matrix
+      else if (mtype .eq. 13) then
+         do 130 j = 1, m
+            call stpmv(lower, normal, nonuni, n, alp, x(1,j), ixone) 
+130      continue
+
+      endif
+
+      return
+      end
+
+
+
+
+          subroutine t1fact (alp, n, mtype, ml, mu, ipvt, info)
+**********************************************************************
+*
+* MTYPE -- matrix type
+* ML,MU -- lower and upper bandwidths of ALP respectively
+*
+**********************************************************************
+* Parameters:
+          integer n, mtype, ml, mu, ipvt(*), info 
+          real alp(*)
+* Local Variables:
+          integer ione, m, lda
+          real work(1)
+          character*1 upper
+* LAPACK routines called:
+          external sgetrf, sgbtrf, spotrf, spptrf
+          external spbtrf, ssytrf, ssptrf
+
+          ione = 1
+          m = n
+          upper  = 'U'
+
+* general (full) matrix
+          if (mtype .eq. 1) then 
+                lda = n
+                call sgetrf(m, n, alp, lda, ipvt, info)
+
+* general band matrix 
+      else if (mtype .eq. 2) then
+            lda = 2*ml+mu+1
+            call sgbtrf(m, n, ml, mu, alp, lda, ipvt, info)
+
+* positive definite matrix
+      else if (mtype .eq. 3) then
+            lda = n
+            call spotrf(upper, n, alp, lda, info)
+
+* positive definite packed matrix
+      else if (mtype .eq. 4) then
+            call spptrf(upper, n, alp,info)
+
+* positive definite band matrix
+      else if (mtype .eq. 5) then
+            lda = ml+1
+            call spbtrf(upper, n, ml, alp, lda, info)
+
+* symmetric indefinite matrix
+* Uses size 1 work area, which is sub-optimal, but factoring
+* is not dominant time consumer in this system
+      else if (mtype .eq. 6) then
+            lda = n
+            call ssytrf(upper, n, alp, lda, ipvt, work, ione, info)
+
+* symmetric indefinite packed matrix
+      else if (mtype .eq. 7) then
+            call ssptrf(upper, n, alp, ipvt, info)
+
+      endif
+
+      return
+      end
+
+
+
+
+      subroutine t1solv (alp, n, ipvt, b, nrhs, mtype, ml, mu)
+**********************************************************************
+* Utility called by TPSOLV to do actual work of forward and backward
+* solution of each of the right hand sides
+*
+* ALP   -- LAPACK format factorization of banded matrix
+* N     -- size of ALP (which is square)
+* B     -- input and output matrix
+* IPVT  -- pivots computed by TPFACT
+* NRHS  -- number of columns in B
+* MTYPE -- matrix type
+* ML,MU -- lower and upper bandwidths of ALP respectively
+*
+**********************************************************************
+* Parameters:
+      integer n, ml, mu, ipvt(n), nrhs, mtype
+      real alp(*), b(n,*) 
+* Local Variables:
+      integer info, lda, ldb
+      character*1 upper, lower, normal, nonuni
+* LAPACK routines called:
+      external sgetrs, sgbtrs, spotrs, spptrs, spbtrs, ssytrs
+      external ssptrs, strtrs, stbtrs, stptrs
+
+      ldb = n
+      upper  = 'U'
+      lower  = 'L'
+      normal = 'N'
+      nonuni = 'N'
+
+* general (full) matrix
+      if (mtype .eq. 1) then 
+         lda = n
+         call sgetrs(normal, n, nrhs, alp, lda, ipvt, b, ldb, info)
+
+* general band matrix 
+      else if (mtype .eq. 2) then
+         lda = 2*ml+mu+1
+         call sgbtrs(normal, n, ml, mu, nrhs, alp, lda, ipvt, b,
+     *               ldb, info)
+
+* positive definite matrix
+      else if (mtype .eq. 3) then
+         lda = n
+         call spotrs(upper, n, nrhs, alp, lda, b, ldb, info)
+
+* positive definite packed matrix
+      else if (mtype .eq. 4) then
+         call spptrs(upper, n, nrhs, alp, b, ldb, info)
+
+* positive definite band matrix
+      else if (mtype .eq. 5) then
+         lda = ml+1
+         call spbtrs(upper, n, ml, nrhs, alp, lda, b, ldb, info)
+
+* symmetric indefinite matrix
+      else if (mtype .eq. 6) then
+         lda = n
+         call ssytrs(upper, n, nrhs, alp, lda, ipvt, b, ldb, info)
+
+* symmetric indefinite packed matrix
+      else if (mtype .eq. 7) then
+         call ssptrs(upper, n, nrhs, alp, ipvt, b, ldb, info)
+
+* upper triangular matrix
+      else if (mtype .eq. 8) then
+         lda = n
+         call strtrs(upper, normal, nonuni, n, nrhs, alp, lda,
+     *               b, ldb, info)
+
+* lower triangular matrix
+      else if (mtype .eq. 9) then
+         lda = n
+         call strtrs(lower, normal, nonuni, n, nrhs, alp, lda,
+     *               b, ldb, info)
+
+* upper triangular band matrix
+      else if (mtype .eq. 10) then
+         lda = ml+1
+         call stbtrs(upper, normal, nonuni, n, ml, nrhs, alp, lda,
+     *               b, ldb, info)
+
+* lower triangular band matrix
+      else if (mtype .eq. 11) then
+         lda = ml+1
+         call stbtrs(lower, normal, nonuni, n, ml, nrhs, alp, lda,
+     *               b, ldb, info)
+
+* upper triangular packed  matrix
+      else if (mtype .eq. 12) then
+         call stptrs(upper, normal, nonuni, n, nrhs, alp, b, ldb, info)
+
+* lower triangular packed  matrix
+      else if (mtype .eq. 13) then
+         call stptrs(lower, normal, nonuni, n, nrhs, alp, b, ldb, info)
+
+      endif
+
+      return
+      end
+
+
+
+      subroutine t0pose (a, b, n, m)
+**********************************************************************
+*
+* Utility called by both TPMULT and TPSOLV to transpose a matrix
+*
+*  A  -- input matrix of size N x M
+*  B  -- output matrix of size M x N
+*  N,M -- sizes of matrices
+*
+**********************************************************************
+      integer n,m
+      real a(n,m), b(m,n)
+ 
+      integer i, j
+ 
+      do 10 i = 1, n
+         do 20 j = 1, m
+            b(j, i) = a(i, j)   
+ 20      continue
+ 10   continue
+ 
+      return
+      end
+C*** tentest.f
+**********************************************************************
+*
+* TENPACK test program
+*
+* Author: Paul Buis
+*
+* Date: Spring, 1994
+*
+**********************************************************************
+
+*     .. Parameters ..
+      INTEGER          NFORM
+      PARAMETER        (NFORM=14)
+*     ..
+*     .. Arrays in Common ..
+      CHARACTER*32     FNAME(NFORM)
+*     ..
+*     .. External Subroutines ..
+      EXTERNAL         PUTGET,TEST1,TEST2,TESTGB,TESTGE,TESTPO,TESTPP,
+     +                 TESTSI,TESTSP,TESTTB,TESTTP,TESTTR
+*     ..
+*     .. Common blocks ..
+      COMMON           /NAMES/FNAME
+*     ..
+      FNAME(1) = 'identity'
+      FNAME(2) = 'general (full)'
+      FNAME(3) = 'general banded'
+      FNAME(4) = 'positive definite'
+      FNAME(5) = 'positive definite packed'
+      FNAME(6) = 'positive definite band'
+      FNAME(7) = 'symmetric indefinite'
+      FNAME(8) = 'symmetric indefinite packed'
+      FNAME(9) = 'upper triangular'
+      FNAME(10) = 'lower triangular'
+      FNAME(11) = 'upper triangular band'
+      FNAME(12) = 'lower triangular band'
+      FNAME(13) = 'upper triangular packed'
+      FNAME(14) = 'lower triangular packed'
+
+      CALL PUTGET
+      CALL TEST1
+      CALL TEST2
+      CALL TESTGE
+      CALL TESTGB
+      CALL TESTPO
+      CALL TESTPP
+      CALL TESTSI
+      CALL TESTSP
+      CALL TESTTR
+      CALL TESTTB
+      CALL TESTTP
+
+      STOP
+
+      END
+
+*
+* original test program used sgefa/sgesl from LINPACK,
+* we want to use LAPACK instead, but don't want to re-write
+* the test program, so we define our own sgefa/sgesl that will
+* call sgetrf and sgetrs:
+
+      SUBROUTINE SGEFA(A,LDA,N,IPVT,INFO)
+*
+*
+*
+
+*     .. Scalar Arguments ..
+      INTEGER          INFO,LDA,N
+*     ..
+*     .. Array Arguments ..
+      REAL             A(LDA,*)
+      INTEGER          IPVT(*)
+*     ..
+*     .. Local Scalars ..
+      INTEGER          M
+*     ..
+*     .. External Subroutines ..
+      EXTERNAL         SGETRF
+*     ..
+      M = N
+
+      CALL SGETRF(M,N,A,LDA,IPVT,INFO)
+      END
+
+
+
+
+      SUBROUTINE SGESL(A,LDA,N,IPVT,B,JOB)
+*
+*     job is assumed to be 0
+*
+
+
+
+*     .. Scalar Arguments ..
+      INTEGER          JOB,LDA,N
+*     ..
+*     .. Array Arguments ..
+      REAL             A(LDA,*),B(*)
+      INTEGER          IPVT(*)
+*     ..
+*     .. Local Scalars ..
+      INTEGER          INFO,LDB,ONE
+      CHARACTER        NORMAL
+*     ..
+*     .. External Subroutines ..
+      EXTERNAL         SGETRS
+*     ..
+      NORMAL = 'N'
+      ONE = 1
+      LDB = N
+
+      CALL SGETRS(NORMAL,N,ONE,A,LDA,IPVT,B,LDB,INFO)
+*
+* as in TENPACK code, info is ignored
+*
+      END
+
+
+      SUBROUTINE PUTGET
+**********************************************************************
+*
+* This subroutine tests tpput and tpget by storing a matrix into each
+* of the possible matrix formats and then retrieving the matrix.
+*
+* The matrices are printed out for visual inspection and are
+* automatically tested for obvious errors.
+*
+* The digits of matrix values are formed by the matrix type followed by
+* the row number followed by the column number (use matrices that are
+* smaller than order 10).
+*
+**********************************************************************
+
+*     .. Parameters ..
+      INTEGER          NSIZE
+      PARAMETER        (NSIZE=7)
+      INTEGER          NFORM
+      PARAMETER        (NFORM=14)
+      INTEGER          NSP3
+      PARAMETER        (NSP3=NSIZE+3)
+      INTEGER          ISPACE
+      PARAMETER        (ISPACE=NSIZE*NSIZE*NFORM)
+*     ..
+*     .. Arrays in Common ..
+      CHARACTER*32     FNAME(NFORM)
+*     ..
+*     .. Local Scalars ..
+      REAL             VAL
+      INTEGER          I,J,K
+*     ..
+*     .. Local Arrays ..
+      REAL             TMP(NSP3,NSP3),TPA(ISPACE)
+      INTEGER          ITP(8,NFORM)
+*     ..
+*     .. External Functions ..
+      REAL             TPGET
+      EXTERNAL         TPGET
+*     ..
+*     .. External Subroutines ..
+      EXTERNAL         LPTOTP,MATPRT,TPDESC,TPPUT,TPTOLP,ZERO
+*     ..
+*     .. Intrinsic Functions ..
+      INTRINSIC        FLOAT
+*     ..
+*     .. Common blocks ..
+      COMMON           /NAMES/FNAME
+*     ..
+      CALL ZERO(TPA,ISPACE)
+      DO 10 I = 1,NFORM
+          ITP(1,I) = NSIZE
+          ITP(2,I) = I - 1
+          ITP(3,I) = NSIZE/2
+          ITP(4,I) = NSIZE/3
+   10 CONTINUE
+
+      CALL TPDESC(ITP,NFORM)
+
+      DO 40 K = NFORM,1,-1
+          DO 30 J = 1,NSIZE
+              DO 20 I = 1,NSIZE
+                  VAL = FLOAT(100*K+10*I+J)
+                  CALL TPPUT(VAL,TPA,ITP,K,I,J)
+   20         CONTINUE
+   30     CONTINUE
+   40 CONTINUE
+
+      DO 100 K = 1,NFORM
+          WRITE(*,'()')
+          WRITE(*,'('' putget, output for '',a)')FNAME(K)
+          DO 50 I = 1,NSIZE
+              WRITE(*,9000) (TPGET(TPA,ITP,K,I,J),J=1,NSIZE)
+   50     CONTINUE
+          DO 70 I = 1,NSIZE
+              DO 60 J = 1,NSIZE
+                  VAL = TPGET(TPA,ITP,K,I,J)
+                  IF ((VAL.NE.0.0) .AND. (VAL.NE.
+     +                FLOAT(100*K+10*I+J)) .AND.
+     +                (VAL.NE.FLOAT(100*K+10*J+I)) .AND.
+     +                (VAL.NE.1.0)) THEN
+                      WRITE(*,'('' obvious error at (i,j)=(''
+     +                      ,I3,'','',I3,'')'')')I,J
+                  END IF
+
+   60         CONTINUE
+   70     CONTINUE
+          WRITE(*,'()')
+          WRITE(*,'('' Linpack format:'')')
+          CALL ZERO(TMP,NSP3*NSP3)
+          CALL TPTOLP(TPA,ITP,K,TMP,NSP3)
+          CALL MATPRT(TMP,NSP3,NSP3)
+          CALL LPTOTP(TMP,NSP3,K,TPA,ITP)
+          DO 90 I = 1,NSIZE
+              DO 80 J = 1,NSIZE
+                  VAL = TPGET(TPA,ITP,K,I,J)
+                  IF ((VAL.NE.0.0) .AND. (VAL.NE.
+     +                FLOAT(100*K+10*I+J)) .AND.
+     +                (VAL.NE.FLOAT(100*K+10*J+I)) .AND.
+     +                (VAL.NE.1.0)) THEN
+                      WRITE(*,'('' error in tptolp or lptotp'')')
+                      WRITE(*,'('' obvious error at (i,j)=(''
+     +                      ,I3,'','',I3,'')'')')I,J
+                  END IF
+
+   80         CONTINUE
+   90     CONTINUE
+  100 CONTINUE
+
+      RETURN
+
+ 9000 FORMAT (' ',9 (f7.0))
+      END
+
+      SUBROUTINE TEST1
+**********************************************************************
+*
+* This subroutine tests tpmult by computing (D tensor I)X
+*
+* D is diagonal with D(i,i) = i
+* I is an Identity matrix
+* X is a vector of 1's
+*
+**********************************************************************
+
+
+*     .. Parameters ..
+      INTEGER          NSIZED
+      PARAMETER        (NSIZED=4)
+      INTEGER          NSIZE2
+      PARAMETER        (NSIZE2=NSIZED*NSIZED)
+      INTEGER          NSIZEI
+      PARAMETER        (NSIZEI=2)
+      INTEGER          NSIZEP
+      PARAMETER        (NSIZEP=NSIZED*NSIZEI)
+      INTEGER          NFORM
+      PARAMETER        (NFORM=14)
+*     ..
+*     .. Arrays in Common ..
+      CHARACTER*32     FNAME(NFORM)
+*     ..
+*     .. Local Scalars ..
+      INTEGER          I,INFO,J,K
+*     ..
+*     .. Local Arrays ..
+      REAL             TPA(NSIZE2),W(NSIZEP),X(NSIZEP)
+      INTEGER          IPVT(NSIZED),ITP(8,2)
+*     ..
+*     .. External Subroutines ..
+      EXTERNAL         TPDESC,TPFACT,TPMULT,TPPUT,TPSOLV
+*     ..
+*     .. Intrinsic Functions ..
+      INTRINSIC        FLOAT
+*     ..
+*     .. Common blocks ..
+      COMMON           /NAMES/FNAME
+*     ..
+      DO 40 K = 1,NFORM - 1
+
+          WRITE(*,'()')
+          WRITE(*,'('' test1, testing '',a)')FNAME(K+1)
+          ITP(1,1) = NSIZED
+          ITP(2,1) = K
+          ITP(3,1) = 1
+          ITP(4,1) = 1
+          ITP(1,2) = NSIZEI
+          ITP(2,2) = 0
+
+          CALL TPDESC(ITP,2)
+
+          DO 20 J = 1,NSIZED
+              DO 10 I = 1,NSIZED
+                  CALL TPPUT(0.0,TPA,ITP,1,I,J)
+                  IF (I.EQ.J) CALL TPPUT(FLOAT(I),TPA,ITP,1,I,J)
+   10         CONTINUE
+   20     CONTINUE
+
+          DO 30 I = 1,NSIZEP
+              X(I) = 1.0
+   30     CONTINUE
+
+          CALL TPMULT(TPA,ITP,2,X,W)
+          WRITE(*, 9000)'b= ', (X(I),I=1,NSIZEP)
+          CALL TPFACT(TPA,ITP,IPVT,2,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,'('' error in tpfact detected in test1'')')
+              STOP
+
+          END IF
+
+          CALL TPSOLV(TPA,ITP,IPVT,2,X,W)
+          WRITE(*, 9000)'x= ', (X(I),I=1,NSIZEP)
+
+   40 CONTINUE
+
+      RETURN
+
+ 9000 FORMAT (' ',a,15 (f5.1))
+      END
+
+
+      SUBROUTINE TEST2
+**********************************************************************
+*
+* This subroutine tests tpmult by computing (I tensor D)X
+*
+* D is diagonal with D(i,i) = i
+* I is an Identity matrix
+* X is a vector of 1's
+*
+**********************************************************************
+
+*     .. Parameters ..
+      INTEGER          NSIZED
+      PARAMETER        (NSIZED=4)
+      INTEGER          NSIZE2
+      PARAMETER        (NSIZE2=NSIZED*NSIZED)
+      INTEGER          NSIZEI
+      PARAMETER        (NSIZEI=2)
+      INTEGER          NSIZEP
+      PARAMETER        (NSIZEP=NSIZED*NSIZEI)
+      INTEGER          NFORM
+      PARAMETER        (NFORM=14)
+*     ..
+*     .. Arrays in Common ..
+      CHARACTER*32     FNAME(NFORM)
+*     ..
+*     .. Local Scalars ..
+      INTEGER          I,INFO,J,K
+*     ..
+*     .. Local Arrays ..
+      REAL             TPA(NSIZE2),W(NSIZEP),X(NSIZEP)
+      INTEGER          IPVT(NSIZED),ITP(8,2)
+*     ..
+*     .. External Subroutines ..
+      EXTERNAL         TPDESC,TPFACT,TPMULT,TPPUT,TPSOLV
+*     ..
+*     .. Intrinsic Functions ..
+      INTRINSIC        FLOAT
+*     ..
+*     .. Common blocks ..
+      COMMON           /NAMES/FNAME
+*     ..
+      DO 40 K = 1,NFORM - 1
+
+          WRITE(*,'()')
+          WRITE(*,'('' test2, testing '',a)')FNAME(K+1)
+          ITP(1,1) = NSIZEI
+          ITP(2,1) = 0
+          ITP(1,2) = NSIZED
+          ITP(2,2) = K
+          ITP(3,2) = 1
+          ITP(4,2) = 1
+
+          CALL TPDESC(ITP,2)
+
+          DO 20 J = 1,NSIZED
+              DO 10 I = 1,NSIZED
+                  CALL TPPUT(0.0,TPA,ITP,2,I,J)
+                  IF (I.EQ.J) CALL TPPUT(FLOAT(I),TPA,ITP,2,I,J)
+   10         CONTINUE
+   20     CONTINUE
+
+          DO 30 I = 1,NSIZEP
+              X(I) = 1.0
+   30     CONTINUE
+
+          CALL TPMULT(TPA,ITP,2,X,W)
+          WRITE(*,9000)'b= ', (X(I),I=1,NSIZEP)
+          CALL TPFACT(TPA,ITP,IPVT,2,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,'('' error in tpfact detected in test2'')')
+              STOP
+
+          END IF
+
+          CALL TPSOLV(TPA,ITP,IPVT,2,X,W)
+          WRITE(*,9000)'x= ', (X(I),I=1,NSIZEP)
+
+   40 CONTINUE
+
+      RETURN
+
+ 9000 FORMAT (' ',a,15 (f5.1))
+      END
+
+      SUBROUTINE TESTGE
+**********************************************************************
+*
+* Subroutine to test general (full) matrices
+*
+**********************************************************************
+
+
+*     .. Parameters ..
+      INTEGER          NSIZE
+      PARAMETER        (NSIZE=3)
+      INTEGER          IVSPAC
+      PARAMETER        (IVSPAC=NSIZE**4)
+      INTEGER          ISPACE
+      PARAMETER        (ISPACE=4*NSIZE*NSIZE)
+*     ..
+*     .. Arrays in Common ..
+      REAL             B(IVSPAC),T(IVSPAC),TP1(IVSPAC,IVSPAC),
+     +                 TP2(IVSPAC,IVSPAC),W(IVSPAC),X(IVSPAC)
+*     ..
+*     .. Local Scalars ..
+      INTEGER          I,INFO,ISEED,J,K,KK,NSIZKK
+*     ..
+*     .. Local Arrays ..
+      REAL             A(ISPACE)
+      INTEGER          IPVT(IVSPAC),ITP(8,4)
+*     ..
+*     .. External Functions ..
+      REAL             ERRNRM,RAND
+      EXTERNAL         ERRNRM,RAND
+*     ..
+*     .. External Subroutines ..
+      EXTERNAL         SCOPY,SGEFA,SGEMV,SGESL,TENSOR,TPDESC,TPFACT,
+     +                 TPMULT,TPPUT,TPSOLV
+*     ..
+*     .. Common blocks ..
+      COMMON           X,B,W,T,TP1,TP2
+*     ..
+      ISEED = 0
+      WRITE(*,9000)
+      DO 60 KK = 1,4
+          WRITE(*,9010)KK
+          NSIZKK = NSIZE**KK
+
+          DO 10 I = 1,KK
+              ITP(1,I) = NSIZE
+              ITP(2,I) = 1
+   10     CONTINUE
+          CALL TPDESC(ITP,KK)
+
+          DO 40 K = 1,KK
+              DO 30 J = 1,NSIZE
+                  DO 20 I = 1,NSIZE
+                      CALL TPPUT(RAND(ISEED),A,ITP,K,I,J)
+   20             CONTINUE
+   30         CONTINUE
+   40     CONTINUE
+          DO 50 I = 1,NSIZKK
+              X(I) = RAND(ISEED)
+   50     CONTINUE
+          CALL SCOPY(NSIZKK,X,1,T,1)
+
+          CALL TENSOR(A,ITP,KK,TP1,TP2,IVSPAC)
+
+          CALL SGEMV('N',NSIZKK,NSIZKK,1.0,TP2,IVSPAC,X,1,0.0,B,1)
+          CALL TPMULT(A,ITP,KK,X,W)
+          WRITE(*,'('' multiplication   error=  '',e12.6)')
+     +                                 ERRNRM(B,X,NSIZKK)
+
+          CALL SGEFA(TP2,IVSPAC,NSIZKK,IPVT,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,
+     +      '('' random matrix was singular -- aborting testge'')')
+              RETURN
+
+          END IF
+
+          CALL SGESL(TP2,IVSPAC,NSIZKK,IPVT,B,0)
+          WRITE(*,'('' linpack solution error=  '',e12.6)')
+     +                                 ERRNRM(T,B,NSIZKK)
+
+          CALL TPFACT(A,ITP,IPVT,KK,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,'('' error in tpfact, detected by testge'')')
+              STOP
+
+          END IF
+
+          CALL TPSOLV(A,ITP,IPVT,KK,X,W)
+          WRITE(*,'('' tenpack solution error=  '',e12.6)')
+     +                                 ERRNRM(T,X,NSIZKK)
+
+   60 CONTINUE
+
+      RETURN
+
+ 9000 FORMAT (/,' ',64 ('*'),/,' testing general (full) matrices',/,' ',
+     +       64 ('*'))
+ 9010 FORMAT (/,' tensor product of ',i2,' matrices')
+      END
+
+      SUBROUTINE TESTGB
+**********************************************************************
+*
+* Subroutine to test banded matrices
+*
+**********************************************************************
+
+
+*     .. Parameters ..
+      INTEGER          NSIZE
+      PARAMETER        (NSIZE=3)
+      INTEGER          IVSPAC
+      PARAMETER        (IVSPAC=NSIZE**4)
+      INTEGER          ISPACE
+      PARAMETER        (ISPACE=8*NSIZE*NSIZE)
+*     ..
+*     .. Arrays in Common ..
+      REAL             B(IVSPAC),T(IVSPAC),TP1(IVSPAC,IVSPAC),
+     +                 TP2(IVSPAC,IVSPAC),W(IVSPAC),X(IVSPAC)
+*     ..
+*     .. Local Scalars ..
+      INTEGER          I,INFO,ISEED,J,K,KK,NSIZKK
+*     ..
+*     .. Local Arrays ..
+      REAL             A(ISPACE)
+      INTEGER          IPVT(IVSPAC),ITP(8,4)
+*     ..
+*     .. External Functions ..
+      REAL             ERRNRM,RAND
+      EXTERNAL         ERRNRM,RAND
+*     ..
+*     .. External Subroutines ..
+      EXTERNAL         SCOPY,SGEFA,SGEMV,SGESL,TENSOR,TPDESC,TPFACT,
+     +                 TPMULT,TPPUT,TPSOLV
+*     ..
+*     .. Common blocks ..
+      COMMON           X,B,W,T,TP1,TP2
+*     ..
+      ISEED = 0
+      WRITE(*,9000)
+      DO 60 KK = 1,4
+          WRITE(*,9010)KK
+          NSIZKK = NSIZE**KK
+
+          DO 10 I = 1,KK
+              ITP(1,I) = NSIZE
+              ITP(2,I) = 2
+              ITP(3,I) = 2
+              ITP(4,I) = 1
+   10     CONTINUE
+          CALL TPDESC(ITP,KK)
+
+          DO 40 K = 1,KK
+              DO 30 J = 1,NSIZE
+                  DO 20 I = 1,NSIZE
+                      CALL TPPUT(RAND(ISEED),A,ITP,K,I,J)
+   20             CONTINUE
+   30         CONTINUE
+   40     CONTINUE
+          DO 50 I = 1,NSIZKK
+              X(I) = RAND(ISEED)
+   50     CONTINUE
+          CALL SCOPY(NSIZKK,X,1,T,1)
+
+          CALL TENSOR(A,ITP,KK,TP1,TP2,IVSPAC)
+
+          CALL SGEMV('N',NSIZKK,NSIZKK,1.0,TP2,IVSPAC,X,1,0.0,B,1)
+          CALL TPMULT(A,ITP,KK,X,W)
+          WRITE(*,'('' multiplication   error=  '',e12.6)')
+     +                                 ERRNRM(B,X,NSIZKK)
+
+          CALL SGEFA(TP2,IVSPAC,NSIZKK,IPVT,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,
+     +      '('' random matrix was singular -- aborting testgb'')')
+              RETURN
+
+          END IF
+
+          CALL SGESL(TP2,IVSPAC,NSIZKK,IPVT,B,0)
+          WRITE(*,'('' linpack solution error=  '',e12.6)')
+     +                                 ERRNRM(T,B,NSIZKK)
+
+          CALL TPFACT(A,ITP,IPVT,KK,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,'('' error in tpfact, detected by testgb'')')
+              STOP
+
+          END IF
+
+          CALL TPSOLV(A,ITP,IPVT,KK,X,W)
+          WRITE(*,'('' tenpack solution error=  '',e12.6)')
+     +                                 ERRNRM(T,X,NSIZKK)
+
+   60 CONTINUE
+
+      RETURN
+
+ 9000 FORMAT (/,' ',64 ('*'),/,' testing banded matrices',/,' ',
+     +       64 ('*'))
+ 9010 FORMAT (/,' tensor product of ',i2,' matrices')
+      END
+
+      SUBROUTINE TESTPO
+**********************************************************************
+*
+* Subroutine to test positive definite matrices
+*
+**********************************************************************
+
+
+*     .. Parameters ..
+      INTEGER          NSIZE
+      PARAMETER        (NSIZE=3)
+      INTEGER          IVSPAC
+      PARAMETER        (IVSPAC=NSIZE**4)
+      INTEGER          ISPACE
+      PARAMETER        (ISPACE=4*NSIZE*NSIZE)
+*     ..
+*     .. Arrays in Common ..
+      REAL             B(IVSPAC),T(IVSPAC),TP1(IVSPAC,IVSPAC),
+     +                 TP2(IVSPAC,IVSPAC),W(IVSPAC),X(IVSPAC)
+*     ..
+*     .. Local Scalars ..
+      INTEGER          I,INFO,ISEED,J,K,KK,NSIZKK
+*     ..
+*     .. Local Arrays ..
+      REAL             A(ISPACE)
+      INTEGER          IPVT(IVSPAC),ITP(8,4)
+*     ..
+*     .. External Functions ..
+      REAL             ERRNRM,RAND
+      EXTERNAL         ERRNRM,RAND
+*     ..
+*     .. External Subroutines ..
+      EXTERNAL         SCOPY,SGEFA,SGEMV,SGESL,TENSOR,TPDESC,TPFACT,
+     +                 TPMULT,TPPUT,TPSOLV
+*     ..
+*     .. Common blocks ..
+      COMMON           X,B,W,T,TP1,TP2
+*     ..
+      ISEED = 0
+      WRITE(*,9000)
+      DO 60 KK = 1,4
+          WRITE(*,9010)KK
+          NSIZKK = NSIZE**KK
+
+          DO 10 I = 1,KK
+              ITP(1,I) = NSIZE
+              ITP(2,I) = 3
+   10     CONTINUE
+          CALL TPDESC(ITP,KK)
+
+          DO 40 K = 1,KK
+              DO 30 J = 1,NSIZE
+                  DO 20 I = 1,J
+                      IF (I.EQ.J) THEN
+                          CALL TPPUT(NSIZKK+RAND(ISEED),A,ITP,K,I,J)
+
+                      ELSE
+                          CALL TPPUT(RAND(ISEED),A,ITP,K,I,J)
+                          CALL TPPUT(RAND(ISEED),A,ITP,K,J,I)
+                      END IF
+
+   20             CONTINUE
+   30         CONTINUE
+   40     CONTINUE
+          DO 50 I = 1,NSIZKK
+              X(I) = RAND(ISEED)
+   50     CONTINUE
+          CALL SCOPY(NSIZKK,X,1,T,1)
+
+          CALL TENSOR(A,ITP,KK,TP1,TP2,IVSPAC)
+
+          CALL SGEMV('N',NSIZKK,NSIZKK,1.0,TP2,IVSPAC,X,1,0.0,B,1)
+
+          CALL TPMULT(A,ITP,KK,X,W)
+          WRITE(*,'('' multiplication   error=  '',e12.6)')
+     +                                 ERRNRM(B,X,NSIZKK)
+
+          CALL SGEFA(TP2,IVSPAC,NSIZKK,IPVT,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,
+     +      '('' random matrix was singular -- aborting testpo'')')
+              RETURN
+
+          END IF
+
+          CALL SGESL(TP2,IVSPAC,NSIZKK,IPVT,B,0)
+          WRITE(*,'('' linpack solution error=  '',e12.6)')
+     +                                 ERRNRM(T,B,NSIZKK)
+
+          CALL TPFACT(A,ITP,IPVT,KK,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,'('' error in tpfact, detected by testpo'')')
+              STOP
+
+          END IF
+
+          CALL TPSOLV(A,ITP,IPVT,KK,X,W)
+          WRITE(*,'('' tenpack solution error=  '',e12.6)')
+     +                                 ERRNRM(T,X,NSIZKK)
+
+   60 CONTINUE
+
+      RETURN
+
+ 9000 FORMAT (/,' ',64 ('*'),/,' testing positive definite matrices',/,
+     +       ' ',64 ('*'))
+ 9010 FORMAT (/,' tensor product of ',i2,' matrices')
+      END
+
+      SUBROUTINE TESTPP
+**********************************************************************
+*
+* Subroutine to test positive definite packed matrices
+*
+**********************************************************************
+
+
+*     .. Parameters ..
+      INTEGER          NSIZE
+      PARAMETER        (NSIZE=3)
+      INTEGER          IVSPAC
+      PARAMETER        (IVSPAC=NSIZE**4)
+      INTEGER          ISPACE
+      PARAMETER        (ISPACE=4*NSIZE*NSIZE)
+*     ..
+*     .. Arrays in Common ..
+      REAL             B(IVSPAC),T(IVSPAC),TP1(IVSPAC,IVSPAC),
+     +                 TP2(IVSPAC,IVSPAC),W(IVSPAC),X(IVSPAC)
+*     ..
+*     .. Local Scalars ..
+      INTEGER          I,INFO,ISEED,J,K,KK,NSIZKK
+*     ..
+*     .. Local Arrays ..
+      REAL             A(ISPACE)
+      INTEGER          IPVT(IVSPAC),ITP(8,4)
+*     ..
+*     .. External Functions ..
+      REAL             ERRNRM,RAND
+      EXTERNAL         ERRNRM,RAND
+*     ..
+*     .. External Subroutines ..
+      EXTERNAL         SCOPY,SGEFA,SGEMV,SGESL,TENSOR,TPDESC,TPFACT,
+     +                 TPMULT,TPPUT,TPSOLV
+*     ..
+*     .. Common blocks ..
+      COMMON           X,B,W,T,TP1,TP2
+*     ..
+      ISEED = 0
+      WRITE(*,9000)
+      DO 60 KK = 1,4
+          WRITE(*,9010)KK
+          NSIZKK = NSIZE**KK
+
+          DO 10 I = 1,KK
+              ITP(1,I) = NSIZE
+              ITP(2,I) = 4
+   10     CONTINUE
+          CALL TPDESC(ITP,KK)
+
+          DO 40 K = 1,KK
+              DO 30 J = 1,NSIZE
+                  DO 20 I = 1,NSIZE
+                      IF (I.EQ.J) THEN
+                          CALL TPPUT(NSIZKK+RAND(ISEED),A,ITP,K,I,J)
+
+                      ELSE
+                          CALL TPPUT(RAND(ISEED),A,ITP,K,I,J)
+                      END IF
+
+   20             CONTINUE
+   30         CONTINUE
+   40     CONTINUE
+          DO 50 I = 1,NSIZKK
+              X(I) = RAND(ISEED)
+   50     CONTINUE
+          CALL SCOPY(NSIZKK,X,1,T,1)
+
+          CALL TENSOR(A,ITP,KK,TP1,TP2,IVSPAC)
+
+          CALL SGEMV('N',NSIZKK,NSIZKK,1.0,TP2,IVSPAC,X,1,0.0,B,1)
+          CALL TPMULT(A,ITP,KK,X,W)
+          WRITE(*,'('' multiplication   error=  '',e12.6)')
+     +                                 ERRNRM(B,X,NSIZKK)
+
+          CALL SGEFA(TP2,IVSPAC,NSIZKK,IPVT,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,
+     +      '('' random matrix was singular -- aborting testpp'')')
+              RETURN
+
+          END IF
+
+          CALL SGESL(TP2,IVSPAC,NSIZKK,IPVT,B,0)
+          WRITE(*,'('' linpack solution error=  '',e12.6)')
+     +                                 ERRNRM(T,B,NSIZKK)
+
+          CALL TPFACT(A,ITP,IPVT,KK,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,'('' error in tpfact, detected by testpp'')')
+              STOP
+
+          END IF
+
+          CALL TPSOLV(A,ITP,IPVT,KK,X,W)
+          WRITE(*,'('' tenpack solution error=  '',e12.6)')
+     +                                 ERRNRM(T,X,NSIZKK)
+
+   60 CONTINUE
+
+      RETURN
+
+ 9000 FORMAT (/,' ',64 ('*'),/,' testing  positive definite ',
+     +       'packed matrices',/,' ',64 ('*'))
+ 9010 FORMAT (/,' tensor product of ',i2,' matrices')
+      END
+
+      SUBROUTINE TESTPB
+**********************************************************************
+*
+* Subroutine to test positive definite band matrices
+*
+**********************************************************************
+
+
+*     .. Parameters ..
+      INTEGER          NSIZE
+      PARAMETER        (NSIZE=3)
+      INTEGER          IVSPAC
+      PARAMETER        (IVSPAC=NSIZE**4)
+      INTEGER          ISPACE
+      PARAMETER        (ISPACE=4*NSIZE*NSIZE)
+*     ..
+*     .. Arrays in Common ..
+      REAL             B(IVSPAC),T(IVSPAC),TP1(IVSPAC,IVSPAC),
+     +                 TP2(IVSPAC,IVSPAC),W(IVSPAC),X(IVSPAC)
+*     ..
+*     .. Local Scalars ..
+      INTEGER          I,INFO,ISEED,J,K,KK,NSIZKK
+*     ..
+*     .. Local Arrays ..
+      REAL             A(ISPACE)
+      INTEGER          IPVT(IVSPAC),ITP(8,4)
+*     ..
+*     .. External Functions ..
+      REAL             ERRNRM,RAND
+      EXTERNAL         ERRNRM,RAND
+*     ..
+*     .. External Subroutines ..
+      EXTERNAL         SCOPY,SGEFA,SGEMV,SGESL,TENSOR,TPDESC,TPFACT,
+     +                 TPMULT,TPPUT,TPSOLV
+*     ..
+*     .. Common blocks ..
+      COMMON           X,B,W,T,TP1,TP2
+*     ..
+      ISEED = 0
+      WRITE(*,9000)
+      DO 60 KK = 1,4
+          WRITE(*,9010)KK
+          NSIZKK = NSIZE**KK
+
+          DO 10 I = 1,KK
+              ITP(1,I) = NSIZE
+              ITP(2,I) = 5
+              ITP(3,I) = 1
+   10     CONTINUE
+          CALL TPDESC(ITP,KK)
+
+          DO 40 K = 1,KK
+              DO 30 J = 1,NSIZE
+                  DO 20 I = 1,NSIZE
+                      IF (I.EQ.J) THEN
+                          CALL TPPUT(NSIZKK+RAND(ISEED),A,ITP,K,I,J)
+
+                      ELSE
+                          CALL TPPUT(RAND(ISEED),A,ITP,K,I,J)
+                      END IF
+
+   20             CONTINUE
+   30         CONTINUE
+   40     CONTINUE
+          DO 50 I = 1,NSIZKK
+              X(I) = RAND(ISEED)
+   50     CONTINUE
+          CALL SCOPY(NSIZKK,X,1,T,1)
+
+          CALL TENSOR(A,ITP,KK,TP1,TP2,IVSPAC)
+
+          CALL SGEMV('N',NSIZKK,NSIZKK,1.0,TP2,IVSPAC,X,1,0.0,B,1)
+          CALL TPMULT(A,ITP,KK,X,W)
+          WRITE(*,'('' multiplication   error=  '',e12.6)')
+     +                                 ERRNRM(B,X,NSIZKK)
+
+          CALL SGEFA(TP2,IVSPAC,NSIZKK,IPVT,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,
+     +      '('' random matrix was singular -- aborting testpb'')')
+              RETURN
+
+          END IF
+
+          CALL SGESL(TP2,IVSPAC,NSIZKK,IPVT,B,0)
+          WRITE(*,'('' linpack solution error=  '',e12.6)')
+     +                                 ERRNRM(T,B,NSIZKK)
+
+          CALL TPFACT(A,ITP,IPVT,KK,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,'('' error in tpfact, detected by testpb'')')
+              STOP
+
+          END IF
+
+          CALL TPSOLV(A,ITP,IPVT,KK,X,W)
+          WRITE(*,'('' tenpack solution error=  '',e12.6)')
+     +                                 ERRNRM(T,X,NSIZKK)
+
+   60 CONTINUE
+
+      RETURN
+
+ 9000 FORMAT (/,' ',64 ('*'),/,' testing  positive definite band',
+     +       'matrices',/,' ',64 ('*'))
+ 9010 FORMAT (/,' tensor product of ',i2,' matrices')
+      END
+
+      SUBROUTINE TESTSI
+**********************************************************************
+*
+* Subroutine to test symmetric indefinite matrices
+*
+**********************************************************************
+
+
+*     .. Parameters ..
+      INTEGER          NSIZE
+      PARAMETER        (NSIZE=3)
+      INTEGER          IVSPAC
+      PARAMETER        (IVSPAC=NSIZE**4)
+      INTEGER          ISPACE
+      PARAMETER        (ISPACE=4*NSIZE*NSIZE)
+*     ..
+*     .. Arrays in Common ..
+      REAL             B(IVSPAC),T(IVSPAC),TP1(IVSPAC,IVSPAC),
+     +                 TP2(IVSPAC,IVSPAC),W(IVSPAC),X(IVSPAC)
+*     ..
+*     .. Local Scalars ..
+      INTEGER          I,INFO,ISEED,J,K,KK,NSIZKK
+*     ..
+*     .. Local Arrays ..
+      REAL             A(ISPACE)
+      INTEGER          IPVT(IVSPAC),ITP(8,4)
+*     ..
+*     .. External Functions ..
+      REAL             ERRNRM,RAND
+      EXTERNAL         ERRNRM,RAND
+*     ..
+*     .. External Subroutines ..
+      EXTERNAL         SCOPY,SGEFA,SGEMV,SGESL,TENSOR,TPDESC,TPFACT,
+     +                 TPMULT,TPPUT,TPSOLV
+*     ..
+*     .. Common blocks ..
+      COMMON           X,B,W,T,TP1,TP2
+*     ..
+      ISEED = 0
+      WRITE(*,9000)
+      DO 60 KK = 1,4
+          WRITE(*,9010)KK
+          NSIZKK = NSIZE**KK
+
+          DO 10 I = 1,KK
+              ITP(1,I) = NSIZE
+              ITP(2,I) = 6
+   10     CONTINUE
+          CALL TPDESC(ITP,KK)
+
+          DO 40 K = 1,KK
+              DO 30 J = 1,NSIZE
+                  DO 20 I = 1,NSIZE
+                      CALL TPPUT(RAND(ISEED),A,ITP,K,I,J)
+   20             CONTINUE
+   30         CONTINUE
+   40     CONTINUE
+          DO 50 I = 1,NSIZKK
+              X(I) = RAND(ISEED)
+   50     CONTINUE
+          CALL SCOPY(NSIZKK,X,1,T,1)
+
+          CALL TENSOR(A,ITP,KK,TP1,TP2,IVSPAC)
+
+          CALL SGEMV('N',NSIZKK,NSIZKK,1.0,TP2,IVSPAC,X,1,0.0,B,1)
+          CALL TPMULT(A,ITP,KK,X,W)
+          WRITE(*,'('' multiplication   error=  '',e12.6)')
+     +                                 ERRNRM(B,X,NSIZKK)
+
+          CALL SGEFA(TP2,IVSPAC,NSIZKK,IPVT,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,
+     +      '('' random matrix was singular -- aborting testsi'')')
+              RETURN
+
+          END IF
+
+          CALL SGESL(TP2,IVSPAC,NSIZKK,IPVT,B,0)
+          WRITE(*,'('' linpack solution error=  '',e12.6)')
+     +                                 ERRNRM(T,B,NSIZKK)
+
+          CALL TPFACT(A,ITP,IPVT,KK,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,'('' error in tpfact, detected by testsi'')')
+              STOP
+
+          END IF
+
+          CALL TPSOLV(A,ITP,IPVT,KK,X,W)
+          WRITE(*,'('' tenpack solution error=  '',e12.6)')
+     +                                 ERRNRM(T,X,NSIZKK)
+
+   60 CONTINUE
+
+      RETURN
+
+ 9000 FORMAT (/,' ',64 ('*'),/,' testing symmetric indefinite matrices',
+     +       /,' ',64 ('*'))
+ 9010 FORMAT (/,' tensor product of ',i2,' matrices')
+      END
+
+      SUBROUTINE TESTSP
+**********************************************************************
+*
+* Subroutine to test symmetric indefinite packed matrices
+*
+**********************************************************************
+
+
+*     .. Parameters ..
+      INTEGER          NSIZE
+      PARAMETER        (NSIZE=3)
+      INTEGER          IVSPAC
+      PARAMETER        (IVSPAC=NSIZE**4)
+      INTEGER          ISPACE
+      PARAMETER        (ISPACE=4*NSIZE*NSIZE)
+*     ..
+*     .. Arrays in Common ..
+      REAL             B(IVSPAC),T(IVSPAC),TP1(IVSPAC,IVSPAC),
+     +                 TP2(IVSPAC,IVSPAC),W(IVSPAC),X(IVSPAC)
+*     ..
+*     .. Local Scalars ..
+      INTEGER          I,INFO,ISEED,J,K,KK,NSIZKK
+*     ..
+*     .. Local Arrays ..
+      REAL             A(ISPACE)
+      INTEGER          IPVT(IVSPAC),ITP(8,4)
+*     ..
+*     .. External Functions ..
+      REAL             ERRNRM,RAND
+      EXTERNAL         ERRNRM,RAND
+*     ..
+*     .. External Subroutines ..
+      EXTERNAL         SCOPY,SGEFA,SGEMV,SGESL,TENSOR,TPDESC,TPFACT,
+     +                 TPMULT,TPPUT,TPSOLV
+*     ..
+*     .. Common blocks ..
+      COMMON           X,B,W,T,TP1,TP2
+*     ..
+      ISEED = 0
+      WRITE(*,9000)
+      DO 60 KK = 1,4
+          WRITE(*,9010)KK
+          NSIZKK = NSIZE**KK
+
+          DO 10 I = 1,KK
+              ITP(1,I) = NSIZE
+              ITP(2,I) = 7
+   10     CONTINUE
+          CALL TPDESC(ITP,KK)
+
+          DO 40 K = 1,KK
+              DO 30 J = 1,NSIZE
+                  DO 20 I = 1,NSIZE
+                      CALL TPPUT(RAND(ISEED),A,ITP,K,I,J)
+   20             CONTINUE
+   30         CONTINUE
+   40     CONTINUE
+          DO 50 I = 1,NSIZKK
+              X(I) = RAND(ISEED)
+   50     CONTINUE
+          CALL SCOPY(NSIZKK,X,1,T,1)
+
+          CALL TENSOR(A,ITP,KK,TP1,TP2,IVSPAC)
+
+          CALL SGEMV('N',NSIZKK,NSIZKK,1.0,TP2,IVSPAC,X,1,0.0,B,1)
+          CALL TPMULT(A,ITP,KK,X,W)
+          WRITE(*,'('' multiplication   error=  '',e12.6)')
+     +                                 ERRNRM(B,X,NSIZKK)
+
+          CALL SGEFA(TP2,IVSPAC,NSIZKK,IPVT,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,
+     +      '('' random matrix was singular -- aborting testsp'')')
+              RETURN
+
+          END IF
+
+          CALL SGESL(TP2,IVSPAC,NSIZKK,IPVT,B,0)
+          WRITE(*,'('' linpack solution error=  '',e12.6)')
+     +                                 ERRNRM(T,B,NSIZKK)
+
+          CALL TPFACT(A,ITP,IPVT,KK,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,'('' error in tpfact, detected by testsp'')')
+              STOP
+
+          END IF
+
+          CALL TPSOLV(A,ITP,IPVT,KK,X,W)
+          WRITE(*,'('' tenpack solution error=  '',e12.6)')
+     +                                 ERRNRM(T,X,NSIZKK)
+
+   60 CONTINUE
+
+      RETURN
+
+ 9000 FORMAT (/,' ',64 ('*'),/,' testing symmetric indefinite ',
+     +       'packed matrices',/,' ',64 ('*'))
+ 9010 FORMAT (/,' tensor product of ',i2,' matrices')
+      END
+
+      SUBROUTINE TESTTR
+**********************************************************************
+*
+* Subroutine to test upper triangular matrices
+*
+**********************************************************************
+
+
+*     .. Parameters ..
+      INTEGER          NSIZE
+      PARAMETER        (NSIZE=3)
+      INTEGER          IVSPAC
+      PARAMETER        (IVSPAC=NSIZE**4)
+      INTEGER          ISPACE
+      PARAMETER        (ISPACE=4*NSIZE*NSIZE)
+*     ..
+*     .. Arrays in Common ..
+      REAL             B(IVSPAC),T(IVSPAC),TP1(IVSPAC,IVSPAC),
+     +                 TP2(IVSPAC,IVSPAC),W(IVSPAC),X(IVSPAC)
+*     ..
+*     .. Local Scalars ..
+      INTEGER          I,INFO,ISEED,J,K,KK,NSIZKK
+*     ..
+*     .. Local Arrays ..
+      REAL             A(ISPACE)
+      INTEGER          IPVT(IVSPAC),ITP(8,4)
+*     ..
+*     .. External Functions ..
+      REAL             ERRNRM,RAND
+      EXTERNAL         ERRNRM,RAND
+*     ..
+*     .. External Subroutines ..
+      EXTERNAL         SCOPY,SGEFA,SGEMV,SGESL,TENSOR,TPDESC,TPFACT,
+     +                 TPMULT,TPPUT,TPSOLV
+*     ..
+*     .. Common blocks ..
+      COMMON           X,B,W,T,TP1,TP2
+*     ..
+      ISEED = 0
+      WRITE(*,9000)
+      DO 60 KK = 1,4
+          WRITE(*,9010)KK
+          NSIZKK = NSIZE**KK
+
+          DO 10 I = 1,KK
+              ITP(1,I) = NSIZE
+              ITP(2,I) = 8
+   10     CONTINUE
+          CALL TPDESC(ITP,KK)
+
+          DO 40 K = 1,KK
+              DO 30 J = 1,NSIZE
+                  DO 20 I = 1,NSIZE
+                      CALL TPPUT(RAND(ISEED),A,ITP,K,I,J)
+   20             CONTINUE
+   30         CONTINUE
+   40     CONTINUE
+          DO 50 I = 1,NSIZKK
+              X(I) = RAND(ISEED)
+   50     CONTINUE
+          CALL SCOPY(NSIZKK,X,1,T,1)
+
+          CALL TENSOR(A,ITP,KK,TP1,TP2,IVSPAC)
+
+          CALL SGEMV('N',NSIZKK,NSIZKK,1.0,TP2,IVSPAC,X,1,0.0,B,1)
+          CALL TPMULT(A,ITP,KK,X,W)
+          WRITE(*,'('' multiplication   error=  '',e12.6)')
+     +                                 ERRNRM(B,X,NSIZKK)
+
+          CALL SGEFA(TP2,IVSPAC,NSIZKK,IPVT,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,
+     +      '('' random matrix was singular -- aborting testtr'')')
+              RETURN
+
+          END IF
+
+          CALL SGESL(TP2,IVSPAC,NSIZKK,IPVT,B,0)
+          WRITE(*,'('' linpack solution error=  '',e12.6)')
+     +                                 ERRNRM(T,B,NSIZKK)
+
+          CALL TPFACT(A,ITP,IPVT,KK,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,'('' error in tpfact, detected by testtr'')')
+              STOP
+
+          END IF
+
+          CALL TPSOLV(A,ITP,IPVT,KK,X,W)
+          WRITE(*,'('' tenpack solution error=  '',e12.6)')
+     +                                 ERRNRM(T,X,NSIZKK)
+
+   60 CONTINUE
+
+      RETURN
+
+ 9000 FORMAT (/,' ',64 ('*'),/,' testing  upper triangular matrices',/,
+     +       ' ',64 ('*'))
+ 9010 FORMAT (/,' tensor product of ',i2,' matrices')
+      END
+
+      SUBROUTINE TESTTB
+**********************************************************************
+*
+* Subroutine to test triangular band matrices
+*
+**********************************************************************
+
+
+*     .. Parameters ..
+      INTEGER          NSIZE
+      PARAMETER        (NSIZE=3)
+      INTEGER          IVSPAC
+      PARAMETER        (IVSPAC=NSIZE**4)
+      INTEGER          ISPACE
+      PARAMETER        (ISPACE=4*NSIZE*NSIZE)
+*     ..
+*     .. Arrays in Common ..
+      REAL             B(IVSPAC),T(IVSPAC),TP1(IVSPAC,IVSPAC),
+     +                 TP2(IVSPAC,IVSPAC),W(IVSPAC),X(IVSPAC)
+*     ..
+*     .. Local Scalars ..
+      INTEGER          I,INFO,ISEED,J,K,KK,NSIZKK
+*     ..
+*     .. Local Arrays ..
+      REAL             A(ISPACE)
+      INTEGER          IPVT(IVSPAC),ITP(8,4)
+*     ..
+*     .. External Functions ..
+      REAL             ERRNRM,RAND
+      EXTERNAL         ERRNRM,RAND
+*     ..
+*     .. External Subroutines ..
+      EXTERNAL         SCOPY,SGEFA,SGEMV,SGESL,TENSOR,TPDESC,TPFACT,
+     +                 TPMULT,TPPUT,TPSOLV
+*     ..
+*     .. Common blocks ..
+      COMMON           X,B,W,T,TP1,TP2
+*     ..
+      ISEED = 0
+      WRITE(*,9000)
+      DO 60 KK = 1,4
+          WRITE(*,9010)KK
+          NSIZKK = NSIZE**KK
+
+          DO 10 I = 1,KK
+              ITP(1,I) = NSIZE
+              ITP(2,I) = 10
+              ITP(3,I) = 1
+   10     CONTINUE
+          CALL TPDESC(ITP,KK)
+
+          DO 40 K = 1,KK
+              DO 30 J = 1,NSIZE
+                  DO 20 I = 1,NSIZE
+                      CALL TPPUT(RAND(ISEED),A,ITP,K,I,J)
+   20             CONTINUE
+   30         CONTINUE
+   40     CONTINUE
+          DO 50 I = 1,NSIZKK
+              X(I) = RAND(ISEED)
+   50     CONTINUE
+          CALL SCOPY(NSIZKK,X,1,T,1)
+
+          CALL TENSOR(A,ITP,KK,TP1,TP2,IVSPAC)
+
+          CALL SGEMV('N',NSIZKK,NSIZKK,1.0,TP2,IVSPAC,X,1,0.0,B,1)
+          CALL TPMULT(A,ITP,KK,X,W)
+          WRITE(*,'('' multiplication   error=  '',e12.6)')
+     +                                 ERRNRM(B,X,NSIZKK)
+
+          CALL SGEFA(TP2,IVSPAC,NSIZKK,IPVT,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,
+     +      '('' random matrix was singular -- aborting testtb'')')
+              RETURN
+
+          END IF
+
+          CALL SGESL(TP2,IVSPAC,NSIZKK,IPVT,B,0)
+          WRITE(*,'('' linpack solution error=  '',e12.6)')
+     +                                 ERRNRM(T,B,NSIZKK)
+
+          CALL TPFACT(A,ITP,IPVT,KK,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,'('' error in tpfact, detected by testtb'')')
+              STOP
+
+          END IF
+
+          CALL TPSOLV(A,ITP,IPVT,KK,X,W)
+          WRITE(*,'('' tenpack solution error=  '',e12.6)')
+     +                                 ERRNRM(T,X,NSIZKK)
+
+   60 CONTINUE
+
+      RETURN
+
+ 9000 FORMAT (/,' ',64 ('*'),/,
+     +       ' testing  upper triangular band matrices',/,' ',64 ('*'))
+ 9010 FORMAT (/,' tensor product of ',i2,' matrices')
+      END
+
+      SUBROUTINE TESTTP
+**********************************************************************
+*
+* Subroutine to test triangular packed  matrices
+*
+**********************************************************************
+
+
+*     .. Parameters ..
+      INTEGER          NSIZE
+      PARAMETER        (NSIZE=3)
+      INTEGER          IVSPAC
+      PARAMETER        (IVSPAC=NSIZE**4)
+      INTEGER          ISPACE
+      PARAMETER        (ISPACE=4*NSIZE*NSIZE)
+*     ..
+*     .. Arrays in Common ..
+      REAL             B(IVSPAC),T(IVSPAC),TP1(IVSPAC,IVSPAC),
+     +                 TP2(IVSPAC,IVSPAC),W(IVSPAC),X(IVSPAC)
+*     ..
+*     .. Local Scalars ..
+      INTEGER          I,INFO,ISEED,J,K,KK,NSIZKK
+*     ..
+*     .. Local Arrays ..
+      REAL             A(ISPACE)
+      INTEGER          IPVT(IVSPAC),ITP(8,4)
+*     ..
+*     .. External Functions ..
+      REAL             ERRNRM,RAND
+      EXTERNAL         ERRNRM,RAND
+*     ..
+*     .. External Subroutines ..
+      EXTERNAL         SCOPY,SGEFA,SGEMV,SGESL,TENSOR,TPDESC,TPFACT,
+     +                 TPMULT,TPPUT,TPSOLV
+*     ..
+*     .. Common blocks ..
+      COMMON           X,B,W,T,TP1,TP2
+*     ..
+      ISEED = 0
+      WRITE(*,9000)
+      DO 60 KK = 1,4
+          WRITE(*,9010)KK
+          NSIZKK = NSIZE**KK
+
+          DO 10 I = 1,KK
+              ITP(1,I) = NSIZE
+              ITP(2,I) = 12
+   10     CONTINUE
+          CALL TPDESC(ITP,KK)
+
+          DO 40 K = 1,KK
+              DO 30 J = 1,NSIZE
+                  DO 20 I = 1,NSIZE
+                      CALL TPPUT(RAND(ISEED),A,ITP,K,I,J)
+   20             CONTINUE
+   30         CONTINUE
+   40     CONTINUE
+          DO 50 I = 1,NSIZKK
+              X(I) = RAND(ISEED)
+   50     CONTINUE
+          CALL SCOPY(NSIZKK,X,1,T,1)
+
+          CALL TENSOR(A,ITP,KK,TP1,TP2,IVSPAC)
+
+          CALL SGEMV('N',NSIZKK,NSIZKK,1.0,TP2,IVSPAC,X,1,0.0,B,1)
+          CALL TPMULT(A,ITP,KK,X,W)
+          WRITE(*,'('' multiplication   error=  '',e12.6)')
+     +                                 ERRNRM(B,X,NSIZKK)
+
+          CALL SGEFA(TP2,IVSPAC,NSIZKK,IPVT,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,
+     +      '('' random matrix was singular -- aborting testtp'')')
+              RETURN
+
+          END IF
+
+          CALL SGESL(TP2,IVSPAC,NSIZKK,IPVT,B,0)
+          WRITE(*,'('' linpack solution error=  '',e12.6)')
+     +                                 ERRNRM(T,B,NSIZKK)
+
+          CALL TPFACT(A,ITP,IPVT,KK,INFO)
+          IF (INFO.NE.0) THEN
+              WRITE(*,'('' error in tpfact, detected by testtp'')')
+              STOP
+
+          END IF
+
+          CALL TPSOLV(A,ITP,IPVT,KK,X,W)
+          WRITE(*,'('' tenpack solution error=  '',e12.6)')
+     +                                 ERRNRM(T,X,NSIZKK)
+
+   60 CONTINUE
+
+      RETURN
+
+ 9000 FORMAT (/,' ',64 ('*'),/,
+     +       ' testing upper triangular packed matrices',/,' ',64 ('*'))
+ 9010 FORMAT (/,' tensor product of ',i2,' matrices')
+      END
+
+**********************************************************************
+* UTILITY SUBPROGRAMS
+**********************************************************************
+      SUBROUTINE TENSOR(ATP,ITP,NMAT,T1,T2,LDT)
+
+*     .. Scalar Arguments ..
+      INTEGER          LDT,NMAT
+*     ..
+*     .. Array Arguments ..
+      REAL             ATP(*),T1(LDT,*),T2(LDT,*)
+      INTEGER          ITP(8,*)
+*     ..
+*     .. Local Scalars ..
+      INTEGER          I,ITSIZE,J
+*     ..
+*     .. External Functions ..
+      REAL             TPGET
+      EXTERNAL         TPGET
+*     ..
+*     .. External Subroutines ..
+      EXTERNAL         SCOPY,T1NSOR
+*     ..
+*     .. Intrinsic Functions ..
+      INTRINSIC        MOD
+*     ..
+      DO 20 J = 1,ITP(1,NMAT)
+          DO 10 I = 1,ITP(1,NMAT)
+              T1(I,J) = TPGET(ATP,ITP,NMAT,I,J)
+   10     CONTINUE
+   20 CONTINUE
+      ITSIZE = ITP(1,NMAT)
+
+      DO 30 I = NMAT - 1,1,-1
+          IF (MOD(NMAT-I,2).EQ.0) THEN
+              CALL T1NSOR(ATP,ITP,I,ITSIZE,T2,T1,LDT)
+
+          ELSE
+              CALL T1NSOR(ATP,ITP,I,ITSIZE,T1,T2,LDT)
+          END IF
+
+          ITSIZE = ITSIZE*ITP(1,I)
+   30 CONTINUE
+
+      IF (MOD(NMAT,2).NE.0) THEN
+          DO 40 J = 1,ITSIZE
+              CALL SCOPY(ITSIZE,T1(1,J),1,T2(1,J),1)
+   40     CONTINUE
+      END IF
+
+      RETURN
+
+      END
+
+      SUBROUTINE T1NSOR(ATP,ITP,IMAT,ITSIZE,T1,T2,LDT)
+
+*     .. Scalar Arguments ..
+      INTEGER          IMAT,ITSIZE,LDT
+*     ..
+*     .. Array Arguments ..
+      REAL             ATP(*),T1(LDT,*),T2(LDT,*)
+      INTEGER          ITP(8,*)
+*     ..
+*     .. Local Scalars ..
+      REAL             AIJ
+      INTEGER          I,J,K,L,NSIZE
+*     ..
+*     .. External Functions ..
+      REAL             TPGET
+      EXTERNAL         TPGET
+*     ..
+      NSIZE = ITP(1,IMAT)
+      DO 40 I = 1,NSIZE
+          DO 30 J = 1,NSIZE
+              AIJ = TPGET(ATP,ITP,IMAT,I,J)
+              DO 20 K = 1,ITSIZE
+                  DO 10 L = 1,ITSIZE
+                      T2((I-1)*ITSIZE+K, (J-1)*ITSIZE+L) = AIJ*T1(K,L)
+   10             CONTINUE
+   20         CONTINUE
+   30     CONTINUE
+   40 CONTINUE
+      RETURN
+
+      END
+
+      REAL FUNCTION ERRNRM(A,B,N)
+* returns ||a-b||/||a||
+
+
+*     .. Scalar Arguments ..
+      INTEGER          N
+*     ..
+*     .. Array Arguments ..
+      REAL             A(N),B(N)
+*     ..
+*     .. Local Scalars ..
+      REAL             ANRM,DIFNRM
+      INTEGER          I
+*     ..
+*     .. Intrinsic Functions ..
+      INTRINSIC        ABS,MAX
+*     ..
+      DIFNRM = 0.0
+      ANRM = 0.0
+      DO 10 I = 1,N
+          DIFNRM = MAX(ABS(A(I)-B(I)),DIFNRM)
+          ANRM = MAX(ABS(A(I)),ANRM)
+   10 CONTINUE
+      ERRNRM = DIFNRM/ANRM
+      RETURN
+
+      END
+
+      SUBROUTINE IMATPR(A,N,M)
+
+*     .. Scalar Arguments ..
+      INTEGER          M,N
+*     ..
+*     .. Array Arguments ..
+      INTEGER          A(N,M)
+*     ..
+*     .. Local Scalars ..
+      INTEGER          I,J
+*     ..
+      DO 10 I = 1,N
+          WRITE(*,9000) (A(I,J),J=1,M)
+   10 CONTINUE
+      RETURN
+
+ 9000 FORMAT (' ',20 (i4,' '))
+      END
+
+      SUBROUTINE MATPRT(A,N,M)
+
+*     .. Scalar Arguments ..
+      INTEGER          M,N
+*     ..
+*     .. Array Arguments ..
+      REAL             A(N,M)
+*     ..
+*     .. Local Scalars ..
+      INTEGER          I,J
+*     ..
+      DO 10 I = 1,N
+          WRITE(*,9000) (A(I,J),J=1,M)
+   10 CONTINUE
+      RETURN
+
+ 9000 FORMAT (' ',20 (f6.1,' '))
+      END
+
+      REAL FUNCTION RAND(ISEED)
+
+
+*     .. Scalar Arguments ..
+      INTEGER          ISEED
+*     ..
+*     .. Local Scalars ..
+      INTEGER          ITEMP
+*     ..
+*     .. Intrinsic Functions ..
+      INTRINSIC        REAL
+*     ..
+      ITEMP = 25173*ISEED + 13849
+      ISEED = ITEMP - 65536* (ITEMP/65536)
+
+      RAND = REAL(ISEED)/65536.0
+
+      RETURN
+
+      END
+
+      SUBROUTINE ZERO(X,N)
+*     .. Scalar Arguments ..
+      INTEGER          N
+*     ..
+*     .. Array Arguments ..
+      REAL             X(N)
+*     ..
+*     .. Local Scalars ..
+      INTEGER          I
+*     ..
+      DO 10 I = 1,N
+          X(I) = 0.0
+   10 CONTINUE
+      RETURN
+
+      END

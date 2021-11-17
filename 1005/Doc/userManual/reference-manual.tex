@@ -1,0 +1,163 @@
+\documentclass[a4paper]{article}
+
+\usepackage[margin=2cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{verbatim}
+\usepackage{hanging}
+
+\setcounter{secnumdepth}{1}
+\newcommand{\minuseq}{\ensuremath{\,-\!\!=}}
+\newcommand{\pluseq}{\ensuremath{\,+\!\!=}}
+
+\title{BLAS-RMD Reference Manual}
+\date{August 2019}
+\author{Kristjan Jonasson, Sven Sigurdsson, Hordur Freyr Yngvason,\\
+  Petur Orri Ragnarsson, Pall Melsted}
+
+\begin{document}
+\maketitle
+
+\tableofcontents
+
+\vspace{3cm}
+
+\section{Introduction}
+
+The BLAS\_RMD package consists of a set Fortran subroutines that compute the
+reverse mode algorithmic derivatives of all the real BLAS operations, and in
+addition there is a routine for the derivative of potrf from LAPACK. Like the
+non-complex BLAS themselves, these routines come in two flavors, single and
+double precision. Corresponding to each BLAS routine there is a derivative
+subroutine with a name obtained by prefixing s or d and suffixing \_rmd. For
+BLAS that have scalar parameters (alpha, beta) there is an additional derivative
+routine with a name obtained by suffixing \_rmds. Thus, the double precision
+derivatives of axpy are implemented in the subroutines daxpy\_rmd and
+daxpy\_rmds.
+
+This reference manual contains documentation for all the 53 subroutines of the
+package, 35 to compute vector and matrix adjoints of 34 BLAS routines and
+Lapack's potrf, in the same order as the corresponding BLAS routines appear in
+the Netlib Quick Reference Guide [1], and an additional 18 to compute scalar
+adjoints of those BLAS routines that include scalar parameters. Only single
+precision versions of the subroutines are covered, as the corresponding double
+precision versions are direct translations.
+
+The parameter list of an RMD-subroutine begins with the parameters of the
+corresponding BLAS, in the original order, leaving out parameters that are not
+needed. This part of the list includes control character options (\texttt{side},
+\texttt{uplo}, \texttt{diag} and \texttt{trans\_}), vector and matrix sizes,
+leading dimensions, bandwidths and vector increments. If the parameters were
+changed by the BLAS, usually they should have the value that they had on exit
+from the BLAS, but in a few cases it is the entry value that is needed, and then
+the parameter name is suffixed with 0. Note that the reference BLAS
+documentation is a little inaccurate in the description of symmetric matrix
+parameters: A is used both to denote the symmetrix matrix itself and the
+corresponding triangular matrix parameter. The RMD-documentation uses sym(A) or
+sym(A') for the matrix and A for the parameter.
+
+This list of original BLAS arguments is followed by a list of adjoints, both
+those needed as input and those computed/updated by the RMD-routine. These are
+listed in the same order as the corresponding BLAS parameters. In all cases it
+is assumed that the adjoints are stored in vectors/matrices with the same size,
+shape, leading dimension, bandwidth and/or increment as the corresponding
+original quantities. Thus there are no new character control or integer
+parameters in the list.
+
+Next in the list for a few of the routines is a work space parameter. For the
+sake of efficiency no memory allocation takes place in the RMD-routines.
+Finally, for many routines the parameter list ends with a character parameter
+called SEL that is used to select which adjoints should be computed. Normally
+a computation involves some constant matrices and vectors (such as measurements
+entering regression analysis) and adjoints of these are normally not required.
+The SEL parameter takes the form '110', indicating that adjoints of the first
+two BLAS vectors/matrices will be computed, but not of the third. Note that
+parameters, which do not appear in formulae for adjoints that are computed
+according to the SEL-value, will not be referenced. In such cases a dummy
+argument may be passed.
+
+One issue that needs attention is whether the RMD-routines should update (i.e.\
+add to or subtract from) or assign to the adjoint parameters. In Table 3 in
+the accompanying article [2] all the formulae are specified as updates, with
+either $\pluseq$ or $\minuseq$. However many BLAS routines overwrite input
+parameters with new values. Inspection of the examples in the demo folder (see
+also Section 6 in the accompanying article [2]) demonstrates that it is natural
+to let the RMD-routines assign to the adjoints of these parameters. The value
+of such a parameter on input to the BLAS routine will not be used again during
+the forward traversing of the computation tree, and thus if the RM computation
+is done in reverse order, this will be the first occurence of the corresponding
+adjoint in the reverse traversing of the computation tree. The documentation
+below provides information on which parameters are updated and which ones are
+assigned to. In the latter case, we state that the parameter is computed.
+
+The Fortran language and the BLAS specification allows for the possibility of
+repeated input arguments, i.e. the same variable being passed to multiple
+parameters. There are three BLAS operations, dot, ger and gemm, where such use
+may be sensible (e.g. the differentiation of $B = A^2$). For these three
+operations the reference manual contains notes explaining how the corresponding
+adjoints could be computed.
+
+For an example, assume that BLAS was called with:
+
+\begin{quote}
+  \texttt{call stbsv(uplo, trans, diag, n, k, A, n, x, 1)},
+\end{quote}
+
+\noindent
+and that the adjoint of \texttt{A} should be updated, but not that of \texttt{x}.
+Then the RMD-call could be:
+
+\begin{quote}
+  \texttt{call stbsv\_rmd(uplo, trans, diag, n, k, A, n, x, 1, Ai, 0.0, wrk, '10')},
+\end{quote}
+
+\noindent
+where all parameters before \texttt{Ai} should be as on the BLAS call,
+\texttt{Ai} should be a triangular matrix with leading dimension \texttt{n},
+bandwith \texttt{k}, and storage properties the same as \texttt{A} (according to
+\texttt{uplo}, \texttt{trans}, and \texttt{diag}), and \texttt{wrk} should be a
+single precision workspace vector of dimension at least \texttt{n}. Since
+\texttt{xi} is not accessed it can be specified as \texttt{0.0}.
+
+For another example, assume the BLAS call
+
+\begin{quote}
+  \texttt{call dtpmv('U', 'T', 'N', n, AP, x, 1)}.
+\end{quote}
+
+\noindent
+The corresponding RMD-call could be
+
+\begin{quote}
+  \texttt{call dtpmv\_rmd('U', 'T', 'N', n, AP, x0, 1, 0d0, xi, 1, '01')}
+\end{quote}
+
+\noindent
+where the assignment \texttt{x0 = x} should be placed before the call to
+\texttt{dtpmv}.
+
+\newcommand{\rmdheadS}[1]{
+  \subsection{S\uppercase{#1}}
+  \verbatiminput{#1.txt}
+}
+  
+\newcommand{\rmdhead}[1]{
+  \pagebreak
+  \rmdheadS{#1}
+}
+
+\input{refdoc.tex}
+
+\section{References}
+\begin{hangparas}{1.4em}{1}
+[1] Oak Ridge National Laboratory, Numerical Algorithms Group Ltd., {\it Basic Linear
+Algebra Subprograms -- A Quick Reference Guide}, 1997, available at
+http://www.netlib.org/blas/blasqr.pdf
+
+\noindent [2] Kristjan Jonasson, Sven Sigurdsson, Hordur Freyr Yngvason, Petur
+Orri Ragnarsson, Pall Melsted, {\it Algorithm xxx: Fortran subroutines for
+  reverse mode algorithmic differentiation of BLAS matrix operations}, ACM
+Transactions on Mathematical Software (TOMS), xx, xx, 2020.
+
+\end{hangparas}
+\end{document}

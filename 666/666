@@ -1,0 +1,1386 @@
+C      ALGORITHM 666, COLLECTED ALGORITHMS FROM ACM.
+C      THIS WORK PUBLISHED IN TRANSACTIONS ON MATHEMATICAL SOFTWARE,
+C      VOL. 14, NO. 4, PP. 330-336.
+      PROGRAM MAINSP
+***********************************************************************
+*                                                                     *
+*     This is a  sample  driver program for our mathematical software *
+*     package CHABIS (CHAracteristic BISection)  which solves systems *
+*     of nonlinear (algebraic and/or transcendental) equations of the *
+*     form                                                            *
+*                             -   -     -                             *
+*                             F ( X ) = 0 ,                           *
+*     where                                                           *
+*           -                       T                                 *
+*           F = ( f1, f2, ... , fn )     is a continuous mapping of a *
+*           bounded region in the real N-space into the real N-space. *
+*                                                                     *
+*     First, CHABIS locates at least one solution of the given system *
+*     within an N-dimensional Polyhedron. Then it obtains an approxi- *
+*     mate solution using a new generalized method of bisection.      *
+*                                                                     *
+*     This driver  program runs all  the examples of the accompanying *
+*     paper. It echoes the example number and  the input values (ini- *
+*     tial guess and stepsizes), and prints out the final approximate *
+*     root.  Also, it prints out performance information such as that *
+*     given in the accompanying paper. It takes the input values from *
+*     the file SINPUT and provides the print out in the file  OUTPUT. *
+*                                                                     *
+*                                                                     *
+*                                        CHABIS. Version of June 1988 *
+*                                        Michael N. Vrahatis          *
+*                                                                     *
+***********************************************************************
+      INTRINSIC INT, FLOAT
+      INTEGER NEXT, N, NFCALL, LIU, LOU, I, ICON, LWA, J, INF1, INF2
+      REAL DELTA, EPSILO, XO(9), H(9), AS(9), VAS(9)
+      REAL WA(28178)
+      CHARACTER*9 EXAMP
+      CHARACTER*70 F1, F2
+      EXTERNAL FNC
+      COMMON / BLK1 / NEXT, N, NFCALL
+*
+*     The Logical Input Unit is assumed to be the number 7.           *
+*
+      DATA LIU / 7 /
+*
+*     The Logical Output Unit is assumed to be the number 8.          *
+*
+      DATA LOU / 8 /
+*
+*     Open the Input and Output files.                                *
+*
+      OPEN ( UNIT = LIU, FILE = 'SINPUT', STATUS = 'OLD' )
+      OPEN ( UNIT = LOU, FILE = 'OUTPUT', STATUS = 'NEW' )
+      DO 10 I = 1, 24
+*
+*        Set the value of DELTA.   DELTA is a positive variable which *
+*        determines  the accuracy of the computation of the roots, of *
+*        the  components of  the given function, which are located on *
+*        the edges of the Initial  N-Polyhedron, and are used for the *
+*        construction of a  Characteristic N-Polyhedron. Note that if *
+*        DELTA is less than the machine precision EPSMCH, or if DELTA *
+*        is not defined, the default value of  DELTA becomes equal to *
+*        0.0625 . The EPSMCH is computed within CHABIS.               *
+*
+         DELTA = 0.625E-1
+*
+*        Set the value of  EPSILO , which  is a nonnegative variable. *
+*        Termination  occurs  when  the algorithm estimates  that the *
+*        Infinity  Norm, of the  function  values at  an  approximate *
+*        solution, is at  most  EPSILO. If  EPSILO  is less than  the *
+*        machine precision  EPSMCH, or if  EPSILO is not defined, the *
+*        default value of EPSILO becomes equal to  EPSMCH.            *
+*
+         EPSILO = 1.0E-8
+*
+*        Set the condition variable  ICON. Note that if ICON is equal *
+*        to 1, then  CHABIS  attempts to find an approximate solution *
+*        even if the default Characteristic N-Polyhedron construction *
+*        fails. Otherwise, set  ICON  equal to another integer value. *
+*
+         ICON = 1
+*
+*        Set the starting values.                                     *
+*
+         READ (LIU, *) EXAMP
+         READ (LIU, *) F1, F2
+         READ (LIU, *) N
+         READ (LIU, *) ( XO(J), J = 1, N )
+         READ (LIU, *) ( H(J), J = 1, N )
+         READ (LIU, *) NEXT
+*
+*        Set the length LWA of the workspace array  WA. Note that LWA *
+*        must be at least equal to the value  ( 2*N+(6*N+1)*2**N ).   *
+*
+         LWA = 2*N + (6*N+1) * 2**N
+*
+         WRITE (LOU, 9999) EXAMP, F1, F2, N
+         WRITE (LOU, 9998) ( XO(J), H(J), J = 1, N )
+*
+*        Call the interface subroutine INTSUB.                        *
+*
+         NFCALL = 0
+         CALL INTSUB( FNC, N, XO, H, DELTA, EPSILO, ICON, INF1,
+     +                AS, VAS, INF2, WA, LWA)
+*
+         IF ( INF1 .EQ. 0 ) THEN
+            WRITE (LOU, 9997)
+         ELSEIF ( INF1 .EQ. 2 .AND. ICON .NE. 1 ) THEN
+            WRITE (LOU, 9996) N
+         ELSE
+            WRITE (LOU, 9995) DELTA, EPSILO, (AS(J), VAS(J), J = 1, N)
+         ENDIF
+         NFCALL = INT( FLOAT( NFCALL ) / FLOAT( N ) )
+         WRITE (LOU, 9994) INF1, INF2, NFCALL
+   10 CONTINUE
+      STOP
+*
+*     Format statements.                                              *
+*
+ 9999 FORMAT (//3X, 14('====='),//14X,' EXAMPLE  ', A /15X,9('--')//
+     +        3X, A / 3X, A //2X,' n =', I2 )
+ 9998 FORMAT (//2X,' INITIAL GUESS :', 17X, ' STEPSIZES :'//
+     +        9( F16.7, 16X, F16.7 / ) )
+ 9997 FORMAT (//5X,'  * * * IMPROPER INPUT PARAMETERS * * *'// )
+ 9996 FORMAT (//5X,'* * * THE CHARACTERISTIC', I2, '-POLYHEDRON HAS',
+     +        ' NOT BEEN COMPLETED * * *'// )
+ 9995 FORMAT (//2X,' DELTA  = ',F20.18 //2X,' EPSILO = ',F20.18
+     +        ////2X,' FINAL APPROXIMATE SOLUTION :', 5X,
+     +        'VERIFICATION OF THE SOLUTION :'//9(F24.18, 9X,F24.18/))
+ 9994 FORMAT (//2X,' EXIT PARAMETERS :   INF1 = ',I1,1X,',   INF2 = '
+     +        ,I1//2X,' NUMBER OF FUNCTION CALLS :   NFCALL =',I4 )
+*
+*     Last statement of the main program.                             *
+*
+      END
+*---------------------------------------------------------------------*
+*
+      REAL FUNCTION FNC( X, IFLAG )
+***********************************************************************
+*                                                                     *
+*     FUNCTION FNC                                                    *
+*                                                                     *
+*       The purpose of this  subprogram  is to evaluate the  IFLAG-th *
+*       component of the given function.                              *
+*                                                                     *
+*                                                                     *
+*     The function statement is :                                     *
+*                                                                     *
+*     REAL FUNCTION FNC( X, IFLAG )                                   *
+*                                                                     *
+*     where                                                           *
+*                                                                     *
+*       X is an array of length N and contains the corresponding com- *
+*         ponents of the independent variable.                        *
+*                                                                     *
+*       IFLAG  determines the component  of the function to be evalu- *
+*         ated.                                                       *
+*                                                                     *
+***********************************************************************
+      INTEGER IFLAG, NEXT, N, NFCALL, I
+      REAL X(9), ZERO, ONE, TWO, FOUR, TEN, ONETEN
+      COMMON / BLK1 / NEXT, N, NFCALL
+      PARAMETER ( ZERO = 0.0,   ONE = 1.0,    TWO = 2.0,
+     +            FOUR = 4.0,   TEN = 10.0,   ONETEN = 0.1 )
+      NFCALL = NFCALL + 1
+      GO TO ( 100, 200, 300, 400, 500, 600 ), NEXT
+100   GO TO ( 1, 2 ), IFLAG
+    1 FNC = X(1)**2 - FOUR * X(2)
+      RETURN
+    2 FNC = X(2)**2 - TWO * X(1) + FOUR * X(2)
+      RETURN
+200   GO TO ( 3, 4 ), IFLAG
+    3 FNC = ONE - X(1)
+      RETURN
+    4 FNC = TEN * ( X(2) - X(1) ** 2 )
+      RETURN
+300   IF ( X(1) .EQ. ZERO ) THEN
+         IF ( X(2) .EQ. ZERO ) THEN
+            FNC = ZERO
+            RETURN
+         ENDIF
+      ENDIF
+      GO TO ( 5, 6 ), IFLAG
+    5 FNC = ( X(1)**3 - X(2)**3 ) / ( X(1)**2 + X(2)**2 )
+      RETURN
+    6 FNC = ( X(1)**3 + X(2)**3 ) / ( X(1)**2 + X(2)**2 )
+      RETURN
+400   FNC = X(IFLAG)
+      RETURN
+500   I = IFLAG + 1
+      IF ( IFLAG .EQ. N ) I = 1
+      FNC = ( X(IFLAG) - ONETEN ) ** 2 + ( X(I) - ONETEN )
+      RETURN
+600   I = IFLAG + 1
+      IF ( IFLAG .EQ. N ) I = 1
+      FNC = X(IFLAG) ** 2 - X(I)
+      RETURN
+*
+*     Last statement of the function FNC.                             *
+*
+      END
+*---------------------------------------------------------------------*
+*
+      SUBROUTINE INTSUB( FNC, N, XO, H, DELTA, EPSILO, ICON, INF1,
+     +                   AS, VAS, INF2, WA, LWA )
+      INTEGER N, ICON, INF1, INF2, LWA
+      REAL XO(N), H(N), DELTA, EPSILO
+      REAL AS(N), VAS(N), WA(LWA)
+      EXTERNAL FNC
+***********************************************************************
+*                                                                     *
+*     SUBROUTINE INTSUB                                               *
+*                                                                     *
+*       This is an interface subroutine between the  main program and *
+*       the subroutines  CHAPOL  and  GENBIS,  through which a single *
+*       workspace array WA is passed. INTSUB evokes CHAPOL and GENBIS *
+*       in such a way that the addresses of  the corresponding arrays *
+*       within the subroutines are computed in WA. In this way, their *
+*       arrays can appear with variable dimensions.                   *
+*                                                                     *
+*                                                                     *
+*     The subroutine statement is :                                   *
+*                                                                     *
+*     SUBROUTINE INTSUB( FNC, N, XO, H, DELTA, EPSILO, ICON, INF1,    *
+*    +                   AS, VAS, INF2, WA, LWA )                     *
+*                                                                     *
+*     where                                                           *
+*                                                                     *
+*       FNC is the name of the user-supplied function which evaluates *
+*         components of the given function. FNC should be declared in *
+*         an external  statement in  the user - calling  program, and *
+*         should be written as follows :                              *
+*                                                                     *
+*         REAL FUNCTION FNC( X, IFLAG )                               *
+*         INTEGER IFLAG                                               *
+*         REAL X(N)                                                   *
+*         ------------------------------------------------------      *
+*         Calculate the IFLAG-th component of the function at X.      *
+*         ------------------------------------------------------      *
+*         RETURN                                                      *
+*         END                                                         *
+*                                                                     *
+*       N is a positive integer input variable which defines the num- *
+*         ber of equations and variables.                             *
+*                                                                     *
+*       XO is an input array of length  N  which defines  the initial *
+*         guess of the solution.                                      *
+*                                                                     *
+*       H is an input array of length N, with positive entries, which *
+*         determines the stepsizes in each coordinate direction.      *
+*                                                                     *
+*       DELTA is a positive input variable which determines the accu- *
+*         racy of  the computation of the roots, of the components of *
+*         the  given function, which are located on  the edges of the *
+*         Initial N-Polyhedron and are used for the construction of a *
+*         Characteristic  N-Polyhedron.  If  DELTA  is less  than the *
+*         machine precision  EPSMCH,  DELTA takes the value  0.0625 . *
+*         The value of EPSMCH is computed within INTSUB.              *
+*                                                                     *
+*       EPSILO  is a nonnegative  input  variable. Termination occurs *
+*         when the algorithm estimates that the Infinity Norm, of the *
+*         function  values  at an  approximate  solution, is at  most *
+*         EPSILO. If EPSILO is less than the machine precision EPSMCH,*
+*         EPSILO becomes equal to  EPSMCH.                            *
+*                                                                     *
+*       ICON  is an integer input variable. If  ICON  is equal to  1, *
+*         then GENBIS is evoked even if a Characteristic N-Polyhedron *
+*         has not been constructed.                                   *
+*                                                                     *
+*       INF1 is an integer output variable set as follows :           *
+*                                                                     *
+*         INF1 = 0   Improper input parameters.                       *
+*                    CHAPOL and GENBIS have not been evoked.          *
+*                                                                     *
+*         INF1 = 1   A  Characteristic  N-Polyhedron  has  been  con- *
+*                    structed.                                        *
+*                                                                     *
+*         INF1 = 2   A Characteristic N-Polyhedron has not  been con- *
+*                    structed.                                        *
+*                                                                     *
+*         INF1 = 3   More than two vertices of the constructed  Char- *
+*                    acteristic  N-Polyhedron are located on the same *
+*                    edge of the Initial N-Polyhedron.                *
+*                                                                     *
+*         INF1 = 4   An approximate solution according to the  preci- *
+*                    sion  EPSILO has been found during the construc- *
+*                    tion of the Characteristic N-Polyhedron.         *
+*                    GENBIS has not been evoked.                      *
+*                                                                     *
+*       AS is an output array of length N  which determines the final *
+*         approximate solution.                                       *
+*                                                                     *
+*       VAS is an output array of length N  which specifies the func- *
+*          tion values at  AS.                                        *
+*                                                                     *
+*       INF2 is an integer output variable set as follows :           *
+*                                                                     *
+*         INF2 = 0   GENBIS has not been evoked.                      *
+*                                                                     *
+*         INF2 = 1   The solution has been found  within the required *
+*                    accuracy of  EPSILO.                             *
+*                                                                     *
+*         INF2 = 2   Iterations have reached their upper limit.       *
+*                    The answer may not be accurate.                  *
+*                                                                     *
+*         INF2 = 3   The  length  of  the longest  diagonal  has been *
+*                    found to be less than  2.0 * N * EPSILO.         *
+*                                                                     *
+*       WA is a workspace array of length LWA.                        *
+*                                                                     *
+*       LWA is a positive integer input variable  not less  than  the *
+*         value of ( 2*N + (6*N+1) * 2**N ).                          *
+*                                                                     *
+*                                                                     *
+*     Subprograms required :                                          *
+*                                                                     *
+*       USER-Supplied ..... FNC                                       *
+*                                                                     *
+*       CHABIS-Supplied ... CHAPOL, GENBIS                            *
+*                                                                     *
+*                                                                     *
+*                                        CHABIS. Version of June 1988 *
+*                                        Michael N. Vrahatis          *
+*                                                                     *
+***********************************************************************
+      INTEGER NV, J, NDG, NN, LD1, LD2, LD3, LD4, LD5, LD6, LD7, LD8
+      INTEGER NS, LD9, LD10, LD11
+      REAL ZERO, ONE, TWO, DEF, EPSMCH, TOL
+      PARAMETER ( ZERO = 0.0,   ONE = 1.0,
+     +            TWO = 2.0,    DEF = 0.0625 )
+*
+*     Check the input parameters for errors.                          *
+*
+      INF1 = 0
+      INF2 = 0
+      NV = 2 ** N
+      IF ( N .LE. 1 .OR. LWA .LT. (2*N+(6*N+1)*NV) ) GO TO 30
+      DO 10 J = 1, N
+         IF ( H(J) .LE. ZERO ) GO TO 30
+   10 CONTINUE
+*
+*     Compute the machine precision.                                  *
+*
+      EPSMCH = ONE
+   20 EPSMCH = EPSMCH / TWO
+         TOL = ONE + EPSMCH
+         IF ( TOL .GT. ONE ) GO TO 20
+      EPSMCH = TWO * EPSMCH
+*
+*     Determine if the input values of EPSILO and DELTA are less than *
+*     the machine precision.                                          *
+*
+      IF ( EPSILO .LT. EPSMCH ) EPSILO = EPSMCH
+      IF ( DELTA .LT. EPSMCH ) DELTA = DEF
+*
+*     Call CHAPOL.                                                    *
+*
+      NDG = NV / 2
+      NN = N * NV
+      LD1 = 1 + NN
+      LD2 = LD1 + NN
+      LD3 = LD2 + NN
+      LD4 = LD3 + NN
+      LD5 = LD4 + NN
+      LD6 = LD5 + NV
+      LD7 = LD6 + NN
+      LD8 = LD7 + N
+      CALL CHAPOL( FNC, N, NV, NDG, XO, H, EPSMCH, DELTA, EPSILO,
+     +             ICON, WA(1), WA(LD1), WA(LD3), WA(LD4), WA(LD2),
+     +             WA(LD5),INF1, AS, VAS, WA(LD6), WA(LD7), WA(LD8))
+      IF ( INF1 .EQ. 4 ) GO TO 30
+      IF ( INF1 .EQ. 2 .AND. ICON .NE. 1 ) GO TO 30
+*
+*     Call GENBIS.                                                    *
+*
+      NS = N * NDG
+      LD9 = LD6 + NS
+      LD10 = LD9 + NDG
+      LD11 = LD10 + N
+      CALL GENBIS( FNC, N, NV, NS, NDG, WA(1), WA(LD1), WA(LD2), EPSMCH,
+     +             EPSILO, WA(LD3), WA(LD6), WA(LD9), AS, VAS, INF2,
+     +             WA(LD5), WA(LD10), WA(LD4), WA(LD11), XO, H )
+   30 RETURN
+*
+*     Last statement of the interface subroutine INTSUB.              *
+*
+      END
+*---------------------------------------------------------------------*
+*
+      SUBROUTINE CHAPOL( FNC, N, NV, NDG, XO, H, EPSMCH, DELTA, EPSILO,
+     +                   ICON, B, C, PO, SPO, CP,
+     +                   A, INF1, X, FX, WM, WA1, WA2 )
+      INTEGER N, NV, NDG, ICON, INF1
+      REAL XO(N), H(N), EPSMCH, DELTA, EPSILO
+      REAL B(NV,N), C(NV,N), PO(NV,N), SPO(NV,N), CP(NV,N)
+      REAL A(NV), X(N), FX(N), WM(NV,N), WA1(N), WA2(N)
+***********************************************************************
+*                                                                     *
+*     SUBROUTINE CHAPOL                                               *
+*                                                                     *
+*       The purpose  of this subroutine is to construct a  Character- *
+*       istic N-Polyhedron for the localization of at least one solu- *
+*       tion of a system of  N  non-linear equations in  N variables. *
+*                                                                     *
+*                                                                     *
+*     The subroutine statement is :                                   *
+*                                                                     *
+*     SUBROUTINE CHAPOL( FNC, N, NV, NDG, XO, H, EPSMCH, DELTA,EPSILO,*
+*    +                   ICON, B, C, PO, SPO, CP,                     *
+*    +                   A, INF1, X, FX, WM, WA1, WA2 )               *
+*                                                                     *
+*     where                                                           *
+*                                                                     *
+*       FNC is the name of the user-supplied function which evaluates *
+*         components of the given function. FNC should be declared in *
+*         an external  statement in  the user - calling  program, and *
+*         should be written as follows :                              *
+*                                                                     *
+*         REAL FUNCTION FNC( X, IFLAG )                               *
+*         INTEGER IFLAG                                               *
+*         REAL X(N)                                                   *
+*         ------------------------------------------------------      *
+*         Calculate the IFLAG-th component of the function at X.      *
+*         ------------------------------------------------------      *
+*         RETURN                                                      *
+*         END                                                         *
+*                                                                     *
+*       N is a positive integer input variable which defines the num- *
+*         ber of equations and variables.                             *
+*                                                                     *
+*       NV is a positive integer  input variable  equal to  2**N.  NV *
+*         specifies the number of vertices of the  Initial and  Char- *
+*         acteristic N-Polyhedra.                                     *
+*                                                                     *
+*       NDG is a positive  integer input variable equal to  NV/2. NDG *
+*         specifies the number of diagonals of the  Characteristic N- *
+*         Polyhedron.                                                 *
+*                                                                     *
+*       XO is an input array of length  N  which defines  the initial *
+*         guess of the solution.                                      *
+*                                                                     *
+*       H is an input array of length N, with positive entries, which *
+*         determines the stepsizes in each coordinate direction.      *
+*                                                                     *
+*       EPSMCH  is a positive input variable which determines the ma- *
+*         chine precision.                                            *
+*                                                                     *
+*       DELTA is a positive input variable which determines the accu- *
+*         racy of  the computation of the roots, of the components of *
+*         the  given function, which are located on  the edges of the *
+*         Initial N-Polyhedron and are used for the construction of a *
+*         Characteristic  N-Polyhedron.  If  DELTA  is less  than the *
+*         machine precision  EPSMCH,  DELTA takes the value  0.0625 . *
+*                                                                     *
+*       EPSILO  is a nonnegative  input  variable. Termination occurs *
+*         when the algorithm estimates that the Infinity Norm, of the *
+*         function  values  at an  approximate  solution, is at  most *
+*         EPSILO. If EPSILO is less than the machine precision EPSMCH,*
+*         EPSILO  becomes equal to  EPSMCH.                           *
+*                                                                     *
+*       ICON is an integer input variable. If  ICON is equal to 1 and *
+*         the  Characteristic  N-Polyhedron construction fails,  then *
+*         CHAPOL  will complete  the unconstructed  Characteristic N- *
+*         Polyhedron vertices, using the  Initial N-Polyhedron verti- *
+*         ces. Note that this action is taken when the Characteristic *
+*         N-Polyhedron  is incomplete and  the subroutine  GENBIS  is *
+*         utilized.                                                   *
+*                                                                     *
+*       B is an output  NV by N  matrix  which defines  the  N-binary *
+*         matrix.                                                     *
+*                                                                     *
+*       C is an output  NV by N  matrix which defines the  N-complete *
+*         matrix.                                                     *
+*                                                                     *
+*       PO is an output NV by N matrix,with entries in each row which *
+*         are  the corresponding  components  of the vertices  of the *
+*         Initial N-Polyhedron.                                       *
+*                                                                     *
+*       SPO is an output  NV  by  N  matrix, with entries in each row *
+*         which are the  corresponding  components  of the vectors of *
+*         signs of the function relative to the vertices of  PO.      *
+*                                                                     *
+*       CP is an output NV by N matrix,with entries in each row which *
+*         are  the corresponding  components  of the vertices of  the *
+*         Characteristic N-Polyhedron.                                *
+*                                                                     *
+*       A is an output array of length NV and determines which verti- *
+*         ces of the  Characteristic N-Polyhedron have not been  con- *
+*         structed. When all its entries are equal to zero, the Char- *
+*         acteristic N-Polyhedron has been constructed.               *
+*                                                                     *
+*       INF1 is an integer output variable set as follows :           *
+*                                                                     *
+*         INF1 = 0   Improper input parameters.                       *
+*                    CHAPOL and GENBIS have not been evoked.          *
+*                                                                     *
+*         INF1 = 1   A  Characteristic  N-Polyhedron  has  been  con- *
+*                    structed.                                        *
+*                                                                     *
+*         INF1 = 2   A Characteristic N-Polyhedron has not  been con- *
+*                    structed.                                        *
+*                                                                     *
+*         INF1 = 3   More than two vertices of the constructed  Char- *
+*                    acteristic  N-Polyhedron are located on the same *
+*                    edge of the Initial N-Polyhedron.                *
+*                                                                     *
+*         INF1 = 4   An approximate solution, according to the preci- *
+*                    sion EPSILO, has been found during the construc- *
+*                    tion of the Characteristic N-Polyhedron.         *
+*                    GENBIS has not been evoked.                      *
+*                                                                     *
+*       X is an output array of length  N  which  determines  a point *
+*         which will be a vertex of the  Characteristic N-Polyhedron. *
+*         In the case of INF1 = 4,  X contains the coordinates of the *
+*         approximate solution.                                       *
+*                                                                     *
+*       FX is an output array of length  N which determines the func- *
+*         tion values at  X .                                         *
+*                                                                     *
+*       WM  is an  NV by N  work matrix.                              *
+*                                                                     *
+*       WA1, WA2 are work arrays of length N.                         *
+*                                                                     *
+*                                                                     *
+*     Subprograms required :                                          *
+*                                                                     *
+*       USER-Supplied ...... FNC                                      *
+*                                                                     *
+*       BLAS-Supplied ...... SCOPY                                    *
+*                                                                     *
+*       CHABIS-Supplied .... SGN, LSINNC, ISCOMC, SAVERC, SSCALC,     *
+*                            SMNLGC                                   *
+*                                                                     *
+*       FORTRAN-Supplied ... FLOAT, LOG, INT, ABS, SIGN               *
+*                                                                     *
+*                                                                     *
+*                                        CHABIS. Version of June 1988 *
+*                                        Michael N. Vrahatis          *
+*                                                                     *
+***********************************************************************
+      INTRINSIC FLOAT, LOG, INT, ABS, SIGN
+      INTEGER J, K, L, I, I1, J1, J2, J3, J4, J5, I2, ITR, I3, NNV, I4
+      REAL ZERO, ONE, TWO, DSTAR, T, EL, ER, RLEN
+      REAL RITR, RO, SRO, S, RN, RT, FE, SRN, SC1, SC2
+      LOGICAL TEST, LSINNC
+      PARAMETER ( ZERO = 0.0,   ONE = 1.0,   TWO = 2.0 )
+*
+*     Set  DSTAR, a small positive number, which determines a  toler- *
+*     ance  of the roots  of  the components  of the given  function, *
+*     which are  located on  the edges of the  Initial  N-Polyhedron. *
+*     DSTAR must be greater than, or equal to, DELTA.                 *
+*
+      DSTAR = DELTA + TWO * EPSMCH
+*
+*     Construct the  N-Complete  Matrix and the matrix  PO. Also, set *
+*     all the entries of CP equal to the corresponding entries of PO. *
+*
+      DO 20 J = 1, N
+         K = 2 ** ( N - J )
+         L = 2 * K
+         DO 10 I = 1, NV
+            I1 = I - 1
+            T = FLOAT( I1 / K - 2 * ( I1 / L ) )
+            B(I,J) = T
+            C(I,J) = TWO * T - ONE
+            PO(I,J) = XO(J) + T * H(J)
+            CP(I,J) = PO(I,J)
+   10    CONTINUE
+   20 CONTINUE
+*
+*     Construct the indexing array, A.                                *
+*
+      DO 30 I = 1, NV
+         A(I) = FLOAT( I )
+   30 CONTINUE
+*
+*     Construct  the matrix of signs  of the given function, relative *
+*     to vertices of the Initial N-Polyhedron.                        *
+*
+      DO 50 I = 1, NV
+         CALL SCOPY( N, PO(I,1), NV, X, 1 )
+         DO 40 J = 1, N
+            FX(J) = FNC( X, J )
+            SPO(I,J) = SGN( FX(J) )
+   40    CONTINUE
+         TEST = LSINNC( N, FX, EPSILO )
+         IF ( TEST ) GO TO 270
+*
+*        Start the construction of a Characteristic  N-Polyhedron.    *
+*
+         CALL SCOPY( N, SPO(I,1), NV, WA1, 1 )
+         K = ISCOMC( N, WA1, C, NV )
+         IF ( K .GT. 0 ) THEN
+            IF ( A(K) .GT. ZERO ) THEN
+               CALL SCOPY( N, X, 1, CP(K,1), NV )
+               A(K) = ZERO
+            ENDIF
+         ENDIF
+   50 CONTINUE
+*
+*     Determine if a  Characteristic N-Polyhedron has been completed. *
+*
+      TEST = LSINNC( NV, A, EPSMCH )
+      IF ( TEST ) GO TO 250
+*
+*     Compute  the roots of the components of the function, which are *
+*     located on the edges of the  Initial N-Polyhedron, and use them *
+*     to construct a  Characteristic N-Polyhedron.                    *
+*
+      DO 130 J1 = 1, N
+         J2 = 2 ** J1 - 2
+         J3 = 2 ** ( N - J1 )
+         DO 120 J4 = 0, J2, 2
+            DO 110 J5 = 1, J3
+               I1 = J4 * J3 + J5
+               I2 = I1 + J3
+               CALL SCOPY( N, PO(I1,1), NV, X, 1 )
+               EL = PO(I1,J1)
+               ER = PO(I2,J1)
+               RLEN = ER - EL
+*
+*              Compute  the number  of iterations which are  required *
+*              to obtain a root to the predetermined accuracy, DELTA. *
+*
+               RITR = LOG( RLEN / DELTA ) / LOG( TWO )
+               K = INT( RITR )
+               ITR = K + 1
+               IF ( RITR .EQ. FLOAT( K ) ) ITR = ITR - 1
+*
+               DO 100 J = 1, N
+                  IF ( SPO(I1,J) * SPO(I2,J) .GT. ZERO ) GO TO 100
+                  RO = EL
+                  SRO = SPO(I1,J)
+                  S = RLEN / TWO
+                  RN = RO + S
+                  RT = ER
+*
+*                 Begin the iterations.                               *
+*
+                  DO 60 I3 = 1, ITR
+                     X(J1) = RN
+                     FE = FNC( X, J )
+                     SRN = SGN( FE )
+                     RO = RN
+                     S = S / TWO
+*
+*                    Compute the new approximate root.                *
+*
+                     RN = RO + SRO * SRN * S
+*
+*                    Specify another stopping test  using the differ- *
+*                    ence between two successive iterations.          *
+*
+                     IF ( ABS( RN - RO ) .LE. DELTA ) GO TO 70
+   60             CONTINUE
+   70             RT = RN
+                  IF ( ( ER - RT ) .LE. DELTA ) GO TO 100
+*
+*                 Construct a  Characteristic  N-Polyhedron using the *
+*                 computed roots.                                     *
+*
+                  DO 90 K = -1, 1, 2
+                     X(J1) = RT - FLOAT( K ) * DSTAR
+                     DO 80 L = 1, N
+                        FX(L) = FNC( X, L )
+                        WA1(L) = SGN( FX(L) )
+   80                CONTINUE
+                     TEST = LSINNC( N, FX, EPSILO )
+                     IF ( TEST ) GO TO 270
+                     I = ISCOMC( N, WA1, C, NV )
+                     IF ( I .NE. 0 ) THEN
+                        CALL SCOPY( N, X, 1, CP(I,1), NV )
+                        A(I) = ZERO
+*
+*                       Determine if  a  Characteristic  N-Polyhedron *
+*                       has been completed.                           *
+*
+                        TEST = LSINNC( NV, A, EPSMCH )
+                        IF ( TEST ) GO TO 150
+                     ENDIF
+   90             CONTINUE
+  100          CONTINUE
+  110       CONTINUE
+  120    CONTINUE
+  130 CONTINUE
+*
+*     Complete the  Characteristic  N-Polyhedron vertices, using  the *
+*     Initial  N-Polyhedron vertices.  Note that this action is taken *
+*     when  the  Characteristic  N-Polyhedron is incomplete,  and the *
+*     the subroutine  GENBIS  is utilized.                            *
+*
+      IF ( ICON .NE. 1 ) GO TO 260
+      CALL SAVERC( N, PO, NV, X )
+      DO 140 I = 1, NV
+         L = 1 - I + NV
+         IF ( A(I) .GT. ZERO ) THEN
+            IF ( A(L) .EQ. ZERO ) THEN
+               SC1 = TWO
+               SC2 = - ONE
+               CALL SSCALC( N, SC1, X, 1, 1, SC2, CP, L, NV,
+     +                      CP, I, NV )
+            ENDIF
+         ENDIF
+  140 CONTINUE
+      GO TO 260
+*
+*     Reconstruct the  Characteristic N-Polyhedron in such a way that *
+*     its vertices are the  vertices of  a scaled translation  of the *
+*     unit N-cube.                                                    *
+*
+  150 INF1 = 1
+      NNV = N * NV
+      CALL SCOPY( NNV, CP(1,1), 1, WM(1,1), 1 )
+      CALL SMNLGC( N, CP, NV, WA1, WA2 )
+      DO 190 I1 = 1, NV
+         DO 160 J = 1, N
+            X(J) = WA1(J) + B(I1,J) * WA2(J)
+  160    CONTINUE
+         K = ISCOMC( N, X, WM, NV )
+         IF ( K .NE. 0 ) GO TO 190
+         K = ISCOMC( N, X, PO, NV )
+         IF ( K .NE. 0 ) GO TO 190
+         DO 170 J = 1, N
+            FX(J) = FNC( X, J )
+  170    CONTINUE
+         TEST = LSINNC( N, FX, EPSILO )
+         IF ( TEST ) GO TO 270
+*
+*        Change vertices.                                             *
+*
+         DO 180 J = 1, N
+            FX(J) = SIGN( ONE, FX(J) )
+  180    CONTINUE
+         I = ISCOMC( N, FX, C, NV )
+         IF ( I .EQ. 0 ) GO TO 190
+         CALL SCOPY( N, X, 1, CP(I,1), NV )
+  190 CONTINUE
+*
+*     Reconstruct the Characteristic  N-Polyhedron in such a way that *
+*     not more  than two of its vertices are located on the same edge *
+*     of the  Initial  N-Polyhedron.                                  *
+*
+      DO 240 I1 = 1, NDG
+         I2 = 1 - I1 + NV
+         DO 200 K = 1, N
+            IF ( ABS( CP(I1,K) - CP(I2,K) ) .LT. EPSMCH ) GO TO 210
+  200    CONTINUE
+         GO TO 240
+  210    INF1 = 3
+         DO 230 I3 = 1, 2
+            I4 = I1
+            IF ( I3 .EQ. 2 ) I4 = I2
+            CALL SCOPY( N, CP(I4,1), NV, X, 1 )
+            IF ( ABS( X(K) - XO(K) ) .LT. EPSMCH ) THEN
+               X(K) = XO(K) + H(K)
+            ELSE
+               X(K) = X(K) - H(K)
+            ENDIF
+            DO 220 J = 1, N
+               FX(J) = FNC( X, J )
+               WA1(J) = SIGN( ONE, FX(J) )
+  220       CONTINUE
+            TEST = LSINNC( N, FX, EPSILO )
+            IF ( TEST ) GO TO 270
+*
+*           Change vertices.                                          *
+*
+            I = ISCOMC( N, WA1, C, NV )
+            IF ( I .EQ. 0 ) GO TO 240
+            IF ( I4 .EQ. I ) THEN
+               INF1 = 1
+               CALL SCOPY( N, X, 1, CP(I,1), NV )
+               GO TO 240
+            ENDIF
+  230    CONTINUE
+  240 CONTINUE
+*
+      RETURN
+  250 INF1 = 1
+      RETURN
+  260 INF1 = 2
+      RETURN
+  270 INF1 = 4
+      RETURN
+*
+*     Last statement of the subroutine CHAPOL.                        *
+*
+      END
+*---------------------------------------------------------------------*
+*
+      SUBROUTINE GENBIS( FNC, N, NV, NS, NDG, B, C, CP, EPSMCH,
+     +                   EPSILO, CPR, DM, DG, BP, FVB, INF2,
+     +                   A, ARP, WM, WA1, WA2, WA3 )
+      INTEGER N, NV, NS, NDG, INF2
+      REAL B(NV,N), C(NV,N), CP(NV,N), EPSMCH, EPSILO
+      REAL CPR(NV,N), DM(NS), DG(NDG), BP(N), FVB(N)
+      REAL A(NV), ARP(N), WM(NV,N), WA1(N), WA2(N), WA3(N)
+***********************************************************************
+*                                                                     *
+*     SUBROUTINE GENBIS                                               *
+*                                                                     *
+*       The  purpose  of this subroutine is to bisect  the Character- *
+*       istic  N-Polyhedron in order to find an approximate solution, *
+*       according to the predetermined accuracy of  EPSILO.           *
+*                                                                     *
+*                                                                     *
+*     The subroutine statement is :                                   *
+*                                                                     *
+*     SUBROUTINE GENBIS( FNC, N, NV, NS, NDG, B, C, CP, EPSMCH,       *
+*    +                   EPSILO, CPR, DM, DG, BP, FVB, INF2,          *
+*    +                   A, ARP, WM, WA1, WA2, WA3 )                  *
+*                                                                     *
+*     where                                                           *
+*                                                                     *
+*       FNC is the name of the user-supplied function which evaluates *
+*         components of the given function. FNC should be declared in *
+*         an external  statement in  the user - calling  program, and *
+*         should be written as follows :                              *
+*                                                                     *
+*         REAL FUNCTION FNC( X, IFLAG )                               *
+*         INTEGER IFLAG                                               *
+*         REAL X(N)                                                   *
+*         ------------------------------------------------------      *
+*         Calculate the IFLAG-th component of the function at X.      *
+*         ------------------------------------------------------      *
+*         RETURN                                                      *
+*         END                                                         *
+*                                                                     *
+*       N is a positive integer input variable which defines the num- *
+*         ber of equations and variables.                             *
+*                                                                     *
+*       NV is a positive integer  input variable  equal to  2**N.  NV *
+*         specifies the number of vertices of the  Initial and  Char- *
+*         acteristic N-Polyhedra.                                     *
+*                                                                     *
+*       NS is a  positive  integer  input variable  equal to  N*NV/2. *
+*         NS  specifies the number of proper 1-simplexes of the Char- *
+*         acteristic N-Polyhedron.                                    *
+*                                                                     *
+*       NDG is a  positive integer input variable equal to  NV/2. NDG *
+*         specifies the number of diagonals of the Characteristic  N- *
+*         Polyhedron.                                                 *
+*                                                                     *
+*       B is an  input  NV by N  matrix  which defines  the  N-binary *
+*         matrix.                                                     *
+*                                                                     *
+*       C is an input  NV by N  matrix  which defines the  N-complete *
+*         matrix.                                                     *
+*                                                                     *
+*       CP is an input NV by N matrix, with entries in each row which *
+*         are  the corresponding  components  of the vertices of  the *
+*         Characteristic N-Polyhedron. In the output, CP  remains un- *
+*         changed.                                                    *
+*                                                                     *
+*       EPSMCH  is a positive input variable which determines the ma- *
+*         chine precision.                                            *
+*                                                                     *
+*       EPSILO  is a nonnegative  input  variable. Termination occurs *
+*         when the algorithm estimates that the Infinity Norm, of the *
+*         function  values  at an  approximate  solution, is at  most *
+*         EPSILO. If EPSILO is less than the machine precision EPSMCH,*
+*         EPSILO  becomes equal to  EPSMCH.                           *
+*                                                                     *
+*       CPR is an  output  NV by N  matrix, with entries  in each row *
+*         which are the corresponding elements of  CP, and determines *
+*         the Characteristic  N-Polyhedron used for the iterative re- *
+*         finement.                                                   *
+*                                                                     *
+*       DM is an output array of length NS which contains the lengths *
+*         of all the proper 1-simplexes of the Characteristic N-Poly- *
+*         hedron.                                                     *
+*                                                                     *
+*       DG is an output array of length NDG which contains the lengths*
+*         of all the diagonals of the Characteristic N-Polyhedron.    *
+*                                                                     *
+*       BP is an output array of length N which determines an approxi-*
+*         mate solution.                                              *
+*                                                                     *
+*       FVB is an output array of length N which determines the func- *
+*         tion values at  BP.                                         *
+*                                                                     *
+*       INF2 is an integer output variable set as follows :           *
+*                                                                     *
+*         INF2 = 0   GENBIS has not been evoked.                      *
+*                                                                     *
+*         INF2 = 1   The solution has been found  within the required *
+*                    accuracy of  EPSILO.                             *
+*                                                                     *
+*         INF2 = 2   Iterations have reached their upper limit.       *
+*                    The answer may not be accurate.                  *
+*                                                                     *
+*         INF2 = 3   The  length  of  the longest  diagonal  has been *
+*                    found to be less than   2.0 * N * EPSILO.        *
+*                                                                     *
+*       A is an  output  array of length  NV  which  determines which *
+*         vertices of the Characteristic N-Polyhedron are substituted *
+*         during the bisection of its proper 1-simplexes.             *
+*                                                                     *
+*       ARP is an output array of length  N  which is used during the *
+*         relaxation procedure.                                       *
+*                                                                     *
+*       WM  is an  NV by N  work matrix.                              *
+*                                                                     *
+*       WA1, WA2, WA3  are work arrays of length N.                   *
+*                                                                     *
+*                                                                     *
+*     Subprograms required :                                          *
+*                                                                     *
+*       USER-Supplied ...... FNC                                      *
+*                                                                     *
+*       BLAS-Supplied ...... SCOPY, SNRM2, ISAMAX                     *
+*                                                                     *
+*       CHABIS-Supplied .... SSCALC, LSINNC, ISCOMC, SMNLGC           *
+*                                                                     *
+*       FORTRAN-Supplied ... FLOAT, LOG, INT, SIGN                    *
+*                                                                     *
+*                                                                     *
+*                                        CHABIS. Version of June 1988 *
+*                                        Michael N. Vrahatis          *
+*                                                                     *
+***********************************************************************
+      INTRINSIC FLOAT, LOG, INT, SIGN
+      INTEGER NIRP, NNV, I3, J1, J2, J3, J4, J5, I1, I2, I, K, ITR
+      INTEGER IRP1, J, IRP2, M
+      REAL ZERO, ONE, TWO, HALF, ZETA, SC1, SC2, GDM, RITR
+      REAL GDG
+      LOGICAL TEST, LSINNC
+      PARAMETER ( ZERO = 0.0,   ONE = 1.0,
+     +            TWO = 2.0,    HALF = 0.5 )
+*
+*     Set  ZETA, a small positive real variable, which determines the *
+*     accuracy of a stopping criterion during  the bisection process. *
+*     The algorithm terminates  if it is determined  that the longest *
+*     diagonal  of a  refined  Characteristic  N-Polyhehedron  has  a *
+*     length less than  ZETA.                                         *
+*
+      ZETA = TWO * FLOAT( N ) * EPSILO
+*
+*     Set the maximum number of iterations of the relaxation process. *
+*
+      NIRP = 2
+*
+*     Set all the entries of the matrix  CPR equal to the correspond- *
+*     ing entries of  CP.                                             *
+*
+      NNV = N * NV
+      CALL SCOPY( NNV, CP(1,1), 1, CPR(1,1), 1 )
+*
+*     Compute the lengths of all  the proper 1-simplexes of the Char- *
+*     acteristic N-Polyhedron and store them in the array, DM.        *
+*
+      I3 = 0
+      DO 30 J1 = 1, N
+         J2 = 2 ** J1 - 2
+         J3 = 2 ** ( N - J1 )
+         DO 20 J4 = 0, J2, 2
+            DO 10 J5 = 1, J3
+               I3 = I3 + 1
+               I1 = J4 * J3 + J5
+               I2 = I1 + J3
+               SC1 = ONE
+               SC2 = - ONE
+               CALL SSCALC( N, SC1, CPR, I1, NV, SC2, CPR, I2, NV,
+     +                      WA1, 1, 1 )
+               DM(I3) = SNRM2( N, WA1, 1 )
+   10       CONTINUE
+   20    CONTINUE
+   30 CONTINUE
+*
+*     Compute the length of the longest proper 1-simplexes.           *
+*
+      I = ISAMAX( NS, DM, 1 )
+      GDM = DM( I )
+*
+*     Compute the maximum number of iterations.                       *
+*
+      RITR = LOG( GDM * TWO / (FLOAT(N)*EPSILO) ) / LOG( TWO )
+      K = INT( RITR )
+      ITR = K + 1
+      IF ( RITR .EQ. FLOAT( K ) ) ITR = ITR - 1
+*
+*     Begin the iterations.                                           *
+*
+      IRP1 = 0
+      DO 230 I3 = 1, ITR
+*
+*        Bisect the diagonals.                                        *
+*
+         IF ( IRP1 .NE. 0 ) GO TO  80
+         DO 60 I1 = 1, NDG
+            I2 = 1 - I1 + NV
+   40       SC1 = HALF
+            CALL SSCALC( N, SC1, CPR, I1, NV, SC1, CPR, I2, NV,
+     +                   BP, 1, 1 )
+            DO 50 J = 1, N
+               FVB(J) = FNC( BP, J )
+               WA1(J) = SIGN( ONE, FVB(J) )
+   50       CONTINUE
+*
+*           Stopping test.                                            *
+*           The solution has been found within the required accuracy. *
+*
+            TEST = LSINNC( N, FVB, EPSILO )
+            IF ( TEST ) GO TO 270
+*
+*           Change vertices.                                          *
+*
+            I = ISCOMC( N, WA1, C, NV )
+            IF ( I .EQ. 0 ) GO TO 60
+            CALL SCOPY( N, BP, 1, CPR(I,1), NV )
+            IF (I .EQ. I1 .OR. I .EQ. I2) GO TO 40
+   60    CONTINUE
+*
+*        Compute the length of the longest diagonal, GDG.             *
+*
+         DO 70 I1 = 1, NDG
+            I2 = 1 - I1 + NV
+            SC1 = ONE
+            SC2 = - ONE
+            CALL SSCALC( N, SC1, CPR, I1, NV, SC2, CPR, I2, NV,
+     +                   WA1, 1, 1 )
+            DG(I1) = SNRM2( N, WA1, 1 )
+   70    CONTINUE
+         I = ISAMAX( NDG, DG, 1 )
+         GDG = DG( I )
+*
+*        Determine if  GDG  is less than  ZETA.                       *
+*
+         IF ( GDG .LT. ZETA ) THEN
+            INF2 = 3
+            GO TO 250
+         ENDIF
+*
+   80    IRP1 = 0
+*
+*        Construct the indexing array, A.                             *
+*
+         DO 90 I = 1, NV
+            A(I) = FLOAT( I )
+   90    CONTINUE
+*
+*        Bisect the proper 1-simplexes.                               *
+*
+         DO 170 J1 = 1, N
+            J2 = 2 ** J1 - 2
+            J3 = 2 ** ( N - J1 )
+            DO 160 J4 = 0, J2, 2
+               DO 150 J5 = 1, J3
+                  I1 = J4 * J3 + J5
+                  I2 = I1 + J3
+                  IRP2 = 0
+                  SC1 = HALF
+                  CALL SSCALC( N, SC1, CPR, I1, NV, SC1, CPR, I2, NV,
+     +                         BP, 1, 1 )
+                  GO TO 110
+*
+*                 Execute the relaxation procedure.                   *
+*
+  100             IRP2 = IRP2 + 1
+                  IRP1 = 1
+                  SC1 = TWO
+                  SC2 = - ONE
+                  CALL SSCALC( N, SC1, CPR, I, NV, SC2, ARP, 1, 1,
+     +                         BP, 1, 1 )
+  110             DO 120 J = 1, N
+                     WA3(J) = ZERO
+                     FVB(J) = FNC( BP, J )
+                     IF ( FVB(J) .EQ. ZERO ) WA3(J) = FLOAT( J )
+                     WA1(J) = SIGN( ONE, FVB(J) )
+  120             CONTINUE
+*
+*                 Stopping test.                                      *
+*                 The  solution has been  found within  the  required *
+*                 accuracy.                                           *
+*
+                  TEST =  LSINNC( N, FVB, EPSILO )
+                  IF ( TEST ) GO TO 270
+*
+*                 Change vertices.                                    *
+*
+                  I = ISCOMC ( N, WA1, C, NV )
+                  IF ( I .EQ. 0 ) GO TO 150
+                  DO 130 K = 1, N
+                     J = INT( WA3(K) )
+                     IF ( WA3(K) .EQ. ZERO ) GO TO 130
+                     M = I - INT( C(I,J) * TWO ** ( N - J ) )
+                     SC1 = ONE
+                     SC2 = - ONE
+                     CALL SSCALC( N, SC1, CPR, I, NV,
+     +                            SC2, CPR, M, NV, WA2, 1, 1 )
+                     TEST =  LSINNC( N, WA2, EPSMCH )
+                     IF ( TEST ) GO TO 140
+  130             CONTINUE
+                  CALL SCOPY( N, CPR(I,1), NV, ARP, 1 )
+                  CALL SCOPY( N, BP, 1, CPR(I,1), NV )
+                  A(I) = ZERO
+  140             IF ( I .NE. I1 .AND. I .NE. I2
+     +                           .AND. IRP2 .LT. NIRP ) GO TO 100
+  150          CONTINUE
+  160       CONTINUE
+  170    CONTINUE
+*
+*        Compute the length of the longest diagonal, GDG.             *
+*
+         DO 180 I1 = 1, NDG
+            I2 = 1 - I1 + NV
+            SC1 = ONE
+            SC2 = - ONE
+            CALL SSCALC( N, SC1, CPR, I1, NV, SC2, CPR, I2, NV,
+     +                   WA1, 1, 1 )
+            DG(I1) = SNRM2( N, WA1, 1 )
+  180    CONTINUE
+         I = ISAMAX( NDG, DG, 1 )
+         GDG = DG( I )
+*
+*        Determine if  GDG  is less than  ZETA.                       *
+*
+         IF ( GDG .LT. ZETA ) THEN
+            INF2 = 3
+            GO TO 250
+         ENDIF
+*
+         K = 0
+         DO 190 I = 1, NV
+            IF ( A(I) .NE. ZERO ) K = K + 1
+  190    CONTINUE
+         IF ( K .EQ. 0 .OR. IRP1 .EQ. 0 ) THEN
+            IRP1 = 0
+            GO TO 230
+         ENDIF
+*
+*        Reconstruct the refined Characteristic  N-Polyhedron in such *
+*        a way that its vertices are  the vertices of a scaled trans- *
+*        lation of the unit N-cube.                                   *
+*
+         CALL SCOPY( NNV, CPR(1,1), 1, WM(1,1), 1 )
+         CALL SMNLGC( N, CPR, NV, WA1, WA2 )
+         DO 220 I1 = 1, NV
+            DO 200 J = 1, N
+               BP(J) = WA1(J) + B(I1,J) * WA2(J)
+  200       CONTINUE
+            I = ISCOMC( N, BP, WM, NV )
+            IF ( I .NE. 0 ) GO TO 220
+            DO 210 J = 1, N
+               FVB(J) = FNC( BP, J )
+               WA3(J) = SIGN( ONE, FVB(J) )
+  210       CONTINUE
+*
+*           Stopping test.                                            *
+*           The solution has been found within the required accuracy. *
+*
+            TEST = LSINNC( N, FVB, EPSILO )
+            IF ( TEST ) GO TO 270
+*
+*           Change vertices.                                          *
+*
+            I = ISCOMC( N, WA3, C, NV )
+            IF ( I .EQ. 0 ) GO TO 220
+            CALL SCOPY( N, BP, 1, CPR(I,1), NV )
+  220    CONTINUE
+  230 CONTINUE
+*
+      INF2 = 2
+*
+*     Find the longest diagonal of the refined Characteristic N-Poly- *
+*     hedron and take its midpoint as the final approximate solution. *
+*
+      DO 240 I1 = 1, NDG
+         I2 = 1 - I1 + NV
+         SC1 = ONE
+         SC2 = - ONE
+         CALL SSCALC( N, SC1, CPR, I1, NV, SC2, CPR, I2, NV, WA1, 1, 1)
+         DG(I1) = SNRM2( N, WA1, 1 )
+  240 CONTINUE
+      I = ISAMAX( NDG, DG, 1 )
+  250 I1 = 1 - I + NV
+      SC1 = HALF
+      CALL SSCALC( N, SC1, CPR, I, NV, SC1, CPR, I1, NV, BP, 1, 1 )
+      DO 260 J = 1, N
+         FVB(J) = FNC( BP, J )
+  260 CONTINUE
+*
+*     Stopping test.                                                  *
+*     The solution has been found within the required accuracy.       *
+*
+      TEST =  LSINNC( N, FVB, EPSILO )
+      IF ( TEST ) GO TO 270
+*
+      RETURN
+  270 INF2 = 1
+      RETURN
+*
+*     Last statement of the subroutine GENBIS.                        *
+*
+      END
+*---------------------------------------------------------------------*
+*---------------------------------------------------------------------*
+*                                                                     *
+*             B L A S  -  L I K E     U T I L I T I E S               *
+*                                                                     *
+*                   CHABIS.  Version of June 1988                     *
+*                                                                     *
+*                        Michael N. Vrahatis                          *
+*                                                                     *
+*---------------------------------------------------------------------*
+*---------------------------------------------------------------------*
+*
+      LOGICAL FUNCTION LSINNC( N, SX, EPSILO )
+*
+*     Determine if  the Infinity Norm of a single precision  N-vector *
+*     stored in SX( ) is less than, or equal to, the single precision *
+*     positive constant EPSILO; if so, set  LSINNC  equal to " TRUE ";*
+*     otherwise, set  LSINNC equal to " FALSE ".                      *
+*
+      INTRINSIC ABS
+      INTEGER N, I
+      REAL SX(1), EPSILO
+*
+      LSINNC = .FALSE.
+      DO 10 I = 1, N
+         IF ( ABS( SX(I) ) .GT. EPSILO ) RETURN
+   10 CONTINUE
+      LSINNC = .TRUE.
+*
+      RETURN
+      END
+*---------------------------------------------------------------------*
+*
+      INTEGER FUNCTION ISCOMC( N, SX, SY, INCY )
+*
+*     Find the value of I, where I can be I = 1,2,...,INCY, such that *
+*     the entries of a single precision N-vector, stored in  SX( J ), *
+*     J = 1,2,...,N, coincide with the corresponding single precision *
+*     entries  SY( I+(J-1)*INCY )  for all J = 1,2,...,N. If there is *
+*     no such value, then return the value of zero.                   *
+*
+      INTEGER N, INCY, I, K, J
+      REAL SX(1), SY(1)
+*
+      DO 20 I = 1, INCY
+         K = I
+         DO 10 J = 1, N
+            IF ( SX(J) .NE. SY(K) ) GO TO 20
+            K = K + INCY
+   10    CONTINUE
+         ISCOMC = I
+         RETURN
+   20 CONTINUE
+      ISCOMC = 0
+*
+      RETURN
+      END
+*---------------------------------------------------------------------*
+*
+      REAL FUNCTION SGN( SV )
+*
+*     Transfer the sign of the single precision variable SV in such a *
+*     way that if  SV is equal to zero, the sign of  SV will be equal *
+*     to zero.                                                        *
+*
+      INTRINSIC SIGN
+      REAL SV, ZERO, ONE
+      PARAMETER ( ZERO = 0.0, ONE = 1.0 )
+*
+      SGN = SIGN( ONE, SV )
+      IF ( SV .EQ. ZERO ) SGN = ZERO
+*
+      RETURN
+      END
+*---------------------------------------------------------------------*
+*
+      SUBROUTINE SAVERC( N, SX, INCX, SY )
+*
+*     Find the average value for each of the  N vector segments (each *
+*     of which contains  INCX  elements)  of the single precision  N- *
+*     vector stored in SX( ). Store these values in the single preci- *
+*     sion  N-vector  SY( ).                                          *
+*
+      INTRINSIC MOD, FLOAT
+      INTEGER  N, INCX, M, K, J, K1, K2, I
+      REAL SX(1), SY(1), ZERO, SUM
+      PARAMETER ( ZERO = 0.0 )
+*
+      M = MOD( INCX, 4 )
+      K = - INCX
+      DO 50 J = 1, N
+         K = K + INCX
+         SUM = ZERO
+         IF ( M .EQ. 0 ) GO TO 20
+         K1 = K + 1
+         K2 = K + M
+         DO 10 I = K1, K2
+            SUM = SUM + SX( I )
+   10    CONTINUE
+         IF ( INCX .LT. 4 ) GO TO 40
+   20    K1 = K + M + 1
+         K2 = K + INCX
+         DO 30 I = K1, K2, 4
+            SUM = SUM + SX( I ) + SX( I+1 ) + SX( I+2 ) + SX( I+3 )
+   30    CONTINUE
+   40    SY(J) = SUM / FLOAT( INCX )
+   50 CONTINUE
+*
+      RETURN
+      END
+*---------------------------------------------------------------------*
+*
+      SUBROUTINE SSCALC( N, V1, SX, LX, INCX, V2, SY, LY, INCY,
+     +                   SZ, LZ, INCZ )
+*
+*     Multiply the single precision variable  V1 by the single preci- *
+*     sion N-vector stored in  SX( ), with leading dimension  LX  and *
+*     storage increment  INCX ; to the product, add the single preci- *
+*     sion variable  V2 multiplied by  the single precision  N-vector *
+*     stored in SY( ),with leading dimension LY and storage increment *
+*     INCY. Store the result in the single precision N-vector  SZ( ), *
+*     with leading dimension  LZ  and storage increment  INCZ.        *
+*
+      INTRINSIC MOD
+      INTEGER N, LX, INCX, LY, INCY, LZ, INCZ, K, IX, IY, IZ, I
+      REAL V1, SX(1), V2, SY(1), SZ(1)
+*
+      K = MOD( N, 4 )
+      IX = LX
+      IY = LY
+      IZ = LZ
+      IF ( K .EQ. 0 ) GO TO 20
+      DO 10 I = 1, K
+         SZ( IZ ) = V1 * SX( IX ) + V2 * SY( IY )
+         IX = IX + INCX
+         IY = IY + INCY
+         IZ = IZ + INCZ
+   10 CONTINUE
+      IF ( N .LT. 4 ) RETURN
+   20 DO 30 I = K, N-1, 4
+         SZ( IZ ) = V1 * SX( IX ) + V2 * SY( IY )
+         IX = IX + INCX
+         IY = IY + INCY
+         IZ = IZ + INCZ
+         SZ( IZ ) = V1 * SX( IX ) + V2 * SY( IY )
+         IX = IX + INCX
+         IY = IY + INCY
+         IZ = IZ + INCZ
+         SZ( IZ ) = V1 * SX( IX ) + V2 * SY( IY )
+         IX = IX + INCX
+         IY = IY + INCY
+         IZ = IZ + INCZ
+         SZ( IZ ) = V1 * SX( IX ) + V2 * SY( IY )
+         IX = IX + INCX
+         IY = IY + INCY
+         IZ = IZ + INCZ
+   30 CONTINUE
+*
+      RETURN
+      END
+*---------------------------------------------------------------------*
+*
+      SUBROUTINE SMNLGC( N, SX, INCX, SMN, SLG )
+*                                                                     *
+*     Find the maximum value, and the difference between  the maximum *
+*     and minimum values, within each of the  N vector segments (each *
+*     of which contains  INCX  elements) of  the single precision  N- *
+*     vector stored in  SX( ). Store  these values in the single pre- *
+*     cision  N-vectors  SMN( ) and  SLG( ),  respectively.           *
+*
+      INTRINSIC MIN, MAX
+      INTEGER  N, INCX, K, J, I
+      REAL SX(1), SMN(1), SLG(1), SMIN, SMAX, X
+*
+      K = - INCX
+      DO 20 J = 1, N
+         K = K + INCX
+         SMIN = SX( K + 1 )
+         SMAX = SMIN
+         DO 10 I = K+2, K+INCX
+            X = SX( I )
+            SMIN = MIN( SMIN, X )
+            SMAX = MAX( SMAX, X )
+   10    CONTINUE
+         SMN(J) = SMIN
+         SLG(J) = SMAX - SMIN
+   20 CONTINUE
+*
+      RETURN
+      END

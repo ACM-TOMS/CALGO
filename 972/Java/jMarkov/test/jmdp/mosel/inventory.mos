@@ -1,0 +1,161 @@
+(!*******************************************************
+*************   File Inventory.mos **********************
+*********************************************************
+
+A single item, periodic review inventory model is 
+computed by computing the cost and probabilities 
+associated with an MDP. It should be called by MDP.mos
+
+German Riano, Ph.D.
+Universidad de los Andes -- Bogota Colombia
+!)
+model PerReviewInventory
+
+options noimplicit
+uses "mmxprs", "mmetc"
+
+!parameters section first
+parameters
+	dataFile='inventory.dat'
+end-parameters
+	
+forward procedure PrintResults
+include 'MDP.mos'
+
+declarations
+	N: integer !Wharehouse size
+	mean: real !Expected demand
+	p : real !Price
+	h0 : real !Non mopnetary holding cost
+	h : real !Holding cost
+	c: real ! adq cost
+	b: real !lost sales cost
+	A: real !fixed cost per order
+	int: real ! Interest rate (APR)
+	B: integer! Max backorders
+	M: integer ! Max sales per week
+	K: integer ! rig capacity
+	sales: real ! expected sales
+	lostSales :real !expected lost sales
+	n: integer !aux var
+	suma: real ! aux var
+	OporCost: array(States,Actions) of real ! Oportunity cost
+	NetIncome: array (States,Actions) of real !net income
+end-declarations
+
+initializations from dataFile 
+	N B mean K p c h0 int b A
+end-initializations
+
+M := N+B+1 ! Max sales
+h := h0 + c * ((1.0+int)^(1.0/52)-1.0) !convert to weekly rate
+
+declarations
+	pois: array(0..M) of real !Poisson pmf
+	poisCdf: array(0..M) of real !Poisson distr cdf
+	poisLoss1: array(0..M) of real !Poisson distr loss function order 1
+end-declarations
+
+! Create sets
+forall (i in -B..N) do
+	States += {i}
+end-do	
+forall (i in 0..N) do
+	Actions += {i}
+end-do	
+
+
+writeln("States =" , States)
+writeln("Computing parameters...")
+
+!Compute pmf, cdf and loss function
+pois(0):= exp(-mean)
+poisCdf(0):= pois(0)
+poisLoss1(0) := mean
+forall (i in 1..N+B) do
+	pois(i) 		:= 	mean * pois(i-1) / i
+	poisCdf(i)		:= 	poisCdf(i-1) + pois(i)
+	poisLoss1(i)	:= 	(mean-i)*(1-poisCdf(i)) + mean*pois(i)
+end-do	
+
+!compute costs and probabilities
+forall (i in States) do 
+	forall(a in Actions|i+a <=N and a<=N ) do
+	Admissible(i,a) := true
+		lostSales := poisLoss1(i+a+B)
+		sales:= mean - lostSales
+		OporCost(i,a) := (p-c)* lostSales + A*ceil(a/K) + if(i>0, h*i, -b*i)
+		NetIncome(i,a) :=   p * sales     - A*ceil(a/K) - if(i>0, h*i, -b*i) - c*a 
+		! Cost(i,a) := OporCost(i,a)
+		!Altermnative = minus net income:
+		Cost(i,a) := - NetIncome (i,a)
+		suma := 1.0
+		forall(j in (-B+1)..N) do
+			n := i + a - j
+			Prob(a,i,j):= if(0 <=n and n<=M, pois(n), 0.0)
+			suma -= Prob(a,i,j)
+		end-do
+		Prob(a,i,-B) := suma !Complete the probability
+	end-do
+end-do
+
+!write to disk
+writeln("Writing Probabilities and Costs to CSV files.")
+diskdata(ETC_OUT+ETC_DENSE,"Prob.csv",Prob)
+diskdata(ETC_OUT+ETC_DENSE,"Cost.csv",Cost)
+writeln("Solving...")	
+
+MDP_BuildModel
+MDP_SolveModel(true)
+PrintResults
+
+
+
+!Implement print_report, which is called at the end of the MDP.mos file 
+procedure PrintResults
+	declarations
+		OptBuy: array(States) of integer !Optimal quantity to buy
+		OptExpSales : array(States) of real ! Exp sales under opt policy
+	end-declarations	
+	forall(i in -B..N) do
+		OptBuy(i) := sum(a in 0..N|Admissible(i,a)) a*round(y(i,a))
+		OptExpSales(i) := mean - poisLoss1(i+OptBuy(i)+B)
+	end-do
+	
+	writeln("\n\nREPORT")
+	write(strfmt("State",-16))
+	forall (i in -B..N)  write(strfmt(i,10,0))
+	write(strfmt("\nProb",-16))
+	forall (i in -B..N)  write(strfmt(pi(i),10,3))
+	write(strfmt("\nInit Inv.",-16))
+	forall (i in -B..N)  write(strfmt(i,10))
+	write(strfmt("\nBuy",-16))
+	forall (i in -B..N)  write(strfmt(OptBuy(i),10))
+	write(strfmt("\nAvailabl.",-16))
+	forall (i in -B..N)  write(strfmt(i+OptBuy(i),10))
+	write(strfmt("\nExp. Sales",-16))
+	forall (i in -B..N)  write(strfmt(OptExpSales(i),10,3))
+	write(strfmt("\nLost Sales",-16))
+	forall (i in -B..N)  write(strfmt(mean-OptExpSales(i),10,3))
+	write(strfmt("\nSales Income",-16))
+	forall (i in -B..N)  write(strfmt(p*OptExpSales(i),10,3))
+	write(strfmt("\nTruck Cost",-16))
+	forall (i in -B..N)  write(strfmt( A * ceil(OptBuy(i)/K),10,3))
+	write(strfmt("\nOrder Cost",-16))
+	forall (i in -B..N)  write(strfmt(c*OptBuy(i),10,3))
+	write(strfmt("\nHolding Cost",-16))
+	forall (i in -B..N)  write(strfmt(if(i>0,h*i,0),10,3))
+	write(strfmt("\nBackorder Cost",-16))
+	forall (i in -B..N)  write(strfmt(if(i<0,-b*i,0),10,3))
+	write(strfmt("\nTot. Oprt. Cost",-16))
+	forall (i in -B..N)  write(strfmt(OporCost(i,OptBuy(i)),10,3))
+	write(strfmt("\nNet Income",-16))
+	forall (i in -B..N)  write(strfmt(NetIncome(i,OptBuy(i)),10,3))
+	writeln
+	
+end-procedure
+end-model
+
+!*******************************************************
+!********* END FILE INVENTORY.MOS **********************
+!*******************************************************

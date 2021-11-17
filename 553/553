@@ -1,0 +1,1376 @@
+C     PROGRAM TEST1(OUTPUT,TAPE6=OUTPUT)
+C
+C TEST PROGRAM 1 FOR J.G.VERWER'S ALGORITHM M3RK, AN EXPLICIT TIME-
+C INTEGRATOR FOR SEMI-DISCRETE PARABOLIC EQUATIONS.
+C THE TEST PROBLEM IS A SYSTEM OF 2 ONE-DIMENSIONAL PARABOLIC EQUA-
+C TIONS WHICH IS DISCUSSED IN SECTION 5.1 OF J.G.VERWER'S COMPANION
+C PAPER "AN IMPLEMENTATION OF A CLASS OF STABILIZED, EXPLICIT ME-
+C THODS FOR THE TIME INTEGRATION OF PARABOLIC EQUTIONS".
+C THE TEST CONSISTS OF THE INTEGRATION OF THE SYSTEM OF 122 ODE'S
+C WHICH IS CALLED SYSTEM II IN SECTION 5.1 OF THE COMPANION PAPER
+C (EQUATIONS (5.3) WITH 61 GRID POINTS FOR THE GALERKIN DISCRETI-
+C ZATION). IN THE PRESENT TEST THE TOLERANCE PARAMETER TOL=1.0E-4.
+C
+C *****************************************************************
+C
+C ARRAY DECLARATIONS FOR M3RK. THE ARRAY U IS THE INPUT ARRAY FOR
+C THE INITIAL VECTOR AND UOUT IS THE OUTPUT ARRAY FOR THE COMPUTED
+C SOLUTION VECTOR.
+C DER IS THE SUBROUTINE DEFINING THE SYSTEM OF ODE'S.
+C THE ARRAY X WILL CONTAIN THE GRID POINTS FOR THE GALERKIN DISCRE-
+C TIZATION AND IS USED BY DER.
+C
+      DIMENSION INFO(15),U(122),U1(122),U2(122),UOUT(122),DU(122)
+     1,DU1(122),SIGMA(2)
+      EXTERNAL DER
+      COMMON /GRID/ X(61)
+C
+C DEFINITION AND PRINTING OF THE GRID POINTS X(I).THE NUMBER OF
+C GRID POINTS CAN BE CHANGED BY REDEFINING NPTS AND BY ADJUSTING
+C THE LENGTH OT THE ARRAYS.
+C
+      NPTS=61
+      DO 10 I=1,NPTS
+   10 X(I)=(FLOAT(I)-1.)/(FLOAT(NPTS)-1.)
+      WRITE(6,12)
+   12 FORMAT(7H1 GRID=)
+      DO 13 I=1,NPTS
+   13 WRITE(6,14)X(I)
+   14 FORMAT(F12.5)
+C
+C DEFINITION AND PRINTING OF THE INITIAL VECTOR FOR THE ODE'S.
+C
+      WRITE(6,20)
+   20 FORMAT(17H1 INITIAL VALUES=)
+      WRITE(6,55)
+      DO 30 I = 1,NPTS
+      U(I) = 1.0
+      IN=I+NPTS
+      U(IN) = .0
+      WRITE(6,70)X(I),U(I),U(IN)
+   30 CONTINUE
+C
+C DEFINITION OF PARAMETERS FOR M3RK. NEQN GIVES THE NUMBER OF COM-
+C PONENTS OF THE SYSTEM OF ODE'S. T IS THE INDEPENDENT VARIABLE.
+C THE MEANING OF THE OTHER PARAMETERS IS CLEARLY EXPLAINED IN THE
+C PROLOGUE OF COMMENTS OF M3RK.
+C
+      NEQN=NPTS*2
+      T=.0
+      TOL=1.E-4
+      INFO(1)=0
+      INFO(2)=2
+      INFO(3)=5000
+C
+C INITIAL AND SUBSEQUENT CALLS OF M3RK(SEE SECTION 5.1 OF THE
+C COMPANION PAPER). TE DEFINES THE POINT WHERE OUTPUT IS DESIRED.
+C
+      DO 80 I=1,6
+      TE=.01
+      IF(I.EQ.2)TE=.1
+      IF(I.EQ.3)TE=1.
+      IF(I.EQ.4)TE=5.
+      IF(I.EQ.5)TE=10.
+      IF(I.EQ.6)TE=20.
+      CALL M3RK(T,TE,NEQN,H,HMIN,SIGMA,TOL,
+     +          DER,U,U1,U2,UOUT,DU,DU1,IFLAG,INFO)
+C
+C PRINTING OF THE OUTPUT POINT, OF THE ERROR FLAG, OF THE ESTIMATED
+C SPECTRAL RADIUS, OF THE ARRAY INFO, AND OF THE COMPUTED SOLUTION.
+C
+      WRITE(6,40)TE,IFLAG,SIGMA(1)
+   40 FORMAT(14H1 ENDPOINT   =,E10.4/10H  IFLAG=  ,I2/8H  SIGMA=
+     1,E13.7)
+      WRITE(6,50)(INFO(KK),KK=1,15)
+   50 FORMAT(8H  INFO= ,15I6/)
+      WRITE(6,55)
+   55 FORMAT(5X,1HX,17X,1HU,19X,1HV/)
+      DO 60 J=1,NPTS
+      JN=J+NPTS
+   60 WRITE(6,70)X(J),UOUT(J),UOUT(JN)
+   70 FORMAT(F9.5,2F20.7)
+   80 CONTINUE
+      STOP
+      END
+      SUBROUTINE DER(N,Y)
+C
+C SUBROUTINE DER DEFINES THE SYSTEM OF ODE'S BEING INTEGRATED.
+C THE ARRAY U IS A WORK ARRAY.
+C
+      DIMENSION Y(N),U(122)
+      COMMON /GRID/ X(61)
+      FI(Z)=EXP(Z*5.73)-EXP(-11.46*Z)
+      DO 10 I=1,N
+   10 U(I)=Y(I)
+      EPS=0.143
+      P=0.1743
+      Y(1)=-2.*EPS*P*(7.*U(1)-8.*U(2)+U(3))/(X(3)-X(1))**2-FI(U(1)-U(62)
+     1)
+      Y(61)=.0
+      Y(62)=.0
+      Y(122)=-2.*P*(7.*U(122)-8.*U(121)+U(120))/(X(61)-X(59))**2+
+     1FI(U(61)-U(122))
+      DO 20 I=2,60,2
+      Y(I)=-4.*EPS*P*(2.*U(I)-U(I-1)-U(I+1))/(X(I+1)-X(I-1))**2-
+     1FI(U(I)-U(I+61))
+      Y(I+61)=-4.*P*(2.*U(I+61)-U(I+60)-U(I+62))/(X(I+1)-X(I-1))
+     1**2+FI(U(I)-U(I+61))
+   20 CONTINUE
+      DO 30 I=3,59,2
+      Y(I)=-2.*EPS*P*((7.*U(I)-8.*U(I-1)+U(I-2))/((X(I+2)-X(I-2))*
+     1(X(I)-X(I-2)))+(7.*U(I)-8.*U(I+1)+U(I+2))/((X(I+2)-X(I-2))*
+     2(X(I+2)-X(I))))-FI(U(I)-U(I+61))
+      Y(I+61)=-2.*P*((7.*U(I+61)-8.*U(I+60)+U(I+59))/((X(I+2)-X(I-2))*
+     1(X(I)-X(I-2)))+(7.*U(I+61)-8.*U(I+62)+U(I+63))/((X(I+2)-X(I-2))*
+     2(X(I+2)-X(I))))+FI(U(I)-U(I+61))
+   30 CONTINUE
+      RETURN
+      END
+C     PROGRAM TEST2(OUTPUT,TAPE6=OUTPUT)
+C
+C TEST PROGRAM 2 FOR J.G.VERWER'S ALGORITHM M3RK, AN EXPLICIT TIME-
+C INTEGRATOR FOR SEMI-DISCRETE PARABOLIC EQUATIONS.
+C THE TEST PROBLEM IS THE SINGLE TWO-DIMENSIONAL PARABOLIC EQUATION
+C WHICH IS DISCUSSED IN SECTION 5.2 OF J.G.VERWER'S COMPANION PAPER
+C "AN IMPLEMENTATION OF A CLASS OF STABILIZED, EXPLICIT METHODS FOR
+C THE TIME INTEGRATION OF PARABOLIC EQUATIONS".
+C THE TEST CONSISTS OF THE INTEGRATION OF THE SYSTEM OF 205 ODE'S
+C WHICH IS CALLED SYSTEM II IN SECTION 5.2 OF THE COMPANION PAPER
+C (EQUATIONS (5.6) WITH 5*41 GRID POINTS FOR THE GALERKIN DISCRETI-
+C ZATION). IN THE PRESENT TEST THE TOLERANCE PARAMETER TOL=1.0E-4.
+C
+C *******************************************************************
+C
+C ARRAY DECLARATIONS FOR M3RK. THE ARRAY U IS THE INPUT ARRAY FOR THE
+C INITIAL VECTOR AND UOUT IS THE OUTPUT ARRAY FOR THE COMPUTED SOLUT-
+C ION VECTOR.
+C DER IS THE SUBROUTINE DEFINING THE SYSTEM OF ODE'S.
+C
+      DIMENSION INFO(15),U(205),U1(205),U2(205),DU(205),DU1(205),
+     +UOUT(205),SIGMA(2)
+      EXTERNAL DER
+C
+C THE ARRAYS R AND Z WILL CONTAIN THE GRID POINTS USED BY THE GALERKIN
+C DISCRETIZATION IN THE R-DIRECTION AND Z-DIRECTION,RESPECTIVELY.
+C
+      DIMENSION R(5),Z(41)
+C
+C ARRAY DECLARATIONS FOR THE AUXILARY SUBROUTINE EVAL WHICH GENERATES
+C THE GALERKIN COEFFICIENTS OCCURRING IN THE SYTEM OF ODE'S(SEE EQUA-
+C TIONS (5.6),(5.7) IN THE COMPANION PAPER). EVAL IS CALLED ONCE IN
+C THE TEST PROGRAM.
+C
+      COMMON/ARRAY/DIAG(205),CO1(205),CO2(205),VRWZ(205),WZ(205)
+C
+C DECLARATION OF SOME CONSTANTS NEEDED IN DER. M IS THE NUMBER OF
+C GRID POINTS IN THE R-DIRECTION, N IS THE NUMBER OF GRID POINTS
+C IN THE Z-DIRECTION. REND IS THE RIGHT BOUNDARY OF THE R-INTERVAL
+C
+      COMMON/CONST/M,N,REND
+C
+C DEFINITION OF THE GRID FOR THE GALERKIN DISCRETIZATION. WE PUT
+C M=5 AND N=41. THESE NUMBERS MAY BE CHANGED, PROVIDED THE LENGTH
+C OF THE ARRAYS ARE ADJUSTED. THE VALUE OF N MINUS 1 MUST BE A
+C MULTIPLE OF 4. THE INTEGER MN DEFINES THE NUMBER OF COMPONENTS
+C OF THE SYSTEM OF ODE'S.
+C
+      REND=1.E-4
+      ZEND=0.15
+      N=41
+      M=5
+      MN=M*N
+      DR = REND/FLOAT(M-1)
+      DO 5 I = 1,M
+    5 R(I) = DR*FLOAT(I-1)
+      Z1=ZEND/10.
+      N1=(N-1)/4
+      DZR=Z1/FLOAT(N1)
+      DZM=4.*DZR
+      N2=N1+1
+      N3=N2+1
+      N4=3*N2-2
+      N5=N4+1
+      DO 6 I=1,N2
+    6 Z(I)=DZR*FLOAT(I-1)
+      DO 7 I=N3,N4
+    7 Z(I)=Z(I-1)+DZM
+      DO 8 I=N5,N
+    8 Z(I)=Z(I-1)+DZR
+C
+C PRINTING OF THE GRIDPOINTS.
+C
+      WRITE(6,20)
+   20 FORMAT(1H1,22H GRID POINTS ON R-AXIS)
+      DO 22 I=1,M
+      WRITE(6,21)R(I)
+   21 FORMAT(1H ,E14.8)
+   22 CONTINUE
+      WRITE(6,23)
+   23 FORMAT(1H1,22H GRID POINTS ON Z-AXIS)
+      DO 25 I=1,N
+      WRITE(6,24)Z(I)
+   24 FORMAT(1H ,E14.8)
+   25 CONTINUE
+      WRITE(6,26)
+   26 FORMAT(1H1)
+C
+C DEFINITION AND PRINTING OF THE INITIAL VECTOR OF THE SYSTEM OF
+C ODE'S-UPRINT IS AN AUXILIARY PRINT ROUTINE-AND CALL OF EVAL.
+C
+      DO 30 I=1,M
+      DO 30 J=1,N
+      IJM=I+(J-1)*M
+      U(IJM)=500.
+   30 CONTINUE
+      CALL UPRINT(M,N,MN,U,Z)
+      CALL EVAL(R,M,Z,N,MN)
+C
+C DEFINITION OF PARAMETERS FOR M3RK. T IS THE INDEPENDENT VARIABLE.
+C THE MEANING OF THE OTHER PARAMETERS IS CLEARLY EXPLAINED IN THE
+C PROLOGUE OF COMMENTS OF M3RK.
+C
+      T=0.
+      TOL=1.E-4
+      INFO(1)=0
+      INFO(2)=2
+      INFO(3)=15000
+C
+C INITIAL AND SUBSEQUENT CALLS OF M3RK (SEE SECTION 5.2 OF THE COM-
+C PANION PAPER). TE DEFINES THE POINT WHERE OUTPUT IS DESIRED.
+C
+      DO 90 I=1,7
+      TE=0.1
+      IF(I.EQ.2)TE=.2
+      IF(I.EQ.3)TE=.4
+      IF(I.EQ.4)TE=.6
+      IF(I.EQ.5)TE=.8
+      IF(I.EQ.6)TE=.9
+      IF(I.EQ.7)TE=1.0
+      CALL M3RK(T,TE,MN,H,HMIN,SIGMA,TOL,
+     1DER,U,U1,U2,UOUT,DU,DU1,IFLAG,INFO)
+C
+C PRINTING OF THE OUTPUT POINT, OF THE ERROR FLAG, OF THE ESTIMATED
+C SPECTRAL RADIUS, OF THE ARRAY INFO, AND OF THE COMPUTED SOLUTION.
+C
+      WRITE(6,50)TE,IFLAG,SIGMA(1)
+   50 FORMAT(1H1,13H ENDPOINT   =,E10.4/11H  IFLAG =  ,I2/
+     18H  SIGMA=,E13.7)
+      WRITE(6,60)(INFO(KK),KK=1,15)
+   60 FORMAT(1H ,7H INFO= ,15(I5,1H )/)
+      CALL UPRINT(M,N,MN,UOUT,Z)
+   90 CONTINUE
+      STOP
+      END
+      SUBROUTINE EVAL(R,M,Z,N,MN)
+C
+C THIS SUBROUTINE COMPUTES, IN A STRAIGHT FORWARD MANNER, THE STANDARD
+C INTEGRALS GIVEN IN FORMULA (5.7) OF THE COMPANION PAPER. THE ARRAYS
+C IN WHICH THE RESULTING VALUES ARE STORED, ARE USED IN DER. BY INSPEC-
+C TION OF DER AND FORMULAS (5.6)-(5.7), THE DEFINITION OF THE ARRAYS
+C WILL BECOME CLEAR.
+C
+      DIMENSION R(M),Z(N)
+      COMMON/ARRAY/DIAG(205),CO1(205),CO2(205),VRWZ(205),WZ(205)
+      WZ(1)=.0
+      DO 10 I=1,MN
+      DIAG(I)=.0
+      CO1(I)=.0
+      CO2(I)=.0
+      VRWZ(I)=.0
+   10 CONTINUE
+      M1=M-1
+      N1=N-1
+      DO 40 I=1,M1
+      RI=R(I)
+      RIPLUS=R(I+1)
+      DR=RIPLUS-RI
+      WLEFT=DR*(2.*RI+RIPLUS)/6.
+      WRGHT=DR*(RI+2.*RIPLUS)/6.
+      WZ(I)=WZ(I)+WLEFT
+      WZ(I+1)=WRGHT
+   15 DO 30 J=1,N1
+      ZJ=Z(J)
+      ZJPLUS=Z(J+1)
+      DZ=ZJPLUS-ZJ
+      ALFA1=WLEFT/DZ
+      ALFA2=WRGHT/DZ
+      BETA=(WLEFT+WRGHT)*DZ/(2.0*DR*DR)
+      VLEFT=WLEFT*DZ/2.
+      VRGHT=WRGHT*DZ/2.
+      L1=M*(J-1)+I
+      L2=L1+1
+      L3=L1+M
+      L4=L3+1
+      DIAG(L1)=DIAG(L1)+ALFA1+BETA
+      DIAG(L2)=DIAG(L2)+ALFA2+BETA
+      DIAG(L3)=DIAG(L3)+ALFA1+BETA
+      DIAG(L4)=DIAG(L4)+ALFA2+BETA
+      VRWZ(L1)=VRWZ(L1)+VLEFT
+      VRWZ(L3)=VRWZ(L3)+VLEFT
+      VRWZ(L2)=VRWZ(L2)+VRGHT
+      VRWZ(L4)=VRWZ(L4)+VRGHT
+      CO1(L1)=CO1(L1)-BETA
+      CO2(L1)=CO2(L1)-ALFA1
+      CO2(L2)=CO2(L2)-ALFA2
+      CO1(L3)=CO1(L3)-BETA
+   30 CONTINUE
+   40 CONTINUE
+      WZ1=WZ(1)
+      DO 50 J=1,N
+      JM1=(J-1)*M+1
+   50 WZ(J)=VRWZ(JM1)/WZ1
+      RETURN
+      END
+      SUBROUTINE DER(MN,P)
+C
+C THE PRESENT SUBROUTINE DEFINES THE SYSTEM OF ODE'S WE ARE INTEGRATING.
+C THE ARRAYS DIAG,CO1,CO2,VRWZ AND WZ ARE DEFINED IN EVAL. THE ARRAYS
+C P AND V ARE WORK ARRAYS.
+C
+      DIMENSION P(MN),V(205)
+      COMMON/ARRAY/DIAG(205),CO1(205),CO2(205),VRWZ(205),WZ(205)
+      COMMON/CONST/M,N,REND
+C
+      RLAM(X)=418.4*((((.1287496E-13*X-.116873E-9)*X+.384891E-6)
+     1*X-.569812E-3)*X+.57185303)
+      RHOC(X)=(146.44+.018513*(X-1040.))*19300.
+      BRON(X)=7.1486**2*1.E-6*(-.378808E-1+.267688E-3*X+
+     1.1724588E-7*X*X)/(3.141593**2*1.E-16)
+      EPST(X)=((((-.270491E-17*X+.3438691E-13)*X-.163905E-9)*
+     1X+.3305647E-6)*X-.1194E-3)*X+.02667112
+C
+      DO 10 I=1,MN
+   10 V(I)=P(I)
+      DO 20 I=1,M
+      P(I)=.0
+      MNI=MN-M+I
+      P(MNI)=.0
+   20 CONTINUE
+      M1=M+1
+      MN1=MN-M
+      DO 30 I=M1,MN1
+      IMM=I-M
+      IPM=I+M
+      P(I)=-DIAG(I)*V(I)-CO1(I-1)*V(I-1)-CO1(I)*V(I+1)
+     1-CO2(IMM)*V(IMM)-CO2(I)*V(IPM)
+   30 CONTINUE
+      N1=N-1
+      DO 40 J=2,N1
+      JTM=J*M
+   40 P(JTM)=P(JTM)-REND*WZ(J)*EPST(V(JTM))/RLAM(V(JTM))
+     1*5.6696E-8*V(JTM)**4
+      DO 50 I=M1,MN1
+   50 P(I)=(P(I)*RLAM(V(I))/VRWZ(I)+BRON(V(I)))/RHOC(V(I))
+      RETURN
+      END
+      SUBROUTINE UPRINT(M,N,MN,U,Z)
+C
+C A PRINT ROUTINE FOR THE COMPUTED SOLTUION VECTOR.
+C
+      DIMENSION U(MN),Z(N)
+      WRITE(6,1)
+    1 FORMAT(///4X,1HZ,40X,8HU(T,R,Z)/)
+      DO 10 I=1,N
+      K=(I-1)*M
+      K1=K+1
+      KM=K+M
+   10 WRITE(6,20)Z(I),(U(J),J=K1,KM)
+   20 FORMAT(F10.6,5X,5F13.6)
+      RETURN
+      END
+      SUBROUTINE M3RK(X,XE,N,H,HMIN,SIGMA,TOL,F,Y,                          10
+     +                Y1,Y2,YXE,DY,DY1,IFLAG,INFO)
+C***********************************************************************
+C* ABSTRACT                                                            *
+C***********************************************************************
+C* M3RK IS DESIGNED TO SOLVE INITIAL VALUE PROBLEMS FOR SYSTEMS OF     *
+C* ORDINARY DIFFERENTIAL EQUATIONS OF THE FORM                         *
+C*                   DY/DX=F(Y(1),...,Y(N)),                           *
+C*                   Y(I) GIVEN AT X,                                  *
+C* WHICH ORIGINATE FROM SEMI-DISCRETIZATION OF INITIAL-BOUNDARY VALUE  *
+C* PROBLEMS FOR PARABOLIC PARTIAL DIFFERENTIAL EQUATIONS. M3RK IS      *
+C* BASED ON STABILIZED,EXPLICIT THREE-STEP RUNGE-KUTTA FORMULAS OF     *
+C* ORDER ONE AND TWO,OF WHICH THE DEGREE CAN VARY BETWEEN 2 AND 12.    *
+C*                                                                     *
+C* M3RK NEEDS 6 ARRAYS OF LENGTH N,WHICH ALL APPEAR IN THE CALL LIST.  *
+C* THE CODE INTEGRATES FROM X TO XE.ON NORMAL RETURN THE PARAMETERS IN *
+C* THE CALL LIST ARE READY FOR CONTINUING THE INTEGRATION.TO CONTINUE  *
+C* THE INTEGRATION,THE USER NEEDS ONLY TO REDEFINE THE OUTPUT POINT XE *
+C* AND CALL AGAIN.                                                     *
+C*                                                                     *
+C* M3RK CALLS 11 SUBROUTINES WHICH HAVE BEEN WRITTEN TO STRUCTURE THE  *
+C* PROGRAM.THESE SUBROUTINES ARE:                                      *
+C* HSTART - HSTART COMPUTES THE INITIAL STEPLENGTH                     *
+C* PARAM  - PARAM COMPUTES PARAMETERS OF THE VARIOUS IMPLEMENTED       *
+C*          SCHEMES FROM THE COEFFICIENTS OF STABILITY POLYNOMIALS     *
+C* POWERM - POWERM ESTIMATES THE SPECTRAL RADIUS OF THE JACOBIAN OF F  *
+C* MAXDEG - MAXDEG COMPUTES THE MAXIMAL DEGREE OF THE FORMULAS,        *
+C*          WHICH IS ALLOWED WITH RESPECT TO INTERNAL STABILITY        *
+C* MINDEG - MINDEG COMPUTES THE MINIMAL DEGREE OF THE FORMULAS,        *
+C*          WHICH IS ALLOWED WITH RESPECT TO ABSOLUTE STABILITY        *
+C* STEP   - STEP CONTAINS THE ACTUAL INTEGRATOR                        *
+C* ESTIMA - ESTIMA COMPUTES A LOCAL ERROR BOUND AND ESTIMATES A LOCAL  *
+C*          ERROR                                                      *
+C* NEWH   - NEWH DELIVERS A NEW STEPLENGTH                             *
+C* INTER1 - INTER1 PERFORMS INTERPOLATION AFTER A CHANGE OF THE        *
+C*          STEPLENGTH                                                 *
+C* INTER2 - INTER2 INTERPOLATES THE SOLUTION AT THE OUTPUT POINT XE    *
+C* SHIFT  - SHIFT SHIFTS THE DATA FOR A NEXT STEP                      *
+C*                                                                     *
+C* THESE SUBROUTINES ARE COMPLETELY LOCAL,I.E.THE INFORMATION THEY     *
+C* NEED IS PASSED THROUGH THE PARAMETER LISTS.THE WHOLE PACKAGE HAS    *
+C* BEEN TESTED ON A CDC CYBER 73-28 USING AN ARITHMETIC PRECISION OF   *
+C* 14 DIGITS.THE CODE POWERM USES THE CDC SYSTEM SUBPROGRAMS RANSET    *
+C* AND RANF CONSTITUTING A RANDOM GENERATOR.RANSET AND RANF MUST BE    *
+C* REPLACED WHEN USING THE PROGRAM ON ANOTHER COMPUTER.                *
+C* THE CODES CALLED BY M3RK USE NO MACHINE DEPENDENT CONSTANTS.        *
+C* M3RK USES ONE MACHINE DEPENDENT CONSTANT,NAMELY THE ARITHMETIC      *
+C* PRECISION OF THE COMPUTER.IN THE PROGRAM THE INTERNAL VARIABLE APR, *
+C* WHICH REPRESENTS THE ARITHMETIC PRECISION,EQUALS 1.0E-14. APR MUST  *
+C* BE CHANGED ACCORDINGLY WHEN USING THE PROGRAM ON ANOTHER COMPUTER.  *
+C*                                                                     *
+C* THE WHOLE PROGRAM PACKAGE IS ACCEPTED BY THE PFORT VERIFIER.THE     *
+C* PFORT VERIFIER IS A PROGRAM WHICH CHECKS A FORTRAN PROGRAM,I.E. A   *
+C* MAIN PROGRAM AND SUBPROGRAMS,FOR ADHERENCE TO PFORT,A PORTABLE      *
+C* SUBSET OF AMERICAN NATIONAL STANDARD FORTRAN(SEEI1 ).THE WHOLE      *
+C* PROGRAM PACKAGE IS COMPLETELY EXPLAINED AND DESCRIBED IN I2 .       *
+C***********************************************************************
+C* MEANING OF THE PARAMETERS                                           *
+C***********************************************************************
+C* X     - VARIABLE    : INDEPENDENT VARIABLE                          *
+C* XE    - EXPRESSION  : OUTPUT POINT AT WHICH SOLUTION IS DESIRED     *
+C* N     - EXPRESSION  : NUMBER OF EQUATIONS                           *
+C* H     - VARIABLE    : STEPLENGTH                                    *
+C* HMIN  - VARIABLE    : MINIMAL STEPLENGTH                            *
+C* SIGMA - ARRAY       : AN ARRAY OF LENGTH 2 CONTAINING ESTIMATES     *
+C*                       OF THE SPECTRAL RADIUS OF THE JACOBIAN OF F   *
+C* TOL   - EXPRESSION  : LOCAL ERROR TOLERANCE                         *
+C* F     - SUBROUTINE  : DERIVATIVE                                    *
+C* Y     - ARRAY       : SOLUTION VECTOR AT X,INPUT AND WORK ARRAY     *
+C* Y1    - ARRAY       : SOLUTION VECTOR AT X-H,WORK ARRAY             *
+C* Y2    - ARRAY       : SOLUTION VECTOR AT X-2H,WORK ARRAY            *
+C* YXE   - ARRAY       : SOLUTION VECTOR AT XE,OUTPUT AND WORK ARRAY   *
+C* DY    - ARRAY       : DERIVATIVE VECTOR AT X,WORK ARRAY             *
+C* DY1   - ARRAY       : DERIVATIVE VECTOR AT X-H,WORK ARRAY           *
+C* IFLAG - VARIABLE    : ERROR FLAG                                    *
+C* INFO  - ARRAY       : INTEGER ARRAY OF LENGTH 15.INFO IS USED TO    *
+C*                       PASS INFORMATION TO INITIALIZE THE CODE,TO    *
+C*                       PASS INFORMATION BETWEEN THE MAIN PROGRAM AND *
+C*                       THE SUBPROGRAMS,TO PASS INFORMATION TO THE    *
+C*                       USER ABOUT THE STATUS OF THE INTEGRATION,AND  *
+C*                       TO RETAIN INFORMATION FOR SUBSEQUENT CALLS.   *
+C***********************************************************************
+C* FIRST CALL TO M3RK                                                  *
+C***********************************************************************
+C* THE USER MUST PROVIDE STORAGE IN HIS CALLING PROGRAM FOR THE ARRAYS *
+C* IN THE CALL LIST.HE HAS TO SUPPLY THE SUBROUTINE F(N,Y) FOR         *
+C* EVALUATING THE DERIVATIVES DY(I)/DT,I=1,...,N,WHICH MUST BE OVER-   *
+C* WRITTEN ON Y(I).FOR THE SPECTRAL RADIUS THERE EXIST THREE OPTIONS   *
+C* WHICH MUST BE SELECTED WITH INFO(2).IN INFO(3) THE USER MUST GIVE   *
+C* A MAXIMUM FOR THE NUMBER OF EVALUATIONS OF F(Y) TO BE SPENT(ON RE-  *
+C* TURN IT MAY OCCUR THAT INFO(3) IS EXCEEDED WITH ABOUT 50)           *
+C************************                                              *
+C* INPUT PARAMETERS                                                    *
+C************************                                              *
+C* X     - INITIAL VALUE OF THE INDEPENDENT VARIABLE                   *
+C* XE    - OUTPUT POINT AT WHICH SOLUTION IS DESIRED                   *
+C* N     - NUMBER OF EQUATIONS                                         *
+C* SIGMA - (1)= AN UPPER ESTIMATION OF THE SPECTRAL RADIUS OF THE JA-  *
+C*              COBIAN OF F IN CASE OF OPTION 1.FOR OPTION 2 AND 3 NO  *
+C*              INITIALIZATION IS REQUIRED                             *
+C* TOL   - LOCAL ERROR TOLERANCE                                       *
+C* Y     - VECTOR OF INITIAL VALUES OF THE DEPENDENT VARIABLES         *
+C* INFO  - (1)= 0 TO INDICATE FIRST CALL                               *
+C*         (2)= 1 TO INDICATE OPTION 1 FOR THE SPECTRAL RADIUS,I.E.    *
+C*                THE USER MUST INITIALIZE SIGMA(1)                    *
+C*            = 2 TO INDICATE OPTION 2 FOR THE SPECTRAL RADIUS,I.E.    *
+C*                THE CODE INITIALIZES SIGMA(1) AND CONTROLS SIGMA(1)  *
+C*            = 3 TO INDICATE OPTION 3 FOR THE SPECTRAL RADIUS,I.E.    *
+C*                THE CODE ONLY INITIALIZES SIGMA(1) AT THE FIRST CALL *
+C*         (3)= MAXIMUM NUMBER OF F(Y) EVALUATIONS TO BE SPENT         *
+C************************                                              *
+C* OUTPUT PARAMETERS                                                   *
+C************************                                              *
+C* X     - LAST POINT REACHED IN INTEGRATION.NORMALLY X IS SLIGHTLY    *
+C*         BEYOND XE                                                   *
+C* H     - INITIAL STEPLENGTH FOR SUBSEQUENT CALL                      *
+C* HMIN  - MINIMAL STEPLENGTH USED BY M3RK                             *
+C* SIGMA - (1)= UPPER ESTIMATION OF THE SPECTRAL RADIUS INITIALIZED BY *
+C*              THE USER OR BY POWERM                                  *
+C*       - (2)= INACCURATE ESTIMATION OF THE SPECTRAL RADIUS USED FOR  *
+C*              ITS CONTROL                                            *
+C* Y     - SOLUTION VECTOR AT X                                        *
+C* Y1    - SOLUTION VECTOR AT X-H                                      *
+C* Y2    - SOLUTION VECTOR AT X-2H                                     *
+C* YXE   - SOLUTION VECTOR AT OUTPUT POINT XE                          *
+C* DY    - DERIVATIVE VECTOR AT X                                      *
+C* DY1   - DERIVATIVE VECTOR AT X-H                                    *
+C* IFLAG - = 0 NORMAL RETURN,I.E.OUTPUT POINT IS REACHED               *
+C*         = 1 OUTPUT POINT IS NOT REACHED.THE MAXIMUM NUMBER OF       *
+C*             F(Y)-EVALUATIONS HAS BEEN SPENT.THE PROCESS CAN BE CON- *
+C*             TINUED BY INCREASING INFO(3) AND CALLING AGAIN          *
+C*         = 2 MAXIMAL DEGREE FALLS OUTSIDE THE RANGE AS TOL/APR IS    *
+C*             TOO SMALL.THE PROCESS IS NOT STARTED                    *
+C*         = 3 POWERM FAILED IN THE ESTIMATION OF THE SPECTRAL RADIUS. *
+C*             THE PROCESS IS DISCONTINUED                             *
+C* INFO  - (1) = 1 TO INDICATE THAT THE NEXT CALL IS A SUBSEQUENT ONE  *
+C*         (2) = 1 IN CASE OF OPTION 1 OR 3,ELSE 2                     *
+C*         (3) = UNCHANGED                                             *
+C*         (4) = TOTAL NUMBER OF INTEGRATION STEPS PERFORMED,I.E.      *
+C*               ACCEPTED AND REJECTED ONES                            *
+C*         (5) = NUMBER OF REJECTED INTEGRATION STEPS                  *
+C*         (6) = NUMBER OF RESTARTS INITIATED BY THE CODE              *
+C*         (7) = TOTAL NUMBER OF DERIVATIVE EVALUATIONS                *
+C*         (8) = NUMBER OF DERIVATIVE EVALUATIONS USED FOR THE ESTIMA- *
+C*               TION AND CONTROL OF THE SPECTRAL RADIUS               *
+C*         (9) = CURRENT DEGREE                                        *
+C*         (10)= MAXIMAL DEGREE FOR THE FIRST ORDER FORMULAS           *
+C*         (11)= MAXIMAL DEGREE FOR THE SECOND ORDER FORMULAS          *
+C*         (12)= CURRENT ORDER                                         *
+C*         (13)= NUMBER OF STEPS PERFORMED AFTER START OR RESTART      *
+C*         (14)= NUMBER OF STEPS PERFORMED AFTER CHANGE OF H OR ORDER  *
+C*         (15)= NUMBER OF STEPS PERFORMED AFTER ESTIMATION OF SPEC-   *
+C*               TRAL RADIUS                                           *
+C*                                                                     *
+C* IT IS EMPHASIZED THAT THE OUTPUT LIST GIVEN ABOVE IS NOT STRICTLY   *
+C* VALID WHEN ON RETURN IFLAG IS EQUAL TO 2 OR 3.                      *
+C* IT IS FURTHER EMPHASIZED THAT ON RETURN THE ARRAY Y ALWAYS CONTAINS *
+C* THE SOLUTION VECTOR AT THE POINT X.THUS WHEN IFLAG=3,THE USER HAS   *
+C* THE POSSIBILITY TO RESTART THE PROCESS AT THE POINT X,PROVIDED HE   *
+C* IS ABLE TO TAKE ACTION WITH RESPECT TO THE ESTIMATION OF THE SPEC-  *
+C* TRAL RADIUS.                                                        *
+C***********************************************************************
+C* SUBSEQUENT CALLS TO M3RK                                            *
+C***********************************************************************
+C* ON RETURN OF M3RK ALL PARAMETERS ARE READY FOR CONTINUING THE INTE- *
+C* GRATION,PROVIDED IFLAG IS NOT EQUAL TO 2 OR 3.IF XE IS REACHED AND  *
+C* A NORMAL CONTINUATION IS DESIRED,THE USER NEEDS ONLY TO DEFINE A NEW*
+C* OUTPUT POINT XE AND CALL AGAIN.IF ON RETURN IFLAG=1 AND THE USER    *
+C* WANTS TO CONTINUE,HE ONLY NEEDS TO INCREASE INFO(3) AND CALL AGAIN. *
+C* THE PROGRAM IS WRITTEN IN SUCH A WAY THAT THE CHOICE OF OUTPUT      *
+C* POINTS DOES NOT AFFECT THE INTEGRATION PROCESS ITSELF.BETWEEN SUB-  *
+C* SEQUENT CALLS THE USER MAY INCREASE TOL.ALL OTHER PARAMETERS MUST   *
+C* REMAIN UNCHANGED.THE COUNTERS IN INFO ARE USED ACCUMULATIVELY.      *
+C***********************************************************************
+C* PROGRAM TEXT                                                        *
+C***********************************************************************
+      DIMENSION Y(N),Y1(N),Y2(N),YXE(N),DY(N),DY1(N),SIGMA(2),INFO(15)
+C*************************************                                 *
+C* MEANING OF THE INTERNAL VARIABLES                                   *
+C*************************************                                 *
+C* ALFA   - THE FACTOR FOR CHANGING THE STEPLENGTH                     *
+C* APR    - THE ARITHMETIC PRECISION                                   *
+C* HOLD   - PREVIOUSLY ACCEPTED STEPLENGTH                             *
+C* MOLD   - PREVIOUSLY USED DEGREE                                     *
+C* REJECT - NUMBER OF SUCCESSIVE STEP FAILURES                         *
+C* B      - NONZERO B-PARAMETERS OF THE SCHEME                         *
+C* C      - C-PARAMETERS OF THE SCHEME                                 *
+C* LA     - LABDA-PARAMETERS OF THE SCHEME                             *
+C* HMAX   - MAXIMAL STEPSIZES WITH RESPECT TO ABSOLUTE STABILITY       *
+C* EPS    - LOCAL ERROR BOUND                                          *
+C* ERROR  - ESTIMATED LOCAL ERROR                                      *
+C***********************************************************************
+      INTEGER REJECT
+      REAL LA
+      DIMENSION B(2),C(12),LA(12),HMAX(2)
+      EXTERNAL F
+C***********************************************************************
+C* IF ALREADY PAST OUTPUT POINT DURING A SUBSEQUENT CALL,THEN INTER-   *
+C* POLATE AND RETURN                                                   *
+C***********************************************************************
+      IF(INFO(1).EQ.0.OR.X.LT.XE) GOTO 10
+      CALL INTER2(N,Y,Y1,Y2,YXE,(X-XE)/H)
+      RETURN
+C***********************************************************************
+C* SET THE ERROR FLAG IFLAG EQUAL TO ZERO AND INITIALIZE APR.DETERMINE *
+C* THE MAXIMAL DEGREES WITH RESPECT TO INTERNAL STABILITY.IF NECESSARY *
+C* INTERRUPT                                                           *
+C***********************************************************************
+   10 IFLAG=0
+      APR=1.0E-14
+      CALL MAXDEG(TOL,APR,IFLAG,INFO)
+      IF(IFLAG.NE.2) GOTO 20
+      RETURN
+C***********************************************************************
+C* SET THE CONTROL VARIABLES INFO(9),REJECT AND HOLD FOR A CONTINUING  *
+C* CALL,AND INITIALIZE THE ARRAY HMAX                                  *
+C***********************************************************************
+   20 INFO(9)=0
+      IF(INFO(1).EQ.0) GOTO 30
+      REJECT=0
+      HOLD=H
+      HMAX(1)=5.15*FLOAT(INFO(10))*FLOAT(INFO(10))/SIGMA(1)
+      HMAX(2)=2.29*FLOAT(INFO(11))*FLOAT(INFO(11))/SIGMA(1)
+      GOTO 80
+C***********************************************************************
+C* SET REJECT,HOLD AND H FOR THE FIRST CALL. SET THE ELEMENTS INFO(I), *
+C* I=4,...,8,13,14,15 EQUAL TO ZERO AND INFO(12) EQUAL TO 2.TO PREPARE *
+C* THE FIRST STEP EVALUATE F(Y) AND SUBSTITUTE INTO DY.IF NECESSARY    *
+C* ESTIMATE THE SPECTRAL RADIUS AND CHECK FOR A FAILURE OF THE POWER   *
+C* METHOD.INITIALIZE ARRAY HMAX AND ESTIMATE THE INITIAL STEPLENGTH    *
+C***********************************************************************
+   30 INFO(1)=1
+      REJECT=0
+      DO 40 I=4,8
+   40 INFO(I)=0
+      DO 50 I=13,15
+   50 INFO(I)=0
+      INFO(12)=2
+      DO 60 I=1,N
+      DY(I)=Y(I)
+      DY1(I)=0.
+      Y1(I)=0.
+      Y2(I)=0.
+   60 CONTINUE
+      CALL F(N,DY)
+      INFO(7)=INFO(7)+1
+      IF(INFO(2).EQ.1) GOTO 70
+      SIGMA(1)=0.
+      CALL POWERM(N,Y,Y1,YXE,DY,DY1,F,SIGMA,APR,IFLAG,INFO)
+      IF(IFLAG.NE.3) GOTO 70
+      RETURN
+C
+   70 HMAX(1)=5.15*FLOAT(INFO(10))*FLOAT(INFO(10))/SIGMA(1)
+      HMAX(2)=2.29*FLOAT(INFO(11))*FLOAT(INFO(11))/SIGMA(1)
+      CALL HSTART(N,Y,DY,YXE,F,TOL,APR,SIGMA(1),HMIN,INFO)
+      H=HMIN
+      HOLD=H
+C***********************************************************************
+C* DETERMINE THE DEGREE,AND,IF NECESSARY,CALCULATE THE PARAMETERS OF   *
+C* THE SCHEME TO BE USED                                               *
+C***********************************************************************
+   80 MOLD=INFO(9)
+      CALL MINDEG(H,SIGMA(1),INFO)
+      IF(INFO(9).EQ.MOLD) GOTO 90
+      CALL PARAM(C,LA,B,INFO)
+C***********************************************************************
+C* CHECK IF THE MAXIMUM NUMBER OF EVALUATIONS IS REACHED.UPDATE HMIN   *
+C* AND CALCULATE A SOLUTION AT X+H                                     *
+C***********************************************************************
+   90 IF(INFO(7).GE.INFO(3)) IFLAG=1
+      IF(IFLAG.NE.1) GOTO 100
+      RETURN
+C
+  100 IF(H.LT.HMIN) HMIN=H
+      CALL STEP(N,Y,Y1,Y2,YXE,DY,DY1,H,F,C,LA,B,INFO)
+      INFO(13)=INFO(13)+1
+      INFO(4)=INFO(4)+1
+C***********************************************************************
+C* IF THE PROCESS IS IN THE START PHASE,SHIFT THE DATA.CHECK FOR THE   *
+C* CONTINUATION WITH A THREE-STEP SCHEME.IF THE OUTPUT POINT IS PASSED *
+C* INTERPOLATE AND RETURN                                              *
+C***********************************************************************
+      IF(INFO(13).GE.3) GOTO 110
+      CALL SHIFT(N,Y,Y1,Y2,YXE,DY,DY1,X,HOLD,F,INFO)
+      INFO(14)=INFO(14)+1
+      INFO(15)=INFO(15)+1
+      IF(INFO(13).EQ.1) GOTO 90
+      INFO(9)=0
+      IF(X.LT.XE) GOTO 80
+      CALL INTER2(N,Y,Y1,Y2,YXE,(X-XE)/HOLD)
+      RETURN
+C***********************************************************************
+C* CALCULATE THE LOCAL ERRORBOUND AND ESTIMATE THE LOCAL ERROR.        *
+C***********************************************************************
+  110 CALL ESTIMA(N,Y,Y1,Y2,YXE,TOL,EPS,ERROR,INFO)
+C***********************************************************************
+C* IF THE ERROR IS TOO LARGE FOR THE THIRD STEP AFTER START,THEN RE-   *
+C* START AT INITIAL POINT WITH H=H/10                                  *
+C***********************************************************************
+      IF(EPS.GE.ERROR.OR.INFO(13).NE.3) GOTO 130
+      INFO(6)=INFO(6)+1
+      INFO(5)=INFO(5)+3
+      INFO(9)=0
+      INFO(13)=0
+      INFO(14)=0
+      INFO(15)=0
+      X=X-2.*H
+      H=H/10.
+      HOLD=H
+      DO 120 I=1,N
+      Y(I)=Y2(I)
+      DY(I)=Y(I)
+  120 CONTINUE
+      CALL F(N,DY)
+      INFO(7)=INFO(7)+1
+      GOTO 80
+C***********************************************************************
+C* IF STEP FAILED,CHECK FOR A REESTIMATION OF THE SPECTRAL RADIUS.IF   *
+C* NECESSARY,CHECK FOR A FAILURE OF POWERM AND UPDATE HMAX             *
+C***********************************************************************
+  130 IF(INFO(2).EQ.1.OR.INFO(15).EQ.0.OR.EPS.GE.ERROR) GOTO 150
+      SIGMA(1)=0.
+      CALL POWERM(N,Y,Y1,YXE,DY,DY1,F,SIGMA,APR,IFLAG,INFO)
+      IF(IFLAG.NE.3) GOTO 140
+      RETURN
+C
+  140 HMAX(1)=5.15*FLOAT(INFO(10))*FLOAT(INFO(10))/SIGMA(1)
+      HMAX(2)=2.29*FLOAT(INFO(11))*FLOAT(INFO(11))/SIGMA(1)
+C***********************************************************************
+C* CALCULATE A NEW STEPLENGTH                                          *
+C***********************************************************************
+  150 HOLD=H
+      CALL NEWH(EPS/ERROR,HOLD,H,ALFA,HMAX,INFO)
+C***********************************************************************
+C* IF THE ORDER EQUALS 1 AND THE STEPLENGTH IS SMALLER THAN THE MAXI-  *
+C* MAL STEPLENGTH FOR ORDER 2 RESET THE ORDER                          *
+C***********************************************************************
+      IF(INFO(12).EQ.1.AND.H.LT.HMAX(2)) INFO(9)=0
+      IF(INFO(9).EQ.0) INFO(12)=2
+C***********************************************************************
+C* IF STEP FAILED REJECT THE INTEGRATION STEP.CHECK FOR THREE SUCCES-  *
+C* SIVE FAILURES,AND,IF NECESSARY,INTERPOLATE FOR THE NEW STEPLENGTH   *
+C* *********************************************************************
+      IF(EPS.GE.ERROR) GOTO 170
+      REJECT=REJECT+1
+      INFO(5)=INFO(5)+1
+      IF(REJECT.EQ.3) GOTO 160
+      CALL INTER1(N,Y,Y1,Y2,DY1,F,ALFA,INFO)
+      GOTO 80
+C***********************************************************************
+C* RESET REJECT,INFO(I),I=6,9,12,13,14 AND THE STEPLENGTH FOR A        *
+C* RESTART                                                             *
+C***********************************************************************
+  160 REJECT=0
+      INFO(6)=INFO(6)+1
+      INFO(9)=0
+      INFO(12)=2
+      INFO(13)=0
+      INFO(14)=0
+      CALL HSTART(N,Y,DY,YXE,F,TOL,APR,SIGMA(1),H,INFO)
+      HOLD=H
+      GOTO 80
+C***********************************************************************
+C* FIND OUT IF THE ORDER SHOULD CHANGE FROM 2 TO 1.ON EXIT OF THIS     *
+C* PROGRAM PART H SHOULD BE RESET TO HMAX(2).IF THE ORDER HAS TO BE    *
+C* CHANGED FROM 2 TO 1 SET INFO(9)=0                                   *
+C***********************************************************************
+  170 IF(INFO(14).LT.3.OR.INFO(12).EQ.1) GOTO 180
+      IF(HOLD.NE.HMAX(2).OR.H.NE.HMAX(2)) GOTO 180
+      INFO(12)=1
+      CALL ESTIMA(N,Y,Y1,Y2,YXE,TOL,EPS,ERROR,INFO)
+      CALL NEWH(EPS/ERROR,HOLD,H,ALFA,HMAX,INFO)
+      IF(ALFA.LE.1.) INFO(12)=2
+      H=HMAX(2)
+      INFO(14)=-1
+      IF(INFO(12).EQ.2) GOTO 180
+      INFO(9)=0
+C***********************************************************************
+C* SHIFT THE DATA                                                      *
+C***********************************************************************
+  180 CALL SHIFT(N,Y,Y1,Y2,YXE,DY,DY1,X,HOLD,F,INFO)
+      REJECT=0
+      INFO(14)=INFO(14)+1
+      INFO(15)=INFO(15)+1
+C***********************************************************************
+C* CHECK FOR A REESTIMATION OF THE SPECTRAL RADIUS.IF NECESSARY,CHECK  *
+C* FOR A FAILURE OF POWERM AND UPDATE HMAX                             *
+C***********************************************************************
+      IF(INFO(2).EQ.1.OR.INFO(15).NE.25) GOTO 200
+      CALL POWERM(N,Y,Y1,YXE,DY,DY1,F,SIGMA,APR,IFLAG,INFO)
+      IF(IFLAG.NE.3) GOTO 190
+      RETURN
+C
+  190 HMAX(1)=5.15*FLOAT(INFO(10))*FLOAT(INFO(10))/SIGMA(1)
+      HMAX(2)=2.29*FLOAT(INFO(11))*FLOAT(INFO(11))/SIGMA(1)
+C***********************************************************************
+C* IF X IS SMALLER THAN XE CONTINUE THE INTEGRATION.IF NECESSARY,IN-   *
+C* TERPOLATE FOR A CHANGE OF H                                         *
+C***********************************************************************
+  200 IF(X.GE.XE) GOTO 210
+      IF(H.NE.HOLD) CALL INTER1(N,Y,Y1,Y2,DY1,F,ALFA,INFO)
+      IF(H.NE.HOLD.OR.INFO(9).EQ.0) GOTO 80
+      GOTO 90
+C***********************************************************************
+C* INTERPOLATE AT XE AND,IF NECESSARY,INTERPOLATE FOR A CHANGE OF H    *
+C* BEFORE RETURN                                                       *
+C***********************************************************************
+  210 CALL INTER2(N,Y,Y1,Y2,YXE,(X-XE)/HOLD)
+      IF(H.NE.HOLD) CALL INTER1(N,Y,Y1,Y2,DY1,F,ALFA,INFO)
+      RETURN
+      END
+      SUBROUTINE HSTART(N,Y,DY,YXE,F,TOL,APR,SIGMA,H,INFO)                4120
+C***********************************************************************
+C* SUBROUTINE HSTART CALCULATES THE INITIAL STEPLENGTH                 *
+C***********************************************************************
+      DIMENSION Y(N),DY(N),YXE(N),INFO(15)
+      DO 10 I=1,N
+      YXE(I)=Y(I)+DY(I)/SIGMA
+   10 CONTINUE
+      CALL F(N,YXE)
+      INFO(7)=INFO(7)+1
+      ETAT=0.0
+      ETAE=0.0
+      DO 20 I=1,N
+      ETAT=ETAT+Y(I)*Y(I)
+      E=YXE(I)-DY(I)
+      ETAE=ETAE+E*E
+   20 CONTINUE
+      ETAT=TOL+TOL*SQRT(ETAT/FLOAT(N))
+      ETAE=SQRT(ETAE/FLOAT(N))/SIGMA+APR
+      H=SQRT(ETAT/ETAE)/SIGMA/10.0
+C
+      RMMAX=INFO(11)
+      BETA=(0.03*RMMAX+0.44)*RMMAX*RMMAX
+      IF(H.GT.BETA/SIGMA)H=BETA/SIGMA
+      RETURN
+      END
+      SUBROUTINE PARAM(C,LA,B,INFO)                                       4380
+C***********************************************************************
+C* PARAM DETERMINES THE PARAMETERS OF THE INTEGRATION SCHEME.THESE     *
+C* PARAMETERS ARE EXPRESSIONS DEPENDING ON THE COEFFICIENTS OF THE     *
+C* STABILITY POLYNOMIALS,WHICH ARE STORED IN THE ARRAY D. DURING       *
+C* THE START,I.E.INFO(13) IS 0 OR 1,THE PARAMETERS OF A ONE-STEP SCHE- *
+C* ME ARE DETERMINED.                                                  *
+C***********************************************************************
+      REAL LA
+      DIMENSION C(12),LA(12),B(2),D(440),P(13),S(13),INFO(15)
+      INTEGER ORDER
+      DATA D(1),D(2),D(3),D(4),D(5),D(6),D(7),D(8),D(9),D(10),
+     +D(11),D(12),D(13),D(14),D(15),D(16),D(17),D(18),D(19),D(20),
+     +D(21),D(22),D(23),D(24),D(25),D(26),D(27),D(28),D(29),D(30)/
+     +.54545454545454E+00,.32974222139503E+00,.15874540963720E-01,
+     +.54545454545454E+00,.32957779372404E+00,.18807742712872E-01,
+     +.26931406295668E-03,.54545454545454E+00,.32959633626966E+00,
+     +.19843848141588E-01,.38370516974646E-03,.23214008199836E-05,
+     +.54545454545454E+00,.32940480780399E+00,.20289622974884E-01,
+     +.43922728369494E-03,.38881393659393E-05,.12058633806519E-07,
+     +.54545454545454E+00,.32915730747582E+00,.20529934599533E-01,
+     +.47014565070180E-03,.48729959290595E-05,.23293337843875E-07,
+     +.41768893290961E-10,.54545454545454E+00,.32940290556199E+00,
+     +.20695785946957E-01,.48959305208277E-03,.55250561672575E-05/
+      DATA D(31),D(32),D(33),D(34),D(35),D(36),D(37),D(38),D(39),
+     +D(40),D(41),D(42),D(43),D(44),D(45),D(46),D(47),D(48),D(49),
+     +D(50),D(51),D(52),D(53),D(54),D(55),D(56),D(57),D(58),D(59),
+     +D(60)/
+     +.32042572866540E-07,.92217187087773E-10,.10431596770258E-12,
+     +.54545454545454E+00,.32904622047855E+00,.20769127247467E-01,
+     +.50144873108237E-03,.59538312498493E-05,.38413639404624E-07,
+     +.13735161731261E-09,.25579038177072E-12,.19355325549260E-15,
+     +.54545454545454E+00,.32902403825404E+00,.20835887364795E-01,
+     +.51019371265378E-03,.62671263848834E-05,.43273294211670E-07,
+     +.17557956622083E-09,.41529099936815E-12,.52977760638010E-15,
+     +.28162396623902E-18,.54545454545454E+00,.32900701770523E+00,
+     +.20847709891773E-01,.51474022625718E-03,.64655444450446E-05,
+     +.46694681553560E-07,.20545752812528E-09,.55985683650846E-12/
+      DATA D(61),D(62),D(63),D(64),D(65),D(66),D(67),D(68),D(69),
+     +D(70),D(71),D(72),D(73),D(74),D(75),D(76),D(77),D(78),D(79),
+     +D(80),D(81),D(82),D(83),D(84),D(85),D(86),D(87),D(88),D(89),
+     +D(90)/
+     +.92238940881933E-15,.84171480799272E-18,.32655765072494E-21,
+     +.54545454545454E+00,.32923047518706E+00,.20942105514450E-01,
+     +.52155114179973E-03,.66698403229501E-05,.49787290971999E-07,
+     +.23175109073032E-09,.69290153772379E-12,.13309584971259E-14,
+     +.15876152476718E-17,.10702794409632E-20,.31159779644428E-24,
+     +.54545454545454E+00,.32888824622955E+00,.20930564082556E-01,
+     +.52398048369937E-03,.67865318951772E-05,.51892263386503E-07,
+     +.25160762750795E-09,.80319349035922E-12,.17105594522426E-14,
+     +.24063258323529E-17,.21467888957759E-20,.11002739569540E-23,
+     +.24672233557657E-27,.45454545454545E+00,.39753050587769E+00/
+      DATA D(91),D(92),D(93),D(94),D(95),D(96),D(97),D(98),D(99),
+     +D(100),D(101),D(102),D(103),D(104),D(105),D(106),D(107),
+     +D(108),D(109),D(110),D(111),D(112),D(113),D(114),D(115),
+     +D(116),D(117),D(118),D(119),D(120)/
+     +.19106034236683E-01,.45454545454545E+00,.39769493354868E+00,
+     +.22675100922608E-01,.32438614977749E-03,.45454545454545E+00,
+     +.39767639100306E+00,.23921246939481E-01,.46221334545758E-03,
+     +.27945492539796E-05,.45454545454545E+00,.39786791946874E+00,
+     +.24509754044867E-01,.53071848010798E-03,.47002589400275E-05,
+     +.14585303356181E-07,.45454545454545E+00,.39811541979691E+00,
+     +.24864589588956E-01,.56998860293388E-03,.59138340603510E-05,
+     +.28300608926316E-07,.50812598486162E-10,.45454545454545E+00,
+     +.39786982171073E+00,.25000002282553E-01,.59148858437864E-03,
+     +.66757562996758E-05,.38720468964770E-07,.11144761163396E-09/
+      DATA D(121),D(122),D(123),D(124),D(125),D(126),D(127),
+     +D(128),D(129),D(130),D(131),D(132),D(133),D(134),D(135),
+     +D(136),D(137),D(138),D(139),D(140),D(141),D(142),D(143),
+     +D(144),D(145),D(146),D(147),D(148),D(149),D(150)/
+     +.12608153728000E-12,.45454545454545E+00,.39822650679417E+00,
+     +.25183525013803E-01,.60880314013113E-03,.72358433014328E-05,
+     +.46725317100106E-07,.16719594503501E-09,.31157527742621E-12,
+     +.23590370482110E-15,.45454545454545E+00,.39824868901869E+00,
+     +.25265819897767E-01,.61910411544859E-03,.76074711148850E-05,
+     +.52536344101559E-07,.21317642667569E-09,.50421345500406E-12,
+     +.64317688539028E-15,.34187163161474E-18,.45454545454545E+00,
+     +.39826570956750E+00,.25287844091655E-01,.62494425734623E-03,
+     +.78540296938450E-05,.56743151456408E-07,.24973869169769E-09,
+     +.68066567167935E-12,.11216260688042E-14,.10236802978533E-17/
+      DATA D(151),D(152),D(153),D(154),D(155),D(156),D(157),
+     +D(158),D(159),D(160),D(161),D(162),D(163),D(164),D(165),
+     +D(166),D(167),D(168),D(169),D(170),D(171),D(172),D(173),
+     +D(174),D(175),D(176)/
+     +.39720657964596E-21,.45454545454545E+00,.39804225208567E+00,
+     +.25341708058167E-01,.63151501325496E-03,.80807554649258E-05,
+     +.60354664402269E-07,.28111642092611E-09,.84106334638657E-12,
+     +.16167280397671E-14,.19299941789907E-17,.13021732956413E-20,
+     +.37944453664700E-24,.45454545454545E+00,.39838448104318E+00,
+     +.25416762495946E-01,.63697712076076E-03,.82551983508228E-05,
+     +.63149729888770E-07,.30629858708888E-09,.97808681916440E-12,
+     +.20836563130596E-14,.29320679574331E-17,.26166497017204E-20,
+     +.13415328284784E-23,.30092796196223E-27/
+      DATA D(177),D(178),D(179),D(180),D(181),D(182),D(183),D(184),
+     +D(185),D(186),D(187),D(188),D(189),D(190),D(191),D(192),D(193),
+     +D(194),D(195),D(196),D(197),D(198),D(199),D(200),D(201),D(202),
+     +D(203),D(204),D(205),D(206)/
+     +-.58064516129032E+00,-.21559395174672E+00,-.30544696579492E-01,
+     +-.58064516129032E+00,-.19115223031554E+00,-.29473834786102E-01,
+     +-.10066347258135E-02,-.58064516129032E+00,-.18233307297138E+00,
+     +-.28236544473632E-01,-.12030039601232E-02,-.15208008334815E-04,
+     +-.58064516129032E+00,-.17833069941496E+00,-.28475246894827E-01,
+     +-.14606302030482E-02,-.29964111364600E-04,-.21343804115613E-06,
+     +-.58064516129032E+00,-.17610367098315E+00,-.28260676645090E-01,
+     +-.15322458810336E-02,-.36586320114212E-04,-.39867529427935E-06,
+     +-.16226665135199E-08,-.58064516129032E+00,-.17483390114911E+00,
+     +-.27741186226246E-01,-.14815956989918E-02,-.36301045393729E-04/
+      DATA D(207),D(208),D(209),D(210),D(211),D(212),D(213),D(214),
+     +D(215),D(216),D(217),D(218),D(219),D(220),D(221),D(222),D(223),
+     +D(224),D(225),D(226),D(227),D(228),D(229),D(230),D(231),D(232),
+     +D(233),D(234),D(235),D(236)/
+     +-.44685007550778E-06,-.26875584507281E-08,-.62831231083352E-11,
+     +-.58064516129032E+00,-.17396071288671E+00,-.28684134226593E-01,
+     +-.17432495919146E-02,-.50845860092993E-04,-.79137773126678E-06,
+     +-.67374753547729E-08,-.29589252318632E-10,-.52416294063507E-13,
+     +-.58064516129032E+00,-.17339878373842E+00,-.28044727272007E-01,
+     +-.16253143532453E-02,-.45810065724231E-04,-.71155788003856E-06,
+     +-.64049072748140E-08,-.33259355915939E-10,-.92392278190522E-13,
+     +-.10625147968957E-15,-.58064516129032E+00,-.17144173377009E+00,
+     +-.28015092938518E-01,-.16157222373633E-02,-.46227724829057E-04,
+     +-.75479222345544E-06,-.74894835017511E-08,-.45979053535837E-10/
+      DATA D(237),D(238),D(239),D(240),D(241),D(242),D(243),D(244),
+     +D(245),D(246),D(247),D(248),D(249),D(250),D(251),D(252),D(253),
+     +D(254),D(255),D(256),D(257),D(258),D(259),D(260),D(261),D(262),
+     +D(263),D(264),D(265),D(266)/
+     +-.17060137796770E-12,-.35056663086597E-15,-.30628886618191E-18,
+     +-.58064516129032E+00,-.17300284166294E+00,-.27328009024214E-01,
+     +-.15056021545051E-02,-.41367453292114E-04,-.65884289780074E-06,
+     +-.65536146317341E-08,-.42091025159364E-10,-.17479977056317E-12,
+     +-.45368406820998E-15,-.66928703208412E-18,-.42844311155752E-21,
+     +-.58064516129032E+00,-.17229366960984E+00,-.28800272381574E-01,
+     +-.18596174430420E-02,-.59976978730906E-04,-.11090566945359E-05,
+     +-.12745935692238E-07,-.95158694657869E-10,-.46969406476975E-12,
+     +-.15218064136528E-14,-.31130952108508E-17,-.36466961532119E-20,
+     +-.18644934368193E-23,.15806451612903E+01,.15059165323919E+01/
+      DATA D(267),D(268),D(269),D(270),D(271),D(272),D(273),D(274),
+     +D(275),D(276),D(277),D(278),D(279),D(280),D(281),D(282),D(283),
+     +D(284),D(285),D(286),D(287),D(288),D(289),D(290),D(291),D(292),
+     +D(293),D(294),D(295),D(296)/
+     +.16978945451019E+00,.15806451612903E+01,.14814748109607E+01,
+     +.19316031414798E+00,.62334163398843E-02,.15806451612903E+01,
+     +.14726556536165E+01,.20074218117966E+00,.86336976630508E-02,
+     +.11558084587197E-03,.15806451612903E+01,.14686532800601E+01,
+     +.20498325715728E+00,.99938118863291E-02,.19922348036296E-03,
+     +.13919201448922E-05,.15806451612903E+01,.14664262516283E+01,
+     +.20699571533935E+00,.10680275405545E-01,.24933405067263E-03,
+     +.26855039111666E-05,.10854850713601E-07,.15806451612903E+01,
+     +.14651564817943E+01,.20774599475456E+00,.10971861052267E-01,
+     +.27524368830002E-03,.35403656934423E-05,.22575321236761E-07/
+      DATA D(297),D(298),D(299),D(300),D(301),D(302),D(303),D(304),
+     +D(305),D(306),D(307),D(308),D(309),D(310),D(311),D(312),D(313),
+     +D(314),D(315),D(316),D(317),D(318),D(319),D(320),D(321),D(322),
+     +D(323),D(324),D(325),D(326)/
+     +.56574487882585E-10,.15806451612903E+01,.14642832935319E+01,
+     +.20956213101730E+00,.11509566107375E-01,.31097988163828E-03,
+     +.45630986133302E-05,.37079641130883E-07,.15682590950194E-09,
+     +.26933430035588E-12,.15806451612903E+01,.14637213643836E+01,
+     +.20948465321101E+00,.11536416747709E-01,.31784614870548E-03,
+     +.49116720047009E-05,.44528196080481E-07,.23505328331393E-09,
+     +.66870118493809E-12,.79239438466385E-15,.15806451612903E+01,
+     +.14617643144152E+01,.21141206884584E+00,.11805056288024E-01,
+     +.33440743994479E-03,.54414235293880E-05,.53918086434111E-07,
+     +.33075450191903E-09,.12264057386754E-11,.25181064036724E-14/
+      DATA D(327),D(328),D(329),D(330),D(331),D(332),D(333),D(334),
+     +D(335),D(336),D(337),D(338),D(339),D(340),D(341),D(342),D(343),
+     +D(344),D(345),D(346),D(347),D(348),D(349),D(350),D(351),D(352)/
+     +.21977616072810E-17,.15806451612903E+01,.14633254223081E+01,
+     +.20916387703869E+00,.11579454550239E-01,.32857305529008E-03,
+     +.54458388015784E-05,.56371977519294E-07,.37545083692440E-09,
+     +.16091005950325E-11,.42884398776166E-14,.64665832685414E-17,
+     +.42148457924105E-20,.15806451612903E+01,.14626162502550E+01,
+     +.21134531244915E+00,.12108121568554E-01,.35894153745450E-03,
+     +.62664422624671E-05,.69193362616297E-07,.50195179261835E-09,
+     +.24253292036317E-11,.77310365461803E-14,.15613921810526E-16,
+     +.18102819599155E-19,.91776107476727E-23/
+C
+      DATA D(353),D(354),D(355),D(356),D(357),D(358),D(359),D(360),
+     +D(361),D(362),D(363),D(364),D(365),D(366),D(367),D(368),D(369),
+     +D(370),D(371),D(372),D(373),D(374),D(375),D(376),D(377),D(378),
+     +D(379),D(380),D(381),D(382),D(383),D(384),D(385),D(386),D(387),
+     +D(388),D(389),D(390),D(391),D(392),D(393),D(394),D(395),D(396),
+     +D(397),D(398),D(399),D(400),D(401),D(402)/
+     +1.,1.,.5,
+     +1.,1.,0.5,63304085.E-09,1.,1.,0.5,79027358.E-09,37089254.E-10,
+     +1.,1.,0.5,85605575.E-09,56773923.E-10,12758716.E-11,1.,1.,0.5,
+     +89018496.E-09,67947003.E-10,23143226.E-11,2898388.E-12,1.,1.,0.5,
+     +91025408.E-09,74822425.E-10,30567580.E-11,6072001.E-12,
+     +4679323.E-14,1.,1.,0.5,92308224.E-09,79335426.E-10,35849723.E-11,
+     +8800161.E-12,11108474.E-14,5648779.E-16,1.,1.,0.5,93178948.E-09,
+     +82451157.E-10,39680345.E-11,11000301.E-12,17552367.E-14/
+      DATA D(403),D(404),D(405),D(406),D(407),D(408),D(409),D(410),
+     +D(411),D(412),D(413),D(414),D(415),D(416),D(417),D(418),D(419),
+     +D(420),D(421),D(422),D(423),D(424),D(425),D(426),D(427),D(428),
+     +D(429),D(430),D(431),D(432),D(433),D(434),D(435),D(436),D(437),
+     +D(438),D(439),D(440)/
+     +14976734.E-16,5293311.E-18,1.,1.,0.5,93797465.E-09,84690176.E-10,
+     +42524183.E-11,12746945.E-12,23355062.E-14,25642831.E-16,
+     +15495967.E-18,3962808.E-20,1.,1.,0.5,94252811.E-09,86352191.E-10,
+     +44683802.E-11,14135170.E-12,28359079.E-14,36242802.E-16,
+     +28591262.E-18,12691526.E-20,24249737.E-23,1.,1.,0.5,94597848.E-09,
+     +87619296.E-10,46357872.E-11,15246910.E-12,32599754.E-14,
+     +46107927.E-16,42819928.E-18,25110371.E-20,84319465.E-23,
+     +12357105.E-25/
+C
+      ORDER=INFO(12)
+      M=INFO(9)
+      IF(INFO(13).LT.2) GOTO 50
+      M1=176*(ORDER-1)+M*(M+1)/2-3
+      M2=88+M1
+      MM=M+1
+      DO 10 J=1,MM
+      M1PJ=M1+J
+      M2PJ=M2+J
+      P(J)=D(M1PJ)
+      S(J)=D(M2PJ)
+   10 CONTINUE
+      IF(M.GT.2) GOTO 20
+      P(4)=0.0
+      S(4)=0.0
+   20 DD=1.375-.6*FLOAT(ORDER-1)
+      E=P(2)+2.0*(-P(3)+P(4)+S(4))
+      C(M)=(E/DD-((DD-0.5)/DD)**2)/(2.+E)
+      LA(M)=1.0/DD-C(M)
+      LA(M-1)=S(3)/LA(M)
+      C(M-1)=P(3)/LA(M)
+      B(1)=(P(2)-C(M))/LA(M)
+      B(2)=P(1)
+      IF(M.GT.2) GOTO 30
+      RETURN
+C
+   30 MM=M-2
+      DO 40 J=1,MM
+      MP2MJ=M+2-J
+      MP1MJ=M+1-J
+      C(J)=P(MP2MJ)/S(MP1MJ)
+      LA(J)=S(MP2MJ)/S(MP1MJ)
+   40 CONTINUE
+      RETURN
+C
+   50 M1=352+M*(M+1)/2-3
+      MM=M+1
+      DO 60 J=1,MM
+      M1PJ=M1+J
+   60 S(J)=D(M1PJ)
+      B(1)=0.0
+      B(2)=0.0
+      C(M)=0.0
+      LA(M)=S(1)
+      MM=M-1
+      DO 70 J=1,MM
+      MP2MJ=M+2-J
+      MP1MJ=M+1-J
+      LA(J)=S(MP2MJ)/S(MP1MJ)
+      C(J)=0.0
+   70 CONTINUE
+      RETURN
+      END
+      SUBROUTINE POWERM(N,Y,Y1,YXE,DY,DY1,F,SIGMA,APR,IFLAG,INFO)         6950
+C***********************************************************************
+C* IF ON ENTRY SIGMA(1)=0 POWERM COMPUTES AN ESTIMATION OF THE SPECTR- *
+C* AL RADIUS OF THE JACOBIAN BY MEANS OF AN ADJUSTED POWER METHOD.THE  *
+C* ITERATION IS STOPPED IF TWO SUCCESSIVE ITERATES DIFFER RELATIVELY   *
+C* LESS THAN 0.001.THE MINIMAL NUMBER OF ITERATIONS IS 5.IF THE COMPU- *
+C* TATION DID NOT SUCCEED WITHIN 50 ITERATIONS AN ERRORMESSAGE IS GIV- *
+C* EN.AS A SAFETY MARGIN,THE LAST ITERATE IS ENLARGED WITH 10 PERCENT. *
+C* THE RESULT IS STORED IN SIGMA(1).                                   *
+C*                                                                     *
+C* IF ON ENTRY SIGMA(1) NOT EQUALS 0 POWERM PERFORMS THREE ITERATIONS  *
+C* WITH THE ADJUSTED POWER METHOD.IF THE THIRD ITERATE IS MORE THAN 10 *
+C* PERCENT SMALLER THAN SIGMA(2),THE ITERATION IS CONTINUED AS IF      *
+C* SIGMA(1)=0.IN THIS CASE THE THIRD ITERATE IS STORED IN SIGMA(2).    *
+C*                                                                     *
+C* THE POWER METHOD REQUIRES THREE WORK ARRAYS.WE USE YXE,DY AND DY1,  *
+C* WHERE DY AND DY1 ARE OVERWRITTEN.ON ENTRY OF THIS ROUTINE DY AND    *
+C* DY1 CONTAIN F(Y) AT Y=Y(X) AND Y=Y(X-H),RESPECTIVELY.THUS ON EXIT   *
+C* OF THIS ROUTINE TWO EXTRA EVALUATIONS OF F ARE NECESSARY FOR RESTO- *
+C* RING THE DERIVATIVES.                                               *
+C*                                                                     *
+C* THIS CODE USES THE CDC SYSTEM SUBPROGRAMS RANSET AND RANF,GENE-     *
+C* RATING RANDOM VALUES FROM THE INTERVAL I0,1 . THE ARGUMENT OF RANF  *
+C* IS DUMMY AND IGNORED.RANSET INITIALIZES THE GENERATIVE VALUE OF RANF*
+C***********************************************************************
+      DIMENSION Y(N),Y1(N),YXE(N),DY(N),DY1(N),SIGMA(2),INFO(15)
+      REAL NORM,NORM0
+      IF(INFO(2).EQ.3) INFO(2)=1
+      INFO(15)=0
+      TOLLIP=1.E+4*APR
+      SIGM=0.0
+      S0=0.0
+      CALL RANSET(0)
+      DO 10 I=1,N
+      RA=2.*RANF(IDUM)-1.
+      YXE(I)=DY(I)
+      IF(Y(I).EQ.0.0) DY(I)=RA*TOLLIP
+      IF(Y(I).NE.0.0) DY(I)=Y(I)*(1.0+TOLLIP*RA)
+      DY1(I)=DY(I)
+      S0=S0+DY(I)*DY(I)
+   10 CONTINUE
+      NORM0=TOLLIP*SQRT(S0)
+      IF(NORM0.LT.TOLLIP)NORM0=TOLLIP
+      CALL F(N,DY1)
+      INFO(7)=INFO(7)+1
+      INFO(8)=INFO(8)+1
+C
+      DO 70 K=1,51
+      IF(K.LT.51) GOTO 20
+      IFLAG=3
+      RETURN
+C
+   20 S0=0
+      DO 30 I=1,N
+      S1=YXE(I)-DY1(I)
+      S0=S0+S1*S1
+   30 CONTINUE
+      NORM=SQRT(S0)
+      SIGM1=SIGM
+      SIGM=NORM/NORM0
+C
+      IF(K.EQ.3.AND.SIGMA(1).EQ.0.0) SIGMA(2)=SIGM
+      IF(K.LE.2.OR.SIGMA(1).EQ.0.0) GOTO 40
+      IF(SIGM.GE.0.9*SIGMA(2)) GOTO 80
+      SIGMA(2)=SIGM
+      SIGMA(1)=0.
+C
+   40 IF(ABS(SIGM1-SIGM)/SIGM.GT.0.001.OR.K.LE.4) GOTO 50
+      SIGMA(1)=1.1*SIGM
+      GOTO 80
+   50 DO 60 I=1,N
+   60 YXE(I)=DY(I)+(YXE(I)-DY1(I))/SIGM
+      CALL F(N,YXE)
+      INFO(7)=INFO(7)+1
+      INFO(8)=INFO(8)+1
+   70 CONTINUE
+C
+   80 DO 90 I=1,N
+   90 DY(I)=Y(I)
+      CALL F(N,DY)
+      INFO(7)=INFO(7)+1
+      INFO(8)=INFO(8)+1
+      IF(INFO(13).NE.0) GOTO 100
+      RETURN
+  100 DO 110 I=1,N
+  110 DY1(I)=Y1(I)
+      CALL F(N,DY1)
+      INFO(7)=INFO(7)+1
+      INFO(8)=INFO(8)+1
+      RETURN
+      END
+      SUBROUTINE MAXDEG(TOL,APR,IFLAG,INFO)                               7860
+C***********************************************************************
+C* IN MAXDEG THE MAXIMAL DEGREES WITH RESPECT TO THE INTERNAL STABILI- *
+C* TY CONDITION ARE COMPUTED. IF ONE OF THESE MAXIMAL DEGREES FALLS    *
+C* OUTSIDE THE RANGE,AN ERRORMESSAGE IS GIVEN.                         *
+C***********************************************************************
+      DIMENSION Q(11),INFO(15)
+      DATA Q(1),Q(2),Q(3),Q(4),Q(5),Q(6),Q(7),Q(8),Q(9),Q(10),Q(11)/
+     +3.E1,1.E2,7.E2,4.E3,3.E4,2.E5,9.E5,5.E6,3.E7,2.E8,1.E9/
+      E=TOL/APR
+      DO 10 I=2,12
+      J=13-I
+      IF(Q(J).LE.E) GOTO 20
+   10 CONTINUE
+      IFLAG=2
+      RETURN
+C
+   20 INFO(10)=14-I
+      DO 30 I=2,12
+      J=13-I
+      IF(100.0*Q(J).LE.E) GOTO 40
+   30 CONTINUE
+      IFLAG=2
+      RETURN
+C
+   40 INFO(11)=14-I
+      RETURN
+      END
+      SUBROUTINE MINDEG(H,SIGMA,INFO)                                     8140
+C***********************************************************************
+C* MINDEG DETERMINES THE MINIMAL DEGREE M WHICH STILL GIVES RISE TO A  *
+C* STABLE INTEGRATION STEP.                                            *
+C***********************************************************************
+      DIMENSION INFO(15)
+      LOGICAL START
+      L=INFO(12)+9
+      MMAX=INFO(L)
+      START=INFO(13).LT.2
+      IF(.NOT.START) BETAC=5.15+2.86*FLOAT(1-INFO(12))
+      DO 10 M=2,MMAX
+      RM=M
+      IF(START) BETAC=0.03*RM+0.44
+      IF(H.LE.BETAC*RM*RM/SIGMA) GOTO 20
+   10 CONTINUE
+      M=MMAX
+   20 INFO(9)=M
+      RETURN
+      END
+      SUBROUTINE STEP(N,Y,Y1,Y2,YXE,DY,DY1,H,F,C,LA,B,INFO)               8340
+C***********************************************************************
+C* STEP CONTAINS THE ACTUAL INTEGRATOR.FOR CONVENIENCE,THE ONE-STEP    *
+C* SCHEME IS ALSO FORMULATED AS A THREE-STEP SCHEME BY INTRODUCING ZE- *
+C* RO-PARAMETERS.ON EXIT OF THIS ROUTINE THE NEW CALCULATED SOLUTION   *
+C* VECTOR IS CONTAINED IN YXE.                                         *
+C***********************************************************************
+      REAL LA
+      DIMENSION Y(N),Y1(N),Y2(N),YXE(N),DY(N),DY1(N),
+     +LA(12),C(12),B(2),INFO(15)
+      M=INFO(9)
+      D=1.375-.6*FLOAT(INFO(12)-1)
+      IF(INFO(13).LT.2) D=1.0
+      DO 10 I=1,N
+   10 YXE(I)=DY(I)
+      IF(M.EQ.2) GOTO 40
+      MM=M-2
+C
+      DO 30 J=1,MM
+      HC=H*C(J)
+      HLA=H*LA(J)
+      DO 20 I=1,N
+      YXE(I)=Y(I)+HC*DY1(I)+HLA*YXE(I)
+   20 CONTINUE
+      CALL F(N,YXE)
+      INFO(7)=INFO(7)+1
+   30 CONTINUE
+C
+   40 BM1=B(1)
+      BM11=1.0-BM1
+      HC=H*C(M-1)
+      HLA=H*LA(M-1)
+      DO 50 I=1,N
+   50 YXE(I)=BM11*Y(I)+BM1*Y1(I)+HC*DY1(I)+HLA*YXE(I)
+      D1=1.-D
+      BM1=B(2)*D
+      BM11=(1.-B(2))*D
+      HC=H*C(M)*D
+      HLA=H*LA(M)*D
+      CALL F(N,YXE)
+      INFO(7)=INFO(7)+1
+      DO 60 I=1,N
+   60 YXE(I)=BM11*Y(I)+BM1*Y1(I)+D1*Y2(I)+HC*DY1(I)+HLA*YXE(I)
+      RETURN
+      END
+      SUBROUTINE ESTIMA(N,Y,Y1,Y2,YXE,TOL,EPS,ERROR,INFO)                 8790
+C***********************************************************************
+C* ESTIMA CALCULATES THE LOCAL ERROR BOUND EPS=(1+NORM(Y))*TOL FOR THE *
+C* MIXED ERROR TEST AND ESTIMATES THE LOCAL ERROR ERROR.               *
+C***********************************************************************
+      DIMENSION Y(N),Y1(N),Y2(N),YXE(N),INFO(15),CONST(2)
+      INTEGER ORDER
+      CONST(1)=4.70
+      CONST(2)=0.79
+      ORDER=INFO(12)
+      EPS=0.0
+      ERROR=0.0
+      IF(ORDER.EQ.2) GOTO 20
+      DO 10 I=1,N
+      YI=Y(I)
+      EPS=EPS+YI*YI
+      E=Y1(I)-YI-YI+YXE(I)
+      ERROR=ERROR+E*E
+   10 CONTINUE
+C
+      GOTO 40
+   20 DO 30 I=1,N
+      EPS=EPS+Y(I)*Y(I)
+      E=-Y2(I)+3.0*(Y1(I)-Y(I))+YXE(I)
+      ERROR=ERROR+E*E
+   30 CONTINUE
+C
+   40 EPS=TOL+TOL*SQRT(EPS/FLOAT(N))
+      ERROR=CONST(ORDER)*SQRT(ERROR/FLOAT(N))
+      RETURN
+      END
+      SUBROUTINE NEWH(EPSERR,HOLD,H,ALFA,HMAX,INFO)                       9100
+C***********************************************************************
+C* NEWH DELIVERS A NEW STEPLENGTH AND THE FACTOR ALFA BY WHICH THE     *
+C* STEPLENGTH IS CHANGED. EPSERR DENOTES EPS/ERROR.                    *
+C***********************************************************************
+      DIMENSION HMAX(2),INFO(15)
+      INTEGER ORDER
+      ALFA=1.0
+      IF(INFO(14).GE.3.OR.EPSERR.LE.1.0) GOTO 10
+      RETURN
+C
+   10 ORDER=INFO(12)
+      ALFA=EPSERR**(1./FLOAT(ORDER+1))/(2.0-FLOAT(ORDER-1)*0.4)
+      IF(ALFA.GT.0.9.AND.ALFA.LT.1.1) ALFA=1.0
+      IF(ALFA.NE.1.0) GOTO 20
+C
+      RETURN
+   20 IF(ALFA.GT.3.0) ALFA=3.0
+      IF(ALFA.LT.0.1) ALFA=0.1
+      H=HOLD*ALFA
+      IF(H.GT.HMAX(ORDER)) H=HMAX(ORDER)
+      ALFA=H/HOLD
+      RETURN
+      END
+      SUBROUTINE INTER1(N,Y,Y1,Y2,DY1,F,ALFA,INFO)                        9340
+C***********************************************************************
+C* INTER1 COMPUTES VALUES FOR Y(X-ALFA*H) AND Y(X-2*ALFA*H) FROM Y(X), *
+C* Y(X-H) AND Y(X-2H) BY QUADRATIC INTERPOLATION,AND COMPUTES THE DER- *
+C* IVATIVE AT X-H BY CALLING F.                                        *
+C***********************************************************************
+      DIMENSION Y(N),Y1(N),Y2(N),DY1(N),INFO(15)
+      REAL NU
+      NU=2.-ALFA
+      C12=(NU-1.)*(NU-2.)/2.
+      C11=NU*(2.-NU)
+      C10=NU*(NU-1.)/2.
+      NU=2.-2.*ALFA
+      C22=(NU-1.)*(NU-2.)/2.
+      C21=NU*(2.-NU)
+      C20=NU*(NU-1.)/2.
+C
+      DO 10 I=1,N
+      CY0=Y(I)
+      CY1=Y1(I)
+      CY2=Y2(I)
+      Y1(I)=C12*CY2+C11*CY1+C10*CY0
+      DY1(I)=Y1(I)
+      Y2(I)=C22*CY2+C21*CY1+C20*CY0
+   10 CONTINUE
+      CALL F(N,DY1)
+      INFO(7)=INFO(7)+1
+      INFO(14)=0
+      RETURN
+      END
+      SUBROUTINE INTER2(N,Y,Y1,Y2,YXE,A)                                  9640
+C***********************************************************************
+C* INTER2 COMPUTES THE SOLUTION AT THE OUTPUT POINT XE=X-A*H BY QUAD-  *
+C* RATIC INTERPOLATION BETWEEN Y(X),Y(X-H) AND Y(X-2H).THE RESULT IS   *
+C* STORED IN YXE.                                                      *
+C***********************************************************************
+      DIMENSION Y(N),Y1(N),Y2(N),YXE(N)
+      REAL NU
+      NU=2.-A
+      C12=(NU-1.)*(NU-2.)/2.
+      C11=NU*(2.-NU)
+      C10=NU*(NU-1.)/2.
+      DO 10 I=1,N
+   10 YXE(I)=C12*Y2(I)+C11*Y1(I)+C10*Y(I)
+      RETURN
+      END
+      SUBROUTINE SHIFT(N,Y,Y1,Y2,YXE,DY,DY1,X,H,F,INFO)                   9800
+C***********************************************************************
+C* SHIFT SHIFTS THE X AND Y VARIABLES AND COMPUTES F(Y(X+H))           *
+C***********************************************************************
+      DIMENSION Y(N),Y1(N),Y2(N),YXE(N),DY(N),DY1(N),INFO(15)
+      DO 10 I=1,N
+      Y2(I)=Y1(I)
+      Y1(I)=Y(I)
+      Y(I)=YXE(I)
+      DY1(I)=DY(I)
+      DY(I)=Y(I)
+   10 CONTINUE
+      CALL F(N,DY)
+      INFO(7)=INFO(7)+1
+      X=X+H
+      RETURN
+      END

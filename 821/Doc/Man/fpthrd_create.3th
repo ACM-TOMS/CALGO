@@ -1,0 +1,295 @@
+.TH FPTHRD 3F "" "FPTHRD API"
+
+.SH NAME
+fpthrd_create,  fpthrd_join, fpthrd_detach, fpthrd_exit, fpthrd_self, fpthrd_equal, fpthrd_once \- Thread creation and control
+
+.SH SYNOPSIS
+.B USE fpthrd
+
+.BI "CALL fpthrd_create(" thred ", " attr ", " 
+.IB start_routine ", " arg ", " ierr ")"
+
+.BI "CALL fpthrd_join(" thred ", " exit_code " [, " 
+.IB ierr "])"
+
+.BI "CALL fpthrd_detach(" thred " [, " ierr "])"
+
+.BI "CALL fpthrd_exit(" exit_code ")"
+
+.BI "CALL fpthrd_self(" thred ")"
+
+.BI "CALL fpthrd_equal(" t1 ", " t2 ", " 
+.IB ierr ")"
+
+.BI "CALL fpthrd_once(" once_control ", " init_routine " [, " 
+.IB ierr "])"
+
+.BI "TYPE(FPTHRD_T) :: " thred ", " t1 ", " t2 
+.br
+.BI "TYPE(FPTHRD_ATTR_T) :: " attr
+.br
+.BI "TYPE(FPTHRD_ONCE_T) :: " once_control
+.br
+.BI "EXTERNAL " start_routine ", " init_routine
+.br
+.BI "INTEGER :: " ierr ", " exit_code ", " how
+
+.SH DESCRIPTION
+.SS Create
+.B "fpthrd_create"
+creates a new thread of control that executes
+concurrently with the calling thread. The new thread applies the
+function 
+.I "start_routine"
+passing it 
+.I "arg"
+as the only argument.
+.I "arg"
+may be any legal Fortran type.
+
+The 
+.I "attr"
+argument specifies thread attributes to be applied to the
+new thread. See 
+.BR "fpthrd_attr_init" (3F)
+for a complete list of thread
+attributes. The 
+.I "attr"
+argument can also be 
+.BR "NULL" ,
+in which case
+default attributes are used.
+
+On success, the identifier of the newly created thread is returned in
+the 
+.I "thred"
+argument.
+
+.SS Join
+.B "fpthrd_join"
+suspends the execution of the calling thread until the
+thread identified by 
+.I "thred"
+terminates, either by calling 
+.B "fpthrd_exit"
+or by being cancelled.
+If 
+.I "exit_code"
+is not 
+.BR "NULL" ,
+the integer return value of 
+.I "thred"
+is stored
+in 
+.IR "exit_code" .
+The return value of
+.I "thred"
+is either the argument it gave to 
+.BR "fpthrd_exit" ,
+or
+.B "FPTHRD_CANCELED"
+if 
+.I "thred"
+was cancelled.
+
+The joined thread 
+.I "thred"
+must be in the joinable state: it must not have
+been detached using 
+.BR "fpthrd_detach" 
+or the
+.B "FPTHRD_CREATE_DETACHED"
+attribute to 
+.BR "fpthrd_create" .
+When a joinable thread terminates, its memory resources (thread
+descriptor and stack) are not deallocated until another thread
+performs 
+.B "fpthrd_join"
+on it. Therefore, 
+.B "fpthrd_join" 
+must be called once for each joinable thread to avoid memory leaks.  
+
+At most one thread can wait for the termination of a given thread. Calling 
+.B "fpthrd_join" 
+on a thread 
+.I "thred" 
+on which another thread is already waiting for termination returns an error.  
+.B "fpthrd_join" 
+is a cancellation point. 
+If a thread is canceled while suspended in 
+.BR "fpthrd_join" , 
+the thread execution resumes immediately and the cancellation is 
+executed without waiting for the thread
+.I "thred" 
+to terminate. If cancellation occurs during 
+.BR "fpthrd_join" ,
+the thread
+.I "thred"
+remains not joined.
+If a thread becomes detached after another thread is waiting for it,
+the waiting thread awakes and returns an error.
+
+.SS Detach
+.B "fpthrd_detach"
+places the thread 
+.I "thred"
+in the detached state. This
+guarantees that the memory resources consumed by 
+.I "thred"
+will be freed
+immediately when 
+.I "thred"
+terminates. However, this prevents other threads
+from synchronizing on the termination of 
+.I "thred"
+using 
+.BR "fpthrd_join" .
+A thread can be created initially in the detached state, using the
+.I "detachstate"
+attribute to 
+.BR "fpthrd_create" .
+In contrast,
+.B "fpthrd_detach"
+applies to threads created in the joinable state, and
+which need to be put in the detached state later.
+After 
+.B "fpthrd_detach"
+completes, subsequent attempts to perform
+.B "fpthrd_join"
+on 
+.I "thred"
+will fail. If another thread is already joining
+the thread 
+.I "thred"
+at the time 
+.B "fpthrd_detach"
+is called,
+.B "fpthrd_detach"
+does nothing and leaves 
+.I "thred"
+in the joinable state.
+
+.SS Exit
+.B "fpthrd_exit"
+terminates the execution of the calling thread.  \" All cleanup handlers that have been set for the calling thread with \" .BR "fpthrd_cleanup_push" (3F) \" are executed in reverse order (the most recently pushed handler is executed first). 
+The 
+.I "exit_code"
+argument is the return value of the thread. It can be
+consulted from another thread using 
+.BR "fpthrd_join" .
+The 
+.B "fpthrd_exit"
+function never returns.
+
+.SS Self
+.B "fpthrd_self"
+will return the thread identifier for the calling thread.
+No error code parameter is needed since every execution stream has 
+an associated thread identifier.
+
+.SS Equal
+.B "fpthrd_equal"
+determines if two thread identifiers refer to the same
+thread.
+A non-zero value is returned in
+.I "ierr"
+if 
+.I "t1"
+and 
+.I "t2"
+refer to the
+same thread. Otherwise, 0 is returned.
+
+.SS Once
+The purpose of 
+.B "fpthrd_once"
+is to ensure that a section of
+code is only executed once. The 
+.I "once_control"
+argument is a globally available variable which must be initialized to
+.BR "FPTHRD_ONCE_INIT" .
+The first time 
+.B "fpthrd_once"
+is called with a given 
+.I "once_control"
+argument, it calls 
+.I "init_routine"
+with no argument and changes the
+value of the 
+.I "once_control"
+variable to record that the associated routine has
+been executed. Subsequent calls to 
+.B "fpthrd_once"
+with the same
+.I "once_control"
+argument do nothing. 
+
+.SH DIAGNOSTICS
+
+All routines, except
+.B "fpthrd_self"
+and 
+.B "fpthrd_equal"
+return 0 in
+.I "ierr"
+on success and a non-zero error code on error.
+No 
+.I "ierr" 
+parameter is needed for
+.BR "fpthrd_self" ; " fpthrd_equal " sets 
+.I "ierr"
+based on equality of the two thread ID arguments as described above.
+The 
+.I ierr
+argument is optional in all routines except
+.BR "fpthrd_create " and " fpthrd_equal" .
+
+
+If any of the following conditions occur, the
+.I "ierr"
+parameter of the 
+.B "fpthrd_create"
+routine returns the corresponding errors:
+.RS
+.TP
+.B "EAGAIN"
+Not enough system resources to create a process for the new thread.
+.TP
+.B "EAGAIN"
+The maximum number of threads are already active.
+.TP
+.B "EINVAL"
+The specified attributes are invalid.
+.RE
+
+If any of the following conditions occur, the 
+.I "ierr"
+parameter of the 
+.B "fpthrd_join" 
+and
+.B "fpthrd_detach"
+routines return the corresponding error:
+.RS
+.TP
+.B "ESRCH"
+No thread could be found corresponding to that specified by 
+.IR "thred" .
+.TP
+.B "EINVAL"
+The thread
+.I "thred"
+has been detached.
+.TP
+.B "EINVAL"
+Another thread is already waiting on termination of 
+.IR "thred" .
+.TP
+.B "EDEADLK"
+The 
+.I "thred"
+argument refers to the calling thread (for 
+.BR "fpthrd_join" ).
+.RE
+
+.SH "SEE ALSO"
+.BR "fpthrd_attr_init" (3F).

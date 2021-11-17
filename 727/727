@@ -1,0 +1,1605 @@
+/*     ALGORITHM 727, COLLECTED ALGORITHMS FROM ACM.
+       THIS WORK PUBLISHED IN TRANSACTIONS ON MATHEMATICAL SOFTWARE,
+       VOL. 20, NO. 1, MARCH, 1994, PP. 100-102.                           */
+/*
+**    Program:    driver (Single Precision version)
+**
+**    Written by: Sherif Hashem - Purdue University - May 17, 1991
+**
+**    Revised:    May 28, 1991
+**
+**    Language:   C
+**
+**    Computer:   Sun/Sparc workstations
+**
+**    Purpose:    Provide a driver program to test the function 'obq'
+**
+**    Uses:       Function: OBQ
+**
+**    Usage:      This main program needs to be compiled and linked
+**                with the (3) modules: obq.c , selct.c , and xtree.c .
+**                It needs also to be linked with the C Math library.
+**
+**    Variables:  - a:     array of real numbers of size n
+**                - n:     size of the array a
+**                - m:     batch size
+**                - q:     quantile value
+**                - qq:    estimate of the quantile
+**                - stdv:  estimate of the standard deviation of qq
+**
+*/
+
+#include <stdio.h>
+#include <math.h>
+
+void obq();
+
+main()
+{
+
+   float *a,qq=0.,stdv=0.;
+   float q=0.4;
+   unsigned long int n=100,m=4;
+   unsigned long int i;
+
+   /*                                                       Initialization */
+
+   a=(float *) malloc(n * sizeof(float));
+   if(!a) {
+     puts("Memory request failed -- driver.c\n");
+     exit(1);
+   }
+   for (i=0;i<n;i++) a[i]=n - i ;
+
+   obq(a,n,m,q,&qq,&stdv);                            /* Call function obq */
+
+   printf("qq=  %f ,  stdv= %f\n",qq,stdv);               /* Print results */
+
+   free(a);
+}                                               /* End of the main program */
+/*
+**  Function:    obq (Single precision)
+**
+**  Written by:  Sherif Hashem - Purdue University - July 1990
+**
+**  Revised:     May 28, 1991
+**
+**  Language:    C
+**
+**  Computer:    Sun/Sparc workstations
+**
+**  Purpose:     To compute an estimate of the q-th quantile for a given set
+**               of data as well as the standard deviation of that estimate.
+**
+**  Method:      The q-th quantile is estimated by the j-th order statistic,
+**               where j=max{ 1,ceil(n*q) } and n=number of data points.
+**               The variance of the point estimator of the q-th quantile is
+**               then estimated using Overlapping Batch Statistics (OBS).
+**               The underlying algorithm for the OBS estimation is described
+**               in:  "Overlapping Batch Statistics," by B. Schmeiser,
+**               T. Avramidis, and S. Hashem in the Proceedings of the 1990
+**               Winter Simulation Conference, O. Balci, R. Sadowski,
+**               R. Nance (eds.), IEEE, NJ, 395-398, (Algorithm B).
+**
+**               Function 'obq' employs two other functions to perform
+**               the tasks described above:
+**               - Function 'selct': an O(n)time function used for
+**                 estimating the q-th quantile using divide-and-conquer
+**                 strategy. Given the rank of the required element, the
+**                 size of the array, and a pointer to the first element
+**                 in the array, 'selct' will return the required element.
+**               - Function 'xtree': an O(n log(m))time function used for
+**                 estimating the variance of the q-th quantile's estimate
+**                 using OBS with batch size m. A 2-3 tree is constructed
+**                 with the elements of the first batch in O(m log m) time.
+**                 Using a simple search/delete/insert scheme, the tree is
+**                 then updated to reflect the data in the subsequent
+**                 overlapping batches and hence providing batch estimates
+**                 in O(log m)time per batch.
+**
+**  Complexity:    O(n log(m)) time, O(n) space.
+**
+**  Uses:          Functions: SELCT, XTREE
+**
+**  Usage:         obq(a,n,m,q,pqq,pstdv)
+**
+**  Type:          Void
+**
+**  Arguments:
+**    -Input:
+**               a: array of size n containing the input data points
+**               n: size of the array a
+**               m: overlapping batch size (between 2 and (n-1) inclusive)
+**               q: quantile to be estimated (between 0. and 1.0 inclusive)
+**    -Output:   The output of this function is passed to the calling
+**               program using pointers to the following variables:
+**               qq:   point estimate of the q-th quantile (pointer: pqq)
+**               stdv: estimate of the standard deviation of qq (pointer: pstdv)
+**
+*/
+
+#include <stdio.h>
+#include <math.h>
+
+float selct();
+void xtree();
+
+void obq(a,n,m,q,pqq,pstdv)
+float *a,*pqq,*pstdv;
+float q;
+unsigned long int n,m;
+{
+   float nq,mq,qq,stdv,var=0.,*sa;
+   register long int i;
+   unsigned long int nnq,mmq;
+
+
+   if(q<0. || q>1. || m<2 || m>(n-1)) {                /* Input Validation */
+     puts("Input validation failed--Function obq\n");
+     exit(1);
+   }
+
+   sa=(float *) malloc( n * sizeof(float));         /* Initialization step */
+   if(!sa) {
+      puts("Memory request failed -- Function obq\n");
+      exit(1);
+   }
+
+   /*                                 Compute the estimate of the quantile */
+
+   nq=(float) q*n;
+   nnq=ceil(nq);
+   if(nnq==0) nnq=1;                                /* The case where q=0. */
+   for (i=0;i<n;i++) sa[i]=a[i];           /* Read the input array into sa */
+   qq=selct(nnq,n,sa);      /* Call SELCT to compute the required estimate */
+   *pqq=qq;                                /* Return the quantile estimate */
+
+   /*           Estimate the standard deviation of the quantile's estimate */
+
+   mq=(float) q*m;
+   mmq=ceil(mq);
+   if(mmq==0) mmq=1;                                /* The case where q=0. */
+   xtree(a,n,m,mmq,qq,&var);  /* Call XTREE to estimate the variance of qq */
+   if(var<0.) var=0.;                    /* Compansate for rounding errors */
+   stdv=sqrt(var);                       /* Compute the standard deviation */
+   *pstdv=stdv;           /* Return the estimate of the standard deviation */
+
+   free(sa);
+}                                                   /* End of function obq */
+/*
+**  Function:     selct (Single precision)
+**
+**  Written by:   Sherif Hashem - Purdue University - June 1990
+**
+**  Revised:      May 28, 1991
+**
+**  Language:     C
+**
+**  Computer:     Sun/Sparc workstations
+**
+**  Purpose:      To find the Kth smallest element in an array S of n elements.
+**
+**  Method:       When n is large enough (n>nbig=50,say), divide-and-conquer
+**                strategy is used. Otherwise, quicksort is used to sort the
+**                given array at first, then the required element is picked up.
+**
+**  Complexity:   O(n) time, O(n) space.
+**
+**  Reference:    Aho A., J. Hopcroft and J. Ullman [1974], The Design and
+**                Analysis of Computer Algorithms, Addison-Wesley, Reading, MA,
+**                92-102.
+**
+**  Uses:         Function: QQSORT
+**
+**  Usage:        selct(k,n,s)
+**
+**  Type:         Float
+**
+**  Arguments:
+**    -Input:
+**                k: rank of the required element
+**                n: number of elements in the array
+**                s: float pointer to the array
+**    -Output:    The value of the required element is RETURNed to the
+**                calling program
+**
+*/
+
+#include <stdio.h>
+#include <math.h>
+void qs(),qqsort();
+
+float selct(k,n,s)
+unsigned long int k,n;
+float *s;
+{
+   unsigned long int i,nbig=50;
+   unsigned long int km,kk,t,xt,tt,ii;
+   float *ss,*st,*mm,m,sol;
+   unsigned long int med;
+   unsigned long int is1=0,is2=0,is3=0;
+   float fmed,*s1,*s3;
+
+   if (k>n || k<1) {                                   /* Input validation */
+       puts("Input validation failed -- Function selct\n");
+       exit(1);
+   }
+
+   /*                                                       Initialization */
+
+   ss=(float *)  malloc(n * sizeof(float));
+   if(!ss) {
+      puts("Memory request failed -- Function selct\n");
+      exit(1);
+   }
+
+   for(i=0;i<n;i++) ss[i]=s[i];            /* Read the input array into ss */
+
+   if(n<nbig) {                 /* When n is not big enough, use quicksort */
+     qqsort(ss,n);
+     kk=k-1;      /* kk: index to Kth smallest element in the sorted array */
+     sol=ss[kk];                           /* sol: is the required element */
+     free(ss);
+     return sol;
+   }
+   else {                  /* When n is big enough, use divide-and-conquer */
+          /* Divide the array SS into subarrays of 5-elements each, with   **
+             ******************************* up to four elements left over */
+        t=n/5;                        /* t: number of 5-elements subarrays */
+        xt=n-(5*t);            /* xt: number of elements left over from ss */
+        tt = xt==0 ? t : t+1;
+        /* tt: size of the array mm which is used to hold the medians of   **
+           ************************************** the generated  subarrays */
+        mm=(float *) malloc(tt * sizeof(float));
+        if(!mm) {
+            puts("Memory request failed -- Function selct \n");
+            exit(1);
+        }
+        for(i=0;i<t;i++) {                         /* Fill up the array mm */
+           ii=(unsigned long int) i*5;
+           st=ss+ii;
+           qqsort(st,(unsigned long int) 5);
+           mm[i]=st[2];
+         }
+         /* Check for leftovers from ss after the 5-elements partitions    */
+         if(xt != 0) {
+           ii=t*5;
+           st=ss+ii;
+           qqsort(st,xt);
+              if(xt == 1 || xt ==2) mm[t]=st[0];
+              else mm[t]=st[1];                        /* case xt = 3 or 4 */
+         }
+
+         /*                  Compute m, where m=the median of the medians  */
+
+         fmed=(float) tt/2.0;
+         med=(unsigned long int) ceil(fmed) ;
+         m=selct(med,tt,mm);
+         free(mm);
+
+         /*                             Divide the original array around m */
+
+         s1=(float *) malloc(n * sizeof(float));
+         /*                    s1: array of elements which are less than m */
+         s3=(float *) malloc(n * sizeof(float));
+         /*                 s3: array of elements which are greater than m */
+         if(!s1 || !s3) {
+            puts("Memory request failed -- Function selct\n");
+            exit(1);
+         }
+         for(i=0;i<n;i++) {
+           if(ss[i] < m) {
+              s1[is1]=ss[i];
+              is1++;
+           }
+           else if (ss[i]==m) {
+                is2++;
+           }
+           else {
+                s3[is3]=ss[i];
+                is3++;
+           }
+           /* is1 and is3 contain the actual # of elements in arrays s1    **
+              ************************ and s3, respectively. is2=n-is1-is3 */
+         }                              /* End of the partitioning process */
+
+         free(ss);                                    /* free the array ss */
+
+           /*      Decide where to look next, in array s1 or in array s2 ? */
+         if (is1>=k) {        /* Look in array s1 for the required element */
+            free(s3);
+            sol=selct(k,is1,s1);
+            free(s1);
+            return sol;
+         }
+         else if (is1+is2 >= k) {     /* The solution is simply equal to m */
+            free(s1);
+            free(s3);
+            return m;
+         }
+         else {               /* Look in array s3 for the required element */
+            km=k-is1-is2;
+            free(s1);
+            sol=selct(km,is3,s3);
+            free(s3);
+            return sol;
+         }
+   }
+}                                                 /* End of function selct */
+
+/*
+**   Functions:  qqsort/qs (Single Precision version)
+**   Written by: Sherif Hashem - Purdue University - June 1990
+**   Language:   C
+**   Computer:   Sun/Sparc workstations
+**   Revised:    May 17, 1991
+**   Purpose:    To sort a given array of real numbers in a non-decreasing order
+**   Method:     QuickSort
+**   Complexity: O(n log n) time, O(n) space.
+**   Usage:      qqsort(a,ct)
+**               Function 'qqsort' acts as a driver function as it employs
+**               another function called 'qs' to do the actual sorting.
+**               'Qqsort' passes to 'qs' the pointer to the array as
+**               well as the position of its first element, 0, and the
+**               position of the last element, (ct-1).
+**  Type:        Void
+**   Arguments:
+**           a - real array (input/output)
+**          ct - dimension of a (input)
+*/
+
+
+void qqsort(a,ct)
+   unsigned long int ct;
+   float *a;
+{
+   long int cct,zro=0;
+
+   cct=ct-1;
+   qs(a,zro,cct);
+   return;
+}                                                /* End of function qqsort */
+
+
+void qs(item,lft,rght)                                       /* Quick Sort */
+   float *item;
+   long int lft,rght;
+{
+   long int lr,i,j;
+   float x,y;
+
+   i=lft;
+   j=rght;
+   lr=(int) ((lft+rght)/2);
+   x=item[lr];
+
+   do {
+      while(item[i]<x  && i<rght) i++;
+      while(item[j]>x  && j>lft)  j--;
+
+      if(i<=j) {
+         y=item[i];
+         item[i]=item[j];
+         item[j]=y;
+         i++; j--;
+      }
+   } while(i<=j);
+
+   if(lft<j) qs(item,lft,j);
+   if(i<rght) qs(item,i,rght);
+}                                                    /* End of function qs */
+/*
+**  Function:     xtree (Single precision)
+**
+**  Written by:   Sherif Hashem - Purdue University - July 1990
+**
+**  Revised:      May 31, 1991
+**
+**  Language:     C
+**
+**  Computer:     Sun/Sparc workstations
+**
+**  Purpose:      To estimate the variance of the q-th quantile's estimate
+**                using Overlapping Batch Statistics (OBS).
+**
+**  Method:       The underlying method of the OBS is discussed in reference #2
+**                (below). The implementation of the OBS algorithm involves
+**                the construction of a balanced 2-3 tree with the elements of
+**                the first batch with batch size equals m. Then using a simple
+**                search/delete/insert scheme, the tree is updated to reflect
+**                the data in the subsequent batches. The construction of the
+**                tree takes O(m log m) time, while the updating process/batch
+**                takes O(m) time. For more information about balanced
+**                2-3 trees see reference #1 (below).
+**                Thus for every batch, a batch estimate of the q-th quantile
+**                can be obtained in O(m) time. Finally, the overlapping
+**                batch estimate of the variance of the estimate of the q-th
+**                quantile is computed.
+**
+**  Complexity:   O(n log(m)) time, O(n) space.
+**
+**  References:   1- Aho, A., J. Hopcroft, and J. Ullman [1974], "The Design
+**                and Analysis of Computer Algorithms," Addison-Wesley,
+**                Reading, MA, 146-152.
+**                2- Schmeiser, B., T. Avramidis, and S. Hashem [1990],
+**                "Overlapping Batch Statistics," in the Proceedings of the
+**                1990 Winter Simulation Conference, O. Balci, R. Sadowski,
+**                and R. Nance (eds.), IEEE, NJ, 395-398, (Algorithm B)
+**
+**  Uses:         Functions: INSERT, TRANK, DELETE
+**
+**  Usage:        xtree(a,n,m,k,grand,pvar)
+**
+**  Type:         Void
+**
+**  Arguments:
+**    Input:
+**                a: array of float of size n
+**                n: size of array a
+**                m: overlapping batch size
+**                k: rank of the element to be located (k=[ceil(m*q)]+,
+**                   where q=the given quantile)
+**            grand: grand estimate of the q-th quantile (over the n data set)
+**    Output:  pvar: float pointer to the estimate of the variance of the
+**                   grand quantile estimate
+**
+*/
+
+#include "stdio.h"
+#include "math.h"
+
+struct tree {            /* defines the stucture of a node in the 2-3 tree */
+   struct tree *father;               /* pointer to the father of the node */
+   float lv;                        /* largest element in the left subtree */
+   float mv;                      /* largest element in the middle subtree */
+   unsigned long int n1;     /* number of leaves in the left-son's subtree */
+   unsigned long int n2;      /* number of leaves in the mid-son's subtree */
+   unsigned long int n3;    /* number of leaves in the right-son's subtree */
+   struct tree *ps1;                            /* pointer to the left son */
+   struct tree *ps2;                          /* pointer to the middle son */
+   struct tree *ps3;                           /* pointer to the right son */
+   struct tree *psx;                    /* extra pointer used in insertion */
+};
+
+struct tree *root;             /* pointer to the root node of the 2-3 tree */
+
+/*
+**
+**            Functions Needed
+**
+*/
+
+void insert();
+struct tree *create_ver();
+struct tree *in_search();
+void addson();
+float max4();
+float aim();
+float trank();
+void delete();
+struct tree *del_search();
+void back_track();
+void del_ver();
+struct tree *search();                                         /* Optional */
+
+/*
+**
+**            Function XTREE
+**
+*/
+
+void xtree(a,n,m,k,grand,pvar)
+float *a,grand,*pvar;
+unsigned long int n,m,k;
+{
+   unsigned long int i;
+   float qvar,batch,tmp,ndm;
+
+   root=NULL;                                  /* Start with an empty tree */
+   for(i=0;i<m;i++) insert(a[i]);                /* Insert the first batch */
+
+   batch=trank(k,root); /* 1st batch estimate of the Kth smallest  element */
+
+
+   /*                                            Initialize the summations */
+
+   tmp=batch - grand;
+   qvar=tmp*tmp;
+
+   /*            Repeat the estimation process for the rest of the batches */
+
+   for(i=0;i<n-m;i++) {
+      delete(a[i]);
+      insert(a[i+m]);
+      batch=trank(k,root);
+      tmp=batch - grand;
+      qvar+=tmp*tmp;
+   }
+
+   for(i=n-m;i<n;i++) delete(a[i]);                    /* Destroy the tree */
+
+   /*                        Compute the required estimate of the variance */
+
+     ndm=(float) n/m;
+     qvar=qvar/(n-m+1.)/(ndm-1.);
+     *pvar=qvar;
+}                                                 /* End of function xtree */
+
+
+
+/* Function:     insert
+** Written by:   Sherif Hashem - Purdue University - July 1990
+** Revised:      May 29, 1991
+** Langauge:     C
+** Computer:     Sun/Sparc workstations
+** Purpose:      Insert an element in the 2-3 tree whose root pointer is 'root'
+** Used By:      Function XTREE
+** Uses:         Functions: CREATE_VER, IN_SEARCH, ADDSON.
+** Usage:        insert(x)
+** Type:         Void
+** Argument:
+**    Input:     x: the element to be added to the tree
+*/
+
+
+void insert(x)
+float x;
+{
+   struct tree *f;   /* Used for pointing at the appropriate father of 'x' */
+   float xv,xxv;
+
+   if(!root) {                                       /* Case of empty tree */
+     root=create_ver(root);                          /* Create a root node */
+     /* Store 'x' in both:'lv' and 'mv' ,since this node is a leaf as well */
+     root->lv=x;
+     root->mv=x;
+     return;
+   }
+
+   if(!root->ps1) {                 /* Case of only one vertex in the tree */
+     root->ps1=create_ver(root->ps1);
+     root->ps1->father=root;
+     root->ps2=create_ver(root->ps2);
+     root->ps2->father=root;
+     if(x < root->lv) {
+       root->ps1->lv=x;
+       root->ps1->mv=x;
+       root->ps2->lv=root->lv;
+       root->ps2->mv=root->lv;
+       root->lv=x;
+     }
+     else {
+       root->ps2->lv=x;
+       root->ps2->mv=x;
+       root->ps1->lv=root->lv;
+       root->ps1->mv=root->lv;
+       root->mv=x;
+     }
+       root->n1=1;
+       root->n2=1;
+       return;
+   }
+
+   else {                      /* Case of more than one vertex in the tree */
+     f=in_search(x,root);    /* Search for an appropriate place to store x */
+     if(!f->ps3) {                                  /* f has only two sons */
+       if(f->lv > x) {                           /* Make x a left son of f */
+         f->ps3=f->ps2;
+         f->n3=1;
+         f->ps2=f->ps1;
+         f->mv=f->lv;
+         f->ps1=NULL;
+         f->ps1=create_ver(f->ps1);
+         f->lv=x;
+         f->ps1->father=f;
+         f->ps1->lv=x;
+         f->ps1->mv=x;
+       }
+       else if(f->mv > x) {                    /* Make x a middle son of f */
+         f->ps3=f->ps2;
+         f->n3=1;
+         f->ps2=NULL;
+         f->ps2=create_ver(f->ps2);
+         f->mv=x;
+         f->ps2->father=f;
+         f->ps2->lv=x;
+       f->ps2->mv=x;
+       }
+       else {                                 /* Make x the third son of f */
+         f->ps3=create_ver(f->ps3);
+         f->n3=1;
+         f->ps3->father=f;
+         f->ps3->lv=x;
+         f->ps3->mv=x;
+       }
+     }
+    else {                                     /* f has already got 3 sons */
+       /* In this situation, x also become a son of f. However, since we   **
+       ** allow at most 3 sons, function ADDSON is called to resolve       **
+       ** the 4-son problem. Variable xv holds the value stored in the     **
+       ** third son of f, and variable xxv holds the value stored in the   **
+       ** fourth son of f                                                  */
+       if(f->lv > x) {                           /* Make x a left son of f */
+         f->psx=f->ps3;
+         f->ps3=f->ps2;
+         f->ps2=f->ps1;
+         xv=f->mv;
+         xxv=f->psx->lv;
+         f->mv=f->lv;
+         f->lv=x;
+         f->ps1=NULL;
+         f->ps1=create_ver(f->ps1);
+         f->ps1->father=f;
+         f->ps1->lv=x;
+         f->ps1->mv=x;
+       }
+       else if(f->mv > x) {                    /* Make x a middle son of f */
+         f->psx=f->ps3;
+         f->ps3=f->ps2;
+         f->ps2=NULL;
+         f->ps2=create_ver(f->ps2);
+         xv=f->mv;
+         xxv=f->psx->lv;
+         f->mv=x;
+         f->ps2->father=f;
+         f->ps2->lv=x;
+         f->ps2->mv=x;
+       }
+       else if(f->ps3->lv >x) {               /* Make x the third son of f */
+         f->psx=f->ps3;
+         xv=x;
+         xxv=f->psx->lv;
+         f->ps3=NULL;
+         f->ps3=create_ver(f->ps3);
+         f->ps3->father=f;
+         f->ps3->lv=x;
+         f->ps3->mv=x;
+       }
+       else {                                 /* Make x the extra son of f */
+         f->psx=create_ver(f->psx);
+         f->psx->father=f;
+         f->psx->lv=x;
+         f->psx->mv=x;
+         xv=f->ps3->lv;
+         xxv=x;
+       }
+       addson(f,xv,xxv);
+      }
+   }
+}                                                /* End of function insert */
+
+
+/* Function:     create_ver
+** Written by:   Sherif Hashem - Purdue University - July 1990
+** Revised:      May 29, 1991
+** Langauge:     C
+** Computer:     Sun/Sparc workstations
+** Purpose:      Create an empty node for the tree
+** Used By:      Functions: INSERT, ADDSON
+** Usage:        create_ver(r)
+** Type:         Struct tree pointer
+** Argument:
+**    Input:     r: Pointer to structure tree (should be NULL when calling
+**                  create_ver, this serves as a check before assigning a
+**                  new dynamic memory space to r)
+**    Output:    Upon RETURNing, a pointer to the created node is passed back
+**               to the calling program
+*/
+
+struct tree *create_ver(r)
+struct tree *r;
+{
+   if(!r) {
+     r=(struct tree *) malloc(sizeof(struct tree));
+     if(!r) {
+       puts("Memory request failed -- Function create_ver\n");
+       exit(0);
+     }
+     r->father=NULL;
+     r->lv=(-2.);       /* Initialize 'lv' and 'mv' to (-2.0) is arbitrary */
+     r->mv=(-2.);
+     r->n1=0;
+     r->n2=0;
+     r->n3=0;
+     r->ps1=NULL;
+     r->ps2=NULL;
+     r->ps3=NULL;
+     r->psx=NULL;
+  }
+  else puts("Logical error from function create_ver\n");
+  return r;
+}                                            /* End of function create_ver */
+
+
+
+/* Function:     in_search
+** Written by:   Sherif Hashem - Purdue University - July 1990
+** Revised:      May 29, 1991
+** Langauge:     C
+** Computer:     Sun/Sparc workstations
+** Purpose:      Search the tree for the appropriate place to insert a given
+**               element x. All relevant information stored in the nodes
+**               along the search path are updated to reflect the effect of
+**               the insertion of x in the tree
+** Used By:      Function INSERT
+** Usage:        in_search(x,r)
+** Type:         Struct tree pointer
+** Arguments:
+**    Input:     x: the element to be added to the tree
+**               r: root of the tree
+**    Output:    Upon RETURNing, a pointer to the appropriate father of x is
+**               passed back to the calling program
+*/
+
+struct tree *in_search(x,r)
+float x;
+struct tree *r;
+{
+   if(!(r->ps1->ps1) ) return r;  /* When r is the direct father of a leaf */
+   else {                       /* When r is not a direct father of a leaf */
+     if(x <= r->lv) {                      /* Search the left subtree of r */
+       (r->n1) ++;
+       return(in_search(x,r->ps1));
+     }
+     else {
+       if(x <= r->mv)  {                 /* Search the middle subtree of r */
+         (r->n2) ++;
+         return(in_search(x,r->ps2));
+       }
+       else if(!r->ps3) {  /* Search the middle subtree of r and update mv */
+          r->mv=x;
+          (r->n2) ++;
+          return(in_search(x,r->ps2));
+       }
+       else {                             /* Search the right subtree of r */
+          (r->n3) ++;
+          return(in_search(x,r->ps3));
+       }
+     }
+   }
+}                                             /* End of function in_search */
+
+
+
+/* Function:     addson
+** Written by:   Sherif Hashem - Purdue University - July 1990
+** Revised:      May 29, 1991
+** Langauge:     C
+** Computer:     Sun/Sparc workstations
+** Purpose:      Resolve the 4-sons problem that occur during the insertion
+** Method:       The effect of the insertion is propagated up towards the
+**               root of the tree, splitting more and more as necessary
+**               until the tree becomes a balanced 2-3 tree once more
+** Uses:         Functions: CREATE_VER, MAX4
+** Used By:      Function INSERT
+** Usage:        addson(v,xv,xxv)
+** Type:         Void
+** Arguments:
+**    Input:     v:   pointer to the father who currently has 4 sons
+**               xv:  largest element in the third subtree of v
+**               xxv: largest element in the fourth subtree of v
+*/
+
+void addson(v,xv,xxv)
+struct tree *v;
+float xv,xxv;
+{
+   struct tree *new,*f;
+
+   new=NULL;
+   new=create_ver(new);                      /* Create a new vertex, 'new' */
+
+   /*                                Give the 3rd and 4th sons of v to new */
+
+   new->ps1=v->ps3;
+   new->ps2=v->psx;
+   new->ps1->father=new;
+   new->ps2->father=new;
+   v->ps3=NULL;
+   v->n3=0;
+   v->psx=NULL;
+   new->lv=xv;
+   new->mv=xxv;
+   new->n1=new->ps1->n1 + new->ps1->n2 + new->ps1->n3;
+   if(new->n1 == 0) new->n1=1;                  /* Case new->ps1 is a leaf */
+   new->n2=new->ps2->n1 + new->ps2->n2 + new->ps2->n3;
+   if(new->n2 == 0) new->n2=1;                  /* Case new->ps2 is a leaf */
+
+   /*          Go upward the tree while performing any necessary splitting */
+
+   if(!v->father) {                      /* Case v is the root of the tree */
+     root=NULL;
+     root=create_ver(root);
+     root->ps1=v;
+     root->ps2=new;
+     v->father=root;
+     new->father=root;
+     root->n1=v->n1+v->n2+v->n3;
+     root->n2=new->n1+new->n2+new->n3;
+     root->lv=v->mv;                               /* Since v has two sons */
+     root->mv=new->mv;                      /* Since new has two sons only */
+   }
+
+   else {                                           /* Case v has a father */
+     f=v->father;
+     new->father=f;                            /* Make f the father of new */
+     if(!f->ps3) {                                       /* f has two sons */
+       if(v==f->ps1) {                   /* Make 'new' the second son of f */
+         f->ps3=f->ps2;
+         f->n3=f->n2;
+         f->ps2=new;
+         f->mv=new->mv;
+         f->n2=new->n1+new->n2;           /* Since 'new' has two sons only */
+         f->n1=v->n1+v->n2;
+         f->lv=v->mv;
+       }
+       else {                             /* Make 'new' the third son of f */
+         f->ps3=new;
+         f->n3=new->n1+new->n2;
+         f->n2=v->n1+v->n2;
+         f->mv=v->mv;
+       }
+     }
+     else {                                            /* f has three sons */
+       if(v==f->ps1) {                        /* Case v the first son of f */
+         /*                                 Make 'new' the second son of f */
+         f->psx=f->ps3;
+         f->ps3=f->ps2;
+         f->n3=f->n2;
+         f->ps2=new;
+         f->n2=new->n1+new->n2;
+         xv=f->mv;
+         f->n1=v->n1+v->n2;
+         f->lv=v->mv;
+         f->mv=new->mv;
+         xxv=max4(f);   /* Call function MAX4 to obtain the maximum value  **
+                           ************ stored in the fourth subtree of f  */
+       }
+       else if(v==f->ps2) {                  /* Case v the second son of f */
+         /*                                  Make 'new' the third son of f */
+         f->psx=f->ps3;
+         f->ps3=new;
+         f->n3=new->n1+new->n2;
+         f->n2=v->n1+v->n2;
+         f->mv=v->mv;
+         xv=new->mv;
+         xxv=max4(f);   /* Call function MAX4 to obtain the maximum value  **
+                           ************ stored in the fourth subtree of f  */
+       }
+       else {                                 /* Case v the third son of f */
+         /*                                  Make 'new' the extra son of f */
+         f->psx=new;
+         f->n3=v->n1+v->n2;
+         xv=v->mv;
+         xxv=new->mv; /* here we don't need to call 'max4' */
+       }
+       addson(f,xv,xxv);   /* Recurrsively call ADDSON until no father has **
+                              ************************************* 4 sons */
+     }
+    }
+}                                                /* End of function addson */
+
+
+
+/* Function:     max4
+** Written by:   Sherif Hashem - Purdue University - July 1990
+** Revised:      May 30, 1991
+** Langauge:     C
+** Computer:     Sun/Sparc workstations
+** Purpose:      To find the largest element stored in the fourth subtree
+**               rooted at f
+** Method:       The recurrent nature of MAX4 causes it to go up towards the
+**               root of the tree and try to make use of the information
+**               stored in the nodes on the way to the root (lv or mv).
+**               This will always result in finding the required value
+**               before hitting the root unless the path from f to the root
+**               bounds the tree from the right with all the nodes on that
+**               path being 3rd sons. In such case, on hitting the root,
+**               function AIM is called to search downwards (towards the
+**               leaves) for the largest element in the tree which happens
+**               to be the required element for this case.
+**               The combined effect of this search technique with the fact
+**               that, function MAX4 is called from function ADDSON only
+**               if the node that has a 4-son problem happen to be the
+**               1st or the 2nd (and not the 3rd) son, causes the execution
+**               time per complete insertion to be O(log(m)) = O(the height
+**               of the tree)
+** Uses:         Function AIM
+** Used By:      Function ADDSON
+** Usage:        max4(f)
+** Type:         Float
+** Argument:
+**    Input:     f: pointer to a node
+**    Output:    Upon RETURNing, the value of the required element is passed
+**               back to the calling program
+*/
+
+float max4(f)
+struct tree *f;
+{
+   struct tree *arrow;
+   float xxv;
+
+   if(!f->father) {                      /* Case f is the root of the tree */
+    arrow=f->psx;   /* This takes care of the initial call of MAX4 with f  **
+                       ************************ being the root of the tree */
+    if(!arrow) arrow=f->ps3;           /* For subsequent (recurrent) calls */
+    if(!arrow) {
+      puts("Error in function 'max4' \n");
+      exit(0);
+    }
+    xxv=aim(arrow);   /* Once we hit the main root, function AIM is used   **
+                         ******* to find the value of the required element */
+    return xxv;
+  }
+  else {                             /* Case f is not the root of the tree */
+    arrow=f->father;
+    if(arrow->ps1==f) return (arrow->lv);
+    else if (arrow->ps2==f) return (arrow->mv);
+    else if (arrow->ps3==f) return(max4(arrow));
+    else {
+      puts("Error in function 'max4' \n");
+      exit(0);
+      return 0;                        /* To avoid false compilor-warnings */
+    }
+  }
+}                                                  /* End of function max4 */
+
+
+
+/* Function:     aim
+** Written by:   Sherif Hashem - Purdue University - July 1990
+** Revised:      May 30, 1991
+** Langauge:     C
+** Computer:     Sun/Sparc workstations
+** Purpose:      To determine the value of the maximum element in a tree
+** Method:       Go in the rightmost path towards the leaves
+** Used By:      Functions: MAX4, DEL_VER
+** Usage:        aim(r)
+** Type:         Float
+** Argument:
+**    Input:     r: pointer to the root of the tree
+**    Output:    Upon RETURNing, the required value is passed back to the
+**               calling program
+*/
+
+float aim(r)
+struct tree *r;
+{
+
+   if(!r) {
+     puts("Error in function 'aim' \n");
+     exit(0);
+   }
+   if(r->psx != NULL) return(aim(r->psx));
+   else if(r->ps3 != NULL) return(aim(r->ps3));
+   else if(r->ps2 != NULL) return(aim(r->ps2));
+   else return (r->lv);                                      /* Hit a leaf */
+}                                                   /* End of function aim */
+
+
+
+/* Function:     trank
+** Written by:   Sherif Hashem - Purdue University - July 1990
+** Revised:      May 30, 1991
+** Langauge:     C
+** Computer:     Sun/Sparc workstations
+** Purpose:      Find the Kth smallest element in the tree rooted at r
+** Used By:      Function XTREE
+** Usage:        trank(k,r)
+** Type:         Float
+** Arguments:
+**    Input:     k: The rank of the required element
+**               r: root of the tree
+**    Output:    Upon RETURNing, the value of the required element is passed
+**               back to the calling program
+*/
+
+float trank(k,r)
+unsigned long int k;
+struct tree *r;
+
+{
+   if(!r || k < 1) {                                   /* Input Validation */
+     puts(" Invalid argument(s) passed to function 'trank' \n");
+     exit(0);
+   }
+   if (r->n1 > 0) {     /* Case there is more than one element in the tree */
+      if(k <= r->n1) return(trank(k,r->ps1));   /* Search the left subtree */
+      else if(k <= (r->n1 + r->n2))           /* Search the middle subtree */
+        return(trank((k-(r->n1)),r->ps2));
+      else if(k > (r->n1 + r->n2 + r->n3)) {            /* Rank validation */
+        puts("Invalid rank in function 'trank' \n");
+        exit(0);
+        return 0;                      /* To avoid false compilor-warnings */
+      }
+      else                                     /* Search the right subtree */
+        return(trank((k-(r->n1)-(r->n2)),r->ps3));
+   }
+   else {                    /* Case there is only one element in the tree */
+     if(k > 1) {                                        /* Rank validation */
+       puts ("Invalid rank in function 'trank'\n");
+       exit(0);
+       return 0;                       /* To avoid false compilor-warnings */
+     }
+     return (r->lv);
+   }
+}                                                 /* End of function trank */
+
+
+
+/* Function:     delete
+** Written by:   Sherif Hashem - Purdue University - July 1990
+** Revised:      May 31, 1991
+** Langauge:     C
+** Computer:     Sun/Sparc workstations
+** Purpose:      Delete an element x from the tree
+** Method:       A special search is conducted at first to locate x and
+**               to update the information stored along the path leading
+**               to the node where x is. For this reason (updating while
+**               searching) it is assumed that x is pre-stored in the tree.
+**               This assumption saves time since separating the search
+**               from the updating process would result in an additional
+**               O(log(m)) = O(height) time. However, the function will
+**               detect any violation of this assumption and will report it,
+**               but the values stored in the nodes will be no longer correct.
+**               If an initial check is required, function SEARCH may
+**               be called just before calling function DEL_SEARCH.
+**               The execution time of the deletion will still be
+**               O(log(m))=O(height of the tree).
+**               After the search/update process, balancing of the tree
+**               is then performed.
+** Uses:         Functions: BACK_TRACK, DEL_SEARCH, DEL_VER, SEARCH (opt.)
+** Used By:      Function XTREE
+** Usage:        delete(x)
+** Type:         Void
+** Argument:
+**    Input:     x: the element to be deleted from the tree
+*/
+
+void delete(x)
+float x;
+{
+   struct tree *f, *ff,*ss,*gg;
+   float fmax;                 /* Maximum value in the subtree rooted at f */
+
+   if(!root) {                           /* When the tree is already empty */
+     puts(" Error in function 'delete'- Tree empty!! \n");
+     exit(0);
+   }
+   if(!root->ps1) {                 /* Case of only one vertex in the tree */
+     if(x != root->lv) {
+       printf("That element (%f) is not in the tree !!\n",x);
+       return;
+     }
+     free(root);
+     root=NULL;
+     return;
+   }
+
+   /* ******************************************************************** */
+   /* This part is OPTIONAL as stated in the heading of this function **** */
+   /* f=search(x,root);               Search for a candidate father to 'x' */
+   /* if((f->lv != x) && (f->mv != x) && (!f->ps3 || (f->ps3->lv != x))) { */
+      /*                                  In case no son of 'f' contains x */
+      /* printf("That element (%f) is not in the tree !!\n",x);            */
+      /* return;                                                           */
+   /* }                                                                    */
+   /* ******************************************************************** */
+
+   f=del_search(x,root);     /* Update the tree & search for f, x's father */
+   if(f->n3 > 0) {                              /* Case 'f' has three sons */
+     if(f->ps1->lv==x) {                    /* 'x' is the first son of 'f' */
+       free(f->ps1);
+       f->ps1=f->ps2;
+       f->ps2=f->ps3;
+       f->ps3=NULL;
+       f->n3=0;
+       f->lv=f->ps1->lv;
+       f->mv=f->ps2->lv;
+     }
+     else if(f->ps2->lv==x) {              /* 'x' is the second son of 'f' */
+       free(f->ps2);
+       f->ps2=f->ps3;
+       f->ps3=NULL;
+       f->n3=0;
+       f->mv=f->ps2->lv;
+     }
+     else if(f->ps3->lv==x) {               /* 'x' is the third son of 'f' */
+       free(f->ps3);
+       f->ps3=NULL;
+       f->n3=0;
+       fmax=f->mv;
+       back_track(f,fmax);
+     }
+     else {                                             /* Error detection */
+       printf("That element (%f) is not in the tree !!\n",x);
+       return;
+     }
+   }
+   else {                                    /* Case 'f' has two sons only */
+     if(f==root) {                                      /* 'f' is the root */
+       if(f->lv==x) {                            /* x is the left son of f */
+         f->lv=f->mv;
+       }
+       else if(f->mv==x){                       /* x is the right son of f */
+         f->mv=f->lv;
+       }
+       else {                                           /* Error detection */
+         printf("That element (%f) is not in the tree !!\n",x);
+         return;
+       }
+       f->n1=0;
+       f->n2=0;
+       free(f->ps1);
+       free(f->ps2);
+       f->ps1=NULL;
+       f->ps2=NULL;
+       return;
+     }
+     else {                                    /* Case 'f' is not the root */
+       ff=f->father;
+       if(f->lv==x) {                            /* x is the left son of f */
+         ss=f->ps2;    /* ss points to the son of 'f' that has to be saved */
+         free(f->ps1);
+       }
+       else if(f->mv==x) {                      /* x is the right son of f */
+         ss=f->ps1;    /* ss points to the son of 'f' that has to be saved */
+         free(f->ps2);
+         /*   Update information about the max of the subtree rooted at f  **
+              ***************************************** using 'back_track' */
+         back_track(f,ss->lv);
+       }
+       else {                                           /* Error detection */
+         printf("That element (%f) is not in the tree !!\n",x);
+         return;
+       }
+       if (f==ff->ps1) {                        /* Case 'f' is a first son */
+         gg=ff->ps2;                   /* 'gg' is the right brother of 'f' */
+         if(!gg->ps3) {                     /* Case 'gg' has only two sons */
+           gg->ps3=gg->ps2;
+           gg->n3=1;
+           ff->n2++;
+           gg->ps2=gg->ps1;
+           gg->ps1=ss;
+           gg->mv=gg->lv;
+           gg->lv=ss->lv;
+           ss->father=gg;
+           del_ver(f); /* Arrange for vertex f to be removed from the tree */
+         }
+         else {                                /* Case 'gg' has three sons */
+           f->ps1=ss;
+           f->ps2=gg->ps1;
+           f->lv=ss->lv;
+           f->mv=f->ps2->lv;
+           f->ps2->father=f;
+           gg->ps1=gg->ps2;
+           gg->ps2=gg->ps3;
+           gg->ps3=NULL;
+           gg->n3=0;
+           gg->lv=gg->mv;
+           gg->mv=gg->ps2->lv;
+           ff->lv=f->mv;
+           ff->n1++;
+           ff->n2--;
+         }
+       }
+       else if(f==ff->ps2) {                 /* Case 'f' is the second son */
+         gg=ff->ps1;                    /* 'gg' is the left brother if 'f' */
+         if(gg->ps3 != NULL) {                 /* Case 'gg' has three sons */
+           f->ps1=gg->ps3;
+           f->lv=f->ps1->lv;
+           f->ps2=ss;
+           f->mv=ss->lv;
+           gg->n3=0;
+           gg->ps3=NULL;
+           f->ps1->father=f;
+           ff->n1--;
+           ff->n2++;
+           ff->lv=gg->mv;
+           ff->mv=f->mv;
+           return;
+         }
+         if(ff->ps3 != NULL && ff->ps3->ps3 != NULL) {
+           /*               Case 'f' has a right brother having three sons */
+           gg=ff->ps3;                   /* let 'gg' be that right brother */
+           f->ps1=ss;
+           f->ps2=gg->ps1;
+           f->lv=ss->lv;
+           f->mv=f->ps2->lv;
+           f->ps2->father=f;
+           gg->ps1=gg->ps2;
+           gg->ps2=gg->ps3;
+           gg->ps3=NULL;
+           gg->n3=0;
+           gg->lv=gg->mv;
+           gg->mv=gg->ps2->lv;
+           ff->mv=f->mv;
+           ff->n2++;
+           ff->n3--;
+           return;
+         }
+         /* Case f has no left or right brother with three son ==> Merge f **
+            ****************************************  and its left brother */
+         gg->ps3=ss;
+         gg->n3++;
+         ss->father=gg;
+         ff->n1++;
+         ff->n2--;
+         ff->lv=ss->lv;
+         del_ver(f);   /* Arrange for vertex f to be removed from the tree */
+         return;
+       }
+       else {                                 /* Case 'f' is the third son */
+         gg=ff->ps2;                    /* 'gg' is the left brother if 'f' */
+         if(gg->ps3 != NULL) {                 /* Case 'gg' has three sons */
+           f->ps1=gg->ps3;
+           f->lv=f->ps1->lv;
+           f->ps2=ss;
+           f->mv=ss->lv;
+           gg->n3=0;
+           gg->ps3=NULL;
+           f->ps1->father=f;
+           ff->n2--;
+           ff->n3++;
+           ff->mv=gg->mv;
+           return;
+         }
+         else {                             /* Case 'gg' has only two sons */
+           /*     Merge f and its left brother ,gg, then remove 'f' as its **
+              *************************** father already has two more sons */
+           gg->ps3=ss;
+           gg->n3++;
+           ss->father=gg;
+           ff->n2++;
+           ff->mv=ss->lv;
+           ff->ps3=NULL;
+           ff->n3=0;
+           free(f);
+           return;
+         }
+       }
+     }
+   }
+}                                                /* End of function delete */
+
+
+
+/* Function:     del_search
+** Written by:   Sherif Hashem - Purdue University - July 1990
+** Revised:      May 30, 1991
+** Langauge:     C
+** Computer:     Sun/Sparc workstations
+** Purpose:      Search the tree for the appropriate place to delete a given
+**               element x. Along the search path, all the relevant
+**               stored information that is affected by the removal of x
+**               from the tree is updated (Except the information about
+**               the maximum element which is stored along that path.
+**               Function BACK_TRACK will take care of that later).
+**               x is assumed to be in the tree.
+** Used By:      Function DELETE
+** Usage:        del_search(x,r)
+** Type:         Struct tree pointer
+** Arguments:
+**    Input:     x: the element to be removed from the tree
+**               r: root of the tree
+**    Output:    Upon RETURNing, a pointer to the appropriate father of x is
+**               passed back to the calling program
+*/
+
+struct tree *del_search(x,r)
+float x;
+struct tree *r;
+{
+   if(!(r->ps1->ps1) ) return r;  /* When r is the direct father of a leaf */
+   else {                       /* When r is not a direct father of a leaf */
+     if(x <= r->lv) {                      /* Search the left subtree of r */
+       (r->n1) --;
+       return(del_search(x,r->ps1));
+     }
+     else {
+       if(x <= r->mv)  {                 /* Search the middle subtree of r */
+         (r->n2) --;
+         return(del_search(x,r->ps2));
+       }
+       else if(!r->ps3) {                               /* Error detection */
+          /*           This Case is impossible since x must be in the tree */
+             puts(" Error in function 'del_search' \n");
+             exit(0);
+             return NULL;              /* To avoid false compilor-warnings */
+       }
+       else {                             /* Search the right subtree of r */
+          (r->n3) --;
+          return(del_search(x,r->ps3));
+       }
+     }
+   }
+}                                            /* End of function del_search */
+
+
+
+/* Function:     back_track
+** Written by:   Sherif Hashem - Purdue University - July 1990
+** Revised:      May 30, 1991
+** Langauge:     C
+** Computer:     Sun/Sparc workstations
+** Purpose:      Update the information about the max element in the
+**               subtree rooted at f which is affected by a deletion process.
+** Method:       Going up towards the root, the relevant information about
+**               the maximum element stored along the path from f to the root
+**               is updated to reflect the effect of removing x from the tree
+** Used By:      Function DELETE
+** Usage:        back_track(f,fmax)
+** Type:         Void
+** Arguments:
+**    Input:     f:    pointer to struct tree
+**               fmax: maximum element stored in the subtree rooted at f
+*/
+
+void back_track(f,fmax)
+struct tree *f;
+float fmax;
+{
+   struct tree *ff;
+
+   while (f->father != NULL) {   /* Loop for updating the values of lv, lm */
+      ff=f->father;                                   /* ff: father of 'f' */
+      if(ff->ps1==f) {                    /* Case f is the first son of ff */
+        ff->lv=fmax;
+        break; /* Since for sure 'ff' has a second son and so the effect   **
+                  **** of the deletion will stop propagating at this stage */
+      }
+      if(ff->ps2==f) {                   /* Case f is the second son of ff */
+        ff->mv=fmax;
+        if(ff->ps3 != NULL) break;        /* No further updating necessary */
+      }
+      /*  Case 'f' is the third son ==>  no changes to 'ff' ==> proceed on */
+      f=ff;
+   }
+}                                            /* End of function back_track */
+
+
+
+/* Function:     del_ver
+** Written by:   Sherif Hashem - Purdue University - July 1990
+** Revised:      May 31, 1991
+** Langauge:     C
+** Computer:     Sun/Sparc workstations
+** Purpose:      Remove a (non-root) vertex from the tree
+** Method:       This removal process results during the balancing of the
+**               tree which occur after the deletion of an element (leaf).
+**               The removal of a vertex involves updating the information
+**               stored in its ancestors. It might also require further
+**               balancing by removing more and more vertices from the tree
+** Uses:         Function AIM
+** Used By:      Function DELETE
+** Usage:        del_ver(r)
+** Type:         Void
+** Argument:
+**    Input:     r: pointer to the required vertex
+*/
+
+void del_ver(r)
+struct tree *r;
+{
+   struct tree *f,*ss,*ff,*gg;
+   float ssx;
+   unsigned long int ssn;
+
+   if(!r || !(r->father)) {                            /* Input validation */
+     puts("Error in function del_ver \n");
+     exit(0);
+   }
+
+   f=r->father;                                /* 'f' is the father of 'r' */
+   if(f->ps3 != NULL) {                         /* Case 'f' has three sons */
+     /*                                   ==> Remove vertex 'r' ==> Return */
+     if(f->ps1==r) {                        /* 'r' is the first son of 'f' */
+       f->ps1=f->ps2;
+       f->ps2=f->ps3;
+       f->ps3=NULL;
+       f->lv=f->mv;
+       f->mv=aim(f->ps2);                               /* To update f->mv */
+       f->n1=f->n2;
+       f->n2=f->n3;
+       f->n3=0;
+     }
+     else if(f->ps2==r) {                  /* 'r' is the second son of 'f' */
+       f->ps2=f->ps3;
+       f->ps3=NULL;
+       f->mv=aim(f->ps2);                               /* To update f->lm */
+       f->n2=f->n3;
+       f->n3=0;
+     }
+     else {                                 /* 'r' is the third son of 'f' */
+       f->ps3=NULL;
+       f->n3=0;
+     }
+     free(r);
+     return;
+   }
+   else {                                    /* Case 'f' has only two sons */
+     if(f->ps1==r) {                        /* 'r' is the first son of 'f' */
+       ss=f->ps2;                /* 'ss' points to the subtree to be saved */
+       ssx=f->mv;     /* 'ssx' holds the value of the max. element in the  **
+                         ************************** subtree rooted at 'ss' */
+       ssn=f->n2; /* 'ssn' holds the number of leaves in the subtree rooted *
+                     ********************************************* at 'ss' */
+     }
+     else {                                /* 'r' is the second son of 'f' */
+       ss=f->ps1;                /* 'ss' points to the subtree to be saved */
+       ssx=f->lv;     /* 'ssx' holds the value of the max. element in the  **
+                         ************************** subtree rooted at 'ss' */
+       ssn=f->n1; /* 'ssn' holds the number of leaves in the subtree rooted *
+                     ********************************************* at 'ss' */
+     }
+     free(r);                          /* Physically remove the vertex 'r' */
+     if(f==root) {                                 /* Case 'f' is the root */
+       free(f);
+       root=ss;
+       root->father=NULL;
+      }
+      else {                                   /* Case 'f' is not the root */
+        ff=f->father;                     /* Let 'ff' be the father of 'f' */
+        if (f==ff->ps1) {                     /* Case 'f' is the first son */
+         gg=ff->ps2;                /* Let'gg' be the right brother of 'f' */
+         if(!gg->ps3) {                          /* 'gg' has only two sons */
+           /*          Give the subtree 'ss' to 'gg' and delete vertex 'f' */
+           gg->ps3=gg->ps2;
+           gg->ps2=gg->ps1;
+           gg->ps1=ss;
+           gg->n3=gg->n2;
+           gg->n2=gg->n1;
+           gg->n1=ssn;
+           gg->mv=gg->lv;
+           gg->lv=ssx;
+           ss->father=gg;
+           ff->n2=gg->n1+gg->n2+gg->n3;
+           del_ver(f);
+         }
+         else {                                     /* 'gg' has three sons */
+           /*          Move the 1st son of 'gg' to become a 2nd son of 'f' */
+           f->ps1=ss;
+           f->ps2=gg->ps1;
+           f->lv=ssx;
+           f->mv=gg->lv;
+           f->n1=ssn;
+           f->n2=gg->n1;
+           f->ps2->father=f;
+           gg->ps1=gg->ps2;
+           gg->ps2=gg->ps3;
+           gg->ps3=NULL;
+           gg->n1=gg->n2;
+           gg->n2=gg->n3;
+           gg->n3=0;
+           gg->lv=gg->mv;
+           gg->mv=aim(gg->ps2);
+           ff->lv=f->mv;
+           ff->n1=ssn+f->n2;
+           ff->n2-=f->n2;
+         }
+       }
+       else if(f==ff->ps2) {                 /* Case 'f' is the second son */
+         gg=ff->ps1;                /* Let 'gg' be the left brother of 'f' */
+         if(gg->ps3 != NULL) {                      /* 'gg' has three sons */
+                      /* Take the 3rd son of 'gg' to be the 1st son of 'f' */
+           f->ps1=gg->ps3;
+           f->lv=ff->lv;                          /* same as = aim(f->ps1) */
+           f->n1=gg->n3;
+           f->ps2=ss;
+           f->mv=ssx;
+           f->n2=ssn;
+           gg->n3=0;
+           gg->ps3=NULL;
+           f->ps1->father=f;
+           ff->lv=gg->mv;
+           ff->mv=f->mv;
+           ff->n1-=f->n1;
+           ff->n2=f->n1+ssn;
+           return;
+         }
+         if(ff->ps3 != NULL && ff->ps3->ps3 != NULL) {
+           /*               Case 'f' has a right brother having three sons */
+           gg=ff->ps3;                   /* Let 'gg' be that right brother */
+           /*        Move the 1st son of 'gg' to become the 2nd son of 'f' */
+           f->ps1=ss;
+           f->ps2=gg->ps1;
+           f->lv=ssx;
+           f->mv=gg->lv;
+           f->n1=ssn;
+           f->n2=gg->n1;
+           f->ps2->father=f;
+           gg->ps1=gg->ps2;
+           gg->ps2=gg->ps3;
+           gg->ps3=NULL;
+           gg->n1=gg->n2;
+           gg->n2=gg->n3;
+           gg->n3=0;
+           gg->lv=gg->mv;
+           gg->mv=aim(gg->ps2);
+           ff->mv=f->mv;
+           ff->n2=ssn+f->n2;
+           ff->n3-=f->n2;
+           return;
+         }
+         /*             Case f has no left or right brother with three son */
+         /*                               ==> Merge f and its left brother */
+         gg->ps3=ss;
+         gg->n3=ssn;
+         ff->lv=ssx;
+         ff->n1+=ssn;
+         ff->n2=0;
+         ss->father=gg;
+         del_ver(f);
+         return;
+       }
+       else {                                 /* Case 'f' is the third son */
+         gg=ff->ps2;                    /* 'gg' is the left brother of 'f' */
+         if(gg->ps3 != NULL) {                      /* 'gg' has three sons */
+                      /* Move the 3rd son of 'gg' to be the 1st son of 'f' */
+           f->ps1=gg->ps3;
+           f->lv=ff->mv;
+           f->ps2=ss;
+           f->mv=ssx;
+           f->n1=gg->n3;
+           f->n2=ssn;
+           gg->n3=0;
+           gg->ps3=NULL;
+           f->ps1->father=f;
+           ff->n2-=f->n1;
+           ff->n3=f->n1+ssn;
+           ff->mv=gg->mv;
+           return;
+         }
+         else {                                  /* 'gg' has only two sons */
+           /*   Merge f and its left brother then remove 'f' as its father **
+                ******************************** already has two more sons */
+           gg->ps3=ss;
+           gg->n3=ssn;
+           ss->father=gg;
+           ff->n2+=ssn;
+           ff->mv=ssx;
+           ff->ps3=NULL;
+           ff->n3=0;
+           free(f);
+           return;
+         }
+       }
+     }
+   }
+}                                               /* End of function del_ver */
+
+
+
+/* Function:     search
+** Written by:   Sherif Hashem - Purdue University - May 31, 1991
+** Revised:      May 31, 1991
+** Langauge:     C
+** Computer:     Sun/Sparc workstations
+** Purpose:      Check the membership of a given element x in the tree rooted
+**               at r
+** Used By:      Function DELETE (optional)
+** Usage:        search(x,r)
+** Type:         Struct tree pointer
+** Arguments:
+**    Input:     x: the element to be removed from the tree
+**               r: root of the tree
+**    Output:    Upon RETURNing, a value of zero is passed to back to the
+**               calling program if x is not in the tree
+*/
+
+struct tree *search(x,r)
+float x;
+struct tree *r;
+{
+
+   if(!(r->ps1->ps1) ) return r;  /* When r is the direct father of a leaf */
+   else {                       /* When r is not a direct father of a leaf */
+     if(x <= r->lv)
+       return(search(x,r->ps1));           /* Search the left subtree of r */
+     else if(x <= r->mv || !r->ps3)
+       return(search(x,r->ps2));         /* Search the middle subtree of r */
+     else return(search(x,r->ps3));     /* Search the right subtree of r */
+   }
+}                                                /* End of function search */
+

@@ -1,0 +1,515 @@
+C SOLUTION OF REAL LINEAR EQUATIONS IN A PAGED VIRTUAL STORE
+C
+C BY J.J. DU CROZ, S.M. NUGENT AND J.K. REID
+C
+C ACM TRANSACTIONS ON MATHEMATICAL SOFTWARE, DECEMBER 1981
+C
+C     TEST DRIVER FOR BLCFAC AND BLCSOL                                 BK 00010
+C                                                                       BK 00020
+C     THIS DRIVER GENERATES MATRICES OF ORDER 1,2,4,7,10,               BK 00030
+C     14,19,24 AND GENERATES RIGHT HAND SIDE VECTORS                    BK 00040
+C     FOR WHICH THE EXACT SOLUTION IS KNOWN.  IT CALLS                  BK 00050
+C     BLCFAC AND BLCSOL TO SOLVE THE GENERATED SYSTEMS OF               BK 00060
+C     LINEAR EQUATIONS AND PRINTS THE MAXIMUM ABSOLUTE ERRORS           BK 00070
+C     IN THE COMPUTED SOLUTION. IT THEN PROVOKES THE ERROR              BK 00080
+C     RETURNS.                                                          BK 00090
+C                                                                       BK 00100
+C     THE PROGRAM CALLS A FUNCTION URAND TO SUPPLY PSEUDO-              BK 00110
+C     RANDOM VALUES.                                                    BK 00120
+C                                                                       BK 00130
+C     .. LOCAL SCALARS ..                                               BK 00140
+      REAL D1, D2, DX                                                   BK 00150
+      INTEGER I, IA, IB, IERR, IR, J, K, N, NCASE, NOUT                 BK 00160
+C     .. LOCAL ARRAYS ..                                                BK 00170
+      REAL A(29,33), B(29,12), P(33), C(29,12)                          BK 00180
+C     .. FUNCTION REFERENCES ..                                         BK 00190
+      REAL URAND                                                        BK 00200
+C     .. SUBROUTINE REFERENCES ..                                       BK 00210
+C     BLCFAC, BLCSOL                                                    BK 00220
+C     ..                                                                BK 00230
+      DATA NOUT /6/                                                     BK 00240
+C     NOUT IS THE UNIT NUMBER OF THE LINE-PRINTER                       BK 00250
+      IA = 29                                                           BK 00260
+C     IA IS THE FIRST DIMENSION OF THE ARRAY A                          BK 00270
+      IB = 29                                                           BK 00280
+C     IB IS THE FIRST DIMENSION OF THE ARRAYS B AND C                   BK 00290
+      DX = 789.0E0                                                      BK 00300
+C     DX CONTROLS THE RANDOM NUMBER GENERATOR URAND                     BK 00310
+      DO 170 NCASE=1,12                                                 BK 00320
+        WRITE (NOUT,99999) NCASE                                        BK 00330
+        N = NCASE + (NCASE-1)**2/3                                      BK 00340
+        IF (NCASE.GT.9) N = 10*(12-NCASE)                               BK 00350
+        IF (N.LE.0 .OR. N.GT.IA) GO TO 120                              BK 00360
+C                                                                       BK 00370
+C     CONSTRUCT TRIANGULAR MATRIX WITH DETERMINANT UNITY                BK 00380
+C                                                                       BK 00390
+        DO 20 J=1,N                                                     BK 00400
+          DO 10 I=1,N                                                   BK 00410
+            A(I,J) = 0.0E0                                              BK 00420
+            IF (I.GT.J) A(I,J) = URAND(DX)                              BK 00430
+   10     CONTINUE                                                      BK 00440
+          A(J,J) = 1.0E0                                                BK 00450
+   20   CONTINUE                                                        BK 00460
+C                                                                       BK 00470
+C     APPLY COLUMN OPERATIONS TO MATRIX                                 BK 00480
+C                                                                       BK 00490
+        IF (N.LE.1) GO TO 50                                            BK 00500
+        DO 40 J=2,N                                                     BK 00510
+          D1 = URAND(DX)                                                BK 00520
+          IF (D1.LT.0.1) GO TO 40                                       BK 00530
+          DO 30 I=1,N                                                   BK 00540
+            A(I,J) = A(I,J) + D1*A(I,J-1)                               BK 00550
+   30     CONTINUE                                                      BK 00560
+   40   CONTINUE                                                        BK 00570
+C                                                                       BK 00580
+C     CONSTRUCT B AND C SO THAT SOLUTIONS ARE X(I,J)=I+J                BK 00590
+C                                                                       BK 00600
+   50   IR = NCASE                                                      BK 00610
+        DO 70 J=1,IR                                                    BK 00620
+          DO 60 I=1,N                                                   BK 00630
+            B(I,J) = 0.0E0                                              BK 00640
+            C(I,J) = 0.0E0                                              BK 00650
+   60     CONTINUE                                                      BK 00660
+   70   CONTINUE                                                        BK 00670
+        DO 100 K=1,N                                                    BK 00680
+          DO 90 J=1,IR                                                  BK 00690
+            DO 80 I=1,N                                                 BK 00700
+              B(I,J) = B(I,J) + A(I,K)*FLOAT(J+K)                       BK 00710
+              C(I,J) = C(I,J) + A(K,I)*FLOAT(J+K)                       BK 00720
+   80       CONTINUE                                                    BK 00730
+   90     CONTINUE                                                      BK 00740
+  100   CONTINUE                                                        BK 00750
+C
+C     CHANGE ROW 7 IN CASES 10,11 TO PROVOKE SINGULARITY FAILURES
+C
+        IF (NCASE.LT.10) GO TO 120
+        DO 110 J=1,N
+          A(7,J) = 0.0E0
+          IF (NCASE.EQ.11) A(7,J) = A(5,J) + A(6,J)
+  110   CONTINUE
+C
+C     CALLS OF SUBROUTINES AND PRINTING
+C
+  120   CALL BLCFAC(N, A, IA, P, IERR)
+        IF (IERR.EQ.0) GO TO 130
+        WRITE (NOUT,99998) IERR
+        IF (NCASE.EQ.10) IR = 0
+        IF (NCASE.EQ.11) IB = 1
+  130   CALL BLCSOL(N, IR, .FALSE., A, IA, P, B, IB, IERR)
+        CALL BLCSOL(N, IR, .TRUE., A, IA, P, C, IB, IERR)
+        IF (IERR.EQ.0) GO TO 140
+        WRITE (NOUT,99997) IERR
+        IERR = MAX0(0,NCASE-8)
+        WRITE (NOUT,99995) IERR
+        GO TO 170
+  140   D1 = 0.0
+        D2 = 0.0
+        DO 160 I=1,N
+          DO 150 J=1,IR
+            D1 = AMAX1(D1,ABS(B(I,J)-FLOAT(I+J)))
+            D2 = AMAX1(D2,ABS(C(I,J)-FLOAT(I+J)))
+  150     CONTINUE
+  160   CONTINUE
+        WRITE (NOUT,99996) N, D1, D2
+  170 CONTINUE
+      STOP
+99999 FORMAT (6H0CASE , I2)
+99998 FORMAT (31H  BLCFAC HAS EXITED WITH IERR =, I2)
+99997 FORMAT (31H  BLCSOL HAS EXITED WITH IERR =, I2)
+99996 FORMAT (4H  N=, I2, 38H MAXIMUM ABSOLUTE ERRORS IN SOLUTIONS=,
+     * 2(1PE12.4))
+99995 FORMAT (16H  IERR SHOULD BE, I2)
+      END
+      REAL FUNCTION URAND(X)                                            BK 01170
+C     RETURNS A PSEUDO-RANDOM NUMBER IN THE RANGE (0,1)
+C     .. SCALAR ARGUMENTS ..
+      REAL X
+C     ..
+      X = AMOD(3125.0E0*X,65536.0E0)
+      URAND = X/65536.0E0
+      RETURN
+      END
+      SUBROUTINE BLCFAC(N, A, IA, P, IERR)                              BK 01260
+C
+C     BLCFAC FACTORIZES A REAL MATRIX BY GAUSSIAN ELIMINATION WITH
+C     PARTIAL PIVOTING .  IT IS ORGANIZED SO THAT BLOCKS OF
+C     CONSECUTIVE COLUMNS ARE TREATED TOGETHER FOR EFFICIENCY ON A
+C     PAGED MACHINE.
+C
+C     THE ROUTINE FACTORIZES THE INPUT MATRIX A AS P * L * U,
+C     WHERE P IS A PERMUTATION MATRIX, L IS A LOWER TRIANGULAR
+C     MATRIX , AND U IS AN UPPER TRIANGULAR MATRIX WITH UNIT
+C     DIAGONAL ELEMENTS.  WHEN CHOOSING A PIVOT, THE ROUTINE
+C     IMPLICITLY SCALES THE ROWS TO HAVE LARGEST ELEMENT 1.0.  THE
+C     ROUTINE TESTS THE SIZE OF THE IMPLICITLY SCALED PIVOT ELEMENT
+C     TO CHECK FOR APPROXIMATE SINGULARITY.
+C
+C     PARAMETERS-
+C
+C     N      INTEGER
+C            ON ENTRY, N SPECIFIES THE ORDER OF THE MATRIX A
+C            (N.GT.0).  UNCHANGED ON EXIT.
+C
+C     A      REAL ARRAY OF DIMENSION (IA,N)
+C            BEFORE ENTRY, A(I,J) MUST BE SET TO THE (I,J)TH ELEMENT
+C            OF THE MATRIX A, FOR I = 1,...,N AND J = 1,...,N.
+C            ON SUCCESSFUL EXIT, THE STRICT UPPER TRIANGLE OF A IS
+C            OVERWRITTEN BY THE CORRESPONDING ELEMENTS OF U (THE
+C            UNIT DIAGONAL ELEMENTS OF U ARE NOT STORED) AND THE
+C            LOWER TRIANGLE OF A IS OVERWRITTEN BY THE MULTIPLIERS
+C            USED IN THE GAUSSIAN ELIMINATION (IT DOES NOT CONTAIN
+C            THE MATRIX L AS SUCH - THE SUBDIAGONAL ELEMENTS ARE
+C            PERMUTED).
+C
+C     IA     INTEGER
+C            ON ENTRY, IA SPECIFIES THE FIRST DIMENSION OF A AS
+C            DECLARED IN THE CALLING (SUB)PROGRAM (IA.GE.N).
+C            UNCHANGED ON EXIT.
+C
+C     P      REAL ARRAY OF DIMENSION (N)
+C            ON SUCCESSFUL EXIT, P(I) CONTAINS THE ROW INDEX OF
+C            THE I-TH PIVOT, FOR I = 1,...,N.
+C
+C     IERR   INTEGER
+C            IERR IS AN ERROR INDICATOR.  ON EXIT
+C            IERR = 0 IF NO ERROR HAS OCCURRED
+C            IERR = 1 IF ON ENTRY IA.LT.N
+C            IERR = 2 IF THE MATRIX HAS A ROW CONSISTING ENTIRELY
+C                     OF ZEROS
+C            IERR = 3 IF THE MATRIX IS APPROXIMATELY SINGULAR
+C            IERR = 4 IF ON ENTRY N.LT.1
+C
+C     FUNCTION REFERENCES-
+C
+      REAL SRELPR
+C            THE RELATIVE PRECISION OF FLOATING-POINT NUMBERS.
+C
+      INTEGER NSACT
+C            NUMBER OF REAL STORAGE UNITS IN TARGET ACTIVE SET
+C            ON A PAGED SYSTEM (OR A SAFE UNDER-ESTIMATE IF THIS
+C            VALUE IS VARIABLE).
+C
+C     .. SCALAR ARGUMENTS ..
+      INTEGER IA, IERR, N
+C     .. ARRAY ARGUMENTS ..
+      REAL A(IA,1), P(1)
+C     IF PSEUDO VARIABLE DIMENSIONING IS NOT AVAILABLE USE
+C     REAL A(IA,N), P(N)
+C     BUT THIS MAY RESULT IN NON-GRACEFUL ERROR TERMINATION
+C     ..
+C     .. LOCAL SCALARS ..
+      REAL EIGHT, HALF, ONE, THRESH, X, Y, ZERO, DUMMY
+      INTEGER I, J1, J, K1, K2, K, KP1, L, LQ
+C     ..
+      DATA ZERO /0.0E0/, HALF /0.5E0/, ONE /1.0E0/, EIGHT /8.0E0/
+C
+      IF (N.LE.0) GO TO 160
+      IF (IA.LT.N) GO TO 130
+C
+C     THRESH IS THE THRESHOLD ON PIVOT SIZE RELATIVE TO THE ORIGINAL
+C     INFINITY NORM OF ITS ROW.
+C
+      THRESH = EIGHT*SRELPR(DUMMY)
+C
+C     LQ IS THE NUMBER OF COLUMNS THAT ARE TREATED TOGETHER.
+C     LQ IS CHOSEN SO THAT THERE IS ROOM IN THE DESIRED ACTIVE SET
+C     FOR LQ CONTIGUOUS COLUMNS OF A, ANOTHER COLUMN ON ITS OWN,
+C     AND THE ARRAY P.
+C
+      LQ = N
+      IF (NSACT(DUMMY).NE.0) LQ = MAX0(1,NSACT(DUMMY)/IA-2)
+C
+C     FIND RECIPROCALS OF THE INFINITY NORMS OF THE ROWS OF A.
+C
+      DO 10 I=1,N
+        P(I) = ZERO
+   10 CONTINUE
+      DO 30 J=1,N
+        DO 20 I=1,N
+          P(I) = AMAX1(ABS(A(I,J)),P(I))
+   20   CONTINUE
+   30 CONTINUE
+      DO 40 I=1,N
+        IF (P(I).LE.ZERO) GO TO 140
+        P(I) = ONE/P(I)
+   40 CONTINUE
+C
+C     MAIN LOOP IN WHICH A BLOCK OF COLUMNS IS TREATED.
+C     THE ACTIVE BLOCK CONSISTS OF COLUMNS K1 TO K2.
+C     THE PREVIOUS COLUMNS SHOULD BE PAGED IN AT MOST ONCE DURING
+C     EXECUTION OF THIS LOOP.
+C
+      DO 120 K1=1,N,LQ
+        K2 = MIN0(K1+LQ-1,N)
+        DO 110 K=1,K2
+          KP1 = K + 1
+          IF (K.LT.K1) GO TO 70
+C
+C     K-TH COLUMN IS IN ACTIVE BLOCK - CHOOSE PIVOT
+C
+          X = ZERO
+          DO 50 I=K,N
+            Y = ABS(A(I,K))*P(I)
+            IF (Y.LE.X) GO TO 50
+            X = Y
+            L = I
+   50     CONTINUE
+          IF (X.LT.THRESH) GO TO 150
+          IF (L.EQ.K) GO TO 60
+C
+C     PERFORM INTERCHANGE
+C
+          Y = A(K,K)
+          A(K,K) = A(L,K)
+          A(L,K) = Y
+          P(L) = P(K)
+   60     P(K) = L
+          J1 = KP1
+          GO TO 80
+C
+C     K-TH COLUMN PRECEDES ACTIVE BLOCK - OBTAIN K-TH PIVOT INDEX
+C
+   70     L = P(K) + HALF
+          J1 = K1
+C
+C     APPLY ELIMINATION OPERATIONS TO COLUMNS J1 TO K2 OF THE ACTIVE
+C     BLOCK
+C
+   80     IF (J1.GT.K2) GO TO 110
+          DO 100 J=J1,K2
+            Y = A(L,J)/A(K,K)
+            A(L,J) = A(K,J)
+            A(K,J) = Y
+            IF (Y.EQ.ZERO) GO TO 100
+C THE FOLLOWING LOOP IS EQUIVALENT TO
+C     CALL SAXPY(N-K,-Y,A(K+1,K),1,A(K+1,J),1)
+            DO 90 I=KP1,N
+              A(I,J) = A(I,J) - A(I,K)*Y
+   90       CONTINUE
+  100     CONTINUE
+  110   CONTINUE
+  120 CONTINUE
+C
+C     SUCCESSFUL EXIT
+C
+      IERR = 0
+      GO TO 170
+C
+C     ERROR EXITS
+C
+  130 IERR = 1
+      GO TO 170
+  140 IERR = 2
+      GO TO 170
+  150 IERR = 3
+      GO TO 170
+  160 IERR = 4
+  170 RETURN
+      END
+      SUBROUTINE BLCSOL(N, IR, TRANS, A, IA, P, B, IB, IERR)            BK 03010
+C
+C     BLCSOL CALCULATES THE APPROXIMATE SOLUTION OF A SET OF REAL
+C     LINEAR EQUATIONS WITH MULTIPLE RIGHT HAND SIDES A * X = B,
+C     AFTER A OR ITS TRANSPOSE HAS BEEN FACTORIZED BY BLCFAC.
+C     IT IS ORGANIZED SO THAT BLOCKS OF CONSECUTIVE RIGHT HAND
+C     SIDES ARE TREATED TOGETHER FOR EFFICIENCY ON A PAGED MACHINE.
+C
+C     PARAMETERS-
+C
+C     N      INTEGER
+C            ON ENTRY, N SPECIFIES THE ORDER OF THE MATRIX A
+C            (N.GT.0).  UNCHANGED ON EXIT.
+C
+C     IR     INTEGER
+C            ON ENTRY, IR SPECIFIES THE NUMBER OF RIGHT HAND SIDES
+C            I.E.  THE NUMBER OF COLUMNS OF THE MATRIX B (IR.GT.0).
+C            UNCHANGED ON EXIT.
+C
+C     TRANS  LOGICAL
+C            ON ENTRY, TRANS MUST BE TRUE IF THE TRANSPOSE OF A
+C            WAS FACTORIZED BY BLCSOL AND FALSE OTHERWISE.
+C            UNCHANGED ON EXIT.
+C
+C     A      REAL ARRAY OF DIMENSION (IA,N)
+C            BEFORE ENTRY, A MUST CONTAIN THE FACTORIZATION OF THE
+C            MATRIX A OR ITS TRANSPOSE AS RETURNED BY THE
+C            ROUTINE BLCSOL. UNCHANGED ON EXIT.
+C
+C     IA     INTEGER
+C            ON ENTRY, IA SPECIFIES THE FIRST DIMENSION OF A AS
+C            DECLARED IN THE CALLING (SUB)PROGRAM (IA.GE.N).
+C            UNCHANGED ON EXIT.
+C
+C     P      REAL ARRAY OF DIMENSION (N)
+C            BEFORE ENTRY, P MUST CONTAIN THE DETAILS OF THE ROW
+C            PERMUTATIONS AS RETURNED BY THE ROUTINE BLCFAC
+C
+C     B      REAL ARRAY OF DIMENSION (IB,IR)
+C            BEFORE ENTRY, B MUST CONTAIN THE MATRIX OF RIGHT
+C            HAND SIDES B.
+C            ON SUCCESSFUL EXIT, B IS OVERWRITTEN BY THE MATRIX
+C            OF SOLUTIONS X.
+C
+C     IB     INTEGER
+C            ON ENTRY, IB SPECIFIES THE FIRST DIMENSION OF B AS
+C            DECLARED IN THE CALLING (SUB)PROGRAM (IB.GE.N).
+C            UNCHANGED ON EXIT.
+C
+C     IERR   INTEGER
+C            IERR IS AN ERROR INDICATOR.  ON EXIT
+C            IERR = 0 IF NO ERROR HAS OCCURRED
+C            IERR = 1 IF ON ENTRY IA.LT.N
+C            IERR = 2 IF ON ENTRY IR.LT.1
+C            IERR = 3 IF ON ENTRY IB.LT.N
+C            IERR = 4 IF ON ENTRY N.LT.1
+C
+C     FUNCTION REFERENCES-
+C
+      INTEGER NSACT
+C            NUMBER OF REAL STORAGE UNITS IN TARGET ACTIVE SET
+C            ON A PAGED SYSTEM (OR A SAFE UNDER-ESTIMATE IF THIS
+C            VALUE IS VARIABLE).  ON A NON-PAGED SYSTEM NSACT
+C            SHOULD BE SET TO ZERO.
+C
+C     .. SCALAR ARGUMENTS ..
+      INTEGER IA, IB, IERR, IR, N
+      LOGICAL TRANS
+C     .. ARRAY ARGUMENTS ..
+      REAL A(IA,1), B(IB,1), P(1)
+C     IF PSEUDO VARIABLE DIMENSIONING IS NOT AVAILABLE USE
+C     REAL A(IA,N), B(IB,IR), P(N)
+C     BUT THIS MAY RESULT IN NON-GRACEFUL ERROR TERMINATION
+C     ..
+C     .. LOCAL SCALARS ..
+      REAL HALF, X
+      INTEGER I, J1, J, JJ, K1, K2, K, L, LQ
+C     ..
+      DATA HALF /0.5E0/
+C
+      IF (N.LE.0) GO TO 210
+      IF (IR.LT.1) GO TO 190
+      IF (IA.LT.N) GO TO 180
+      IF (IB.LT.N) GO TO 200
+C
+C     LQ IS THE NUMBER OF RIGHT HAND SIDES THAT ARE TREATED
+C     TOGETHER.
+C     LQ IS CHOSEN SO THAT THERE IS ROOM IN THE DESIRED ACTIVE SET
+C     FOR LQ CONTIGUOUS COLUMNS OF B, ANOTHER COLUMN ON ITS OWN,
+C     AND THE ARRAY P.
+C
+      LQ = IR
+      IF (NSACT(DUMMY).NE.0) LQ = MAX0(1,NSACT(DUMMY)/IB-2)
+C
+C     MAIN LOOP IN WHICH A BLOCK OF RIGHT HAND SIDES IS TREATED.
+C     THE ACTIVE BLOCK CONSISTS OF COLUMNS K1 TO K2.
+C     THE COLUMNS OF A SHOULD BE PAGED IN AT MOST ONCE DURING THE
+C     FORWARD SUBSTITUTION AND ONCE DURING THE BACKWARD SUBSTITUTION
+C     IN THIS LOOP.
+C
+      DO 160 K1=1,IR,LQ
+        K2 = MIN0(K1+LQ-1,IR)
+        IF (TRANS) GO TO 70
+C
+C     FORWARD SUBSTITUTION
+C
+        DO 30 J=1,N
+          J1 = J + 1
+          L = P(J) + HALF
+          DO 20 K=K1,K2
+            X = B(L,K)/A(J,J)
+            B(L,K) = B(J,K)
+            B(J,K) = X
+            IF (J.EQ.N) GO TO 20
+C THE FOLLOWING LOOP IS EQUIVALENT TO
+C     CALL SAXPY(N-J,-X,A(J+1,J),1,B(J+1,K),1)
+            DO 10 I=J1,N
+              B(I,K) = B(I,K) - A(I,J)*X
+   10       CONTINUE
+   20     CONTINUE
+   30   CONTINUE
+C
+C     BACKWARD SUBSTITUTION
+C
+        IF (N.EQ.1) GO TO 170
+        DO 60 JJ=2,N
+          J = N + 2 - JJ
+          J1 = J - 1
+          DO 50 K=K1,K2
+            X = B(J,K)
+C THE FOLLOWING LOOP IS EQUIVALENT TO
+C     CALL SAXPY(J-1,-X,A(1,J),1,B(1,K),1)
+            DO 40 I=1,J1
+              B(I,K) = B(I,K) - A(I,J)*X
+   40       CONTINUE
+   50     CONTINUE
+   60   CONTINUE
+        GO TO 160
+C
+C FORWARD SUBSTITUTION (TRANSPOSED CASE)
+C
+   70   IF (N.EQ.1) GO TO 110
+        DO 100 J=2,N
+          J1 = J - 1
+          DO 90 K=K1,K2
+C THE FOLLOWING FIVE STATEMENTS ARE EQUIVALENT TO
+C     B(J,K)=B(J,K)-SDOT(J-1,B(1,K),1,A(1,J),1)
+            X = B(J,K)
+            DO 80 I=1,J1
+              X = X - B(I,K)*A(I,J)
+   80       CONTINUE
+            B(J,K) = X
+   90     CONTINUE
+  100   CONTINUE
+C
+C BACKWARD SUBSTITUTION (TRANSPOSED CASE)
+C
+  110   DO 150 JJ=1,N
+          J = 1 + N - JJ
+          J1 = J + 1
+          DO 140 K=K1,K2
+C THE FOLLOWING FIVE STATEMENTS ARE EQUIVALENT TO
+C     X=B(J,K)-SDOT(N-J,B(J+1,K),1,A(J+1,J),1)
+            X = B(J,K)
+            IF (J.EQ.N) GO TO 130
+            DO 120 I=J1,N
+              X = X - A(I,J)*B(I,K)
+  120       CONTINUE
+  130       L = P(J) + HALF
+            B(J,K) = B(L,K)
+            B(L,K) = X/A(J,J)
+  140     CONTINUE
+  150   CONTINUE
+  160 CONTINUE
+C
+C     SUCCESSFUL EXIT
+C
+  170 IERR = 0
+      GO TO 220
+C
+C     ERROR EXIT
+C
+  180 IERR = 1
+      GO TO 220
+  190 IERR = 2
+      GO TO 220
+  200 IERR = 3
+      GO TO 220
+  210 IERR = 4
+  220 RETURN
+      END
+      FUNCTION SRELPR(DUMMY)                                            BK101540
+C THIS FUNCTION RETURNS THE RELATIVE PRECISION, SEE TOMS,4(1978),
+C     100-103. THE VALUE 16.**(-5) IS APPROPRIATE FOR
+C     SINGLE PRECISION WORKING ON  IBM 360/370/303X
+      SRELPR = ****
+      RETURN
+      END
+      FUNCTION NSACT(DUMMY)                                             BK101610
+C THIS FUNCTION RETURNS THE NUMBER OF REAL STORAGE UNITS IN THE
+C      TARGET ACTIVE SET (OR AN UNDER-ESTIMATE IF IT CAN VARY).
+C      FOR NON-PAGED SYSTEMS THE VALUE SHOULD BE ZERO.
+C     THE VALUE 150 IS SUITABLE FOR USE WITH THE TEST DRIVER.
+C     IT ENSURES THAT ALL THE CODE IS EXECUTED.
+      NSACT = ****
+      RETURN
+      END

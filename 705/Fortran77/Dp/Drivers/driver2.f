@@ -1,0 +1,205 @@
+C--**--CH2908--705--P:LAP--28:10:1999
+C--**--CH2885--705--C:SU--28:10:1999
+C--**--CH2881--705--B:MA--28:10:1999
+C--**--CH2863--705--A:H--28:10:1999
+C     -- PROGRAM TSYLGC --
+C
+C     THIS PROGRAM TESTS THE SOFTWARE FOR SOLVING THE SYMMETRIC
+C     SYLVESTER EQUATION
+C
+C        A*X*E' + E*X*A' + Q = 0    (' DENOTES TRANSPOSE)
+C
+C     USING A SET OF ILL-CONDITIONED EQUATIONS.  SEE "SOLUTION OF THE
+C     SYLVESTER MATRIX EQUATION AXB'+CXD'=E" BY GARDINER, LAUB, AMATO,
+C     AND MOLER FOR A DESCRIPTION OF THE TEST PROBLEMS.
+C
+C     THE SOLUTION IS CHECKED BY COMPUTING THE RESIDUAL AND ITS RELATIVE
+C     1-NORM.  THE CONDITION ESTIMATE IS CHECKED FOR SMALL SYSTEMS ONLY
+C     (N*N <= 40) BY FORMING THE KRONECKER PRODUCT MATRIX AND COMPUTING
+C     ITS SINGULAR VALUE DECOMPOSITION.
+C
+C     SUBROUTINES AND FUNCTIONS CALLED -
+C       SYLGC; (LINPACK) DSVDC; (MATU) MADD MULC TRNATA D1NRM MSAVE
+C
+C     WRITTEN -
+C       27JAN89 J. GARDINER, OSU CIS, COLUMBUS, OH  43210  (614)292-8658
+C     REVISED -
+C       12DEC90 J. GARDINER, OSU CIS, COLUMBUS, OH  43210  (614)292-8658
+C
+C     -- MAXIMUM N IS 8 --
+      INTEGER NAE, NQ, NW, N, IERR, NWX, IDMY, KT
+      INTEGER NMAX, WRKLEN, MAXSVD
+      PARAMETER (NMAX=8, WRKLEN=2*NMAX*NMAX+3*NMAX,
+     +           MAXSVD=40)
+      DOUBLE PRECISION A(NMAX,NMAX), E(NMAX,NMAX), Q(NMAX,NMAX)
+      DOUBLE PRECISION WKM1(NMAX,NMAX), WKM2(NMAX,NMAX),
+     +                 WKV(WRKLEN)
+C
+      INTEGER I, J, NXN, II, JJ, INDX, JNDX
+      DOUBLE PRECISION A1(NMAX,NMAX), E1(NMAX,NMAX), Q1(NMAX,NMAX), 
+     +                 WKMX(MAXSVD,MAXSVD)
+      DOUBLE PRECISION TMP, NRMR, NRMQ, WORST, RCOND, RCDSVD
+      DOUBLE PRECISION WORSTL, WORSTH, RATIO, DUMY(1), ST
+      DOUBLE PRECISION D1NRM
+C     --- OUTPUT UNIT FOR WRITE ---
+      NAE = NMAX
+      NQ = NMAX
+      NW = NMAX
+      NWX = MAXSVD
+C
+C     -- INITIALIZE --
+      WORST = 0.0D0
+      WORSTL = 1.0D100
+      WORSTH = 0.0D0
+C
+      WRITE(*,90000)
+      WRITE(*,90001)
+90000 FORMAT("             T        T")
+90001 FORMAT(" SOLVE  A*X*E  + E*X*A  + Q = 0  USING SYLGC")
+C
+C     USE THIS LINE TO RUN A COMPLETE TEST
+C
+       DO 300 N = 1,NMAX
+C
+C     USE THIS LINE TO RUN A MINIMAL INSTALLATION TEST
+C
+C     DO 300 N = 5,5
+C
+      WRITE(*,90005) N
+C
+90005 FORMAT(/ " N =", I3)
+      DO 230 KT = 0,40,10
+         ST = (2.0D0)**(-KT)
+C
+C GENERATE COEFFICIENT MATRICES  --  TRUE SOLUTION IS MATRIX OF ALL ONES
+C
+         DO 80 I=1,N
+            DO 70 J=1,I
+               A(I,J) = 1.0D0
+               A(J,I) = 0.0D0
+               E(J,I) = ST
+               E(I,J) = 0.0D0
+   70       CONTINUE
+            A(I,I) = ST + (I-1)
+            E(I,I) = 1.0D0
+   80    CONTINUE
+C
+         DO 160 I=1,N
+            WKV(I) = 0.0D0
+            DO 150 J=1,N
+               WKV(I) = WKV(I) + A(I,J)
+  150       CONTINUE
+  160    CONTINUE
+         DO 190 I=1,N
+            TMP = 0.0D0
+            DO 170 J=1,N
+               TMP = TMP + E(I,J)
+  170       CONTINUE
+            DO 180 J=1,N
+               Q(J,I) = TMP * WKV(J)
+  180       CONTINUE
+  190    CONTINUE
+         DO 210 I=1,N
+            DO 200 J=1,I
+               Q(I,J) = -(Q(I,J) + Q(J,I))
+               Q(J,I) = Q(I,J)
+  200       CONTINUE
+  210    CONTINUE
+C
+C        -- SAVE A COPY --
+         CALL MSAVE(NAE, NAE, N, N, A, A1)
+         CALL MSAVE(NAE, NAE, N, N, E, E1)
+         CALL MSAVE(NQ, NQ, N, N, Q, Q1)
+C
+C        -- COMPUTE NORM OF Q --
+         NRMQ = D1NRM(NQ, N, N, Q)
+C
+C        -- COMPUTE SOLUTION, ESTIMATE CONDITION IF SVD COMPUTABLE --
+         NXN = N*N
+         IF (NXN .LE. MAXSVD) THEN
+            IERR = 1
+         ELSE
+            IERR = 0
+         ENDIF
+         CALL SYLGC(NAE, NQ, N, A, E, Q, WKV, IERR, RCOND)
+         IF (IERR .NE. 0) THEN
+            WRITE(*,90003) KT, IERR
+90003       FORMAT(" AT ITERATION", I2, " ERROR IN SYLGC, IERR=", I2)
+         ENDIF
+C
+C        -- COMPUTE RESIDUAL --
+         CALL MULC(NAE, NQ, NW, N, N, N, A1, Q, WKM1)
+         CALL TRNATA(NAE, N, E1)
+         CALL MULC(NW, NAE, NW, N, N, N, WKM1, E1, WKM2)
+         CALL TRNATA(NAE, N, E1)
+         CALL MADD(NQ, NW, NQ, N, N, Q1, WKM2, Q1)
+         CALL MULC(NAE, NQ, NW, N, N, N, E1, Q, WKM1)
+         CALL TRNATA(NAE, N, A1)
+         CALL MULC(NW, NAE, NW, N, N, N, WKM1, A1, WKM2)
+         CALL TRNATA(NAE, N, A1)
+         CALL MADD(NQ, NW, NQ, N, N, Q1, WKM2, Q1)
+C
+C        -- COMPUTE NORM OF RESIDUAL --
+         NRMR = D1NRM(NQ, N, N, Q1)
+         TMP = NRMR/NRMQ
+         IF (TMP .GT. WORST) WORST = TMP
+C
+C        -- COMPUTE REAL CONDITION NUMBER
+         IF (NXN .LE. MAXSVD) THEN
+            DO 140 J = 1,N
+               DO 130 JJ = 1,N
+                  DO 120 I = 1,N
+                     DO 110 II = 1,N
+                        INDX = N*(I-1) + II
+                        JNDX = N*(J-1) + JJ
+                        WKMX(INDX,JNDX) = A1(II,JJ)*E1(I,J)
+     *                                    + E1(II,JJ)*A1(I,J)
+  110                CONTINUE
+  120             CONTINUE
+  130          CONTINUE
+  140       CONTINUE
+            IDMY = 1
+            CALL DSVDC(WKMX, NWX, NXN, NXN, WKV, WKV(NXN+1), DUMY, IDMY,
+     *                 DUMY, IDMY, WKM1, 00, IERR)
+            IF (IERR .NE. 0) THEN
+               WRITE(*,90006) KT
+90006          FORMAT(" ITERATION", I2, " SVD FAILED")
+               RCDSVD = 0.0D0
+            ELSE
+               RCDSVD = WKV(NXN) / WKV(1)
+            ENDIF
+            RATIO = RCOND / RCDSVD
+            IF (RATIO .LT. WORSTL) WORSTL = RATIO
+            IF (RATIO .GT. WORSTH) WORSTH = RATIO
+         ENDIF
+C
+C        -- PRINT RESULTS --
+         IF (NXN .LE. MAXSVD) THEN
+            WRITE(*,90002) KT, TMP, RCOND, RATIO
+         ELSE
+            WRITE(*,90007) KT, TMP
+         ENDIF
+90002    FORMAT(1X, I2, '  (NRM RESID)/(NRM Q)=', E10.3,          '  RCO
+     +ND(EST)=', E10.3, ' EST/TRUE=', E10.3)
+C
+C
+90007    FORMAT(1X, I2, '  (NRM RESID)/(NRM Q)=', E10.3)
+  230 CONTINUE
+  300 CONTINUE
+C
+      WRITE(*,90004) WORST
+90004 FORMAT(/ " WORST CASE RESIDUAL IS", E10.3)
+      WRITE(*,90008) WORSTL, WORSTH
+C
+90008 FORMAT(' WORST CASE RCOND RATIOS (EST/TRUE) ARE', E10.3,       ' (
+     +LOW) AND', E10.3, ' (HIGH)')
+      WRITE(*,90010)
+90010 FORMAT(// ' THE RESIDUAL SHOULD BE ON THE ORDER OF 1E-14',        
+     +  ' OR SMALLER ON MOST MACHINES.')
+      WRITE(*,90011)
+C
+90011 FORMAT(' THE RCOND RATIOS SHOULD BE ON THE ORDER OF 1,',       ' I
+     +.E., BETWEEN .1 AND 10.')
+      STOP
+C --- LAST LINE OF TSYLGC ---
+      END

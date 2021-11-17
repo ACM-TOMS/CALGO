@@ -1,0 +1,352 @@
+\documentclass{article}
+\usepackage{amsmath,amssymb}
+\usepackage{bm}
+\usepackage{xspace}
+
+% Typical LaTeX macros
+\renewcommand{\tilde}{\widetilde}
+\renewcommand{\hat}{\widehat}
+\renewcommand{\vec}[1]{{\mathbf{#1}}}
+\newcommand{\abs}[1]{\ensuremath{\left\lvert #1 \right\rvert}}
+\newcommand{\norm}[1]{\ensuremath{\left\lVert #1 \right\rVert}}
+\newcommand{\R}{\ensuremath{\mathbb{R}}}
+\newcommand{\C}{\ensuremath{\mathbb{C}}}
+\newcommand{\Z}{\ensuremath{\mathbb{Z}}}
+\newcommand{\N}{\ensuremath{\mathbb{N}}}
+\newcommand{\Q}{\ensuremath{\mathbb{Q}}}
+\renewcommand{\Re}{\ensuremath{\operatorname{Re}}\xspace}
+\renewcommand{\Im}{\ensuremath{\operatorname{Im}}}
+\DeclareMathOperator{\dom}{dom}
+\DeclareMathOperator{\ran}{ran}
+
+\newcommand{\lambi}{\ensuremath{\lambda_{\mathrm{min}}}}
+\newcommand{\lambf}{\ensuremath{\lambda_{\mathrm{max}}}}
+\newcommand{\ie}{\textit{i.e.}}
+\newcommand{\eg}{\textit{e.g.}}
+\newcommand{\pampac}{\textsc{PAMPAC}\xspace}
+\newcommand{\RED}{\texttt{PROGRESSING}\xspace}
+\newcommand{\YELLOW}{\texttt{CONVERGING}\xspace}
+\newcommand{\GREEN}{\texttt{CONVERGED}\xspace}
+\newcommand{\BLACK}{\texttt{FAILED}\xspace}
+
+% Insert macro for superscripts with parentheses
+\renewcommand{\sup}[1]{\ensuremath{{}^{(#1)}}}
+%\usepackage{natbib}
+%\usepackage{setspace}
+%\usepackage{xr}
+%\externaldocument{main}
+
+% Title portion
+\title{\pampac user manual}
+\author{D.A.~Aruliah, Lennaert van Veen, Alex Dubitski}
+\date{}
+
+\begin{document} % Actual document begins here
+\maketitle
+
+\section{Overview}
+
+\pampac (Parallel Adaptive Method for Pseudo-Arclength Continuation)
+is a C library using MPI (Message-Passing Interface) routines that allows
+users to adapt serial codes for pseudo-arclength continuation to achieve
+a modest amount of concurrent processing.
+%
+Specifically, the library permits scientific researchers to extend
+their continuation codes with a parallel strategy for concurrent
+computation of corrector steps in a predictor-corrector framework.
+%
+The details of the algorithm are provided in the article \cite{aruliah}
+by the authors.
+
+
+The  user supplies a few basic routines with interfaces explained:
+%
+\begin{itemize}
+\item a function \verb.main. to act as a driver for the other routines;
+\item a function \verb.compute_residual. for evaluating the nonlinear residual of the system of nonlinear equations at a given point;
+\item a function \verb.single_corrector_step. that, given a putative point on the continuation curve and a tangent direction, computes an update (e.g., via Newton's method or some similar strategy) to obtain an improved point;
+\item a function \verb.write_coordinates. for writing output as a user chooses; and
+\item a \verb.main. function as typical for a C program to act as a driver.
+\end{itemize}
+
+In addition, the user must supply a text file storing the numerical values corresponding to
+an initial point on the continuation curve and a text file with parameters to control the core
+\pampac algorithm.
+%
+An example application (that solves a modified Kuramoto-Sivashinsky
+equation) is provided to serve as a template from which users can build their own applications.
+
+\section{System requirements}
+
+\pampac has been developed using Linux/Unix systems with the following configuration:
+\begin{itemize}
+\item a ISO/IEC 9899:1999-compliant C compiler (\texttt{gcc} 4.8.2 on our systems);
+\item an implementation of the Message Passing Interface (MPI-2, \texttt{openmpi} 1.6.5 on our systems);
+\item the GNU Scientific Library (GSL 1.16 on our systems); and
+\item the Automatically Tuned Linear Algebra Software (ATLAS 3.10.1 on our systems). 
+\end{itemize}
+%
+In the core \pampac library, the GSL is used only as an interface to BLAS routines (Basic Linear Algebra
+Subroutines). Users are welcome to link to BLAS libraries tuned for their hardware when building the \pampac
+library instead.
+The example application provided uses the GSL for computing FFTs (Fast Fourier Transforms) and uses ATLAS
+as an interface for linear algebra solvers packaged in LAPACK libraries.
+The dependence on ATLAS is strictly for the example application (and not for the \pampac library itself).
+
+\section{Installation}
+
+After downloading and unpacking the source code, the \texttt{INSTALL} file in the top-level
+directory provides the key instructions. Briefly, they are as follows.
+
+\begin{enumerate}
+\item Customize the file \texttt{Make.config} in the top-level directory to suit your system.
+\item \texttt{make lib} in the top-level directory to build the library.
+\item Customize the file \texttt{driver.config} in the \texttt{example} directory to suit your system.
+\item \texttt{make driver} in the \texttt{example} directory to build the driver executable.
+\item Edit the file \texttt{parameters.txt} in the \texttt{example} directory as suitable for your run.
+\item \texttt{make run} in the \texttt{example} directory to start a run. You will want to tune the number of
+processors in the call to \texttt{mpiexec} to reflect your system.
+\end{enumerate}
+%
+The main \pampac library comes with template \texttt{Makefiles} for easy building;
+some configuration of the files \texttt{Make.config} and \texttt{example/driver.config} is
+required to ensure that all library dependencies are met on your system.
+%
+The build should work on any POSIX system; it has been tested on a cluster with QDR Infiniband interconnects and
+2.2GHz AMD Opteron processors as well as desktop machines with two quad-core Intel Xeon X5482 processors.
+
+
+More details are provided within the \texttt{INSTALL} file.
+
+
+\section{Structure of the code}
+\label{sec:structure}
+
+The \pampac library is written in C (ISO/IEC 9899:1999) using MPI for parallelization.
+%
+The \pampac library is modular in its design to aid in debugging and understanding its structure;
+each of the core tasks is performed by a separate function, located in the \verb^/src^ directory.
+%
+Many of the core routines in the \pampac library require traversal of the rooted tree in a depth-first (using recursion) or a breadth-first (using a queue) fashion.
+%
+The node and queue data structures for managing the tree are documented in \texttt{pampac.h} in the \texttt{src} subdirectory.
+%
+This file also describes a data structure for storing and communicating the parameter options parsed from the user's parameter file.
+%
+The \pampac library is designed so that users need not know the details of the implementations of these data structures (nor the routines for allocation/deallocation of memory, management of pointers, etc.).
+%
+The user need only specify the depth of the underlying tree and the related tunable parameters that control the parallel algorithm.
+
+%
+The \texttt{main} function performs two primary tasks: it initializes and finalizes MPI communication and
+it divides work between the master and the slave processes
+(this is typical in the Single-Program-Multiple-Processor (SPMP) paradigm).
+%
+Within the \texttt{main} function, the master processor parses the user-provided parameter file to determine
+the algorithm-tuning parameters; 
+if it does so successfully, the master process broadcasts the number of degrees of freedom (\texttt{N\_DIM})
+to the other processes and initiates the principal algorithm by invoking the routine \verb^master_process^.
+%
+After some preprocessing, such as loading the initial point from the user's input file and computing an initial tangent direction, the master process initiates the parallel algorithm.
+%
+The slave processes all call the function \verb^slave_process^ in which they idle until receiving data from the master process---the data being a point \texttt{z} and some tangent direction \texttt{T} from which a corrector iteration can be computed.
+%
+The only interprocess communication during the continuation loop consists
+of the root process sending these data to the slaves and each slave returning the
+result of a corrector step to the root process.
+%
+The routines \verb^master_process^ and \verb^slave_process^ package the core components of the
+\pampac algorithm in a manner that alleviates the burden of managing the parallel computation from the user.
+%
+The corrector iterations are independent and should be much more expensive than the cost of inter-process communication in order for \pampac to yield a speed-up.
+
+
+\section*{User-supplied functions}
+
+To use the \pampac library, the user needs to supply functions with the following signatures:
+\begin{itemize}
+%
+\item[] \verb^int main (int argc, char *argv[])^ or alternatively, \newline
+        \verb^void main (int argc, char *argv[])^
+\item[] \verb^int computer_residual (int N_dim, double *z, double *res)^ 
+\item[] \verb^int single_corrector_step (int N_dim, double *z, double *T)^ 
+\item[] \verb^write_coordinates (int N_dim, double *z)^
+\end{itemize}
+%
+The function \verb.main. is a standard entry point that can accept command-line arguments.
+%
+The function \verb^compute_residual^ evaluates the residual of the nonlinear function that
+determines whether points lie on the continuation curve.
+%
+The input parameter \texttt{z} is an array (vector) of \texttt{N\_dim} double precision values;
+the computed residual \texttt{res} is an array of \texttt{N\_dim-1} double precision values.
+%
+The function \verb^single_corrector_step^ is a routine to compute the updated corrector iterate
+using the input point \texttt{z} and the tangent vector \texttt{T}.
+%
+The corrected value of \texttt{z} overwrites the array \texttt{T} on exit from this function.
+%
+Finally, the function \verb.write_coordinates. is a user-tuned output routine for recording
+points computed on the continuation curve.
+%
+These user-supplied functions need to be compiled with \texttt{main.c}---and any user-required dependencies---to
+produce an executable that can be run in parallel on numerous processors.
+%
+Assuming that the user's \texttt{Makefile} is suitably configured, the user can link the executable with external library functions required by their routines.
+
+%
+Notice that, relative to the mathematical description of the template continuation problem in \cite{aruliah}, \verb^N_dim^$\,= n+1$, i.e., \verb^N_dim^ refers to the dimension of the vector $\vec{z}=(\vec{x},\lambda)$ rather than the dimension of the vector $\vec{x}$.
+%
+Thus, in \verb^compute_residual^, the ``input'' values are the (integer) dimension \verb^N_dim^ of the problem and the \verb^N_dim^-vector pointed to by the pointer \verb^z^;
+the ``output'' is the residual vector of the nonlinear problem, stored in an
+array of length \verb^N_dim-1^ in memory pointed to by 
+the pointer \verb^res^.
+%
+Similarly, in \verb^single_corrector_step^, the ``input'' values are the (integer) dimension \verb^N_dim^ of the problem, the \verb^N_dim^-vector pointed to by the pointer \verb^z^, and the \verb^N_dim^-vector pointed to by the pointer \verb^T^ (corresponding to $\vec{T}$).
+%
+After calling  \verb^single_corrector_step^, the array pointed to by \verb^z^ has been overwritten with the updated corrector iterate.
+%
+
+\section*{The parameter file}
+
+Parameters controlling the parallel continuation algorithm are loaded
+from a plain text file at run-time by the master processor.
+A template is provided in the file \texttt{example/parameters.txt}.
+%
+Notice in the template \texttt{example/main.c} file, the name of the parameter file
+is read as a command-line argument and passed into the function \verb.parse_parameters.
+directly.
+
+The parameters in the parameter file are all denoted by the string \verb.@param@. preceding
+the parameter's name and value.
+The parameter identifiers are as follows:
+\begin{itemize}
+\item \verb+N_DIM+: the number of unknowns/degrees of freedom $n+1$;
+%
+\item \verb+LAMBDA_MIN+ and \verb+LAMBDA_MAX+: bounds on the interval $[\lambi,\lambf]$ in which the continuation parameter $\lambda$ lies;
+%
+\item \verb+LAMBDA_INDEX+: integer between \texttt{0} and \verb+N_DIM-1+ that is the index of the parameter $\lambda$ in any \verb+N_DIM+-vector;
+%
+\item \verb+DELTA_LAMBDA+: parameter for initial corrector iterations to generate a second point on the curve from the first (required to bootstrap the algorithm);
+%
+\item \verb+H_MIN+ and \verb+H_MAX+: the minimal, maximal and initial pseudo-arclength step-size;
+%
+\item \verb+H_INIT+: the initial step-length used to determine the initial secant direction on the continuation curve.
+Notice that if $\mathtt{H\_INIT}<0$, the initial secant direction points backwards with respect to the parameter $\lambda$.
+%
+\item \verb+MAX_ITER+: the maximum number of corrector steps before a node is designated as \BLACK;
+%
+\item \verb+TOL_RESIDUAL+: the threshold for accepting \GREEN nodes (\ie, when  \smash{$\norm{\vec{r}_{\alpha}^{(\nu_\alpha)}}_{2} \le\,$}\verb+TOL_RESIDUAL+);
+%
+\item \verb+MU+: the threshold reduction in residual for \BLACK nodes \newline
+(\ie, when \smash{$\norm{\vec{r}_{\alpha}^{(\nu_\alpha)}}_{2} > \mathtt{MU} \norm{\vec{r}_{\alpha}^{(\nu_\alpha-1)}}_{2}$});
+%
+\item \verb+GAMMA+: the threshold rate of residual reduction for \YELLOW nodes \newline
+(\ie, when \smash{$\mathtt{GAMMA}\log\norm{\vec{r}_{\alpha}^{(\nu_\alpha)}}_2\le\log\,$}\verb+TOL_RESIDUAL+;
+%
+\item \verb+MAX_DEPTH+: the maximum depth of the tree, $D$ (excluding the root node);
+%
+\item \verb+MAX_GLOBAL_ITER+: the maximum number of global \pampac iterations before continuation is halted;
+%
+\item \verb+SCALE_FACTOR+: a real,positive factor $t_{\mathtt{K}}$ by which step-sizes are multiplied when a new predictor step is spawned from a given point;
+%
+\item \verb+VERBOSE+: an integer parameter controlling the verbosity of output;
+%
+\item \verb+INPUT_FILENAME+: a string giving the path to the input file from which the initial point is read; and
+%
+\item \verb+TREE_BASE_FILENAME+: a string giving the path and the base filename that can be used if visualizations of
+the rooted trees at each stage of the algorithm are to be generated by the program.
+%
+\end{itemize}
+%
+
+Most of the parameters are self-explanatory.
+%
+For instance, the parameters \verb^MAX_ITER^ and \verb.TOL_RESIDUAL. are used to assess convergence of
+corrector iterations and to circumvent stagnating corrector loops respectively.
+%
+In the descriptions above, the quantity $\vec{r}_{\alpha}^{(\nu_\alpha)}$ is the nonlinear residual (\ie, the vector yielded by evaluating the function \verb+compute_residual+) by node $\alpha$ when the local iteration counter is $\nu_\alpha$. 
+%
+
+The parameter \verb+GAMMA+ is used to classify corrector iterations as \YELLOW according to the relation
+$\norm{\vec{r}_{\alpha}^{(\nu_\alpha)}}_{2}^{\mathtt{GAMMA}} \le\mathtt{TOL\_RESIDUAL}$ (\ie, the \textit{next iterate} computed from that iterate is expected to have converged onto the continuation curve).
+%
+The parameter \verb+MU+ is used to classify corrector iterations as \BLACK according to whether
+$\nu_{\alpha}>\mathtt{MAX\_ITER}$ or $\norm{\vec{r}_{\alpha}^{(\nu_\alpha)}}_{2} > {\mathtt{MU}} \norm{\vec{r}_{\alpha}^{(\nu_\alpha-1)}}_{2}$
+(\ie, either the maximum number of corrector iterations is exceeded or the reduction of the residual
+is insufficient in consecutive corrector iterations).
+%
+Tuning these parameters determines how the \pampac algorithm will preserve or destroy prospective corrector iteration
+sequences by deciding which iterates are deemed to be making sufficient progress to keep.
+
+The parameter \verb+LAMBDA_INDEX+ provides additional flexibility by permitting the user to specify any integer index of $\vec{z}$---using 0-based indexing as is conventional in C---for the continuation parameter.
+%
+That is, the parameter $\lambda$ does not need to be the $(n+1)^{\mathrm{st}}$ component of the $(n+1)$-vector $\vec{z}$.
+%
+
+The user specifies the depth of the tree in the parameter \verb+MAX_DEPTH+.
+%
+By contrast, the maximum number of children any node can spawn is given by the \textit{number of lines containing the keyword}\verb+SCALE_FACTOR+.
+%
+That is, rather than specifying the width of the tree---that is, the number of children each node can potentially spawn---in the parameter, the user specifies a sequence of lines with the keyword \verb+SCALE_FACTOR+.
+%
+The numerical value in each of these lines is the multiplicative factor $t_{k}$ that the \pampac algorithm uses to scale the pseudo-arclength step-size in generating predictor steps to seed concurrent corrector iterations.
+
+%
+To bootstrap the algorithm, the master processor requires an initial tangent direction in addition to
+the initial point loaded from the user's input file.
+%
+It generates an approximate tangent direction by carrying out a few corrector iterations to generate another point near the initial point and computing a secant direction between those two points.
+%
+At any given point on the continuation curve, there are two anti-parallel tangent directions;
+%
+as such, the sign of  \verb+H_INIT+ is used to fix the initial direction of the continuation
+(\ie, the tangent direction used to generate the second point on the curve is oriented in the direction of $\lambda$ increasing or decreasing when \verb^H_INIT^$>0$ or \verb^H_INIT^$<0$, respectively).
+%
+The user also needs to specify \verb+DELTA_LAMBDA+ (roughly how far from the initial point to look for the neighboring point) to control this bootstrapping process.
+%
+
+
+The user can specify an integer parameter \verb+VERBOSE+ to control output generated at run-time.
+%
+No output is generated unless the parameter \verb+VERBOSE+ is positive;
+%
+With \verb+VERBOSE>=1+, the master process displays diagnostic messages to standard output as the algorithm progresses.
+%
+When \verb+VERBOSE>=2+, the master process also creates data files in a user-specified path that display the structure of the rooted trees.
+%
+The data files generated are compatible with the \texttt{dot} language for specifying directed graphs with the \textsc{Graphviz} software for visualization of graphs (see \texttt{www.graphviz.org}).
+%
+Such graphs are useful for performance-tuning, \ie, for understanding how the data in \texttt{parameters.txt} affect the use of processors.
+
+
+\section{Determining the number of processors}
+
+The user specifies the number of available CPUs using the \verb^-np^ flag in the call to \verb^mpiexec^
+when running an executable compiled against the \pampac library.
+%
+For a given tree of width $W$ and depth $D$ ($D$ is measured excluding the root node),
+the maximal number of nodes---including the root node---is
+$$
+np_{\rm max}=\begin{cases} D+1 &\text{if}\ W=1 \\
+\frac{W^{D+1}-1}{W-1} &\text{if}\ W>1\end{cases}
+$$
+If the user-specified number of available CPUs is smaller than $np_{\rm max}$, \pampac will occasionally need to select
+a number of nodes to stall. This is done by traversing the tree breadth-first, \ie,
+first over increasing step-sizes at each level of the tree and then over an increasing number of extrapolations.
+Thus, the processes corresponding to the tentative solutions with the largest step-size and the most extrapolations from not-quite-converged results are stalled first; this strategy makes sense since these are the iterates that are most
+likely to fail. They are not pruned, though, and the corrector sequences corresponding to these nodes
+may resume in the next iteration of the main loop.
+
+% Bibliography
+\begin{thebibliography}{1}
+
+\bibitem{aruliah}
+D.~A. Aruliah, Lennaert van Veen, and Alex Dubitski.
+\newblock Pampac: a parallel adaptive method for arclength continuation.
+\newblock {\em ACM Trans. Math. Software}, 2014.
+
+\end{thebibliography}
+
+\end{document}
+

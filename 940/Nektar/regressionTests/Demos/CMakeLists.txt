@@ -1,0 +1,2 @@
+SUBDIRS(StdRegions LocalRegions MultiRegions)
+

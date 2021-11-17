@@ -1,0 +1,773 @@
+C     ALGORITHM 632 COLLECTED ALGORITHMS FROM ACM.
+C     ALGORITHM APPEARED IN ACM-TRANS. MATH. SOFTWARE, VOL.11, NO. 2,
+C     JUN., 1985, P. 135-140.
+C SAMPLE DRIVER PROGRAM FOR MKP.
+C
+C THIS PROGRAM SOLVES A 0-1 MULTIPLE KNAPSACK PROBLEM OF  N
+C ITEMS AND  M  KNAPSACKS.
+C
+C COMPLETE DETAILS OF THE PARAMETERS MAY BE FOUND IN THE
+C DOCUMENTATION OF SUBROUTINE MKP.
+C
+C THE INPUT UNIT NUMBER IS ASSUMED TO BE  5 .
+C THE OUTPUT UNIT NUMBER IS ASSUMED TO BE  6 .
+C THE ARRAYS ARE CURRENTLY DIMENSIONED TO ALLOW PROBLEMS FOR
+C WHICH  N .LE. 200  AND  M .LE. 4 .
+C
+C THE PROGRAM MAY BE TESTED ON THE FOLLOWING SETS OF PROFITS
+C AND WEIGHTS:
+C
+C N =    10
+C P =    92   57   49   68   60   43   67   84   87   72
+C W =    23   31   29   44   53   38   63   85   89   82
+C
+C FOUR TEST PROBLEMS ARE OBTAINED WITH THE FOLLOWING
+C KNAPSACK CAPACITIES:
+C
+C PROBLEM 1
+C M =     2
+C K =    70  127
+C
+C PROBLEM 2
+C M =     3
+C K =    50   81  120
+C
+C PROBLEM 3
+C M =     4
+C K =    31   37   48  152
+C
+C PROBLEM 4 (0-1 SINGLE KNAPSACK PROBLEM)
+C M =     1
+C K =   165
+C
+      INTEGER P(200),W(200),K(4),XSTAR(200),VSTAR,BCK
+C INPUT PROFITS AND WEIGHTS
+      READ (5,10) N
+      READ (5,10) (P(J),J=1,N)
+      READ (5,10) (W(J),J=1,N)
+      WRITE (6,20) N, (P(J),J=1,N), (W(J),J=1,N)
+C PROBLEM 1
+      READ (5,10) M
+      READ (5,10) (K(I),I=1,M)
+      WRITE (6,30) M, (K(I),I=1,M)
+      BCK = - 1
+      CALL MKP(N,M,P,W,K,BCK,XSTAR,VSTAR)
+      WRITE (6,40) VSTAR, (XSTAR(J),J=1,N), BCK
+C PROBLEM 2
+      READ (5,10) M
+      READ (5,10) (K(I),I=1,M)
+      WRITE (6,30) M, (K(I),I=1,M)
+      BCK = - 1
+      CALL MKP(N,M,P,W,K,BCK,XSTAR,VSTAR)
+      WRITE (6,40) VSTAR, (XSTAR(J),J=1,N), BCK
+C PROBLEM 3
+      READ (5,10) M
+      READ (5,10) (K(I),I=1,M)
+      WRITE (6,30) M, (K(I),I=1,M)
+C (OPTIMAL SOLUTION)
+      BCK = - 1
+      CALL MKP(N,M,P,W,K,BCK,XSTAR,VSTAR)
+      WRITE (6,40) VSTAR, (XSTAR(J),J=1,N), BCK
+C (HEURISTIC SOLUTION)
+      BCK = 10
+      CALL MKP(N,M,P,W,K,BCK,XSTAR,VSTAR)
+      WRITE (6,40) VSTAR, (XSTAR(J),J=1,N), BCK
+C PROBLEM 4
+      READ (5,10) M
+      READ (5,10) (K(I),I=1,M)
+      WRITE (6,30) M, (K(I),I=1,M)
+      BCK = - 1
+      CALL MKP(N,M,P,W,K,BCK,XSTAR,VSTAR)
+      WRITE (6,40) VSTAR, (XSTAR(J),J=1,N), BCK
+      STOP
+   10 FORMAT (10I5)
+   20 FORMAT (1H1//////5H N = ,I5/5H P = ,10I5/5H W = ,10I5)
+   30 FORMAT (///5H M = ,I5/5H K = ,4I5)
+   40 FORMAT (/9H VSTAR = ,I5/9H XSTAR = ,10I5/9H BCK   = ,
+     *        I5)
+      END
+      SUBROUTINE MKP(N,M,P,W,K,BCK,XSTAR,VSTAR)
+C
+C SUBROUTINE TO SOLVE A 0-1 MULTIPLE KNAPSACK PROBLEM OF  N
+C ITEMS (WITH  N .GE. 2) AND  M  KNAPSACKS (WITH  M .GE. 1 ,
+C I.E. ALSO SUITABLE FOR A 0-1 SINGLE KNAPSACK PROBLEM).
+C THE PROBLEM TO BE SOLVED IS:
+C
+C MAXIMIZE  VSTAR = P(1)*(X(1,1) + ... + X(M,1)) + ...
+C                   ... + P(N)*(X(1,N) + ... + X(M,N))
+C SUBJECT TO
+C W(1)*X(I,1) + ... + W(N)*X(I,N) .LE. K(I)   FOR  I=1,...,M
+C X(1,J) + ... + X(M,J) .LE. 1   FOR  J=1,...,N
+C X(I,J) = 0 OR 1   FOR  I=1,...,M ,  J=1,...,N ,
+C
+C WITH ALL  P(J) ,  W(J)  AND  K(I)  POSITIVE INTEGERS.
+C BEFORE MKP IS CALLED, ARRAYS  P  AND  W  NEED TO BE SORTED
+C SO THAT  P(1)/W(1) .GE. P(2)/W(2) .GE. ... .GE. P(N)/W(N),
+C ARRAY  K  SO THAT  K(1) .LE. K(2) .LE. ... .LE. K(M) .
+C
+C MKP CALLS  4  SUBROUTINES: SIGMA, PI, PAR AND SKP. THE
+C WHOLE PACKAGE IS COMPLETELY SELF-CONTAINED AND COMMUNICA-
+C TION TO IT IS ACHIEVED SOLELY THROUGH THE PARAMETER LIST
+C OF MKP. NO MACHINE DEPENDENT CONSTANTS ARE USED. THE PACK-
+C AGE IS WRITTEN IN AMERICAN NATIONAL STANDARD FORTRAN AND
+C IS ACCEPTED BY THE PFORT VERIFIER (A PROGRAM WHICH CHECKS
+C PROGRAM AND SUBROUTINES FOR ADHERENCE TO PFORT, A PORTABLE
+C SUBSET OF AMERICAN NATIONAL STANDARD FORTRAN).
+C THE PACKAGE HAS BEEN TESTED ON A CDC CYBER 76, A CDC 6600,
+C AN IBM 370/168 AND A DIGITAL VAX 11/780.
+C
+C MKP NEEDS  5  ARRAYS ( K ,  F ,  PBL ,  Q  AND  V ) OF
+C LENGTH  M ,  8  ARRAYS ( P ,  W ,  XSTAR ,  UBB ,  LX ,
+C LXI ,  BS  AND  XS ) OF LENGTH  N ,  3  ARRAYS ( B ,  PS
+C AND  WS ) OF LENGTH  N + 1 ,  3  ARRAYS ( BB ,  X  AND
+C XL ) OF LENGTH  M*N  AND  1  ARRAY ( BL ) OF LENGTH
+C M*(N + 1).
+C THE ARRAYS ARE CURRENTLY DIMENSIONED TO ALLOW PROBLEMS FOR
+C WHICH  M .LE. 4  AND  N .LE. 200 . CHANGING SUCH DIMEN-
+C SIONS ALSO REQUIRES CHANGING THE DIMENSIONS OF  BS ,  PS ,
+C WS ,  XS ,  LX  AND  LXI  IN SUBROUTINE SIGMA, OF  BB ,
+C BL ,  XL ,  BS ,  PS ,  WS  AND  XS  IN SUBROUTINE PI, OF
+C BB ,  LX  AND  LXI  IN SUBROUTINE PAR, OF  D ,  MIN ,
+C PBAR ,  WBAR ,  ZBAR ,  BS ,  PS ,  WS  AND  XS  IN
+C SUBROUTINE SKP.
+C
+C MEANING OF THE INPUT PARAMETERS:
+C N    = NUMBER OF ITEMS.
+C M    = NUMBER OF KNAPSACKS.
+C P(J) = PROFIT OF ITEM  J  (J=1,...,N) .
+C W(J) = WEIGHT OF ITEM  J  (J=1,...,N) .
+C K(I) = CAPACITY OF KNAPSACK  I  (I=1,...,M) .
+C BCK  = -1  IF EXACT SOLUTION IS REQUIRED.
+C      = MAXIMUM NUMBER OF BACKTRACKINGS TO BE PERFORMED, IF
+C        HEURISTIC SOLUTION IS REQUIRED.
+C
+C MEANING OF THE OUTPUT PARAMETERS:
+C XSTAR(J) = 0  IF ITEM  J  IS NOT IN THE OPTIMAL SOLUTION
+C               (I.E. IF  X(I,J) = 0  FOR ALL  I ).
+C          = KNAPSACK WHERE ITEM  J  IS INSERTED, OTHERWISE
+C            (I.E. IF  X(XSTAR(J),J) = 1 ).
+C VSTAR    = VALUE OF THE OPTIMAL SOLUTION IF  VSTAR .GT. 0.
+C          = ERROR CONDITION (INFEASIBILITY OR TRIVIALITY)
+C            IN THE INPUT DATA IF  VSTAR .LT. 0 :
+C            = -1  IF  N .LT. 2  OR  M .LT. 1 .
+C            = -2  IF SOME  P(J) ,  W(J)  OR  K(I) ARE NOT
+C                  POSITIVE.
+C            = -3  IF A KNAPSACK CANNOT CONTAIN ANY ITEM.
+C            = -4  IF AN ITEM CANNOT FIT INTO ANY KNAPSACK.
+C            = -5  IF KNAPSACK  M  CONTAINS ALL THE ITEMS.
+C            = -6  IF ARRAYS  P  AND  W  ARE NOT CORRECTLY
+C                  SORTED.
+C            = -7  IF ARRAY  K IS NOT CORRECTLY SORTED.
+C            (IN ALL THE ABOVE CASES ARRAY  XSTAR IS NOT
+C            DEFINED).
+C
+C ALL THE PARAMETERS ARE INTEGERS. ON RETURN OF MKP ALL THE
+C INPUT PARAMETERS ARE UNCHANGED EXCEPT  BCK , WHICH GIVES
+C THE NUMBER OF BACKTRACKINGS PERFORMED.
+C
+C MEANING OF THE MAIN INTERNAL VARIABLES:
+C I       = KNAPSACK CURRENTLY CONSIDERED.
+C LB      = LOWER BOUND ON THE OPTIMAL SOLUTION.
+C UB      = UPPER BOUND ON THE OPTIMAL SOLUTION.
+C VB      = VALUE OF THE CURRENT SOLUTION.
+C X(I,J)  = 1  IF ITEM  J  IS INSERTED IN KNAPSACK  I  IN
+C              THE CURRENT SOLUTION.
+C         = 0  OTHERWISE.
+C F(I)    = POINTER TO THE LAST ITEM INSERTED IN KNAPSACK  I
+C           ( = -1  IF KNAPSACK  I  IS EMPTY).
+C BB(I,J) = POINTER TO THE ITEM INSERTED IN KNAPSACK  I
+C           JUST BEFORE ITEM  J ( = -1  IF  J  IS THE FIRST
+C           ITEM INSERTED IN KNAPSACK  I ).
+C Q(I)    = CURRENT AVAILABLE CAPACITY OF KNAPSACK  I .
+C B(J)    = 1  IF ITEM  J  IS NOT INSERTED IN ANY KNAPSACK.
+C         = 0  IF ITEM  J  IS INSERTED IN A KNAPSACK.
+C PBL(I)  = NUMBER OF THE ITEMS WHICH CAN BE INSERTED IN
+C           KNAPSACK  I .
+C BL(I,S) = POINTER TO THE  S-TH  ITEM WHICH CAN BE INSERTED
+C           IN KNAPSACK  I .
+C XL(I,J) = 1  IF ITEM  J  WAS INSERTED IN KNAPSACK  I  IN
+C              THE LAST EXECUTION OF SUBROUTINE PI.
+C         = 0  OTHERWISE.
+C
+      INTEGER P(200),W(200),K(4),XSTAR(200),BCK,VSTAR
+      INTEGER BB(4,200),BL(4,201),X(4,200),XL(4,200)
+      INTEGER B(201),UBB(200)
+      INTEGER F(4),PBL(4),Q(4),V(4),S,U,UB,VB,BS,PS,WS,XS
+      COMMON /SNGL/ BS(200),PS(201),WS(201),XS(200)
+      COMMON /PUB/ LX(200),LXI(200),LR,LRI,LUBI
+C
+C STEP 0 (CHECK ON THE INPUT DATA)
+C
+      VSTAR = 0
+      IF ( N .LE. 1 ) VSTAR = - 1
+      IF ( M .LE. 0 ) VSTAR = - 1
+      IF ( VSTAR .LT. 0 ) RETURN
+      MAXW = W(1)
+      MINW = W(1)
+      ISUMW = W(1)
+      AP = P(1)
+      AW = W(1)
+      RR = AP/AW
+      IF ( P(1) .LE. 0 ) VSTAR = - 2
+      IF ( W(1) .LE. 0 ) VSTAR = - 2
+      DO 10 J=2,N
+        IF ( P(J) .LE. 0 ) VSTAR = - 2
+        IF ( W(J) .LE. 0 ) VSTAR = - 2
+        R = RR
+        IF ( W(J) .GT. MAXW ) MAXW = W(J)
+        IF ( W(J) .LT. MINW ) MINW = W(J)
+        ISUMW = ISUMW + W(J)
+        AP = P(J)
+        AW = W(J)
+        RR = AP/AW
+        IF ( RR .LE. R ) GO TO 10
+        VSTAR = - 6
+        RETURN
+   10 CONTINUE
+      IF ( K(1) .LE. 0 ) VSTAR = - 2
+      IF ( M .EQ. 1 ) GO TO 250
+      DO 20 I=2,M
+        IF ( K(I) .LE. 0 ) VSTAR = - 2
+        IF ( K(I) .GE. K(I-1) ) GO TO 20
+        VSTAR = - 7
+        RETURN
+   20 CONTINUE
+      IF ( MINW .GT. K(1) ) VSTAR = - 3
+      IF ( MAXW .GT. K(M) ) VSTAR = - 4
+      IF ( ISUMW .LE. K(M) ) VSTAR = - 5
+      IF ( VSTAR .LT. 0 ) RETURN
+C
+C STEP 1 (INITIALIZATION)
+C
+      JBCK = BCK
+      BCK = 0
+      KUB = 0
+      N1 = N + 1
+      B(N1) = 1
+      M1 = M - 1
+      DO 40 J=1,N
+        B(J) = 1
+        DO 30 I=1,M
+          X(I,J) = 0
+          BB(I,J) = 0
+   30   CONTINUE
+   40 CONTINUE
+      DO 50 I=1,M1
+        Q(I) = K(I)
+        F(I) = -1
+   50 CONTINUE
+      Q(M) = K(M)
+      VSTAR = 0
+      VB = 0
+      I = 1
+      CALL SIGMA(N,M,P,W,K,1,B,KUB,UB)
+      DO 60 J=1,N
+        LXI(J) = LX(J)
+   60 CONTINUE
+      LRI = LR
+      LUBI = UB
+      IFLAG = 0
+C
+C STEP 2 (HEURISTIC)
+C
+   70 KUB = VSTAR - VB
+      CALL PI(N,M,P,W,Q,I,B,BB,KUB,BL,LB,PBL,V,XL)
+      IF ( LB + VB .LE. VSTAR ) GO TO 140
+      VSTAR = LB + VB
+      DO 90 J=1,N
+        XSTAR(J) = 0
+        DO 80 S=1,I
+          IF ( X(S,J) .EQ. 0 ) GO TO 80
+          XSTAR(J) = S
+          GO TO 90
+   80   CONTINUE
+   90 CONTINUE
+      IP = PBL(I)
+      IF ( IP .EQ. 0 ) GO TO 110
+      DO 100 J=1,IP
+        JJ = BL(I,J)
+        IF ( XL(I,J) .EQ. 1 ) XSTAR(JJ) = I
+  100 CONTINUE
+  110 I1 = I + 1
+      DO 130 II=I1,M
+        IP = PBL(II)
+        IF ( IP .EQ. 0 ) GO TO 130
+        DO 120 J=1,IP
+          JJ = BL(II,J)
+          IF ( XL(II,J) .EQ. 1 ) XSTAR(JJ) = II
+  120   CONTINUE
+  130 CONTINUE
+      IF ( UB .EQ. LB ) GO TO 200
+C
+C STEP 3 (UPDATING)
+C
+  140 IF ( V(I) .EQ. 0 ) GO TO 180
+      IUV = UB + VB
+      U = PBL(I)
+      IBV = 0
+      DO 170 S=1,U
+        IF ( XL(I,S) .EQ. 0 ) GO TO 170
+        J = BL(I,S)
+        X(I,J) = 1
+        Q(I) = Q(I) - W(J)
+        VB = VB + P(J)
+        B(J) = 0
+        BB(I,J) = F(I)
+        UBB(J) = IUV
+        IF ( IFLAG .EQ. 1 ) GO TO 150
+        LUB = IUV
+        LJ = J
+        LI = I
+  150   F(I) = J
+        IBV = IBV + P(J)
+        IF ( IBV .EQ. V(I) ) GO TO 180
+        CALL PAR(I,I,UB,IFLAG,VB,LUB,LJ,LI,F,BB,Q,B,N)
+        IF ( IFLAG .EQ. 1 ) GO TO 160
+        KUB = VSTAR - VB
+        CALL SIGMA(N,M,P,W,Q,I,B,KUB,UB)
+        LJ = N1
+  160   IUV = UB + VB
+        IF ( IUV .LE. VSTAR ) GO TO 200
+  170 CONTINUE
+  180 IF ( I .EQ. M - 1 ) GO TO 200
+      IP1 = I + 1
+      CALL PAR(IP1,I,UB,IFLAG,VB,LUB,LJ,LI,F,BB,Q,B,N)
+      IF ( IFLAG .EQ. 1 ) GO TO 190
+      KUB = VSTAR - VB
+      CALL SIGMA(N,M,P,W,Q,IP1,B,KUB,UB)
+      LJ = N1
+  190 IF ( UB + VB .LE. VSTAR ) GO TO 200
+      I = I + 1
+      GO TO 140
+C
+C STEP 4 (BACKTRACKING)
+C
+  200 IF ( I .GT. 0 ) GO TO 210
+      BCK = BCK - 1
+      RETURN
+  210 IF ( BCK .EQ. JBCK ) RETURN
+      BCK = BCK + 1
+      IF ( F(I) .NE. (-1) ) GO TO 230
+      DO 220 J=1,N
+        BB(I,J) = 0
+  220 CONTINUE
+      I = I - 1
+      GO TO 200
+  230 J = F(I)
+      X(I,J) = 0
+      B(J) = 1
+      VB = VB - P(J)
+      Q(I) = Q(I) + W(J)
+      DO 240 S=1,N
+        IF ( BB(I,S) .EQ. J ) BB(I,S) = 0
+  240 CONTINUE
+      F(I) = BB(I,J)
+      IF ( UBB(J) .LE. VSTAR ) GO TO 200
+      UB = UBB(J) - VB
+      IFLAG = 1
+      GO TO 70
+C
+C PARTICULAR CASE ( 0-1 SINGLE KNAPSACK PROBLEM)
+C
+  250 IF ( MAXW .GT. K(1) ) VSTAR = - 4
+      IF ( ISUMW .LE. K(1) ) VSTAR = - 5
+      IF ( VSTAR .LT. 0 ) RETURN
+      K1 = K(1)
+      DO 260 J=1,N
+        PS(J) = P(J)
+        WS(J) = W(J)
+  260 CONTINUE
+      CALL SKP(N,K1,0,VSTAR)
+      DO 270 J=1,N
+        XSTAR(J) = XS(J)
+  270 CONTINUE
+      BCK = 0
+      RETURN
+      END
+      SUBROUTINE SIGMA(N,M,P,W,Q,I,B,KUB,UB)
+C
+C SUBROUTINE TO COMPUTE AN UPPER BOUND  UB  ON THE BEST
+C FINAL SOLUTION WHICH CAN BE OBTAINED FROM THE CURRENT
+C SOLUTION.
+C
+      INTEGER P(200),W(200),Q(4),B(201),UB
+      INTEGER BS,PS,QS,SB,WS,XS
+      COMMON /SNGL/ BS(200),PS(201),WS(201),XS(200)
+      COMMON /PUB/ LX(200),LXI(200),LR,LRI,LUBI
+      NS = 0
+      QS = 0
+      DO 10 J=I,M
+        QS = QS + Q(J)
+   10 CONTINUE
+      SB = 0
+      DO 20 J=1,N
+        LX(J) = 0
+        IF ( B(J) .EQ. 0 ) GO TO 20
+        NS = NS + 1
+        BS(NS) = J
+        PS(NS) = P(J)
+        WS(NS) = W(J)
+        SB = SB + W(J)
+   20 CONTINUE
+      IF ( SB .GT. QS ) GO TO 40
+      LR = QS - SB
+      UB = 0
+      IF ( NS .EQ. 0 ) RETURN
+      DO 30 J=1,NS
+        UB = UB + PS(J)
+        XS(J) = 1
+   30 CONTINUE
+      GO TO 50
+   40 CALL SKP(NS,QS,KUB,UB)
+      LR = QS
+   50 DO 60 J=1,NS
+        JJ = BS(J)
+        LX(JJ) = XS(J)
+   60 CONTINUE
+      RETURN
+      END
+      SUBROUTINE PI(N,M,P,W,Q,I,B,BB,KUB,BL,LB,PBL,V,XL)
+C
+C SUBROUTINE TO COMPUTE A FEASIBLE SOLUTION TO THE CURRENT
+C PROBLEM. THE SOLUTION IS STORED IN ARRAY  XL , THE
+C CORRESPONDING VALUE IN  LB .
+C
+      INTEGER BB(4,200),BL(4,201),XL(4,200)
+      INTEGER P(200),W(200),Q(4),B(201),PBL(4),V(4)
+      INTEGER BS,PB,PS,QS,SB,U,WS,XS
+      COMMON /SNGL/ BS(200),PS(201),WS(201),XS(200)
+C STEP 1
+      U = 0
+      DO 10 J=1,N
+        IF ( B(J) .EQ. 0 ) GO TO 10
+        U = U + 1
+        BS(U) = J
+   10 CONTINUE
+      DO 20 J=I,M
+        PBL(J) = 0
+        V(J) = 0
+   20 CONTINUE
+      LB = 0
+      IKUB = KUB
+      IF ( U .EQ. 0 ) RETURN
+      NS = 0
+      SB = 0
+      DO 30 J=1,U
+        JJ = BS(J)
+        IF ( BB(I,JJ) .NE. 0 ) GO TO 30
+        IF ( W(JJ) .GT. Q(I) ) GO TO 30
+        NS = NS + 1
+        SB = SB + W(JJ)
+        BL(I,NS) = JJ
+        PS(NS) = P(JJ)
+        WS(NS) = W(JJ)
+   30 CONTINUE
+      II = I
+C STEP 2
+   40 PBL(II) = NS
+      IF ( SB .GT. Q(II) ) GO TO 60
+      PB = 0
+      IF ( NS .EQ. 0 ) GO TO 80
+      DO 50 J=1,NS
+        PB = PB + PS(J)
+        XL(II,J) = 1
+   50 CONTINUE
+      GO TO 80
+   60 QS = Q(II)
+      KUB = 0
+      IF ( II .EQ. M ) KUB = IKUB
+      CALL SKP(NS,QS,KUB,PB)
+      DO 70 J=1,NS
+        XL(II,J) = XS(J)
+   70 CONTINUE
+   80 LB = LB + PB
+      IKUB = IKUB - PB
+      V(II) = PB
+      BL(II,NS+1) = N + 1
+C STEP 3
+      IF ( II .EQ. M ) RETURN
+      JB = 1
+      JBS = 0
+      DO 100 J=1,U
+        IF ( BS(J) .LT. BL(II,JB) ) GO TO 90
+        JB = JB + 1
+        IF ( XL(II,JB-1) .EQ. 1 ) GO TO 100
+   90   JBS = JBS + 1
+        BS(JBS) = BS(J)
+  100 CONTINUE
+      U = JBS
+      IF ( U .EQ. 0 ) RETURN
+      NS = 0
+      SB = 0
+      II = II + 1
+      DO 110 J=1,U
+        JJ = BS(J)
+        IF( W(JJ) .GT. Q(II) ) GO TO 110
+        NS = NS + 1
+        SB = SB + W(JJ)
+        BL(II,NS) = JJ
+        PS(NS) = P(JJ)
+        WS(NS) =  W(JJ)
+  110 CONTINUE
+      GO TO 40
+      END
+      SUBROUTINE PAR(I,II,UB,IFLAG,VB,LUB,LJ,LI,F,BB,Q,B,N)
+C
+C SUBROUTINE FOR PARAMETRIC COMPUTATION OF THE UPPER BOUNDS.
+C
+      INTEGER F(4),BB(4,200),Q(4),B(201),UB,VB,R,S
+      COMMON /PUB/ LX(200),LXI(200),LR,LRI,LUBI
+      IFLAG = 0
+      IF ( B(LJ) .NE. 0 ) GO TO 60
+      I1 = I - 1
+      IF ( I1 .LT. LI ) GO TO 20
+      IQ = 0
+      DO 10 R=LI,I1
+        IQ = IQ + Q(R)
+   10 CONTINUE
+      IF ( IQ .GT. LR ) RETURN
+   20 R = II
+      S = F(R)
+   30 IF ( S .NE. (-1) ) GO TO 40
+      R = R - 1
+      S = F(R)
+      GO TO 30
+   40 IF ( LX(S) .EQ. 0 ) RETURN
+      IF ( S .EQ. LJ ) GO TO 50
+      S = BB(R,S)
+      GO TO 30
+   50 UB = LUB - VB
+      IFLAG = 1
+      RETURN
+   60 I1 = I - 1
+      IF ( I1 .LT. 1 ) GO TO 80
+      IQ = 0
+      DO 70 R=1,I1
+        IQ = IQ + Q(R)
+   70 CONTINUE
+      IF ( IQ .GT. LRI ) RETURN
+   80 DO 90 J=1,N
+        IF ( B(J) .EQ. 1 ) GO TO 90
+        IF ( LXI(J) .EQ. 0 ) RETURN
+   90 CONTINUE
+      UB = LUBI - VB
+      IFLAG = 1
+      RETURN
+      END
+      SUBROUTINE SKP(NS,QS,KUB,VS)
+C
+C SUBROUTINE TO SOLVE THE 0-1 SINGLE KNAPSACK PROBLEM
+C
+C MAXIMIZE    VS = PS(1)*XS(1) + ... + PS(NS)*XS(NS)
+C SUBJECT TO       WS(1)*XS(1) + ... + WS(NS)*XS(NS) .LE. QS
+C                  XS(J) = 0 OR 1   FOR  J=1,...,NS
+C                  VS .GT. KUB
+C
+C THIS SUBROUTINE IS A MODIFIED VERSION OF SUBROUTINE KP01
+C WHICH APPEARED IN  COMPUTING 21, 81-86(1978).
+C
+      INTEGER BS,PS,WS,XS,QS,VS,DIFF,PR,R,T
+      INTEGER D(200),MIN(200),PBAR(200),WBAR(200),ZBAR(200)
+      COMMON /SNGL/ BS(200),PS(201),WS(201),XS(200)
+      VS = KUB
+      IP = 0
+      MS = QS
+      DO 10 L=1,NS
+        LL = L
+        IF ( WS(L) .GT. MS ) GO TO 20
+        IP = IP + PS(L)
+        MS = MS - WS(L)
+   10 CONTINUE
+   20 LL = LL - 1
+      IF ( MS .EQ. 0 ) GO TO 50
+      PS(NS+1) = 0
+      WS(NS+1) = QS + 1
+      LIM = IP + MS*PS(LL+2)/WS(LL+2)
+      A = IP + PS(LL+1)
+      B = (WS(LL+1) - MS)*PS(LL)
+      C = WS(LL)
+      LIM1 = A - B/C
+      IF ( LIM1 .GT. LIM ) LIM = LIM1
+      IF ( LIM .LE. VS ) RETURN
+      MINK = QS + 1
+      MIN(NS) = MINK
+      DO 30 J=2,NS
+        KK = NS + 2 - J
+        IF ( WS(KK) .LT. MINK ) MINK = WS(KK)
+        MIN(KK-1) = MINK
+   30 CONTINUE
+      DO 40 J=1,NS
+        D(J) = 0
+   40 CONTINUE
+      PR = 0
+      LOLD = NS
+      II = 1
+      GO TO 170
+   50 IF ( VS .GE. IP ) RETURN
+      VS = IP
+      DO 60 J=1,LL
+        XS(J) = 1
+   60 CONTINUE
+      NN = LL + 1
+      DO 70 J=NN,NS
+        XS(J) = 0
+   70 CONTINUE
+      QS = 0
+      RETURN
+   80 IF ( WS(II) .LE. QS ) GO TO 90
+      II1 = II + 1
+      IF ( VS .GE. QS*PS(II1)/WS(II1) + PR ) GO TO 280
+      II = II1
+      GO TO 80
+   90 IP = PBAR(II)
+      MS = QS - WBAR(II)
+      IN = ZBAR(II)
+      LL = NS
+      IF ( IN .GT. NS) GO TO 110
+      DO 100 L=IN,NS
+        LL = L
+        IF ( WS(L) .GT. MS ) GO TO 160
+        IP = IP + PS(L)
+        MS = MS - WS(L)
+  100 CONTINUE
+  110 IF ( VS .GE. IP + PR ) GO TO 280
+      VS = IP + PR
+      MFIRST = MS
+      NN = II - 1
+      DO 120 J=1,NN
+        XS(J) = D(J)
+  120 CONTINUE
+      DO 130 J=II,LL
+        XS(J) = 1
+  130 CONTINUE
+      IF ( LL .EQ. NS ) GO TO 150
+      NN = LL + 1
+      DO 140 J=NN,NS
+        XS(J) = 0
+  140 CONTINUE
+  150 IF ( VS .NE. LIM ) GO TO 280
+      QS = MFIRST
+      RETURN
+C Original submission set L = LL
+C Only path to label 160 is from IF statement in do 100
+C loop where LL and L are already equal.
+C Pointed out by steven serocki <sirocco@mac.com> Oct 2003
+C 160 L = LL
+  160 LL = LL - 1
+      IF ( MS .EQ. 0 ) GO TO 110
+      IF ( VS .GE. PR + IP + MS*PS(L)/WS(L) ) GO TO 280
+  170 WBAR(II) = QS - MS
+      PBAR(II) = IP
+      ZBAR(II) = LL + 1
+      D(II) = 1
+      NN = LL - 1
+      IF ( NN .LT. II ) GO TO 190
+      DO 180 J=II,NN
+        WBAR(J+1) = WBAR(J) - WS(J)
+        PBAR(J+1) = PBAR(J) - PS(J)
+        ZBAR(J+1) = LL + 1
+        D(J+1) = 1
+  180 CONTINUE
+  190 J1 = LL + 1
+      DO 200 J=J1,LOLD
+        WBAR(J) = 0
+        PBAR(J) = 0
+        ZBAR(J) = J
+  200 CONTINUE
+      LOLD = LL
+      QS = MS
+      PR = PR + IP
+      IF ( LL - (NS - 2) ) 240, 220, 210
+  210 II = NS
+      GO TO 250
+  220 IF ( QS .LT. WS(NS) ) GO TO 230
+      QS = QS - WS(NS)
+      PR = PR + PS(NS)
+      D(NS) = 1
+  230 II = NS - 1
+      GO TO 250
+  240 II = LL + 2
+      IF ( QS .GE. MIN(II-1) ) GO TO 80
+  250 IF ( VS .GE. PR ) GO TO 270
+      VS = PR
+      DO 260 J=1,NS
+        XS(J) = D(J)
+  260 CONTINUE
+      MFIRST = QS
+      IF ( VS .EQ. LIM ) RETURN
+  270 IF ( D(NS) .EQ. 0 ) GO TO 280
+      D(NS) = 0
+      QS = QS + WS(NS)
+      PR = PR - PS(NS)
+  280 NN = II - 1
+      IF ( NN .EQ. 0 ) GO TO 300
+      DO 290 J=1,NN
+        KK = II - J
+        IF ( D(KK) .EQ. 1 ) GO TO 310
+  290 CONTINUE
+  300 QS = MFIRST
+      RETURN
+  310 R = QS
+      QS = QS + WS(KK)
+      PR = PR - PS(KK)
+      D(KK) = 0
+      IF ( R .LT. MIN(KK) ) GO TO 320
+      II = KK + 1
+      GO TO 80
+  320 NN = KK + 1
+      II = KK
+  330 IF ( VS .GE. PR + QS*PS(NN)/WS(NN) ) GO TO 280
+      DIFF = WS(NN) - WS(KK)
+      IF ( DIFF ) 390, 340, 350
+  340 NN = NN + 1
+      GO TO 330
+  350 IF ( DIFF .GT. R ) GO TO 340
+      IF ( VS .GE. PR + PS(NN) ) GO TO 340
+      VS = PR + PS(NN)
+      DO 360 J=1,KK
+        XS(J) = D(J)
+  360 CONTINUE
+      JJ = KK + 1
+      DO 370 J=JJ,NS
+        XS(J) = 0
+  370 CONTINUE
+      XS(NN) = 1
+      MFIRST = QS - WS(NN)
+      IF ( VS .NE. LIM ) GO TO 380
+      QS = MFIRST
+      RETURN
+  380 R = R - DIFF
+      KK = NN
+      NN = NN + 1
+      GO TO 330
+  390 T = R - DIFF
+      IF ( T .LT. MIN(NN) ) GO TO 340
+      N = NN + 1
+      IF ( VS .GE. PR + PS(NN) + T*PS(N)/WS(N) ) GO TO 280
+      QS = QS - WS(NN)
+      PR = PR + PS(NN)
+      D(NN) = 1
+      II = NN + 1
+      WBAR(NN) = WS(NN)
+      PBAR(NN) = PS(NN)
+      ZBAR(NN) = II
+      N1 = NN + 1
+      DO 400 J=N1,LOLD
+        WBAR(J) = 0
+        PBAR(J) = 0
+        ZBAR(J) = J
+  400 CONTINUE
+      LOLD = NN
+      GO TO 80
+      END
+   10
+   92   57   49   68   60   43   67   84   87   72
+   23   31   29   44   53   38   63   85   89   82
+    2
+   70  127
+    3
+   50   81  120
+    4
+   31   37   48  152
+    1
+  165

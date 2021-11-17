@@ -1,0 +1,2226 @@
+C     ALGORITHM 589, COLLECTED ALGORITHMS FROM ACM.
+C     ALGORITHM APPEARED IN ACM-TRANS. MATH. SOFTWARE, VOL.8, NO. 4,
+C     DEC., 1982, P.371-375.
+C                                                                       MAN   10
+C     TEST PROGRAM FOR ROUTINE SICE (SINGLE PRECISION ROUTINE           MAN   20
+C     TO IMPROVE COMPUTED EIGENVALUES).                                 MAN   30
+C                                                                       MAN   40
+C     THIS ROUTINE SETS UP THE MATRIX, FINDS THE EIGENVALUE IN          MAN   50
+C     SINGLE PRECISION AND DISPLAYS THE RESULTS.                        MAN   60
+C                                                                       MAN   70
+C     IN THIS TEST PROGRAM FOR SICE                                     MAN   80
+C     ROUTINES INCLUDED FALL INTO TWO CATEGORIES,                       MAN   90
+C                                                                       MAN  100
+C         TESTING -- MAIN                                               MAN  110
+C                    MATGEN                                             MAN  120
+C                    OUT                                                MAN  130
+C                    IDAMAX(FROM BLAS)                                  MAN  140
+C                    DSCAL(FROM BLAS)                                   MAN  150
+C                    SSWAP(FROM BLAS)                                   MAN  160
+C                    SASUM(FROM BLAS)                                   MAN  170
+C                                                                       MAN  180
+C         DRIVER FOR SICE --                                            MAN  190
+C                    SICEDR                                             MAN  200
+C                                                                       MAN  210
+C         THE DRIVER, SICEDR, IS DIVIDED INTO TWO PARTS                 MAN  220
+C                                                                       MAN  230
+C            PRE-SICE-- ORTHES(FROM EISPACK)                            MAN  240
+C                       ORTRAN(FROM EISPACK)                            MAN  250
+C                       HQRORT(MODIFIED EISPACK)                        MAN  260
+C                                                                       MAN  270
+C            SICE    -- SICE                                            MAN  280
+C                       CANDS                                           MAN  290
+C                       SDADD                                           MAN  300
+C                       SDDDOT                                          MAN  310
+C                       ISAMAX(FROM BLAS)                               MAN  320
+C                       SAXPY(FROM BLAS)                                MAN  330
+C                       SCOPY(FROM BLAS)                                MAN  340
+C                       SDOT(FROM BLAS)                                 MAN  350
+C                       SROT(FROM BLAS)                                 MAN  360
+C                       SROTG(FROM BLAS)                                MAN  370
+C                       SSCAL(FROM BLAS)                                MAN  380
+C                       STRSL(FROM LINPACK)                             MAN  390
+C                                                                       MAN  400
+      INTEGER I, K, N, LB, LDA, JOB, IUB, INF, NOMATS, IDAMAX, IMAT,    MAN  410
+     * INIT, IMAX, PRINT, ISUM                                          MAN  420
+      REAL A(40,40), X(40,40), WR(40), WI(40), B(40,40), LAMDA, R(40),  MAN  430
+     * Z(40), Y1(40), Y2(40), SDDDOT, Z1(40), Z2(40), Z3(40), Q(40,40), MAN  440
+     * CW, XNORM, ANORM, TEMP, V(40), SASUM, WERNRM, VERNRM             MAN  450
+      DOUBLE PRECISION DW, DX(40)                                       MAN  460
+C                                                                       MAN  470
+      REAL ST(2)                                                        MAN  480
+C                                                                       MAN  490
+C     IF PRINT = 1 THE ORIGINAL MATRIX AND THE FACTORED MATRICES ARE    MAN  500
+C                  DISPLAYED, AS WELL AS THE EIGENVECTOR.               MAN  510
+C     IF PRINT = 0 THE ABOVE INFORMATION IS SUPPRESSED.                 MAN  520
+C                                                                       MAN  530
+C                                                                       MAN  540
+C     NOUT=FORTRAN OUTPUT UNIT NUMBER.                                  MAN  550
+      NOUT = 6                                                          MAN  560
+      PRINT = 0                                                         MAN  570
+C                                                                       MAN  580
+      WRITE (NOUT,99999)                                                MAN  590
+99999 FORMAT (1H1, 46H     THIS IS THE TEST PROGRAM FOR SICE (SINGLE/   MAN  600
+     * 57H PRECISION ROUTINE TO IMPROVE COMPUTED REAL EIGENVALUES)./    MAN  610
+     * 43H ROUTINES INCLUDED IN THIS TEST PACKAGE ARE/14H IN TWO CATEGO,MAN  620
+     * 5HRIES,//19H    TESTING -- MAIN/15X, 6HMATGEN/15X, 3HOUT/15X,    MAN  630
+     * 17HIDAMAX(FROM BLAS)/15X, 16HDSCAL(FROM BLAS)/15X, 10HSSWAP(FROM,MAN  640
+     * 6H BLAS)/15X, 16HSASUM(FROM BLAS)//21H   DRIVER FOR SICE --/15X, MAN  650
+     * 6HSICEDR//49H   THE DRIVER, SICEDR, IS DIVIDED INTO TWO PARTS,// MAN  660
+     * 3X, 35H    PRE-SICE-- ORTHES(FROM EISPACK)/18X, 13HORTRAN(FROM E,MAN  670
+     * 7HISPACK)/18X, 24HHQRORT(MODIFIED EISPACK)//3X, 13H    SICE    -,MAN  680
+     * 6H- SICE/18X, 5HCANDS/18X, 5HSDADD/18X, 6HSDDDOT/18X, 8HISAMAX(F,MAN  690
+     * 9HROM BLAS)/18X, 16HSAXPY(FROM BLAS)/18X, 16HSCOPY(FROM BLAS))   MAN  700
+      WRITE (NOUT,99998)                                                MAN  710
+99998 FORMAT (18X, 15HSDOT(FROM BLAS)/18X, 15HSROT(FROM BLAS)/18X,      MAN  720
+     * 16HSROTG(FROM BLAS)/18X, 16HSSCAL(FROM BLAS)/18X, 11HSTRSL(FROM ,MAN  730
+     * 8HLINPACK)/)                                                     MAN  740
+      IF (PRINT.EQ.1) WRITE (NOUT,99997)                                MAN  750
+99997 FORMAT (54H DISPLAYED IS THE ORIGINAL MATRIX, THE ORTHOGONAL MATR,MAN  760
+     * 2HIX/55H USED TO REDUCE THE ORIGINAL MATRIX TO QUASI-TRIANGULAR/ MAN  770
+     * 53H FORM, THE QUASI-TRIANGULAR MATRIX AND THE EIGENVALUE/        MAN  780
+     * 16H TO BE IMPROVED.)                                             MAN  790
+      WRITE (NOUT,99996)                                                MAN  800
+99996 FORMAT (54H ROUTINE SICE IS CALLED TO IMPROVE EACH OF THE EIGENVA,MAN  810
+     * 4HLUES/32H AND ITS ASSOCIATED EIGENVECTOR./18H THE IMPROVED EIGE,MAN  820
+     * 19HNVALUE FROM SICE IS/38H DISPLAYED AS ARE ERROR BOUNDS AND RES,MAN  830
+     * 6HIDUAL.)                                                        MAN  840
+C                                                                       MAN  850
+      LDA = 40                                                          MAN  860
+      NOMATS = 9                                                        MAN  870
+      ISUM = 0                                                          MAN  880
+C                                                                       MAN  890
+C     MAIN LOOP FOR TEST MATRICES                                       MAN  900
+C                                                                       MAN  910
+      DO 120 IMAT=1,NOMATS                                              MAN  920
+C                                                                       MAN  930
+C        GENERATE TEST MATRIX                                           MAN  940
+C                                                                       MAN  950
+        WRITE (NOUT,99990)                                              MAN  960
+        CALL MATGEN(A, LDA, N, LB, IUB, X, JOB, 1, IMAT)                MAN  970
+        IF (PRINT.EQ.0) GO TO 10                                        MAN  980
+        WRITE (NOUT,99995)                                              MAN  990
+99995   FORMAT (29H  ORIGINAL MATRIX (BY COLUMN))                       MAN 1000
+        CALL OUT(A, LDA, N, N)                                          MAN 1010
+   10   CONTINUE                                                        MAN 1020
+        INIT = 1                                                        MAN 1030
+C                                                                       MAN 1040
+C        CALL SICEDR TO REDUCE THE MATRIX TO HESSENBERG FORM.           MAN 1050
+C                                                                       MAN 1060
+        CALL SICEDR(LDA, N, A, B, Q, LAMDA, V, CW, Z, K, Y1, Y2, R, Z1, MAN 1070
+     *   WR, WI, JOB, INF, INIT)                                        MAN 1080
+        IF (PRINT.EQ.0) GO TO 20                                        MAN 1090
+        WRITE (NOUT,99994)                                              MAN 1100
+99994   FORMAT (34H THE ORTHOGONAL MATRIX (BY COLUMN))                  MAN 1110
+        CALL OUT(Q, LDA, N, N)                                          MAN 1120
+        WRITE (NOUT,99993)                                              MAN 1130
+99993   FORMAT (34H THE TRIANGULAR MATRIX (BY COLUMN))                  MAN 1140
+        CALL OUT(B, LDA, N, N)                                          MAN 1150
+   20   CONTINUE                                                        MAN 1160
+        WRITE (NOUT,99992)                                              MAN 1170
+99992   FORMAT (/16H THE EIGENVALUES)                                   MAN 1180
+        CALL OUT(WR, LDA, N, 1)                                         MAN 1190
+        CALL OUT(WI, LDA, N, 1)                                         MAN 1200
+C                                                                       MAN 1210
+C        SETUP TO IMPROVE THE EIGENVALUE                                MAN 1220
+C                                                                       MAN 1230
+C                                                                       MAN 1240
+C        IMPROVE EIGENVALUES LB THROUGH IUB OF THE MATRIX.              MAN 1250
+C                                                                       MAN 1260
+        DO 110 K=LB,IUB                                                 MAN 1270
+          IF (WI(K).NE.0.0E0) GO TO 110                                 MAN 1280
+          LAMDA = WR(K)                                                 MAN 1290
+          WRITE (NOUT,99991)                                            MAN 1300
+99991     FORMAT (1H , 1X, 79(1H+)/)                                    MAN 1310
+99990     FORMAT (1H1, 1X, 79(1H*)/)                                    MAN 1320
+          WRITE (NOUT,99989) K                                          MAN 1330
+99989     FORMAT (15H CORRECTING THE, I5, 14H-TH EIGEN-PAIR//)          MAN 1340
+          WRITE (NOUT,99988) LAMDA                                      MAN 1350
+99988     FORMAT (/35H  THE EIGENVALUE TO BE CORRECTED = , 1PE16.8)     MAN 1360
+          IF (JOB.EQ.0) GO TO 50                                        MAN 1370
+          CALL SCOPY(N, X(1,K), 1, V, 1)                                MAN 1380
+          IF (PRINT.EQ.0) GO TO 40                                      MAN 1390
+          WRITE (NOUT,99987)                                            MAN 1400
+99987     FORMAT (/34H  THE EIGENVECTOR TO BE CORRECTED )               MAN 1410
+          DO 30 I=1,N                                                   MAN 1420
+            WRITE (NOUT,99986) V(I)                                     MAN 1430
+99986       FORMAT (10X, 1PE16.8)                                       MAN 1440
+   30     CONTINUE                                                      MAN 1450
+   40     CONTINUE                                                      MAN 1460
+   50     CONTINUE                                                      MAN 1470
+          INIT = 0                                                      MAN 1480
+C                                                                       MAN 1490
+C           CALL SICEDR TO IMPROVE THE K-TH EIGENPAIR.                  MAN 1500
+C                                                                       MAN 1510
+          CALL SICEDR(LDA, N, A, B, Q, LAMDA, V, CW, Z, K, Y1, Y2, R,   MAN 1520
+     *     Z1, Z2, Z3, JOB, INF, INIT)                                  MAN 1530
+          IF (INF.EQ.0) GO TO 60                                        MAN 1540
+          ISUM = ISUM + 1                                               MAN 1550
+          WRITE (NOUT,99985) INF                                        MAN 1560
+99985     FORMAT (//33H *****ERROR FROM SICE***** INFO =, I5)           MAN 1570
+   60     CONTINUE                                                      MAN 1580
+          DW = DBLE(LAMDA) + DBLE(CW)                                   MAN 1590
+          LAMDA = DW                                                    MAN 1600
+          DO 70 I=1,N                                                   MAN 1610
+            DX(I) = DBLE(V(I)) + DBLE(Z(I))                             MAN 1620
+            V(I) = DX(I)                                                MAN 1630
+   70     CONTINUE                                                      MAN 1640
+C                                                                       MAN 1650
+C           NORMALIZE THE EIGENVECTOR                                   MAN 1660
+C                                                                       MAN 1670
+          IMAX = IDAMAX(N,DX,1)                                         MAN 1680
+          CALL DSCAL(N, 1.0D0/DABS(DX(IMAX)), DX, 1)                    MAN 1690
+C                                                                       MAN 1700
+          WRITE (NOUT,99984) DW                                         MAN 1710
+99984     FORMAT (26H  THE CORRECTED EIGENVALUE, 7X, 2H= , 1PD24.16//)  MAN 1720
+          IF (PRINT.EQ.0) GO TO 90                                      MAN 1730
+          WRITE (NOUT,99983)                                            MAN 1740
+99983     FORMAT (/16H THE EIGENVECTOR)                                 MAN 1750
+          DO 80 I=1,N                                                   MAN 1760
+            WRITE (NOUT,99982) DX(I)                                    MAN 1770
+99982       FORMAT (10X, 1PD24.16)                                      MAN 1780
+   80     CONTINUE                                                      MAN 1790
+   90     CONTINUE                                                      MAN 1800
+C                                                                       MAN 1810
+C           CALCULATE THE RESIDUAL.                                     MAN 1820
+C                                                                       MAN 1830
+          ANORM = 0.0E0                                                 MAN 1840
+          XNORM = SASUM(N,V,1)                                          MAN 1850
+          DO 100 I=1,N                                                  MAN 1860
+            ST(1) = -LAMDA                                              MAN 1870
+            ST(2) = V(I)                                                MAN 1880
+            R(I) = -SDDDOT(N,A(I,1),LDA,V,1,ST)                         MAN 1890
+            TEMP = SASUM(N,A(1,I),1)                                    MAN 1900
+            IF (TEMP.GT.ANORM) ANORM = TEMP                             MAN 1910
+  100     CONTINUE                                                      MAN 1920
+          TEMP = SASUM(N,R,1)/(ANORM*XNORM)                             MAN 1930
+          WRITE (NOUT,99981) TEMP                                       MAN 1940
+99981     FORMAT (/45H NORM OF RESIDUAL FROM CORRECTED EIGEN-PAIR =,    MAN 1950
+     *     1PE16.8)                                                     MAN 1960
+C                                                                       MAN 1970
+C           CALL SICEDR TO COMPUTE ERROR BOUNDS.                        MAN 1980
+C                                                                       MAN 1990
+          CALL SICEDR(LDA, N, A, B, Q, LAMDA, V, CW, Z, K, Y1, Y2, R,   MAN 2000
+     *     Z1, Z2, Z3, 2, INF, INIT)                                    MAN 2010
+          WERNRM = ABS(CW)                                              MAN 2020
+          VERNRM = SASUM(N,Z,1)                                         MAN 2030
+          WRITE (NOUT,99980) WERNRM                                     MAN 2040
+99980     FORMAT (/45H NORM OF ERROR BOUND FOR THE EIGENVALUE     =,    MAN 2050
+     *     1PE16.8)                                                     MAN 2060
+          WRITE (NOUT,99979) VERNRM                                     MAN 2070
+99979     FORMAT (/45H NORM OF ERROR BOUND FOR THE EIGENVECTOR    =,    MAN 2080
+     *     1PE16.8)                                                     MAN 2090
+  110   CONTINUE                                                        MAN 2100
+  120 CONTINUE                                                          MAN 2110
+      WRITE (NOUT,99978) ISUM                                           MAN 2120
+99978 FORMAT (///41H1***** NUMBER OF ERRORS DURING TEST *****, I5)      MAN 2130
+      WRITE (NOUT,99977)                                                MAN 2140
+99977 FORMAT (///24H ***** END OF TEST *****///)                        MAN 2150
+      STOP                                                              MAN 2160
+      END                                                               MAN 2170
+      SUBROUTINE OUT(A, LDA, N, M)                                      OUT   10
+      INTEGER I, J, K, M, N, IC, LDA, ICB, ICE
+      REAL A(LDA,1)
+C
+C     GENERAL PURPOSE OUTPUT ROUTINE FOR THE MATRIX A WHICH
+C     HAS LEADING DIMENSION LDA AND IS N BY M.
+C
+      IF (M.EQ.1) GO TO 30
+      IC = (M+4)/5
+      ICB = 1
+      ICE = 5
+      DO 20 K=1,IC
+        IF (ICE.GT.M) ICE = M
+        DO 10 I=1,N
+          WRITE (6,99999) (A(I,J),J=ICB,ICE)
+99999     FORMAT (1P5E16.8)
+   10   CONTINUE
+        ICB = ICB + 5
+        ICE = ICE + 5
+        WRITE (6,99998)
+99998   FORMAT (/)
+   20 CONTINUE
+      WRITE (6,99997)
+99997 FORMAT (///)
+      RETURN
+   30 CONTINUE
+      WRITE (6,99999) (A(I,1),I=1,N)
+      WRITE (6,99997)
+      RETURN
+      END
+      INTEGER FUNCTION IDAMAX(N, DX, INCX)                              IDA   10
+C
+C     FINDS THE INDEX OF ELEMENT HAVING MAX. DABSOLUTE VALUE.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      DOUBLE PRECISION DX(1), DMAX
+      INTEGER I, INCX, IX, N
+C
+      IDAMAX = 0
+      IF (N.LT.1) RETURN
+      IDAMAX = 1
+      IF (N.EQ.1) RETURN
+      IF (INCX.EQ.1) GO TO 30
+C
+C        CODE FOR INCREMENT NOT EQUAL TO 1
+C
+      IX = 1
+      DMAX = DABS(DX(1))
+      IX = IX + INCX
+      DO 20 I=2,N
+        IF (DABS(DX(IX)).LE.DMAX) GO TO 10
+        IDAMAX = I
+        DMAX = DABS(DX(IX))
+   10   IX = IX + INCX
+   20 CONTINUE
+      RETURN
+C
+C        CODE FOR INCREMENT EQUAL TO 1
+C
+   30 DMAX = DABS(DX(1))
+      DO 40 I=2,N
+        IF (DABS(DX(I)).LE.DMAX) GO TO 40
+        IDAMAX = I
+        DMAX = DABS(DX(I))
+   40 CONTINUE
+      RETURN
+      END
+      SUBROUTINE DSCAL(N, DA, DX, INCX)                                 DSC   10
+C
+C     SCALES A VECTOR BY A CONSTANT.
+C     USES UNROLLED LOOPS FOR INCREMENT EQUAL TO 1.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      DOUBLE PRECISION DA, DX(1)
+      INTEGER I, INCX, M, MP1, N, NINCX
+C
+      IF (N.LE.0) RETURN
+      IF (INCX.EQ.1) GO TO 20
+C
+C        CODE FOR INCREMENT NOT EQUAL TO 1
+C
+      NINCX = N*INCX
+      DO 10 I=1,NINCX,INCX
+        DX(I) = DA*DX(I)
+   10 CONTINUE
+      RETURN
+C
+C        CODE FOR INCREMENT EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,5)
+      IF (M.EQ.0) GO TO 40
+      DO 30 I=1,M
+        DX(I) = DA*DX(I)
+   30 CONTINUE
+      IF (N.LT.5) RETURN
+   40 MP1 = M + 1
+      DO 50 I=MP1,N,5
+        DX(I) = DA*DX(I)
+        DX(I+1) = DA*DX(I+1)
+        DX(I+2) = DA*DX(I+2)
+        DX(I+3) = DA*DX(I+3)
+        DX(I+4) = DA*DX(I+4)
+   50 CONTINUE
+      RETURN
+      END
+      SUBROUTINE SSWAP(N, SX, INCX, SY, INCY)                           SSW   10
+C
+C     INTERCHANGES TWO VECTORS.
+C     USES UNROLLED LOOPS FOR INCREMENTS EQUAL TO 1.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SX(1), SY(1), STEMP
+      INTEGER I, INCX, INCY, IX, IY, M, MP1, N
+C
+      IF (N.LE.0) RETURN
+      IF (INCX.EQ.1 .AND. INCY.EQ.1) GO TO 20
+C
+C       CODE FOR UNEQUAL INCREMENTS OR EQUAL INCREMENTS NOT EQUAL
+C         TO 1
+C
+      IX = 1
+      IY = 1
+      IF (INCX.LT.0) IX = (-N+1)*INCX + 1
+      IF (INCY.LT.0) IY = (-N+1)*INCY + 1
+      DO 10 I=1,N
+        STEMP = SX(IX)
+        SX(IX) = SY(IY)
+        SY(IY) = STEMP
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      RETURN
+C
+C       CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+C
+C       CLEAN-UP LOOP
+C
+   20 M = MOD(N,3)
+      IF (M.EQ.0) GO TO 40
+      DO 30 I=1,M
+        STEMP = SX(I)
+        SX(I) = SY(I)
+        SY(I) = STEMP
+   30 CONTINUE
+      IF (N.LT.3) RETURN
+   40 MP1 = M + 1
+      DO 50 I=MP1,N,3
+        STEMP = SX(I)
+        SX(I) = SY(I)
+        SY(I) = STEMP
+        STEMP = SX(I+1)
+        SX(I+1) = SY(I+1)
+        SY(I+1) = STEMP
+        STEMP = SX(I+2)
+        SX(I+2) = SY(I+2)
+        SY(I+2) = STEMP
+   50 CONTINUE
+      RETURN
+      END
+      REAL FUNCTION SASUM(N, SX, INCX)                                  SAS   10
+C
+C     TAKES THE SUM OF THE ABSOLUTE VALUES.
+C     USES UNROLLED LOOPS FOR INCREMENT EQUAL TO ONE.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SX(1), STEMP
+      INTEGER I, INCX, M, MP1, N, NINCX
+C
+      SASUM = 0.0E0
+      STEMP = 0.0E0
+      IF (N.LE.0) RETURN
+      IF (INCX.EQ.1) GO TO 20
+C
+C        CODE FOR INCREMENT NOT EQUAL TO 1
+C
+      NINCX = N*INCX
+      DO 10 I=1,NINCX,INCX
+        STEMP = STEMP + ABS(SX(I))
+   10 CONTINUE
+      SASUM = STEMP
+      RETURN
+C
+C        CODE FOR INCREMENT EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,6)
+      IF (M.EQ.0) GO TO 40
+      DO 30 I=1,M
+        STEMP = STEMP + ABS(SX(I))
+   30 CONTINUE
+      IF (N.LT.6) GO TO 60
+   40 MP1 = M + 1
+      DO 50 I=MP1,N,6
+        STEMP = STEMP + ABS(SX(I)) + ABS(SX(I+1)) + ABS(SX(I+2)) +
+     *   ABS(SX(I+3)) + ABS(SX(I+4)) + ABS(SX(I+5))
+   50 CONTINUE
+   60 SASUM = STEMP
+      RETURN
+      END
+      SUBROUTINE SICEDR(LD, N, A, T, Q, W, X, CW, CX, K, Y1, Y2, R, Z1, SIC   10
+     * WR, WI, JOB, INFO, INIT)
+C
+      INTEGER I, J, IP1, IERR, LD, N, K, JOB, INFO, INIT
+      REAL A(LD,1), T(LD,1), Q(LD,1), WR(1), WI(1)
+      REAL W, X(1), CW, CX(1), Y1(1), Y2(1), R(1), Z1(1)
+C
+C     THIS SUBROUTINE PROVIDES TWO FUNCTIONS DEPENDING ON
+C     THE VALUE OF INIT.
+C
+C          1) TO REDUCE A MATRIX TO QUASI-TRIANGULAR FORM,
+C             ACCUMULATING THE ORTHOGONAL TRANSFORMATIONS,
+C             AND DETERMINE THE EIGENVALUES OF THE MATRIX.
+C
+C          2) TO IMPROVE THE ACCURACY OF AN EIGENVALUE AND
+C             IMPROVE THE EIGENVECTOR OR COMPUTE AND IMPROVE THE
+C             EIGENVECTOR, GIVEN THE ORIGINAL MATRIX, AN
+C             APPROXIMATE EIGENVALUE, THE QUASI-TRIANGULAR MATRIX,
+C             AND THE ORTHOGONAL MATRIX WHICH PRODUCED THE
+C             QUASI-TRIANGULAR FORM.
+C
+C     THESE FUNCTIONS ARE SIGNALED BY THE PARAMETER INIT.
+C
+C     INIT = 1  PRE-SICE
+C               THE MATRIX, A, IS REDUCED TO QUASI-TRIANGULAR FORM, T,
+C               THE ORTHOGONAL TRANSFORMATIONS ARE ACCUMULATED IN Q AND
+C               THE EIGENVALUES ARE DETERMINED IN WR AND WI.
+C
+C     INIT = 0  SICE
+C               THE K-TH EIGENVALUE PROVIDED IN W IS IMPROVED AND THE
+C               EIGENVECTOR EITHER IMPROVED OR COMPUTED IN X.
+C
+C     ******************************************************************
+C
+C     CASE INIT = 1 PRE-SICE(REDUCE THE MATRIX TO QUASI-TRIANGULAR FORM)
+C
+C     ON ENTRY
+C
+C        LD      INTEGER
+C                THE LEADING DIMENSION OF THE ARRAYS A,T, AND Q.
+C
+C        N       INTEGER
+C                THE ORDER OF THE MATRICES A,T,AND Q .
+C
+C        A       REAL(LD,N)
+C                CONTAINS THE ORIGINAL MATRIX.
+C
+C        INIT    INTEGER
+C                INIT = 1  PRE-SICE
+C                THE MATRIX, A, IS REDUCED TO QUASI-TRIANGULAR FORM, T,
+C                THE ORTHOGONAL TRANSFORMATIONS ARE ACCUMULATED IN Q AND
+C                THE EIGENVALUES ARE DETERMINED IN WR AND WI.
+C
+C      ON RETURN
+C
+C        T       REAL(LD,N)
+C                CONTAINS THE UPPER QUASI-TRIANGULAR MATRIX PRODUCED
+C                FROM THE EIGENVALUE DECOMPOSITION. BY QUASI-TRIANGULAR
+C                WE MEAN THAT THE MATRIX FALLS SHORT OF TRIANGULAR
+C                BECAUSE OF POSSIBLE 2 BY 2 BLOCKS ON THE MAIN DIAGONAL
+C                WHICH CORRESPOND TO COMPLEX CONJUGATE PAIRS OF
+C                EIGENVALUES. THE SUBDIAGONAL OF T IS USED BY THIS
+C                ROUTINE. ANY INFORMATION THE USER MAY HAVE IN THE
+C                SUBDIAGONAL OF T ON ENTRY WILL BE DESTROYED ON RETURN.
+C                THE ELEMENTS BELOW THE SUBDIAGONAL ARE NOT REFERRED TO.
+C
+C        Q       REAL(LD,N)
+C                CONTAINS THE ORTHOGONAL MATRIX USED TO REDUCE THE
+C                ORIGINAL MATRIX TO QUASI-TRIANGULAR FORM.
+C
+C        WR      REAL(N)
+C                CONTAINS REAL PART OF THE APPROXIMATE EIGENVALUES.
+C
+C        WI      REAL(N)
+C                CONTAINS IMAGINARY PART OF THE APPROXIMATE EIGENVALUES.
+C
+C        Y1      REAL(N)
+C                WORK VECTOR.
+C
+C     PARAMETERS W,X,CW,CX,K,Y2,R,Z1,JOB,INFO ARE NOT REFERENCED
+C     IF INIT = 1.
+C
+C     ******************************************************************
+C
+C     CASE INIT = 0 SICE (IMPROVE THE COMPUTED EIGENVALUE)
+C
+C     ON ENTRY
+C
+C        LD      INTEGER
+C                THE LEADING DIMENSION OF THE ARRAYS A,T, AND Q.
+C
+C        N       INTEGER
+C                THE ORDER OF THE MATRICES A,T,AND Q .
+C
+C        A       REAL(LD,N)
+C                CONTAINS THE ORIGINAL MATRIX.
+C
+C        T       REAL(LD,N)
+C                CONTAINS THE UPPER QUASI-TRIANGULAR MATRIX PRODUCED
+C                FROM THE EIGENVALUE DECOMPOSITION. BY QUASI-TRIANGULAR
+C                WE MEAN THAT THE MATRIX FALLS SHORT OF TRIANGULAR
+C                BECAUSE OF POSSIBLE 2 BY 2 BLOCK ON THE MAIN DIAGONAL
+C                WHICH CORRESPOND TO COMPLEX CONJUGATE PAIRS OF
+C                EIGENVALUES THE SUBDIAGONAL OF T IS USED BY THIS
+C                ROUTINE. ANY INFORMATION THE USER MAY HAVE IN THE
+C                SUBDIAGONAL OF T ON ENTRY WILL BE DESTROYED ON RETURN.
+C                THE ELEMENTS BELOW THE SUBDIAGONAL ARE NOT REFERRED TO.
+C
+C        Q       REAL(LD,N)
+C                CONTAINS THE ORTHOGONAL MATRIX USED TO REDUCE THE
+C                ORIGINAL MATRIX TO QUASI-TRIANGULAR FORM.
+C
+C        W       REAL
+C                CONTAINS THE EIGENVALUE TO BE IMPROVED.
+C
+C        X       REAL(N)
+C                CONTAINS THE EIGENVECTOR TO BE IMPROVED.
+C                SEE PARAMETER JOB BELOW, IF JOB = 0, NO
+C                VALUE NEED BE SUPPLIED TO X.
+C
+C        K       INTEGER
+C                IS THE POSITION ON THE DIAGONAL OF T WHERE THE
+C                EIGENVALUE, W, IS FOUND.
+C
+C        JOB     INTEGER
+C                IS A FLAG WHICH IS SET TO
+C                0 IF NO INITIAL APPROXIMATE EIGENVECTOR IS SUPPLIED.
+C                1 IF AN INITIAL APPROXIMATE EIGENVECTOR IS SUPPLIED
+C                2 IF AN INITIAL APPROXIMATE EIGENVECTOR IS SUPPLIED
+C                  THEN JUST ONE ITERATION IS TO BE TAKEN.
+C                  THIS CAN BE USED TO ESTIMATE THE ERRORS
+C                  BETWEEN THE TRUE AND THE COMPUTED EIGENVALUE AND
+C                  EIGENVECTOR IF THE QUANTITIES CW AND CX ARE EXAMINED.
+C                  THE VALUES OF W AND X ARE LEFT UNCHANGED.
+C
+C        INIT    INTEGER
+C                INIT = 0  SICE
+C                THE K-TH EIGENVALUE PROVIDED IN W IS IMPROVED AND THE
+C                EIGENVECTOR EITHER IMPROVED OR COMPUTED IN X.
+C
+C     ON RETURN
+C
+C        T       IS TRANSFORMED TO AN UPPER TRIANGULAR MATRIX.
+C
+C        W       CONTAINS THE IMPROVED EIGENVALUE.
+C
+C        X       REAL(N)
+C                CONTAINS THE EIGENVECTOR.
+C
+C        CW      REAL
+C                CONTAINS THE LAST CORRECTION TO W. THIS CAN
+C                BE ADDED TO W USING DOUBLE PRECISION AND A
+C                MORE ACCURATE EIGENVALUE WILL RESULT.
+C
+C        CX      REAL(N)
+C                CONTAINS THE LAST CORRECTION TO X. THIS CAN
+C                BE ADDED TO X USING DOUBLE PRECISION AND A
+C                MORE ACCURATE EIGENVECTOR WILL RESULT.
+C
+C        INFO    INTEGER
+C                = 0 FOR NORMAL RETURN
+C                = 10 IF THE ALGORITHM HAS FAILED TO CONVERGE AFTER
+C                  10 ITERATIONS. THIS SIGNALS THE CASE WHERE
+C                  CLOSE EIGENVALUES ARE PRESENT. THE RESULTS MAYBE
+C                  ACCEPTABLE EVEN IF INFO = 10, THE USER SHOULD EXAMINE
+C                  CW TO DETERMINE THE ERROR.
+C
+C        Y1,Y2,R,Z1,WR,WI
+C                REAL(N)
+C                WORK VECTORS.
+C
+C     ALL PARAMETERS ARE REFERENCED IF INIT = 0.
+C
+C     THIS ROUTINE CALLS THE FOLLOWING FUNCTIONS AND SUBROUTINES -
+C
+C        FORTRAN ABS
+C        BLAS SCOPY
+C        EISPACK ORTHES,ORTRAN
+C        OTHER HQRORT,SICE
+C
+      IF (INIT.EQ.0) GO TO 50
+C
+C     USE EISPACK TO REDUCE MATRIX TO HESSENBERG FORM
+C     AND SAVE THE TRANSFORMATIONS
+C
+      DO 10 I=1,N
+        CALL SCOPY(N, A(1,I), 1, T(1,I), 1)
+   10 CONTINUE
+      CALL ORTHES(LD, N, 1, N, T, Y1)
+      CALL ORTRAN(LD, N, 1, N, T, Y1, Q)
+C
+C     FIND THE REAL EIGENVALUES OF HESSENBERG FORM, COLLECTING THE
+C     TRANSFORMATION IN Q.
+C     HQRORT IS A MODIFICATION OF THE EISPACK ROUTINE HQR2.
+C     (SEE PAGE 100-101 OF LECT. NOTES IN COMP. SCI. VOL. 6
+C     MATRIX EIGENSYSTEM ROUTINES - EISPACK GUIDE, B.T. SMITH ET AL.
+C     1976.)
+C
+      CALL HQRORT(LD, N, 1, N, T, WR, WI, Q, IERR)
+      DO 40 I=1,N
+        IP1 = I + 1
+        IF (ABS(WI(I)).NE.0.0) IP1 = IP1 + 1
+        IF (IP1.GT.N) GO TO 30
+        DO 20 J=IP1,N
+          T(J,I) = 0.0
+   20   CONTINUE
+   30   CONTINUE
+   40 CONTINUE
+      RETURN
+C
+   50 CONTINUE
+C
+C     IMPROVE THE EIGENVALUE AND GENERATE THE EIGENVECTOR
+C
+      CALL SICE(LD, N, A, T, Q, W, X, CW, CX, K, Y1, Y2, R, Z1, WR, WI,
+     * JOB, INFO)
+C
+      RETURN
+C
+      END
+      SUBROUTINE ORTHES(NM, N, LOW, IGH, A, ORT)                        ORT   10
+C
+      INTEGER I, J, M, N, II, JJ, LA, MP, NM, IGH, KP1, LOW
+      REAL A(NM,N), ORT(IGH)
+      REAL F, G, H, SCALE
+      REAL SQRT, ABS, SIGN
+C
+C     THIS SUBROUTINE IS A TRANSLATION OF THE ALGOL PROCEDURE ORTHES,
+C     NUM. MATH. 12, 349-368(1968) BY MARTIN AND WILKINSON.
+C     HANDBOOK FOR AUTO. COMP., VOL.II-LINEAR ALGEBRA, 339-358(1971).
+C
+C     GIVEN A REAL GENERAL MATRIX, THIS SUBROUTINE
+C     REDUCES A SUBMATRIX SITUATED IN ROWS AND COLUMNS
+C     LOW THROUGH IGH TO UPPER HESSENBERG FORM BY
+C     ORTHOGONAL SIMILARITY TRANSFORMATIONS.
+C
+C     ON INPUT-
+C
+C        NM MUST BE SET TO THE ROW DIMENSION OF TWO-DIMENSIONAL
+C          ARRAY PARAMETERS AS DECLARED IN THE CALLING PROGRAM
+C          DIMENSION STATEMENT,
+C
+C        N IS THE ORDER OF THE MATRIX,
+C
+C        LOW AND IGH ARE INTEGERS DETERMINED BY THE BALANCING
+C          SUBROUTINE  BALANC.  IF  BALANC  HAS NOT BEEN USED,
+C          SET LOW=1, IGH=N,
+C
+C        A CONTAINS THE INPUT MATRIX.
+C
+C     ON OUTPUT-
+C
+C        A CONTAINS THE HESSENBERG MATRIX.  INFORMATION ABOUT
+C          THE ORTHOGONAL TRANSFORMATIONS USED IN THE REDUCTION
+C          IS STORED IN THE REMAINING TRIANGLE UNDER THE
+C          HESSENBERG MATRIX,
+C
+C        ORT CONTAINS FURTHER INFORMATION ABOUT THE TRANSFORMATIONS.
+C          ONLY ELEMENTS LOW THROUGH IGH ARE USED.
+C
+C     QUESTIONS AND COMMENTS SHOULD BE DIRECTED TO B. S. GARBOW,
+C     APPLIED MATHEMATICS DIVISION, ARGONNE NATIONAL LABORATORY
+C
+C     ------------------------------------------------------------------
+C
+      LA = IGH - 1
+      KP1 = LOW + 1
+      IF (LA.LT.KP1) GO TO 100
+C
+      DO 90 M=KP1,LA
+        H = 0.0
+        ORT(M) = 0.0
+        SCALE = 0.0
+C     ********** SCALE COLUMN (ALGOL TOL THEN NOT NEEDED) **********
+        DO 10 I=M,IGH
+          SCALE = SCALE + ABS(A(I,M-1))
+   10   CONTINUE
+C
+        IF (SCALE.EQ.0.0) GO TO 90
+        MP = M + IGH
+C     ********** FOR I=IGH STEP -1 UNTIL M DO -- **********
+        DO 20 II=M,IGH
+          I = MP - II
+          ORT(I) = A(I,M-1)/SCALE
+          H = H + ORT(I)*ORT(I)
+   20   CONTINUE
+C
+        G = -SIGN(SQRT(H),ORT(M))
+        H = H - ORT(M)*G
+        ORT(M) = ORT(M) - G
+C     ********** FORM (I-(U*UT)/H) * A **********
+        DO 50 J=M,N
+          F = 0.0
+C     ********** FOR I=IGH STEP -1 UNTIL M DO -- **********
+          DO 30 II=M,IGH
+            I = MP - II
+            F = F + ORT(I)*A(I,J)
+   30     CONTINUE
+C
+          F = F/H
+C
+          DO 40 I=M,IGH
+            A(I,J) = A(I,J) - F*ORT(I)
+   40     CONTINUE
+C
+   50   CONTINUE
+C     ********** FORM (I-(U*UT)/H)*A*(I-(U*UT)/H) **********
+        DO 80 I=1,IGH
+          F = 0.0
+C     ********** FOR J=IGH STEP -1 UNTIL M DO -- **********
+          DO 60 JJ=M,IGH
+            J = MP - JJ
+            F = F + ORT(J)*A(I,J)
+   60     CONTINUE
+C
+          F = F/H
+C
+          DO 70 J=M,IGH
+            A(I,J) = A(I,J) - F*ORT(J)
+   70     CONTINUE
+C
+   80   CONTINUE
+C
+        ORT(M) = SCALE*ORT(M)
+        A(M,M-1) = SCALE*G
+   90 CONTINUE
+C
+  100 RETURN
+C     ********** LAST CARD OF ORTHES **********
+      END
+      SUBROUTINE ORTRAN(NM, N, LOW, IGH, A, ORT, Z)                     ORT   10
+C
+      INTEGER I, J, N, KL, MM, MP, NM, IGH, LOW, MP1
+      REAL A(NM,IGH), ORT(IGH), Z(NM,N)
+      REAL G
+C
+C     THIS SUBROUTINE IS A TRANSLATION OF THE ALGOL PROCEDURE ORTRANS,
+C     NUM. MATH. 16, 181-204(1970) BY PETERS AND WILKINSON.
+C     HANDBOOK FOR AUTO. COMP., VOL.II-LINEAR ALGEBRA, 372-395(1971).
+C
+C     THIS SUBROUTINE ACCUMULATES THE ORTHOGONAL SIMILARITY
+C     TRANSFORMATIONS USED IN THE REDUCTION OF A REAL GENERAL
+C     MATRIX TO UPPER HESSENBERG FORM BY  ORTHES.
+C
+C     ON INPUT-
+C
+C        NM MUST BE SET TO THE ROW DIMENSION OF TWO-DIMENSIONAL
+C          ARRAY PARAMETERS AS DECLARED IN THE CALLING PROGRAM
+C          DIMENSION STATEMENT,
+C
+C        N IS THE ORDER OF THE MATRIX,
+C
+C        LOW AND IGH ARE INTEGERS DETERMINED BY THE BALANCING
+C          SUBROUTINE  BALANC.  IF  BALANC  HAS NOT BEEN USED,
+C          SET LOW=1, IGH=N,
+C
+C        A CONTAINS INFORMATION ABOUT THE ORTHOGONAL TRANS-
+C          FORMATIONS USED IN THE REDUCTION BY  ORTHES
+C          IN ITS STRICT LOWER TRIANGLE,
+C
+C        ORT CONTAINS FURTHER INFORMATION ABOUT THE TRANS-
+C          FORMATIONS USED IN THE REDUCTION BY  ORTHES.
+C          ONLY ELEMENTS LOW THROUGH IGH ARE USED.
+C
+C     ON OUTPUT-
+C
+C        Z CONTAINS THE TRANSFORMATION MATRIX PRODUCED IN THE
+C          REDUCTION BY  ORTHES,
+C
+C        ORT HAS BEEN ALTERED.
+C
+C     QUESTIONS AND COMMENTS SHOULD BE DIRECTED TO B. S. GARBOW,
+C     APPLIED MATHEMATICS DIVISION, ARGONNE NATIONAL LABORATORY
+C
+C     ------------------------------------------------------------------
+C
+C     ********** INITIALIZE Z TO IDENTITY MATRIX **********
+      DO 20 I=1,N
+C
+        DO 10 J=1,N
+          Z(I,J) = 0.0
+   10   CONTINUE
+C
+        Z(I,I) = 1.0
+   20 CONTINUE
+C
+      KL = IGH - LOW - 1
+      IF (KL.LT.1) GO TO 80
+C     ********** FOR MP=IGH-1 STEP -1 UNTIL LOW+1 DO -- **********
+      DO 70 MM=1,KL
+        MP = IGH - MM
+        IF (A(MP,MP-1).EQ.0.0) GO TO 70
+        MP1 = MP + 1
+C
+        DO 30 I=MP1,IGH
+          ORT(I) = A(I,MP-1)
+   30   CONTINUE
+C
+        DO 60 J=MP,IGH
+          G = 0.0
+C
+          DO 40 I=MP,IGH
+            G = G + ORT(I)*Z(I,J)
+   40     CONTINUE
+C     ********** DIVISOR BELOW IS NEGATIVE OF H FORMED IN ORTHES.
+C                DOUBLE DIVISION AVOIDS POSSIBLE UNDERFLOW **********
+          G = (G/ORT(MP))/A(MP,MP-1)
+C
+          DO 50 I=MP,IGH
+            Z(I,J) = Z(I,J) + G*ORT(I)
+   50     CONTINUE
+C
+   60   CONTINUE
+C
+   70 CONTINUE
+C
+   80 RETURN
+C     ********** LAST CARD OF ORTRAN **********
+      END
+      SUBROUTINE HQRORT(NM, N, LOW, IGH, H, WR, WI, Z, IERR)            HQR   10
+C
+      INTEGER I, J, K, L, M, N, EN, LL, MM, NA, NM, IGH, ITS, LOW, MP2,
+     * ENM2, IERR
+      REAL H(NM,N), WR(N), WI(N), Z(NM,N)
+      REAL P, Q, R, S, T, W, X, Y, ZZ, NORM, S1, S2
+      REAL SQRT, ABS, SIGN
+      INTEGER MIN0
+      LOGICAL NOTLAS
+C
+C     THIS SUBROUTINE IS A MODIFICATION TO THE TRANSLATION OF THE
+C     ALGOL PROCEDURE HQR2, NUM. MATH. 16, 181-204(1970) BY PETERS
+C     AND WILKINSON. HANDBOOK FOR AUTO. COMP., VOL.II-LINEAR
+C     ALGEBRA, 372-395(1971).
+C
+C     THIS ROUTINE PRODUCES A QUASI-TRIANGULARIZATION
+C     OF A MATRIX. ONE MUST FIRST CALL THE EISPACK ROUTINE ORTHES
+C     TO REDUCE THE MATRIX TO UPPER-HESSENBERG FORM FOLLOWED BY A CALL
+C     TO THE EISPACK ROUTINE ORTRAN TO ACCUMULATE THE TRANSFORMATIONS.
+C     THIS MODIFIED VERSION OF HQR2 COMPLETES THE ORTHOGONAL REDUCTION
+C     TO QUASI-TRIANGULAR FORM AND ACCUMULATES THE REMAINING
+C     TRANSFORMATIONS.
+C
+C     ON INPUT-
+C
+C        NM MUST BE SET TO THE ROW DIMENSION OF TWO-DIMENSIONAL
+C          ARRAY PARAMETERS AS DECLARED IN THE CALLING PROGRAM
+C          DIMENSION STATEMENT,
+C
+C        N IS THE ORDER OF THE MATRIX,
+C
+C        LOW AND IGH ARE INTEGERS DETERMINED BY THE BALANCING
+C          SUBROUTINE  BALANC.  IF  BALANC  HAS NOT BEEN USED,
+C          SET LOW=1, IGH=N, (BALANC IS AN EISPACK SUBROUTINE).
+C
+C        H CONTAINS THE UPPER HESSENBERG MATRIX,
+C
+C        Z CONTAINS THE TRANSFORMATION MATRIX PRODUCED BY  ORTRAN
+C          AFTER THE REDUCTION BY  ORTHES.  IF THE ORIGINAL MATRIX
+C          IS A  HESSENBERG MATRIX, Z MUST CONTAIN THE IDENTITY MATRIX.
+C
+C     ON OUTPUT-
+C
+C        H HAS BEEN DESTROYED,
+C
+C        WR AND WI CONTAIN THE REAL AND IMAGINARY PARTS,
+C          RESPECTIVELY, OF THE EIGENVALUES.  THE EIGENVALUES
+C          ARE UNORDERED EXCEPT THAT COMPLEX CONJUGATE PAIRS
+C          OF VALUES APPEAR CONSECUTIVELY WITH THE EIGENVALUE
+C          HAVING THE POSITIVE IMAGINARY PART FIRST.  IF AN
+C          ERROR EXIT IS MADE, THE EIGENVALUES SHOULD BE CORRECT
+C          FOR INDICES IERR+1,...,N,
+C
+C        Z CONTAINS THE TRANSFORMATION MATRIX USED TO REDUCE THE
+C          ORIGINAL MATRIX TO QUASI-TRIANGULAR FORM.
+C
+C        IERR IS SET TO
+C          ZERO       FOR NORMAL RETURN,
+C          J          IF THE J-TH EIGENVALUE HAS NOT BEEN
+C                     DETERMINED AFTER 30 ITERATIONS.
+C
+C     -----------------------------------------------------------------
+C
+C**********************************************************************
+C**********************************************************************
+C
+C     THIS ROUTINE IS A MODIFICATION OF THE EISPACK ROUTINE HQR2.
+C
+C     IT CAN BE OBTAINED BY CHANGING THE STATEMENT LABELED 60 IN HQR2 TO
+C
+C        60 IF (EN .LT. LOW ) GO TO 1001
+C
+C     THE STATEMENTS BEGINNING WITH THAT LABELED 340 AND ENDING WITH
+C     THAT IMMEDIATELY PRECEDING THE STATEMENT LABELED 1000 ARE DELETED.
+C
+C     THE MACHINE DEPENDENT VARIABLE MACHEP HAS BEEN REPLACE
+C     BY THE PORTABLE CONSTRUCTIONS FOUND IN DO LOOPS 80 AND 140.
+C
+C     JACK DONGARRA, ARGONNE NATIONAL LABORATORY, MAY 1981.
+C
+C**********************************************************************
+C**********************************************************************
+C
+      IERR = 0
+      NORM = 0.0
+      K = 1
+C     ********** STORE ROOTS ISOLATED BY BALANC
+C                AND COMPUTE MATRIX NORM **********
+      DO 20 I=1,N
+C
+        DO 10 J=K,N
+          NORM = NORM + ABS(H(I,J))
+   10   CONTINUE
+C
+        K = I
+        IF (I.GE.LOW .AND. I.LE.IGH) GO TO 20
+        WR(I) = H(I,I)
+        WI(I) = 0.0
+   20 CONTINUE
+C
+      EN = IGH
+      T = 0.0
+C     ********** SEARCH FOR NEXT EIGENVALUES **********
+   30 IF (EN.LT.LOW) GO TO 300
+      ITS = 0
+      NA = EN - 1
+      ENM2 = NA - 1
+C     ********** LOOK FOR SINGLE SMALL SUB-DIAGONAL ELEMENT
+C                FOR L=EN STEP -1 UNTIL LOW DO -- **********
+   40 DO 50 LL=LOW,EN
+        L = EN + LOW - LL
+        IF (L.EQ.LOW) GO TO 60
+        S = ABS(H(L-1,L-1)) + ABS(H(L,L))
+        IF (S.EQ.0.0) S = NORM
+        S1 = S
+        S2 = S1 + ABS(H(L,L-1))
+        IF (S1.EQ.S2) GO TO 60
+   50 CONTINUE
+C     ********** FORM SHIFT **********
+   60 X = H(EN,EN)
+      IF (L.EQ.EN) GO TO 220
+      Y = H(NA,NA)
+      W = H(EN,NA)*H(NA,EN)
+      IF (L.EQ.NA) GO TO 230
+      IF (ITS.EQ.30) GO TO 290
+      IF (ITS.NE.10 .AND. ITS.NE.20) GO TO 80
+C     ********** FORM EXCEPTIONAL SHIFT **********
+      T = T + X
+C
+      DO 70 I=LOW,EN
+        H(I,I) = H(I,I) - X
+   70 CONTINUE
+C
+      S = ABS(H(EN,NA)) + ABS(H(NA,ENM2))
+      X = 0.75*S
+      Y = X
+      W = -0.4375*S*S
+   80 ITS = ITS + 1
+C     ********** LOOK FOR TWO CONSECUTIVE SMALL
+C                SUB-DIAGONAL ELEMENTS.
+C                FOR M=EN-2 STEP -1 UNTIL L DO -- **********
+      DO 90 MM=L,ENM2
+        M = ENM2 + L - MM
+        ZZ = H(M,M)
+        R = X - ZZ
+        S = Y - ZZ
+        P = (R*S-W)/H(M+1,M) + H(M,M+1)
+        Q = H(M+1,M+1) - ZZ - R - S
+        R = H(M+2,M+1)
+        S = ABS(P) + ABS(Q) + ABS(R)
+        P = P/S
+        Q = Q/S
+        R = R/S
+        IF (M.EQ.L) GO TO 100
+        S1 = ABS(P)*(ABS(H(M-1,M-1))+ABS(ZZ)+ABS(H(M+1,M+1)))
+        S2 = S1 + ABS(H(M,M-1))*(ABS(Q)+ABS(R))
+        IF (S1.EQ.S2) GO TO 100
+   90 CONTINUE
+C
+  100 MP2 = M + 2
+C
+      DO 110 I=MP2,EN
+        H(I,I-2) = 0.0
+        IF (I.EQ.MP2) GO TO 110
+        H(I,I-3) = 0.0
+  110 CONTINUE
+C     ********** DOUBLE QR STEP INVOLVING ROWS L TO EN AND
+C                COLUMNS M TO EN **********
+      DO 210 K=M,NA
+        NOTLAS = K.NE.NA
+        IF (K.EQ.M) GO TO 120
+        P = H(K,K-1)
+        Q = H(K+1,K-1)
+        R = 0.0
+        IF (NOTLAS) R = H(K+2,K-1)
+        X = ABS(P) + ABS(Q) + ABS(R)
+        IF (X.EQ.0.0) GO TO 210
+        P = P/X
+        Q = Q/X
+        R = R/X
+  120   S = SIGN(SQRT(P*P+Q*Q+R*R),P)
+        IF (K.EQ.M) GO TO 130
+        H(K,K-1) = -S*X
+        GO TO 140
+  130   IF (L.NE.M) H(K,K-1) = -H(K,K-1)
+  140   P = P + S
+        X = P/S
+        Y = Q/S
+        ZZ = R/S
+        Q = Q/P
+        R = R/P
+C     ********** ROW MODIFICATION **********
+        DO 160 J=K,N
+          P = H(K,J) + Q*H(K+1,J)
+          IF (.NOT.NOTLAS) GO TO 150
+          P = P + R*H(K+2,J)
+          H(K+2,J) = H(K+2,J) - P*ZZ
+  150     H(K+1,J) = H(K+1,J) - P*Y
+          H(K,J) = H(K,J) - P*X
+  160   CONTINUE
+C
+        J = MIN0(EN,K+3)
+C     ********** COLUMN MODIFICATION **********
+        DO 180 I=1,J
+          P = X*H(I,K) + Y*H(I,K+1)
+          IF (.NOT.NOTLAS) GO TO 170
+          P = P + ZZ*H(I,K+2)
+          H(I,K+2) = H(I,K+2) - P*R
+  170     H(I,K+1) = H(I,K+1) - P*Q
+          H(I,K) = H(I,K) - P
+  180   CONTINUE
+C     ********** ACCUMULATE TRANSFORMATIONS **********
+        DO 200 I=LOW,IGH
+          P = X*Z(I,K) + Y*Z(I,K+1)
+          IF (.NOT.NOTLAS) GO TO 190
+          P = P + ZZ*Z(I,K+2)
+          Z(I,K+2) = Z(I,K+2) - P*R
+  190     Z(I,K+1) = Z(I,K+1) - P*Q
+          Z(I,K) = Z(I,K) - P
+  200   CONTINUE
+C
+  210 CONTINUE
+C
+      GO TO 40
+C     ********** ONE ROOT FOUND **********
+  220 H(EN,EN) = X + T
+      WR(EN) = H(EN,EN)
+      WI(EN) = 0.0
+      EN = NA
+      GO TO 30
+C     ********** TWO ROOTS FOUND **********
+  230 P = (Y-X)/2.0
+      Q = P*P + W
+      ZZ = SQRT(ABS(Q))
+      H(EN,EN) = X + T
+      X = H(EN,EN)
+      H(NA,NA) = Y + T
+      IF (Q.LT.0.0) GO TO 270
+C     ********** REAL PAIR **********
+      ZZ = P + SIGN(ZZ,P)
+      WR(NA) = X + ZZ
+      WR(EN) = WR(NA)
+      IF (ZZ.NE.0.0) WR(EN) = X - W/ZZ
+      WI(NA) = 0.0
+      WI(EN) = 0.0
+      X = H(EN,NA)
+      S = ABS(X) + ABS(ZZ)
+      P = X/S
+      Q = ZZ/S
+      R = SQRT(P*P+Q*Q)
+      P = P/R
+      Q = Q/R
+C     ********** ROW MODIFICATION **********
+      DO 240 J=NA,N
+        ZZ = H(NA,J)
+        H(NA,J) = Q*ZZ + P*H(EN,J)
+        H(EN,J) = Q*H(EN,J) - P*ZZ
+  240 CONTINUE
+C     ********** COLUMN MODIFICATION **********
+      DO 250 I=1,EN
+        ZZ = H(I,NA)
+        H(I,NA) = Q*ZZ + P*H(I,EN)
+        H(I,EN) = Q*H(I,EN) - P*ZZ
+  250 CONTINUE
+C     ********** ACCUMULATE TRANSFORMATIONS **********
+      DO 260 I=LOW,IGH
+        ZZ = Z(I,NA)
+        Z(I,NA) = Q*ZZ + P*Z(I,EN)
+        Z(I,EN) = Q*Z(I,EN) - P*ZZ
+  260 CONTINUE
+C
+      GO TO 280
+C     ********** COMPLEX PAIR **********
+  270 WR(NA) = X + P
+      WR(EN) = X + P
+      WI(NA) = ZZ
+      WI(EN) = -ZZ
+  280 EN = ENM2
+      GO TO 30
+C     ********** SET ERROR -- NO CONVERGENCE TO AN
+C                EIGENVALUE AFTER 30 ITERATIONS **********
+  290 IERR = EN
+  300 RETURN
+C     ********** LAST CARD OF HQRORT **********
+      END
+      SUBROUTINE SICE(LD, N, A, T, Q, W, X, CW, CX, K, Y1, Y2, R, Z1,   SIC   10
+     * Z2, Z3, JOB, INFO)
+C
+      INTEGER LD, N, K, INFO
+      REAL A(LD,N), T(LD,N), Q(LD,N), W, X(N), CW, CX(N), Y1(N), Y2(N)
+      REAL R(N), Z1(N), Z2(N), Z3(N)
+C
+C     THIS SUBROUTINE WILL IMPROVE A GIVEN REAL EIGENVALUE AND CALCULATE
+C     THE EIGENVECTOR ASSOCIATED WITH IT. THE METHOD IS ITERATIVE
+C     AND REQUIRES ORDER N**2 WORK. THE IMPROVEMENT IS EQUIVALENT TO
+C     CARRYING OUT THE EIGENVALUE COMPUTATION IN DOUBLE PRECISION
+C     AND THEN TRUNCATING THE RESULTS TO SINGLE PRECISION.
+C     A MORE ACCURATE EIGENVALUE AND EIGENVECTOR CAN BE FORMED
+C     IF ON RETURN FROM SICE W AND CW, AND X AND CX ARE ADDED IN
+C     DOUBLE PRECISION.
+C
+C     ON ENTRY
+C
+C        LD      INTEGER
+C                THE LEADING DIMENSION OF THE ARRAYS A,T AND Q.
+C
+C        N       INTEGER
+C                THE ORDER OF THE MATRICES A, T AND Q.
+C
+C        A       REAL(LD,N)
+C                CONTAINS THE ORIGINAL MATRIX.
+C
+C        T       REAL(LD,N)
+C                CONTAINS THE UPPER QUASI-TRIANGULAR MATRIX PRODUCED
+C                FROM THE EIGENVALUE DECOMPOSITION. BY QUASI-TRIANGULAR
+C                WE MEAN THAT THE MATRIX FALLS SHORT OF TRIANGULAR
+C                BECAUSE OF POSSIBLE 2 BY 2 BLOCKS ON THE MAIN DIAGONAL
+C                WHICH CORRESPOND TO COMPLEX CONJUGATE PAIRS OF
+C                EIGENVALUES. THE SUBDIAGONAL OF T IS USED BY THIS
+C                ROUTINE. ANY INFORMATION THE USER MAY HAVE IN THE
+C                SUBDIAGONAL OF T ON ENTRY WILL BE DESTROYED ON RETURN.
+C                THE ELEMENTS BELOW THE SUBDIAGONAL ARE NOT REFERRED TO.
+C
+C        Q       REAL(LD,N)
+C                CONTAINS THE ORTHOGONAL MATRIX USED TO REDUCE THE
+C                ORIGINAL MATRIX TO QUASI-TRIANGULAR FORM.
+C
+C        W       REAL
+C                CONTAINS THE APPROXIMATE EIGENVALUE
+C                TO BE IMPROVED.
+C
+C        X       REAL(N)
+C                CONTAINS THE APPROXIMATE EIGENVECTOR TO BE IMPROVED.
+C                SEE PARAMETER JOB BELOW. IF JOB = 0, NO VALUE NEED
+C                BE SUPPLIED TO X.
+C
+C        K       INTEGER
+C                IS THE POSITION ON THE DIAGONAL OF T WHERE THE
+C                EIGENVALUE, W, IS FOUND.
+C
+C        JOB     INTEGER
+C                IS A FLAG WHICH IS SET TO
+C                0 IF NO INITIAL APPROXIMATE EIGENVECTOR IS SUPPLIED.
+C                1 IF AN INITIAL APPROXIMATE EIGENVECTOR IS SUPPLIED
+C                2 IF AN INITIAL APPROXIMATE EIGENVECTOR IS SUPPLIED
+C                  THEN JUST ONE ITERATION IS TO BE TAKEN.
+C                  THIS CAN BE USED TO ESTIMATE THE ERRORS
+C                  BETWEEN THE TRUE AND THE COMPUTED EIGENVALUE AND
+C                  EIGENVECTOR IF THE QUANTITIES CW AND CX ARE EXAMINED.
+C                  THE VALUES OF W AND X ARE LEFT UNCHANGED.
+C
+C     ON RETURN
+C
+C        T       IS TRANSFORMED TO AN UPPER TRIANGULAR MATRIX.
+C
+C        W       CONTAINS THE IMPROVED EIGENVALUE.
+C
+C        X       REAL(N)
+C                CONTAINS THE EIGENVECTOR.
+C
+C        CW      REAL
+C                CONTAINS THE LAST CORRECTION TO W. THIS CAN
+C                BE ADDED TO W USING DOUBLE PRECISION AND A
+C                MORE ACCURATE EIGENVALUE WILL RESULT.
+C
+C        CX      REAL(N)
+C                CONTAINS THE LAST CORRECTION TO X. THIS CAN
+C                BE ADDED TO X USING DOUBLE PRECISION AND A
+C                MORE ACCURATE EIGENVECTOR WILL RESULT.
+C
+C        INFO    INTEGER
+C                = 0 FOR NORMAL RETURN
+C                = 10 IF THE ALGORITHM HAS FAILED TO CONVERGE AFTER
+C                  10 ITERATIONS. THIS SIGNALS THE CASE WHERE
+C                  CLOSE EIGENVALUES ARE PRESENT. THE RESULTS MAYBE
+C                  ACCEPTABLE EVEN IF INFO = 10, THE USER SHOULD EXAMINE
+C                  CW TO DETERMINE THE ERROR.
+C
+C        Y1,Y2,R,Z1,Z2,Z3
+C                REAL(N)
+C                WORK VECTORS.
+C
+C     THIS VERSION DATED 6/82.
+C     JACK DONGARRA, ARGONNE NATIONAL LABORATORY.
+C
+C     THIS ROUTINE CALLS THE FOLLOWING FUNCTIONS AND SUBROUTINES -
+C
+C        FORTRAN ABS,FLOAT,SQRT
+C        BLAS ISAMAX,SAXPY,SCOPY,SDOT,SROT,SROTG,SSCAL
+C        LINPACK STRSL
+C        AUXILIARY CANDS,SDADD,SDDDOT
+C
+      INTEGER I, IB, IMAX, INF, ISAMAX, ITER
+      REAL C, S, SDADD, SDDDOT
+      REAL OLDCW, SDOT, ST(2), T1, T2, TZ
+C
+C     INITIALIZATION
+C
+      ITER = 0
+      INFO = 0
+      IF (JOB.NE.0) GO TO 30
+C
+C     PICK A STARTING VECTOR
+C
+      S = SQRT(FLOAT(N))
+      C = 1.0E0/(FLOAT(N)+S)
+      X(1) = (1.0E0+S)/C
+      IF (N.EQ.1) GO TO 20
+      DO 10 I=2,N
+        X(I) = C
+   10 CONTINUE
+   20 CONTINUE
+      X(K) = X(K) - 1.0E0
+C
+C     MAIN LOOP FOR ITERATION
+C
+   30 CONTINUE
+C
+C
+C        NORMALIZE THE EIGENVECTOR SO THE LARGEST COMPONENT IS
+C        IS EQUAL TO ONE IN MAGNITUDE.
+C
+      IMAX = ISAMAX(N,X,1)
+      CALL SSCAL(N, 1.0E0/ABS(X(IMAX)), X, 1)
+C
+C        CALCULATE THE RESIDUAL, FOR THE EIGENVALUE PROBLEM,
+C        WITH DOUBLE PRECISION ACCUMULATION OF INNER PRODUCT.
+C
+      DO 40 I=1,N
+        ST(1) = -W
+        ST(2) = X(I)
+        R(I) = -SDDDOT(N,A(I,1),LD,X,1,ST)
+   40 CONTINUE
+C
+C        FORM  T - LAMDA*I
+C
+      DO 50 I=1,N
+        T(I,I) = T(I,I) - W
+   50 CONTINUE
+C
+C        FORM C = -X - (A - LAMDA*I)*E(IMAX), WHERE E(IMAX) IS THE
+C        IMAX-TH COLUMN OF THE IDENTITY MATRIX AND IMAX IS THE
+C        POSITION OF THE LARGEST COMPONENT IN MAGNITUDE OF X.
+C
+      DO 60 I=1,N
+        Z2(I) = -X(I) - A(I,IMAX)
+   60 CONTINUE
+      Z2(IMAX) = Z2(IMAX) + W
+C
+C        FORM D = TRANS(Q)*C
+C
+      DO 70 I=1,N
+        Y1(I) = SDOT(N,Q(1,I),1,Z2,1)
+   70 CONTINUE
+C
+C        RESTORE MATRIX TO TRIANGULAR FORM AFTER RANK ONE UPDATE.
+C
+      DO 80 I=1,N
+        CX(I) = SDOT(N,Q(1,I),1,R,1)
+   80 CONTINUE
+      IF (N.EQ.1) GO TO 110
+      DO 90 I=2,N
+        Z3(I) = 0.0E0
+        IF (T(I,I-1).EQ.0.0E0) GO TO 90
+        T1 = T(I-1,I-1)
+        T2 = T(I,I-1)
+        CALL SROTG(T1, T2, C, S)
+        CALL SROT(N-I+1, T(I-1,I), LD, T(I,I), LD, C, S)
+        Z3(I) = T2
+        T(I,I-1) = 0.0E0
+        T(I-1,I-1) = T1
+        CALL SROT(1, CX(I-1), 1, CX(I), 1, C, S)
+        CALL SROT(1, Y1(I-1), 1, Y1(I), 1, C, S)
+   90 CONTINUE
+      T2 = Y1(N)
+      DO 100 IB=2,N
+        I = N - IB + 2
+        T1 = Y1(I-1)
+        CALL SROTG(T1, T2, C, S)
+        CALL SROT(IB, T(I-1,I-1), LD, T(I,I-1), LD, C, S)
+        CALL SROT(1, CX(I-1), 1, CX(I), 1, C, S)
+        Z1(I) = T2
+        T2 = T1
+  100 CONTINUE
+  110 CONTINUE
+C
+C        ADD T + D*TRANS(F), WHERE F = TRANS(Q)*E(IMAX).
+C
+      CALL SAXPY(N, T1, Q(IMAX,1), LD, T(1,1), LD)
+      TZ = T1
+      IF (N.EQ.1) GO TO 130
+      DO 120 I=2,N
+        T1 = T(I-1,I-1)
+        T2 = T(I,I-1)
+        CALL SROTG(T1, T2, C, S)
+        T(I-1,I-1) = T1
+        Z2(I) = T2
+        CALL SROT(N-I+1, T(I-1,I), LD, T(I,I), LD, C, S)
+        T(I,I-1) = 0.0E0
+        CALL SROT(1, CX(I-1), 1, CX(I), 1, C, S)
+  120 CONTINUE
+  130 CONTINUE
+C
+C        SOLVE TRIANGULAR SYSTEM.
+C
+      CALL STRSL(T, LD, N, CX, 1, INF)
+C
+C        APPLY RANK ONE UPDATES TO SOLUTION AND
+C        UN-TRANSFORM THE CORRECTIONS AND MATRIX.
+C
+      CALL SCOPY(N, CX, 1, Y2, 1)
+      IF (N.EQ.1) GO TO 150
+      DO 140 IB=2,N
+        I = N - IB + 2
+        CALL CANDS(Z2(I), C, S)
+        CALL SROT(N-I+1, T(I-1,I), LD, T(I,I), LD, C, -S)
+        T1 = T(I-1,I-1)
+        T(I,I-1) = S*T1
+        T(I-1,I-1) = C*T1
+  140 CONTINUE
+  150 CONTINUE
+      DO 160 I=1,N
+        T(1,I) = T(1,I) - TZ*Q(IMAX,I)
+  160 CONTINUE
+      IF (N.EQ.1) GO TO 190
+      DO 170 I=2,N
+        CALL CANDS(Z1(I), C, S)
+        CALL SROT(N-I+2, T(I-1,I-1), LD, T(I,I-1), LD, C, -S)
+  170 CONTINUE
+      DO 180 IB=2,N
+        I = N - IB + 2
+        IF (Z3(I).EQ.0.0E0) GO TO 180
+        CALL CANDS(Z3(I), C, S)
+        CALL SROT(N-I+1, T(I-1,I), LD, T(I,I), LD, C, -S)
+        T1 = T(I-1,I-1)
+        T(I,I-1) = S*T1
+        T(I-1,I-1) = C*T1
+  180 CONTINUE
+  190 CONTINUE
+      DO 200 I=1,N
+        T(I,I) = T(I,I) + W
+        CX(I) = SDOT(N,Q(I,1),LD,Y2,1)
+  200 CONTINUE
+      CW = CX(IMAX)
+      CX(IMAX) = 0.0E0
+      IF (JOB.EQ.2) GO TO 240
+C
+C        TEST FOR CONVERGENCE.
+C
+      IF (CW.EQ.0.0E0) GO TO 240
+      IF (ITER.LE.1) GO TO 210
+      IF (ABS(CW).GT.ABS(OLDCW)/2.0) GO TO 240
+  210 CONTINUE
+      OLDCW = CW
+      ITER = ITER + 1
+      IF (ITER.LE.10) GO TO 220
+      INFO = 10
+      GO TO 240
+  220 CONTINUE
+C
+C        CORRECT THE EIGENVALUE AND EIGENVECTOR
+C
+      W = SDADD(W,CW)
+      DO 230 I=1,N
+        X(I) = SDADD(X(I),CX(I))
+  230 CONTINUE
+      GO TO 30
+  240 CONTINUE
+      RETURN
+C
+      END
+      SUBROUTINE CANDS(Z, C, S)                                         CAN   10
+C
+      REAL Z, C, S
+C
+C     THIS SUBROUTINE RECONSTRUCTS THE SINE AND COSINE
+C     FROM THE INFORMATION RETURNED FROM ROUTINE SROTG.
+C     SEE THE DOCUMENTATION FOR SROTG FOR THE DETAILS OF
+C     HOW THIS WORKS.
+C     BASICALLY
+C        IF ABS(Z) .EQ. 1 SET C = 0 AND S = 1
+C        IF ABS(Z) .GT. 1 SET C = 1/Z AND S = SQRT(1-C**2)
+C        IF ABS(Z) .LT. 1 SET C = SQRT(1-Z**2) AND S = Z
+C
+      IF (ABS(Z).LT.1.0E0) GO TO 10
+      IF (ABS(Z).GT.1.0E0) GO TO 20
+C
+C     ABS(Z) .EQ. 1
+C
+      C = 0.0E0
+      S = 1.0E0
+      GO TO 30
+C
+C     ABS(Z) .LT. 1
+C
+   10 CONTINUE
+      C = SQRT(1.0E0-Z*Z)
+      S = Z
+      GO TO 30
+C
+C     ABS(Z) .GT. 1
+C
+   20 CONTINUE
+      C = 1.0E0/Z
+      S = SQRT(1.0E0-C*C)
+C
+   30 CONTINUE
+      RETURN
+      END
+      REAL FUNCTION SDADD(A, B)                                         SDA   10
+      REAL A, B
+C
+C     THIS ROUTINE ADDS TOGETHER TWO SINGLE PRECISION NUMBERS
+C     IN DOUBLE PRECISION AND RETURNS THE TRUNCATED SINGLE
+C     PRECISION RESULT.
+C
+      SDADD = DBLE(A) + DBLE(B)
+      RETURN
+      END
+      REAL FUNCTION SDDDOT(N, X, INCX, Y, INCY, ST)                     SDD   10
+      INTEGER I, N, IX, IY, INCX, INCY
+      REAL X(1), Y(1), ST(2)
+      DOUBLE PRECISION T
+C
+C     THIS ROUTINE IS A MODIFICATION OF THE BLA (BASIC LINEAR ALGEBRA)
+C     ROUTINE SDSDOT.
+C     THIS ROUTINE FORMS THE DOT PRODUCT OF TWO VECTORS X AND Y OF
+C     LENGTH N, USING DOUBLE PRECISION FOR THE ACCUMULATION, AND
+C     ADDS TO THE RESULT THE PRODUCT OF ST(1) AND ST(2).
+C
+      T = DBLE(ST(1))*DBLE(ST(2))
+      IF (N.LE.0) GO TO 20
+      IX = 1
+      IY = 1
+      DO 10 I=1,N
+        T = T + DBLE(X(IX))*DBLE(Y(IY))
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+   20 CONTINUE
+      SDDDOT = T
+      RETURN
+      END
+      INTEGER FUNCTION ISAMAX(N, SX, INCX)                              ISA   10
+C
+C     FINDS THE INDEX OF ELEMENT HAVING MAX. ABSOLUTE VALUE.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SX(1), SMAX
+      INTEGER I, INCX, IX, N
+C
+      ISAMAX = 0
+      IF (N.LT.1) RETURN
+      ISAMAX = 1
+      IF (N.EQ.1) RETURN
+      IF (INCX.EQ.1) GO TO 30
+C
+C        CODE FOR INCREMENT NOT EQUAL TO 1
+C
+      IX = 1
+      SMAX = ABS(SX(1))
+      IX = IX + INCX
+      DO 20 I=2,N
+        IF (ABS(SX(IX)).LE.SMAX) GO TO 10
+        ISAMAX = I
+        SMAX = ABS(SX(IX))
+   10   IX = IX + INCX
+   20 CONTINUE
+      RETURN
+C
+C        CODE FOR INCREMENT EQUAL TO 1
+C
+   30 SMAX = ABS(SX(1))
+      DO 40 I=2,N
+        IF (ABS(SX(I)).LE.SMAX) GO TO 40
+        ISAMAX = I
+        SMAX = ABS(SX(I))
+   40 CONTINUE
+      RETURN
+      END
+      SUBROUTINE SAXPY(N, SA, SX, INCX, SY, INCY)                       SAX   10
+C
+C     CONSTANT TIMES A VECTOR PLUS A VECTOR.
+C     USES UNROLLED LOOP FOR INCREMENTS EQUAL TO ONE.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SX(1), SY(1), SA
+      INTEGER I, INCX, INCY, IX, IY, M, MP1, N
+C
+      IF (N.LE.0) RETURN
+      IF (SA.EQ.0.0) RETURN
+      IF (INCX.EQ.1 .AND. INCY.EQ.1) GO TO 20
+C
+C        CODE FOR UNEQUAL INCREMENTS OR EQUAL INCREMENTS
+C          NOT EQUAL TO 1
+C
+      IX = 1
+      IY = 1
+      IF (INCX.LT.0) IX = (-N+1)*INCX + 1
+      IF (INCY.LT.0) IY = (-N+1)*INCY + 1
+      DO 10 I=1,N
+        SY(IY) = SY(IY) + SA*SX(IX)
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      RETURN
+C
+C        CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,4)
+      IF (M.EQ.0) GO TO 40
+      DO 30 I=1,M
+        SY(I) = SY(I) + SA*SX(I)
+   30 CONTINUE
+      IF (N.LT.4) RETURN
+   40 MP1 = M + 1
+      DO 50 I=MP1,N,4
+        SY(I) = SY(I) + SA*SX(I)
+        SY(I+1) = SY(I+1) + SA*SX(I+1)
+        SY(I+2) = SY(I+2) + SA*SX(I+2)
+        SY(I+3) = SY(I+3) + SA*SX(I+3)
+   50 CONTINUE
+      RETURN
+      END
+      SUBROUTINE SCOPY(N, SX, INCX, SY, INCY)                           SCO   10
+C
+C     COPIES A VECTOR, X, TO A VECTOR, Y.
+C     USES UNROLLED LOOPS FOR INCREMENTS EQUAL TO 1.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SX(1), SY(1)
+      INTEGER I, INCX, INCY, IX, IY, M, MP1, N
+C
+      IF (N.LE.0) RETURN
+      IF (INCX.EQ.1 .AND. INCY.EQ.1) GO TO 20
+C
+C        CODE FOR UNEQUAL INCREMENTS OR EQUAL INCREMENTS
+C          NOT EQUAL TO 1
+C
+      IX = 1
+      IY = 1
+      IF (INCX.LT.0) IX = (-N+1)*INCX + 1
+      IF (INCY.LT.0) IY = (-N+1)*INCY + 1
+      DO 10 I=1,N
+        SY(IY) = SX(IX)
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      RETURN
+C
+C        CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,7)
+      IF (M.EQ.0) GO TO 40
+      DO 30 I=1,M
+        SY(I) = SX(I)
+   30 CONTINUE
+      IF (N.LT.7) RETURN
+   40 MP1 = M + 1
+      DO 50 I=MP1,N,7
+        SY(I) = SX(I)
+        SY(I+1) = SX(I+1)
+        SY(I+2) = SX(I+2)
+        SY(I+3) = SX(I+3)
+        SY(I+4) = SX(I+4)
+        SY(I+5) = SX(I+5)
+        SY(I+6) = SX(I+6)
+   50 CONTINUE
+      RETURN
+      END
+      REAL FUNCTION SDOT(N, SX, INCX, SY, INCY)                         SDO   10
+C
+C     FORMS THE DOT PRODUCT OF TWO VECTORS.
+C     USES UNROLLED LOOPS FOR INCREMENTS EQUAL TO ONE.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SX(1), SY(1), STEMP
+      INTEGER I, INCX, INCY, IX, IY, M, MP1, N
+C
+      STEMP = 0.0E0
+      SDOT = 0.0E0
+      IF (N.LE.0) RETURN
+      IF (INCX.EQ.1 .AND. INCY.EQ.1) GO TO 20
+C
+C        CODE FOR UNEQUAL INCREMENTS OR EQUAL INCREMENTS
+C          NOT EQUAL TO 1
+C
+      IX = 1
+      IY = 1
+      IF (INCX.LT.0) IX = (-N+1)*INCX + 1
+      IF (INCY.LT.0) IY = (-N+1)*INCY + 1
+      DO 10 I=1,N
+        STEMP = STEMP + SX(IX)*SY(IY)
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      SDOT = STEMP
+      RETURN
+C
+C        CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,5)
+      IF (M.EQ.0) GO TO 40
+      DO 30 I=1,M
+        STEMP = STEMP + SX(I)*SY(I)
+   30 CONTINUE
+      IF (N.LT.5) GO TO 60
+   40 MP1 = M + 1
+      DO 50 I=MP1,N,5
+        STEMP = STEMP + SX(I)*SY(I) + SX(I+1)*SY(I+1) + SX(I+2)*SY(I+2)
+     *   + SX(I+3)*SY(I+3) + SX(I+4)*SY(I+4)
+   50 CONTINUE
+   60 SDOT = STEMP
+      RETURN
+      END
+      SUBROUTINE SROT(N, SX, INCX, SY, INCY, C, S)                      SRO   10
+C
+C     APPLIES A PLANE ROTATION.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SX(1), SY(1), STEMP, C, S
+      INTEGER I, INCX, INCY, IX, IY, N
+C
+      IF (N.LE.0) RETURN
+      IF (INCX.EQ.1 .AND. INCY.EQ.1) GO TO 20
+C
+C       CODE FOR UNEQUAL INCREMENTS OR EQUAL INCREMENTS NOT EQUAL
+C         TO 1
+C
+      IX = 1
+      IY = 1
+      IF (INCX.LT.0) IX = (-N+1)*INCX + 1
+      IF (INCY.LT.0) IY = (-N+1)*INCY + 1
+      DO 10 I=1,N
+        STEMP = C*SX(IX) + S*SY(IY)
+        SY(IY) = C*SY(IY) - S*SX(IX)
+        SX(IX) = STEMP
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      RETURN
+C
+C       CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+   20 DO 30 I=1,N
+        STEMP = C*SX(I) + S*SY(I)
+        SY(I) = C*SY(I) - S*SX(I)
+        SX(I) = STEMP
+   30 CONTINUE
+      RETURN
+      END
+      SUBROUTINE SROTG(SA, SB, C, S)                                    SRO   10
+C
+C     CONSTRUCT GIVENS PLANE ROTATION.
+C     JACK DONGARRA, LINPACK, 3/11/78, MODIFIED 6/82.
+C
+      REAL SA, SB, C, S, ROE, SCALE, R, Z
+C
+      ROE = SB
+      IF (ABS(SA).GT.ABS(SB)) ROE = SA
+      SCALE = ABS(SA) + ABS(SB)
+      IF (SCALE.NE.0.0) GO TO 10
+      C = 1.0
+      S = 0.0
+      R = 0.0
+      GO TO 20
+   10 R = SCALE*SQRT((SA/SCALE)**2+(SB/SCALE)**2)
+      R = SIGN(1.0,ROE)*R
+      C = SA/R
+      S = SB/R
+   20 Z = 1.0
+      IF (ABS(SA).GT.ABS(SB) .OR. SA*SB.EQ.0.0) Z = S
+      IF (ABS(SB).GE.ABS(SA) .AND. ABS(SA).GT.0.0) Z = 1.0/C
+      SA = R
+      SB = Z
+      RETURN
+      END
+      SUBROUTINE SSCAL(N, SA, SX, INCX)                                 SSC   10
+C
+C     SCALES A VECTOR BY A CONSTANT.
+C     USES UNROLLED LOOPS FOR INCREMENT EQUAL TO 1.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SA, SX(1)
+      INTEGER I, INCX, M, MP1, N, NINCX
+C
+      IF (N.LE.0) RETURN
+      IF (INCX.EQ.1) GO TO 20
+C
+C        CODE FOR INCREMENT NOT EQUAL TO 1
+C
+      NINCX = N*INCX
+      DO 10 I=1,NINCX,INCX
+        SX(I) = SA*SX(I)
+   10 CONTINUE
+      RETURN
+C
+C        CODE FOR INCREMENT EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,5)
+      IF (M.EQ.0) GO TO 40
+      DO 30 I=1,M
+        SX(I) = SA*SX(I)
+   30 CONTINUE
+      IF (N.LT.5) RETURN
+   40 MP1 = M + 1
+      DO 50 I=MP1,N,5
+        SX(I) = SA*SX(I)
+        SX(I+1) = SA*SX(I+1)
+        SX(I+2) = SA*SX(I+2)
+        SX(I+3) = SA*SX(I+3)
+        SX(I+4) = SA*SX(I+4)
+   50 CONTINUE
+      RETURN
+      END
+      SUBROUTINE STRSL(T, LDT, N, B, JOB, INFO)                         STR   10
+      INTEGER LDT, N, JOB, INFO
+      REAL T(LDT,1), B(1)
+C
+C
+C     STRSL SOLVES SYSTEMS OF THE FORM
+C
+C                   T * X = B
+C     OR
+C                   TRANS(T) * X = B
+C
+C     WHERE T IS A TRIANGULAR MATRIX OF ORDER N. HERE TRANS(T)
+C     DENOTES THE TRANSPOSE OF THE MATRIX T.
+C
+C     ON ENTRY
+C
+C         T         REAL(LDT,N)
+C                   T CONTAINS THE MATRIX OF THE SYSTEM. THE ZERO
+C                   ELEMENTS OF THE MATRIX ARE NOT REFERENCED, AND
+C                   THE CORRESPONDING ELEMENTS OF THE ARRAY CAN BE
+C                   USED TO STORE OTHER INFORMATION.
+C
+C         LDT       INTEGER
+C                   LDT IS THE LEADING DIMENSION OF THE ARRAY T.
+C
+C         N         INTEGER
+C                   N IS THE ORDER OF THE SYSTEM.
+C
+C         B         REAL(N).
+C                   B CONTAINS THE RIGHT HAND SIDE OF THE SYSTEM.
+C
+C         JOB       INTEGER
+C                   JOB SPECIFIES WHAT KIND OF SYSTEM IS TO BE SOLVED.
+C                   IF JOB IS
+C
+C                        00   SOLVE T*X=B, T LOWER TRIANGULAR,
+C                        01   SOLVE T*X=B, T UPPER TRIANGULAR,
+C                        10   SOLVE TRANS(T)*X=B, T LOWER TRIANGULAR,
+C                        11   SOLVE TRANS(T)*X=B, T UPPER TRIANGULAR.
+C
+C     ON RETURN
+C
+C         B         B CONTAINS THE SOLUTION, IF INFO .EQ. 0.
+C                   OTHERWISE B IS UNALTERED.
+C
+C         INFO      INTEGER
+C                   INFO CONTAINS ZERO IF THE SYSTEM IS NONSINGULAR.
+C                   OTHERWISE INFO CONTAINS THE INDEX OF
+C                   THE FIRST ZERO DIAGONAL ELEMENT OF T.
+C
+C     LINPACK. THIS VERSION DATED 08/14/78 .
+C     G. W. STEWART, UNIVERSITY OF MARYLAND, ARGONNE NATIONAL LAB.
+C
+C     SUBROUTINES AND FUNCTIONS
+C
+C     BLAS SAXPY,SDOT
+C     FORTRAN MOD
+C
+C     INTERNAL VARIABLES
+C
+      REAL SDOT, TEMP
+      INTEGER CASE, J, JJ
+C
+C     BEGIN BLOCK PERMITTING ...EXITS TO 150
+C
+C        CHECK FOR ZERO DIAGONAL ELEMENTS.
+C
+      DO 10 INFO=1,N
+C     ......EXIT
+        IF (T(INFO,INFO).EQ.0.0E0) GO TO 150
+   10 CONTINUE
+      INFO = 0
+C
+C        DETERMINE THE TASK AND GO TO IT.
+C
+      CASE = 1
+      IF (MOD(JOB,10).NE.0) CASE = 2
+      IF (MOD(JOB,100)/10.NE.0) CASE = CASE + 2
+      GO TO (20, 50, 80, 110), CASE
+C
+C        SOLVE T*X=B FOR T LOWER TRIANGULAR
+C
+   20 CONTINUE
+      B(1) = B(1)/T(1,1)
+      IF (N.LT.2) GO TO 40
+      DO 30 J=2,N
+        TEMP = -B(J-1)
+        CALL SAXPY(N-J+1, TEMP, T(J,J-1), 1, B(J), 1)
+        B(J) = B(J)/T(J,J)
+   30 CONTINUE
+   40 CONTINUE
+      GO TO 140
+C
+C        SOLVE T*X=B FOR T UPPER TRIANGULAR.
+C
+   50 CONTINUE
+      B(N) = B(N)/T(N,N)
+      IF (N.LT.2) GO TO 70
+      DO 60 JJ=2,N
+        J = N - JJ + 1
+        TEMP = -B(J+1)
+        CALL SAXPY(J, TEMP, T(1,J+1), 1, B(1), 1)
+        B(J) = B(J)/T(J,J)
+   60 CONTINUE
+   70 CONTINUE
+      GO TO 140
+C
+C        SOLVE TRANS(T)*X=B FOR T LOWER TRIANGULAR.
+C
+   80 CONTINUE
+      B(N) = B(N)/T(N,N)
+      IF (N.LT.2) GO TO 100
+      DO 90 JJ=2,N
+        J = N - JJ + 1
+        B(J) = B(J) - SDOT(JJ-1,T(J+1,J),1,B(J+1),1)
+        B(J) = B(J)/T(J,J)
+   90 CONTINUE
+  100 CONTINUE
+      GO TO 140
+C
+C        SOLVE TRANS(T)*X=B FOR T UPPER TRIANGULAR.
+C
+  110 CONTINUE
+      B(1) = B(1)/T(1,1)
+      IF (N.LT.2) GO TO 130
+      DO 120 J=2,N
+        B(J) = B(J) - SDOT(J-1,T(1,J),1,B(1),1)
+        B(J) = B(J)/T(J,J)
+  120 CONTINUE
+  130 CONTINUE
+  140 CONTINUE
+  150 CONTINUE
+      RETURN
+      END
+      SUBROUTINE MATGEN(A, LDA, N, LB, UB, X, JOB, INIT, IMAT)          MAT   10
+      INTEGER I, J, K, M, I1, J1, M1, M2, JB, IM, JM, MM, NN, NM1, IP1,
+     * NNN, NMIP1, LDA, N, LB, UB, JOB, INIT, IMAT
+      REAL A(LDA,1), X(LDA,1), ASAVE(40,40), XSAVE(40,40), T
+C
+C     THIS ROUTINE GENERATES OR REGENERATES DIFFERENT TEST
+C     MATRICES FOR SICE.
+C     THE MATRICES ARE
+C        1) 4X4 EIGENVALUES 1,2,3,4
+C        2) 4X4 SYMMETRIC MULTIPLE EIGENVALUES
+C        3) 3X3 EIGENVALUES 1,2,3 ILL-CONDITIONED
+C        4) 11X11 WILKINSON PLUS (W11+)
+C        5) 8X8 FRANK MATRIX
+C        6) 4X4 MAGIC SQUARE
+C        7) 3X3 WITH COMPLEX EIGENVALUES
+C        8) 4X4 WITH COMPLEX EIGENVALUES
+C        9) 1X1 MONOELEMENTAL
+C
+      NOUT = 6
+      IF (INIT.EQ.0) GO TO 390
+      GO TO (10, 40, 70, 80, 130, 180, 300, 310, 320), IMAT
+C
+C     4X4 EIGENVALUES 1,2,3,4
+C
+   10 CONTINUE
+      WRITE (NOUT,99999)
+99999 FORMAT (24H 4X4 EIGENVALUES 1,2,3,4)
+      N = 4
+      DO 30 I=1,N
+        DO 20 J=1,N
+          A(J,I) = 2.0
+   20   CONTINUE
+   30 CONTINUE
+      A(1,1) = -2.0
+      A(2,1) = -3.0
+      A(3,1) = -2.0
+      A(4,1) = -1.0
+      A(2,2) = 3.0
+      A(3,2) = 0.0
+      A(4,2) = 0.0
+      A(3,3) = 4.0
+      A(4,3) = 0.0
+      A(4,4) = 5.0
+      JOB = 1
+      X(1,1) = 1.
+      X(2,1) = .7
+      X(3,1) = .5
+      X(4,1) = .2
+      X(1,2) = 1.
+      X(2,2) = 1.
+      X(3,2) = .66
+      X(4,2) = .33
+      X(1,3) = 1.
+      X(2,3) = 1.
+      X(3,3) = 1.
+      X(4,3) = .5
+      X(1,4) = 1.
+      X(2,4) = 1.
+      X(3,4) = 1.
+      X(4,4) = 1.
+      GO TO 330
+C
+C     SYMMETRIC MATRIX MULTIPLE EIGENVALUES
+C
+   40 CONTINUE
+      WRITE (NOUT,99998)
+99998 FORMAT (35H 4X4 SYMMETRIC MULTIPLE EIGENVALUES)
+      N = 4
+      DO 60 I=1,N
+        DO 50 J=1,N
+          A(J,I) = 4.0
+   50   CONTINUE
+        NMIP1 = N - I + 1
+        A(NMIP1,I) = 1.0
+        A(I,I) = 6.0
+   60 CONTINUE
+      JOB = 0
+      GO TO 330
+C
+C     3X3 EIGENVALUES 1,2,3 CONDITION 10**3
+C
+   70 CONTINUE
+      WRITE (NOUT,99997)
+99997 FORMAT (38H 3X3 EIGENVALUES 1,2,3 ILL-CONDITIONED)
+      N = 3
+      A(1,1) = -149.
+      A(2,1) = 537.
+      A(3,1) = -27.
+      A(1,2) = -50.
+      A(2,2) = 180.
+      A(3,2) = -9.
+      A(1,3) = -154.
+      A(2,3) = 546.
+      A(3,3) = -25.
+      JOB = 0
+      GO TO 330
+C
+C     MATRIX IS W11+ ON PAGE 308 OF AEP.
+C
+   80 CONTINUE
+      WRITE (NOUT,99996)
+99996 FORMAT (28H 11X11 WILKINSON PLUS (W11+))
+      N = 11
+      NNN = N/2
+      DO 100 J=1,N
+        DO 90 I=1,N
+          A(I,J) = 0.0E0
+   90   CONTINUE
+  100 CONTINUE
+      NN = NNN + 1
+      DO 110 I=1,NN
+        A(I,I) = FLOAT(NNN+1-I)
+        A(I+1,I) = 1.0E0
+        A(I,I+1) = 1.0E0
+  110 CONTINUE
+      NN = NN + 1
+      DO 120 I=NN,N
+        A(I,I) = FLOAT(I-NNN-1)
+        A(I,I-1) = 1.0E0
+        A(I-1,I) = 1.0E0
+  120 CONTINUE
+      JOB = 0
+      GO TO 330
+C
+C     FRANK MATRIX
+C
+  130 CONTINUE
+      WRITE (NOUT,99995)
+99995 FORMAT (17H 8X8 FRANK MATRIX)
+      N = 8
+      DO 160 I=1,N
+        DO 140 J=1,I
+          A(J,I) = N - I + 1
+  140   CONTINUE
+        IF (I.EQ.N) GO TO 160
+        IP1 = I + 1
+        DO 150 J=IP1,N
+          A(J,I) = 0.0
+  150   CONTINUE
+  160 CONTINUE
+      NM1 = N - 1
+      DO 170 I=1,NM1
+        A(I+1,I) = NM1 - I + 1
+  170 CONTINUE
+      JOB = 0
+      GO TO 330
+C
+C     ALGORITHMS FOR MAGIC SQUARES TAKEN FROM
+C        MATHEMATICAL RECREATIONS AND ESSAYS, 12TH ED.,
+C        BY W. W. ROUSE BALL AND H. S. M. COXETER
+C
+  180 CONTINUE
+      WRITE (NOUT,99994)
+99994 FORMAT (17H 4X4 MAGIC SQUARE)
+      JOB = 0
+C
+      N = 4
+      IF (MOD(N,4).EQ.0) GO TO 270
+      IF (MOD(N,2).EQ.0) M = N/2
+      IF (MOD(N,2).NE.0) M = N
+C
+C     ODD ORDER OR UPPER CORNER OF EVEN ORDER
+C
+      DO 200 J=1,M
+        DO 190 I=1,M
+          A(I,J) = 0
+  190   CONTINUE
+  200 CONTINUE
+      I = 1
+      J = (M+1)/2
+      MM = M*M
+      DO 220 K=1,MM
+        A(I,J) = K
+        I1 = I - 1
+        J1 = J + 1
+        IF (I1.LT.1) I1 = M
+        IF (J1.GT.M) J1 = 1
+        IF (A(I1,J1).EQ.0.0) GO TO 210
+        I1 = I + 1
+        J1 = J
+  210   CONTINUE
+        I = I1
+        J = J1
+  220 CONTINUE
+      IF (MOD(N,2).NE.0) GO TO 330
+C
+C     REST OF EVEN ORDER
+C
+      T = M*M
+      DO 240 I=1,M
+        DO 230 J=1,M
+          IM = I + M
+          JM = J + M
+          A(I,JM) = A(I,J) + 2.0*T
+          A(IM,J) = A(I,J) + 3.0*T
+          A(IM,JM) = A(I,J) + T
+  230   CONTINUE
+  240 CONTINUE
+      M1 = (M-1)/2
+      IF (M1.EQ.0) GO TO 330
+      DO 250 J=1,M1
+        CALL SSWAP(M, A(1,J), 1, A(M+1,J), 1)
+  250 CONTINUE
+      M1 = (M+1)/2
+      M2 = M1 + M
+      T = A(M1,1)
+      A(M1,1) = A(M2,1)
+      A(M2,1) = T
+      T = A(M1,M1)
+      A(M1,M1) = A(M2,M1)
+      A(M2,M1) = T
+      M1 = (M-3)/2
+      IF (M1.EQ.0) GO TO 330
+      DO 260 JB=1,M1
+        J = N + 1 - JB
+        CALL SSWAP(M, A(1,J), 1, A(M+1,J), 1)
+  260 CONTINUE
+      GO TO 330
+C
+C     DOUBLE EVEN ORDER
+C
+  270 K = 1
+      DO 290 I=1,N
+        DO 280 J=1,N
+          A(I,J) = K
+          IF (MOD(I,4)/2.EQ.MOD(J,4)/2) A(I,J) = N*N + 1 - K
+          K = K + 1
+  280   CONTINUE
+  290 CONTINUE
+      GO TO 330
+C
+C     3X3 COMPLEX EIGENVALUES
+C
+  300 CONTINUE
+      WRITE (NOUT,99993)
+99993 FORMAT (29H 3X3 WITH COMPLEX EIGENVALUES)
+      N = 3
+      A(1,1) = -1.0
+      A(2,1) = -4.0
+      A(3,1) = 7.0
+      A(1,2) = -2.0
+      A(2,2) = 5.0
+      A(3,2) = -8.0
+      A(1,3) = -3.0
+      A(2,3) = -6.0
+      A(3,3) = 9.0
+      JOB = 0
+      GO TO 330
+C
+C     4X4 COMPLEX EIGENVALUES
+C
+  310 CONTINUE
+      WRITE (NOUT,99992)
+99992 FORMAT (29H 4X4 WITH COMPLEX EIGENVALUES)
+      N = 4
+      A(1,1) = 4.0
+      A(1,2) = 0.0
+      A(1,3) = 5.0
+      A(1,4) = 3.0
+      A(2,1) = -5.0
+      A(2,2) = 4.0
+      A(2,3) = -3.0
+      A(2,4) = 0.0
+      A(3,1) = 0.0
+      A(3,2) = -3.0
+      A(3,3) = 4.0
+      A(3,4) = 5.0
+      A(4,1) = 3.0
+      A(4,2) = -5.0
+      A(4,3) = 0.0
+      A(4,4) = 4.0
+      JOB = 0
+      GO TO 330
+C
+C     1X1 MONOELEMENTAL MATRIX
+C
+  320 CONTINUE
+      WRITE (NOUT,99991)
+99991 FORMAT (18H 1X1 MONOELEMENTAL)
+      N = 1
+      A(1,1) = 1.0E0
+      JOB = 0
+      GO TO 330
+C
+C     SAVE THE MATRIX
+C
+  330 CONTINUE
+      LB = 1
+      UB = N
+      DO 350 I=1,N
+        DO 340 J=1,N
+          ASAVE(J,I) = A(J,I)
+  340   CONTINUE
+  350 CONTINUE
+      IF (JOB.EQ.0) GO TO 380
+      DO 370 I=1,N
+        DO 360 J=1,N
+          XSAVE(J,I) = X(J,I)
+  360   CONTINUE
+  370 CONTINUE
+  380 CONTINUE
+      RETURN
+C
+C     REGENERATE THE MATRIX
+C
+  390 CONTINUE
+      DO 410 I=1,N
+        DO 400 J=1,N
+          A(J,I) = ASAVE(J,I)
+  400   CONTINUE
+  410 CONTINUE
+      IF (JOB.EQ.0) GO TO 440
+      DO 430 I=1,N
+        DO 420 J=1,N
+          X(J,I) = XSAVE(J,I)
+  420   CONTINUE
+  430 CONTINUE
+  440 CONTINUE
+C
+      RETURN
+      END

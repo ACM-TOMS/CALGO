@@ -1,0 +1,1164 @@
+C     ALGORITHM 583, COLLECTED ALGORITHMS FROM ACM.
+C     ALGORITHM APPEARED IN ACM-TRANS. MATH. SOFTWARE, VOL.8, NO. 2,
+C     JUN., 1982, P. 195.
+      SUBROUTINE LSQR( M,N,APROD,DAMP,                                     1.
+     1                 LENIW,LENRW,IW,RW,
+     2                 U,V,W,X,SE,
+     3                 ATOL,BTOL,CONLIM,ITNLIM,NOUT,
+     4                 ISTOP,ANORM,ACOND,RNORM,ARNORM,XNORM )
+C
+      EXTERNAL   APROD
+      INTEGER    M,N,LENIW,LENRW,ITNLIM,NOUT,ISTOP
+      INTEGER    IW(LENIW)
+      REAL       RW(LENRW),U(M),V(N),W(N),X(N),SE(N),
+     1           ATOL,BTOL,CONLIM,DAMP,ANORM,ACOND,RNORM,ARNORM,XNORM
+C     ------------------------------------------------------------------
+C
+C     LSQR  FINDS A SOLUTION  X  TO THE FOLLOWING PROBLEMS...
+C
+C     1. UNSYMMETRIC EQUATIONS --    SOLVE  A*X = B
+C
+C     2. LINEAR LEAST SQUARES  --    SOLVE  A*X = B
+C                                    IN THE LEAST-SQUARES SENSE
+C
+C     3. DAMPED LEAST SQUARES  --    SOLVE  (   A    )*X = ( B )
+C                                           ( DAMP*I )     ( 0 )
+C                                    IN THE LEAST-SQUARES SENSE
+C
+C     WHERE  A  IS A MATRIX WITH  M  ROWS AND  N  COLUMNS, B  IS AN
+C     M-VECTOR, AND  DAMP  IS A SCALAR (ALL QUANTITIES REAL).
+C     THE MATRIX  A  IS INTENDED TO BE LARGE AND SPARSE.  IT IS ACCESSED
+C     BY MEANS OF SUBROUTINE CALLS OF THE FORM
+C
+C                CALL APROD( MODE,M,N,X,Y,LENIW,LENRW,IW,RW )
+C
+C     WHICH MUST PERFORM THE FOLLOWING FUNCTIONS...
+C
+C                IF MODE = 1, COMPUTE  Y = Y + A*X.
+C                IF MODE = 2, COMPUTE  X = X + A(TRANSPOSE)*Y.
+C
+C     THE VECTORS X AND Y ARE INPUT PARAMETERS IN BOTH CASES.
+C     IF MODE = 1, Y SHOULD BE ALTERED WITHOUT CHANGING X.
+C     IF MODE = 2, X SHOULD BE ALTERED WITHOUT CHANGING Y.
+C     THE PARAMETERS LENIW, LENRW, IW, RW MAY BE USED FOR WORKSPACE
+C     AS DESCRIBED BELOW.
+C
+C     THE RHS VECTOR  B  IS INPUT VIA  U,  AND SUBSEQUENTLY OVERWRITTEN.
+C
+C
+C     NOTE.  LSQR USES AN ITERATIVE METHOD TO APPROXIMATE THE SOLUTION.
+C     THE NUMBER OF ITERATIONS REQUIRED TO REACH A CERTAIN ACCURACY
+C     DEPENDS STRONGLY ON THE SCALING OF THE PROBLEM.  POOR SCALING OF
+C     THE ROWS OR COLUMNS OF  A  SHOULD THEREFORE BE AVOIDED WHERE
+C     POSSIBLE.
+C
+C     FOR EXAMPLE, IN PROBLEM 1 THE SOLUTION IS UNALTERED BY
+C     ROW-SCALING.  IF A ROW OF  A  IS VERY SMALL OR LARGE COMPARED TO
+C     THE OTHER ROWS OF  A,  THE CORRESPONDING ROW OF  ( A  B )  SHOULD
+C     BE SCALED UP OR DOWN.
+C
+C     IN PROBLEMS 1 AND 2, THE SOLUTION  X  IS EASILY RECOVERED
+C     FOLLOWING COLUMN-SCALING.  IN THE ABSENCE OF BETTER INFORMATION,
+C     THE NONZERO COLUMNS OF  A  SHOULD BE SCALED SO THAT THEY ALL HAVE
+C     THE SAME EUCLIDEAN NORM (E.G.  1.0).
+C
+C     IN PROBLEM 3, THERE IS NO FREEDOM TO RE-SCALE IF  DAMP  IS
+C     NONZERO.  HOWEVER, THE VALUE OF  DAMP  SHOULD BE ASSIGNED ONLY
+C     AFTER ATTENTION HAS BEEN PAID TO THE SCALING OF  A.
+C
+C     THE PARAMETER  DAMP  IS INTENDED TO HELP REGULARIZE
+C     ILL-CONDITIONED SYSTEMS, BY PREVENTING THE TRUE SOLUTION FROM
+C     BEING VERY LARGE.  ANOTHER AID TO REGULARIZATION IS PROVIDED BY
+C     THE PARAMETER  ACOND,  WHICH MAY BE USED TO TERMINATE ITERATIONS
+C     BEFORE THE COMPUTED SOLUTION BECOMES VERY LARGE.
+C
+C
+C     NOTATION
+C     --------
+C
+C     THE FOLLOWING QUANTITIES ARE USED IN DISCUSSING THE SUBROUTINE
+C     PARAMETERS...
+C
+C     ABAR   =  (   A    ),          BBAR  =  ( B )
+C               ( DAMP*I )                    ( 0 )
+C
+C     R      =  B  -  A*X,           RBAR  =  BBAR  -  ABAR*X
+C
+C     RNORM  =  SQRT( NORM(R)**2  +  DAMP**2 * NORM(X)**2 )
+C            =  NORM( RBAR )
+C
+C     RELPR  =  THE RELATIVE PRECISION OF FLOATING-POINT ARITHMETIC
+C               ON THE MACHINE BEING USED.  FOR EXAMPLE, ON THE IBM 370,
+C               RELPR  IS ABOUT 1.0E-6 AND 1.0D-16 IN SINGLE AND DOUBLE
+C               PRECISION RESPECTIVELY.
+C
+C     LSQR  MINIMIZES THE FUNCTION  RNORM  WITH RESPECT TO  X.
+C
+C
+C     PARAMETERS
+C     ----------
+C
+C     M       INPUT      THE NUMBER OF ROWS IN  A.
+C
+C     N       INPUT      THE NUMBER OF COLUMNS IN  A.
+C
+C     APROD   EXTERNAL   SEE ABOVE.
+C
+C     DAMP    INPUT      THE DAMPING PARAMETER FOR PROBLEM 3 ABOVE.
+C                        (DAMP  SHOULD BE 0.0 FOR PROBLEMS 1 AND 2.)
+C                        IF THE SYSTEM  A*X = B  IS INCOMPATIBLE, VALUES
+C                        OF  DAMP  IN THE RANGE 0 TO SQRT(RELPR)*NORM(A)
+C                        WILL PROBABLY HAVE A NEGLIGIBLE EFFECT.
+C                        LARGER VALUES OF  DAMP  WILL TEND TO DECREASE
+C                        THE NORM OF  X  AND TO REDUCE THE NUMBER OF
+C                        ITERATIONS REQUIRED BY LSQR.
+C
+C                        THE WORK PER ITERATION AND THE STORAGE NEEDED
+C                        BY LSQR ARE THE SAME FOR ALL VALUES OF  DAMP.
+C
+C     LENIW   INPUT      THE LENGTH OF THE WORKSPACE ARRAY  IW.
+C     LENRW   INPUT      THE LENGTH OF THE WORKSPACE ARRAY  RW.
+C     IW      WORKSPACE  AN INTEGER ARRAY OF LENGTH  LENIW.
+C     RW      WORKSPACE  A REAL ARRAY OF LENGTH  LENRW.
+C
+C             NOTE.  LSQR DOES NOT EXPLICITLY USE THE PREVIOUS FOUR
+C             PARAMETERS, BUT PASSES THEM TO SUBROUTINE APROD FOR
+C             POSSIBLE USE AS WORKSPACE.  IF APROD DOES NOT NEED
+C             IW  OR  RW,  THE VALUES  LENIW = 1  OR  LENRW = 1  SHOULD
+C             BE USED, AND THE ACTUAL PARAMETERS CORRESPONDING TO
+C             IW  OR  RW  MAY BE ANY CONVENIENT ARRAY OF SUITABLE TYPE.
+C
+C     U(M)    INPUT      THE RHS VECTOR  B.  BEWARE THAT  U  IS
+C                        OVER-WRITTEN BY LSQR.
+C
+C     V(N)    WORKSPACE
+C     W(N)    WORKSPACE
+C
+C     X(N)    OUTPUT     RETURNS THE COMPUTED SOLUTION  X.
+C
+C     SE(N)   OUTPUT     RETURNS STANDARD ERROR ESTIMATES FOR THE
+C                        COMPONENTS OF  X.  FOR EACH  I,  SE(I)  IS SET
+C                        TO THE VALUE  RNORM * SQRT( SIGMA(I,I) / T ),
+C                        WHERE  SIGMA(I,I)  IS AN ESTIMATE OF THE I-TH
+C                        DIAGONAL OF THE INVERSE OF ABAR(TRANSPOSE)*ABAR
+C                        AND  T = 1      IF  M .LE. N,
+C                             T = M - N  IF  M .GT. N  AND  DAMP = 0,
+C                             T = M      IF  DAMP .NE. 0.
+C
+C     ATOL    INPUT      AN ESTIMATE OF THE RELATIVE ERROR IN THE DATA
+C                        DEFINING THE MATRIX  A.  FOR EXAMPLE,
+C                        IF  A  IS ACCURATE TO ABOUT 6 DIGITS, SET
+C                        ATOL = 1.0E-6 .
+C
+C     BTOL    INPUT      AN ESTIMATE OF THE RELATIVE ERROR IN THE DATA
+C                        DEFINING THE RHS VECTOR  B.  FOR EXAMPLE,
+C                        IF  B  IS ACCURATE TO ABOUT 6 DIGITS, SET
+C                        BTOL = 1.0E-6 .
+C
+C     CONLIM  INPUT      AN UPPER LIMIT ON  COND(ABAR),  THE APPARENT
+C                        CONDITION NUMBER OF THE MATRIX  ABAR.
+C                        ITERATIONS WILL BE TERMINATED IF A COMPUTED
+C                        ESTIMATE OF  COND(ABAR)  EXCEEDS  CONLIM.
+C                        THIS IS INTENDED TO PREVENT CERTAIN SMALL OR
+C                        ZERO SINGULAR VALUES OF  A  OR  ABAR  FROM
+C                        COMING INTO EFFECT AND CAUSING UNWANTED GROWTH
+C                        IN THE COMPUTED SOLUTION.
+C
+C                        CONLIM  AND  DAMP  MAY BE USED SEPARATELY OR
+C                        TOGETHER TO REGULARIZE ILL-CONDITIONED SYSTEMS.
+C
+C                        NORMALLY,  CONLIM  SHOULD BE IN THE RANGE
+C                        1000  TO  1/RELPR.
+C                        SUGGESTED VALUE --
+C                        CONLIM = 1/(100*RELPR)  FOR COMPATIBLE SYSTEMS,
+C                        CONLIM = 1/(10*SQRT(RELPR))  FOR LEAST SQUARES.
+C
+C             NOTE.  IF THE USER IS NOT CONCERNED ABOUT THE PARAMETERS
+C             ATOL, BTOL  AND  CONLIM,  ANY OR ALL OF THEM MAY BE SET
+C             TO ZERO.  THE EFFECT WILL BE THE SAME AS THE VALUES
+C             RELPR, RELPR  AND  1/RELPR  RESPECTIVELY.
+C
+C     ITNLIM  INPUT      AN UPPER LIMIT ON THE NUMBER OF ITERATIONS.
+C                        SUGGESTED VALUE --
+C                        ITNLIM = N/2     FOR WELL CONDITIONED SYSTEMS,
+C                        ITNLIM = 4*N     OTHERWISE.
+C
+C     NOUT    INPUT      FILE NUMBER FOR PRINTER.  IF POSITIVE,
+C                        A SUMMARY WILL BE PRINTED ON FILE  NOUT.
+C
+C     ISTOP   OUTPUT     AN INTEGER GIVING THE REASON FOR TERMINATION...
+C
+C                0       X = 0  IS THE EXACT SOLUTION.
+C                        NO ITERATIONS WERE PERFORMED.
+C
+C                1       THE EQUATIONS  A*X = B  ARE PROBABLY
+C                        COMPATIBLE.  NORM(A*X - B)  IS SUFFICIENTLY
+C                        SMALL, GIVEN THE VALUES OF  ATOL  AND  BTOL.
+C
+C                2       THE SYSTEM  A*X = B  IS PROBABLY NOT
+C                        COMPATIBLE.  A LEAST-SQUARES SOLUTION HAS
+C                        BEEN OBTAINED WHICH IS SUFFICIENTLY ACCURATE,
+C                        GIVEN THE VALUE OF  ATOL.
+C
+C                3       AN ESTIMATE OF  COND(ABAR)  HAS EXCEEDED
+C                        CONLIM.   THE SYSTEM  A*X = B  APPEARS TO BE
+C                        ILL-CONDITIONED.  OTHERWISE, THERE COULD BE AN
+C                        AN ERROR IN SUBROUTINE APROD.
+C
+C                4       THE EQUATIONS  A*X = B  ARE PROBABLY
+C                        COMPATIBLE.  NORM(A*X - B)  IS AS SMALL AS
+C                        SEEMS REASONABLE ON THIS MACHINE.
+C
+C                5       THE SYSTEM  A*X = B  IS PROBABLY NOT
+C                        COMPATIBLE.  A LEAST-SQUARES SOLUTION HAS
+C                        BEEN OBTAINED WHICH IS AS ACCURATE AS SEEMS
+C                        REASONABLE ON THIS MACHINE.
+C
+C                6       COND(ABAR)  SEEMS TO BE SO LARGE THAT THERE IS
+C                        NOT MUCH POINT IN DOING FURTHER ITERATIONS,
+C                        GIVEN THE PRECISION OF THIS MACHINE.
+C                        THERE COULD BE AN ERROR IN SUBROUTINE APROD.
+C
+C                7       THE ITERATION LIMIT  ITNLIM  WAS REACHED.
+C
+C     ANORM   OUTPUT     AN ESTIMATE OF THE FROBENIUS NORM OF  ABAR.
+C                        THIS IS THE SQUARE-ROOT OF THE SUM OF SQUARES
+C                        OF THE ELEMENTS OF  ABAR.
+C                        IF  DAMP  IS SMALL AND IF THE COLUMNS OF  A
+C                        HAVE ALL BEEN SCALED TO HAVE LENGTH  1.0,
+C                        ANORM  SHOULD INCREASE TO ROUGHLY  SQRT(N).
+C                        A RADICALLY DIFFERENT VALUE FOR  ANORM  MAY
+C                        INDICATE AN ERROR IN SUBROUTINE APROD (THERE
+C                        MAY BE AN INCONSISTENCY BETWEEN MODES 1 AND 2).
+C
+C     ACOND   OUTPUT     AN ESTIMATE OF  COND(ABAR),  THE CONDITION
+C                        NUMBER OF  ABAR.  A VERY HIGH VALUE OF  ACOND
+C                        MAY AGAIN INDICATE AN ERROR IN APROD.
+C
+C     RNORM   OUTPUT     AN ESTIMATE OF THE FINAL VALUE OF NORM(RBAR),
+C                        THE FUNCTION BEING MINIMIZED (SEE NOTATION
+C                        ABOVE).  THIS WILL BE SMALL IF  A*X = B  HAS
+C                        A SOLUTION.
+C
+C     ARNORM  OUTPUT     AN ESTIMATE OF THE FINAL VALUE OF
+C                        NORM( ABAR(TRANSPOSE)*RBAR ), THE NORM OF
+C                        THE RESIDUAL FOR THE USUAL NORMAL EQUATIONS.
+C                        THIS SHOULD BE SMALL IN ALL CASES.  (ARNORM
+C                        WILL OFTEN BE SMALLER THAN THE TRUE VALUE
+C                        COMPUTED FROM THE OUTPUT VECTOR  X.)
+C
+C     XNORM   OUTPUT     AN ESTIMATE OF THE NORM OF THE FINAL
+C                        SOLUTION VECTOR  X.
+C
+C
+C     SUBROUTINES AND FUNCTIONS USED
+C     ------------------------------
+C
+C     USER       APROD
+C     LSQR       NORMLZ
+C     BLAS       SCOPY,SNRM2,SSCAL  (SEE LAWSON ET AL. BELOW)
+C                (SNRM2 IS USED ONLY IN NORMLZ)
+C     FORTRAN    ABS,MOD,SQRT
+C
+C
+C     PRECISION
+C     ---------
+C
+C     THE NUMBER OF ITERATIONS REQUIRED BY LSQR WILL USUALLY DECREASE
+C     IF THE COMPUTATION IS PERFORMED IN HIGHER PRECISION.  TO CONVERT
+C     LSQR  AND  NORMLZ  BETWEEN SINGLE- AND DOUBLE-PRECISION, CHANGE
+C     THE WORDS
+C                SCOPY, SNRM2, SSCAL
+C                ABS, REAL, SQRT
+C     TO THE APPROPRIATE BLAS AND FORTRAN EQUIVALENTS.
+C
+C
+C     REFERENCES
+C     ----------
+C
+C     PAIGE, C.C. AND SAUNDERS, M.A.  LSQR: AN ALGORITHM FOR SPARSE
+C        LINEAR EQUATIONS AND SPARSE LEAST SQUARES.
+C        ACM TRANSACTIONS ON MATHEMATICAL SOFTWARE 8, 1 (MARCH 1982).
+C
+C     LAWSON, C.L., HANSON, R.J., KINCAID, D.R. AND KROGH, F.T.
+C        BASIC LINEAR ALGEBRA SUBPROGRAMS FOR FORTRAN USAGE.
+C        ACM TRANSACTIONS ON MATHEMATICAL SOFTWARE 5, 3 (SEPT 1979),
+C        308-323 AND 324-325.
+C
+C
+C     LSQR.      THIS VERSION DATED 22 FEBRUARY 1982.
+C     ------------------------------------------------------------------
+C
+C     FUNCTIONS AND LOCAL VARIABLES
+C
+      INTEGER    I,ITN,MOD,NCONV,NSTOP
+      REAL       ABS,SQRT
+      REAL       ALFA,BBNORM,BETA,BNORM,
+     1           CS,CS1,CS2,CTOL,DAMPSQ,DDNORM,DELTA,
+     2           GAMMA,GAMBAR,ONE,PHI,PHIBAR,PSI,
+     3           RES1,RES2,RHO,RHOBAR,RHBAR1,RHBAR2,RHS,RTOL,
+     4           SN,SN1,SN2,T,TAU,TEST1,TEST2,TEST3,
+     5           THETA,T1,T2,T3,XXNORM,Z,ZBAR,ZERO
+C
+C
+C     INITIALIZE.
+C
+      IF (NOUT .GT. 0)
+     1   WRITE(NOUT, 1000) M,N,DAMP,ATOL,CONLIM,BTOL,ITNLIM
+      ZERO   = 0.0
+      ONE    = 1.0
+      CTOL   = ZERO
+      IF (CONLIM .GT. ZERO) CTOL = ONE/CONLIM
+      DAMPSQ = DAMP**2
+      ANORM  = ZERO
+      ACOND  = ZERO
+      BBNORM = ZERO
+      DDNORM = ZERO
+      RES2   = ZERO
+      XNORM  = ZERO
+      XXNORM = ZERO
+      CS2    = -ONE
+      SN2    = ZERO
+      Z      = ZERO
+      ITN    = 0
+      ISTOP  = 0
+      NSTOP  = 0
+C
+      DO 10 I = 1, N
+         V(I) = ZERO
+         X(I) = ZERO
+        SE(I) = ZERO
+   10 CONTINUE
+C
+C     SET UP THE FIRST VECTORS FOR THE BIDIAGONALIZATION.
+C     THESE SATISFY   BETA*U = B,   ALFA*V = A(TRANSPOSE)*U.
+C
+      CALL NORMLZ( M,U,BETA )
+      CALL APROD ( 2,M,N,V,U,LENIW,LENRW,IW,RW )
+      CALL NORMLZ( N,V,ALFA )
+      CALL SCOPY ( N,V,1,W,1 )
+C
+      RHOBAR = ALFA
+      PHIBAR = BETA
+      BNORM  = BETA
+      RNORM  = BETA
+      ARNORM = ALFA*BETA
+      IF (ARNORM .LE. ZERO) GO TO 800
+      IF (NOUT   .LE.  0  ) GO TO 100
+      IF (DAMPSQ .LE. ZERO) WRITE(NOUT, 1200)
+      IF (DAMPSQ .GT. ZERO) WRITE(NOUT, 1300)
+      TEST1  = ONE
+      TEST2  = ALFA/BETA
+      WRITE(NOUT, 1500) ITN,X(1),RNORM,TEST1,TEST2
+      WRITE(NOUT, 1600)
+C
+C     ------------------------------------------------------------------
+C     MAIN ITERATION LOOP.
+C     ------------------------------------------------------------------
+  100 ITN = ITN + 1
+C
+C     PERFORM THE NEXT STEP OF THE BIDIAGONALIZATION TO OBTAIN THE
+C     NEXT  BETA, U, ALFA, V.  THESE SATISFY THE RELATIONS
+C                BETA*U  =  A*V  -  ALFA*U,
+C                ALFA*V  =  A(TRANSPOSE)*U  -  BETA*V.
+C
+      CALL SSCAL ( M,(-ALFA),U,1 )
+      CALL APROD ( 1,M,N,V,U,LENIW,LENRW,IW,RW )
+      CALL NORMLZ( M,U,BETA )
+      BBNORM = BBNORM + ALFA**2 + BETA**2 + DAMPSQ
+      CALL SSCAL ( N,(-BETA),V,1 )
+      CALL APROD ( 2,M,N,V,U,LENIW,LENRW,IW,RW )
+      CALL NORMLZ( N,V,ALFA )
+C
+C
+C     USE A PLANE ROTATION TO ELIMINATE THE DAMPING PARAMETER.
+C     THIS ALTERS THE DIAGONAL (RHOBAR) OF THE LOWER-BIDIAGONAL MATRIX.
+C
+      RHBAR2 = RHOBAR**2 + DAMPSQ
+      RHBAR1 = SQRT(RHBAR2)
+      CS1    = RHOBAR/RHBAR1
+      SN1    = DAMP/RHBAR1
+      PSI    = SN1*PHIBAR
+      PHIBAR = CS1*PHIBAR
+C
+C
+C     USE A PLANE ROTATION TO ELIMINATE THE SUBDIAGONAL ELEMENT (BETA)
+C     OF THE LOWER-BIDIAGONAL MATRIX, GIVING AN UPPER-BIDIAGONAL MATRIX.
+C
+      RHO    = SQRT(RHBAR2 + BETA**2)
+      CS     = RHBAR1/RHO
+      SN     = BETA/RHO
+      THETA  =  SN*ALFA
+      RHOBAR = -CS*ALFA
+      PHI    =  CS*PHIBAR
+      PHIBAR =  SN*PHIBAR
+      TAU    =  SN*PHI
+C
+C
+C     UPDATE  X, W  AND THE STANDARD ERROR ESTIMATES.
+C
+      T1 =    PHI/RHO
+      T2 = -THETA/RHO
+      T3 =    ONE/RHO
+C
+      DO 200 I = 1, N
+         T     = W(I)
+         X(I)  = T1*T + X(I)
+         W(I)  = T2*T + V(I)
+         T     =(T3*T)**2
+         SE(I) = T + SE(I)
+         DDNORM= T + DDNORM
+  200 CONTINUE
+C
+C
+C     USE A PLANE ROTATION ON THE RIGHT TO ELIMINATE THE
+C     SUPER-DIAGONAL ELEMENT (THETA) OF THE UPPER-BIDIAGONAL MATRIX.
+C     THEN USE THE RESULT TO ESTIMATE  NORM(X).
+C
+      DELTA  =  SN2*RHO
+      GAMBAR = -CS2*RHO
+      RHS    = PHI - DELTA*Z
+      ZBAR   = RHS/GAMBAR
+      XNORM  = SQRT(XXNORM + ZBAR**2)
+      GAMMA  = SQRT(GAMBAR**2 + THETA**2)
+      CS2    = GAMBAR/GAMMA
+      SN2    = THETA/GAMMA
+      Z      = RHS/GAMMA
+      XXNORM = XXNORM + Z**2
+C
+C
+C     TEST FOR CONVERGENCE.
+C     FIRST, ESTIMATE THE NORM AND CONDITION OF THE MATRIX  ABAR,
+C     AND THE NORMS OF  RBAR  AND  ABAR(TRANSPOSE)*RBAR.
+C
+      ANORM  = SQRT(BBNORM)
+      ACOND  = ANORM*SQRT(DDNORM)
+      RES1   = PHIBAR**2
+      RES2   = RES2 + PSI**2
+      RNORM  = SQRT(RES1 + RES2)
+      ARNORM = ALFA*ABS(TAU)
+C
+C     NOW USE THESE NORMS TO ESTIMATE CERTAIN OTHER QUANTITIES,
+C     SOME OF WHICH WILL BE SMALL NEAR A SOLUTION.
+C
+      TEST1  = RNORM/BNORM
+      TEST2  = ARNORM/(ANORM*RNORM)
+      TEST3  = ONE/ACOND
+      T1     = TEST1/(ONE + ANORM*XNORM/BNORM)
+      RTOL   = BTOL +  ATOL*ANORM*XNORM/BNORM
+C
+C     THE FOLLOWING TESTS GUARD AGAINST EXTREMELY SMALL VALUES OF
+C     ATOL, BTOL  OR  CTOL.  (THE USER MAY HAVE SET ANY OR ALL OF
+C     THE PARAMETERS  ATOL, BTOL, CONLIM  TO ZERO.)
+C     THE EFFECT IS EQUIVALENT TO THE NORMAL TESTS USING
+C     ATOL = RELPR,  BTOL = RELPR,  CONLIM = 1/RELPR.
+C
+      T3 = ONE + TEST3
+      T2 = ONE + TEST2
+      T1 = ONE + T1
+      IF (ITN .GE. ITNLIM) ISTOP = 7
+      IF (T3  .LE. ONE   ) ISTOP = 6
+      IF (T2  .LE. ONE   ) ISTOP = 5
+      IF (T1  .LE. ONE   ) ISTOP = 4
+C
+C     ALLOW FOR TOLERANCES SET BY THE USER.
+C
+      IF (TEST3 .LE. CTOL) ISTOP = 3
+      IF (TEST2 .LE. ATOL) ISTOP = 2
+      IF (TEST1 .LE. RTOL) ISTOP = 1
+C     ==================================================================
+C
+C     SEE IF IT IS TIME TO PRINT SOMETHING.
+C
+      IF (NOUT .LE. 0) GO TO 600
+      IF (M.LE.40 .OR. N.LE.40) GO TO 400
+      IF (ITN .LE. 10)          GO TO 400
+      IF (ITN .GE. ITNLIM-10)   GO TO 400
+      IF (MOD(ITN,10) .EQ. 0)   GO TO 400
+      IF (TEST3 .LE.  2.0*CTOL) GO TO 400
+      IF (TEST2 .LE. 10.0*ATOL) GO TO 400
+      IF (TEST1 .LE. 10.0*RTOL) GO TO 400
+      GO TO 600
+C
+C     PRINT A LINE FOR THIS ITERATION.
+C
+  400 WRITE(NOUT, 1500) ITN,X(1),RNORM,TEST1,TEST2,ANORM,ACOND
+      IF (MOD(ITN,10) .EQ. 0) WRITE(NOUT, 1600)
+C     ==================================================================
+C
+C     STOP IF APPROPRIATE.
+C     THE CONVERGENCE CRITERIA ARE REQUIRED TO BE MET ON  NCONV
+C     CONSECUTIVE ITERATIONS, WHERE  NCONV  IS SET BELOW.
+C     SUGGESTED VALUE --   NCONV = 1, 2  OR  3.
+C
+  600 IF (ISTOP .EQ. 0) NSTOP = 0
+      IF (ISTOP .EQ. 0) GO TO 100
+      NCONV = 1
+      NSTOP = NSTOP + 1
+      IF (NSTOP .LT. NCONV  .AND.  ITN .LT. ITNLIM) ISTOP = 0
+      IF (ISTOP .EQ. 0) GO TO 100
+C     ------------------------------------------------------------------
+C     END OF ITERATION LOOP.
+C     ------------------------------------------------------------------
+C
+C
+C     FINISH OFF THE STANDARD ERROR ESTIMATES.
+C
+      T = ONE
+      IF (M .GT. N) T = M - N
+      IF (DAMPSQ .GT. ZERO) T = M
+      T = RNORM/SQRT(T)
+C
+      DO 700 I = 1, N
+         SE(I) = T*SQRT(SE(I))
+  700 CONTINUE
+C
+C     PRINT THE STOPPING CONDITION.
+C
+  800 IF (NOUT .LE. 0) GO TO 900
+      WRITE(NOUT, 1900) ITN,ISTOP
+      IF (ISTOP .EQ. 0) WRITE(NOUT, 2000)
+      IF (ISTOP .EQ. 1) WRITE(NOUT, 2100)
+      IF (ISTOP .EQ. 2) WRITE(NOUT, 2200)
+      IF (ISTOP .EQ. 3) WRITE(NOUT, 2300)
+      IF (ISTOP .EQ. 4) WRITE(NOUT, 2400)
+      IF (ISTOP .EQ. 5) WRITE(NOUT, 2500)
+      IF (ISTOP .EQ. 6) WRITE(NOUT, 2600)
+      IF (ISTOP .EQ. 7) WRITE(NOUT, 2700)
+  900 RETURN
+C     ------------------------------------------------------------------
+C
+ 1000 FORMAT(
+     1   // 25X, 46HLSQR   --   LEAST-SQUARES SOLUTION OF  A*X = B
+     2   // 25X, 18HTHE MATRIX  A  HAS, I6, 11H ROWS   AND, I6, 5H COLS
+     3    / 25X, 36HTHE DAMPING PARAMETER IS    DAMP   =, 1PE10.2
+     4   // 25X,  8HATOL   =, 1PE10.2, 10X, 8HCONLIM =, 1PE10.2
+     5    / 25X,  8HBTOL   =, 1PE10.2, 10X, 8HITNLIM =, I10)
+ 1200 FORMAT(// 3X, 3HITN, 9X, 4HX(1), 14X, 8HFUNCTION, 7X,
+     1   45HCOMPATIBLE INCOMPATIBLE    NORM(A)    COND(A) /)
+ 1300 FORMAT(// 3X, 3HITN, 9X, 4HX(1), 14X, 8HFUNCTION, 7X,
+     1   45HCOMPATIBLE INCOMPATIBLE NORM(ABAR) COND(ABAR) /)
+ 1500 FORMAT(I6, 1PE20.10, 1PE19.10, 1P2E13.3, 1P2E11.2)
+ 1600 FORMAT(1X)
+ 1900 FORMAT(/ 20H NO. OF ITERATIONS =, I6,
+     1   8X, 21H STOPPING CONDITION =, I3)
+ 2000 FORMAT(/ 52H THE EXACT SOLUTION IS  X = 0.                      )
+ 2100 FORMAT(/ 52H A*X - B  IS SMALL ENOUGH, GIVEN  ATOL, BTOL        )
+ 2200 FORMAT(/ 52H THE LEAST-SQRS SOLN IS GOOD ENOUGH, GIVEN  ATOL    )
+ 2300 FORMAT(/ 52H THE ESTIMATE OF  COND(ABAR)  HAS EXCEEDED  CONLIM  )
+ 2400 FORMAT(/ 52H A*X - B   IS SMALL ENOUGH FOR THIS MACHINE         )
+ 2500 FORMAT(/ 52H THE LEAST-SQRS SOLN IS GOOD ENOUGH FOR THIS MACHINE)
+ 2600 FORMAT(/ 52H COND(ABAR)   SEEMS TO BE TOO LARGE FOR THIS MACHINE)
+ 2700 FORMAT(/ 52H THE ITERATION LIMIT HAS BEEN REACHED               )
+C     END OF LSQR
+      END
+      SUBROUTINE NORMLZ( N,X,BETA )                                      551.
+      INTEGER    N
+      REAL       X(N),BETA
+C
+C     NORMLZ  IS REQUIRED BY SUBROUTINE LSQR.  IT COMPUTES THE
+C     EUCLIDEAN NORM OF  X  AND RETURNS THE VALUE IN  BETA.
+C     IF  X  IS NONZERO, IT IS SCALED SO THAT NORM(X) = 1.
+C
+C     FUNCTIONS AND SUBROUTINES
+C
+C     BLAS       SNRM2,SSCAL
+C
+      REAL       ONE,SNRM2,ZERO
+C
+C
+      ZERO = 0.0
+      ONE  = 1.0
+      BETA = SNRM2( N,X,1 )
+      IF (BETA .GT. ZERO) CALL SSCAL( N,(ONE/BETA),X,1 )
+      RETURN
+C
+C     END OF NORMLZ
+      END
+      SUBROUTINE APROD( MODE,M,N,X,Y,LENIW,LENRW,IW,RW )                 625.
+      INTEGER    MODE,M,N,LENIW,LENRW
+      INTEGER    IW(LENIW)
+      REAL       X(N),Y(M),RW(LENRW)
+C
+C     THIS IS THE MATRIX-VECTOR PRODUCT ROUTINE REQUIRED BY  LSQR
+C     FOR A TEST MATRIX OF THE FORM  A = HY*D*HZ.  THE QUANTITIES
+C     DEFINING  D, HY, HZ  ARE IN THE WORK ARRAY  RW,  FOLLOWED BY
+C     A WORK ARRAY  W.  THESE ARE PASSED TO  APROD1  AND  APROD2
+C     IN ORDER TO MAKE THE CODE LEGIBLE.
+C
+      INTEGER    LOCD,LOCHY,LOCHZ,LOCW
+C
+C
+      LOCD   = 1
+      LOCHY  = LOCD  + N
+      LOCHZ  = LOCHY + M
+      LOCW   = LOCHZ + N
+C
+      IF (MODE .EQ. 1) CALL APROD1( M,N,X,Y,
+     1   RW(LOCD), RW(LOCHY), RW(LOCHZ), RW(LOCW) )
+C
+      IF (MODE .NE. 1) CALL APROD2( M,N,X,Y,
+     1   RW(LOCD), RW(LOCHY), RW(LOCHZ), RW(LOCW) )
+C
+      RETURN
+C
+C     END OF APROD
+      END
+      SUBROUTINE APROD1( M,N,X,Y,D,HY,HZ,W )                             654.
+      INTEGER    M,N
+      REAL       X(N),Y(M),D(N),HY(M),HZ(N),W(M)
+C
+C     APROD1  COMPUTES  Y = Y + A*X  FOR SUBROUTINE APROD,
+C     WHERE  A  IS A TEST MATRIX OF THE FORM  A = HY*D*HZ,
+C     AND THE LATTER MATRICES  HY, D, HZ  ARE REPRESENTED BY
+C     INPUT VECTORS WITH THE SAME NAME.
+C
+      INTEGER    I,N1
+      REAL       ZERO
+C
+C
+      CALL HPROD( N,HZ,X,W )
+C
+      DO 100 I = 1, N
+         W(I) = D(I)*W(I)
+  100 CONTINUE
+C
+      IF (M .LE. N) GO TO 500
+      ZERO = 0.0
+      N1   = N + 1
+      DO 200 I = N1, M
+         W(I) = ZERO
+  200 CONTINUE
+C
+  500 CALL HPROD( M,HY,W,W )
+C
+      DO 600 I = 1, M
+         Y(I) = Y(I) + W(I)
+  600 CONTINUE
+      RETURN
+C
+C     END OF APROD1
+      END
+      SUBROUTINE APROD2( M,N,X,Y,D,HY,HZ,W )                             689.
+      INTEGER    M,N
+      REAL       X(N),Y(M),D(N),HY(M),HZ(N),W(M)
+C
+C     APROD2  COMPUTES  X = X + A(T)*Y  FOR SUBROUTINE APROD,
+C     WHERE  A  IS A TEST MATRIX OF THE FORM  A = HY*D*HZ,
+C     AND THE LATTER MATRICES  HY, D, HZ  ARE REPRESENTED BY
+C     INPUT VECTORS WITH THE SAME NAME.
+C
+      INTEGER    I
+C
+C
+      CALL HPROD( M,HY,Y,W )
+C
+      DO 100 I = 1, N
+         W(I) = D(I)*W(I)
+  100 CONTINUE
+C
+      CALL HPROD( N,HZ,W,W )
+C
+      DO 600 I = 1, N
+         X(I) = X(I) + W(I)
+  600 CONTINUE
+      RETURN
+C
+C     END OF APROD2
+      END
+      SUBROUTINE HPROD( N,HZ,X,Y )                                       716.
+      INTEGER    N
+      REAL       HZ(N),Y(N),X(N)
+C
+C     HPROD  APPLIES A HOUSEHOLDER TRANSFORMATION STORED IN  HZ
+C     TO GET  Y = ( I - 2*HZ*HZ(TRANSPOSE) ) * X.
+C
+      INTEGER    I
+      REAL       S
+C
+      S = 0.0
+      DO 100 I = 1, N
+         S = HZ(I)*X(I) + S
+  100 CONTINUE
+C
+      S = S + S
+      DO 200 I = 1, N
+         Y(I) = X(I) - S*HZ(I)
+  200 CONTINUE
+      RETURN
+C
+C     END OF HPROD
+      END
+      SUBROUTINE LSTP( M,N,NDUPLC,NPOWER,DAMP,X,                         739.
+     1                 B,D,HY,HZ,W,ACOND,RNORM )
+      INTEGER    M,N,MAXMN,NDUPLC,NPOWER
+      REAL       DAMP,ACOND,RNORM
+      REAL       B(M),X(N),D(N),HY(M),HZ(N),W(M)
+C
+C     LSTP  GENERATES A SPARSE LEAST-SQUARES TEST PROBLEM OF THE FORM
+C
+C                (   A    )*X = ( B )
+C                ( DAMP*I )     ( 0 )
+C
+C     HAVING A SPECIFIED SOLUTION  X.  THE MATRIX  A  IS CONSTRUCTED
+C     IN THE FORM  A = HY*D*HZ,  WHERE  D  IS AN M BY N DIAGONAL MATRIX,
+C     AND  HY AND HZ  ARE HOUSEHOLDER TRANSFORMATIONS.
+C
+C     THE FIRST 6 PARAMETERS ARE INPUT TO LSTP.  THE REMAINDER ARE
+C     OUTPUT.  LSTP IS INTENDED FOR USE WITH  M .GE. N.
+C
+C
+C     FUNCTIONS AND SUBROUTINES
+C
+C     TESTPROB   APROD1,HPROD
+C     LSQR       NORMLZ
+C     BLAS       SNRM2
+C     FORTRAN    COS,FLOAT,SIN,SQRT
+C
+C     LOCAL VARIABLES
+C
+      INTEGER    I,J,N1
+      REAL       COS,FLOAT,SIN,SNRM2,SQRT
+      REAL       ALFA,BETA,DAMPSQ,FOURPI,T
+C
+C
+      DAMPSQ = DAMP**2
+C
+C     ------------------------------------------------------------------
+C     MAKE TWO VECTORS OF NORM 1.0 FOR THE HOUSEHOLDER TRANSFORMATIONS.
+C     FOURPI  NEED NOT BE EXACT.
+C     ------------------------------------------------------------------
+      FOURPI = 4.0*3.141592
+      ALFA   = FOURPI/FLOAT(M)
+      BETA   = FOURPI/FLOAT(N)
+C
+      DO 100 I = 1, M
+         HY(I) = SIN(FLOAT(I)*ALFA)
+  100 CONTINUE
+C
+      DO 200 I = 1, N
+         HZ(I) = COS(FLOAT(I)*BETA)
+  200 CONTINUE
+C
+      CALL NORMLZ( M,HY,ALFA )
+      CALL NORMLZ( N,HZ,BETA )
+C
+C     ------------------------------------------------------------------
+C     SET THE DIAGONAL MATRIX  D.  THESE ARE THE SINGULAR VALUES OF  A.
+C     ------------------------------------------------------------------
+      DO 300 I = 1, N
+         J = (I-1+NDUPLC)/NDUPLC
+         T = J*NDUPLC
+         T = T/FLOAT(N)
+         D(I) = T**NPOWER
+  300 CONTINUE
+C
+      ACOND  = SQRT((D(N)**2 + DAMPSQ) / (D(1)**2 + DAMPSQ))
+C
+C     ------------------------------------------------------------------
+C     COMPUTE THE RESIDUAL VECTOR, STORING IT IN  B.
+C     IT TAKES THE FORM  HY*( S )
+C                           ( T )
+C     WHERE  S  IS OBTAINED FROM  D*S = DAMP**2 * HZ * X
+C     AND    T  CAN BE ANYTHING.
+C     ------------------------------------------------------------------
+      CALL HPROD ( N,HZ,X,B )
+C
+      DO 500 I = 1, N
+         B(I) = DAMPSQ*B(I)/D(I)
+  500 CONTINUE
+C
+      IF (M .LE. N) GO TO 650
+      T  = 1.0
+      N1 = N + 1
+      DO 600 I = N1, M
+         J    = I - N
+         B(I) = T*FLOAT(J)/FLOAT(M)
+         T    = - T
+  600 CONTINUE
+C
+  650 CALL HPROD ( M,HY,B,B )
+C
+C     ------------------------------------------------------------------
+C     NOW COMPUTE THE TRUE  B  =  RESIDUAL  + A*X.
+C     ------------------------------------------------------------------
+      RNORM = SQRT( SNRM2( M,B,1 )**2 + DAMPSQ*SNRM2( N,X,1 )**2 )
+      CALL APROD1( M,N,X,B,D,HY,HZ,W )
+      RETURN
+C
+C     END OF LSTP
+      END
+      SUBROUTINE TEST( M,N,NDUPLC,NPOWER,DAMP )                          838.
+      INTEGER    M,N,NDUPLC,NPOWER
+      REAL       DAMP
+C
+C     THIS IS AN EXAMPLE DRIVER ROUTINE FOR RUNNING  LSQR.
+C     IT GENERATES A TEST PROBLEM, SOLVES IT, AND EXAMINES THE RESULTS.
+C     NOTE THAT SUBROUTINE APROD MUST BE DECLARED  EXTERNAL  IF IT IS
+C     USED ONLY IN THE CALL TO LSQR.
+C
+C
+C     FUNCTIONS AND SUBROUTINES
+C
+C     TESTPROB   APROD
+C     BLAS       SCOPY,SNRM2,SSCAL
+C     FORTRAN    MAX0,SQRT
+C
+C     FUNCTIONS AND LOCAL VARIABLES
+C
+      EXTERNAL   APROD
+      INTEGER    ISTOP,ITNLIM,J,NOUT
+      REAL       SNRM2,SQRT
+      REAL       B(200),U(200),
+     1           V(100),W(100),X(100),SE(100),
+     2           ATOL,BTOL,CONLIM,ANORM,ACOND,RNORM,ARNORM,
+     3           DAMPSQ,ONE,XNORM
+      INTEGER    IW(1),LENIW,LENRW,LOCD,LOCHY,LOCHZ,LOCW,LTOTAL
+      REAL       RW(600)
+      DATA       LENIW/1/, LENRW/600/
+C
+C     ------------------------------------------------------------------
+C     GENERATE THE SPECIFIED TEST PROBLEM.
+C     THE WORKSPACE ARRAY  IW  IS NOT NEEDED IN THIS APPLICATION.
+C     THE WORKSPACE ARRAY  RW  IS USED FOR THE FOLLOWING VECTORS...
+C     D(N), HY(M), HZ(N), W(MAX(M,N)).
+C     THE VECTORS  D, HY, HZ  WILL DEFINE THE TEST MATRIX  A,  AND  W
+C     IS NEEDED FOR WORKSPACE IN THE ASSOCIATED ROUTINES APROD1, APROD2.
+C     ------------------------------------------------------------------
+C
+C     SET THE DESIRED SOLUTION  X.
+C
+      DO 100 J = 1, N
+         X(J) = N - J
+  100 CONTINUE
+C
+C     ALLOCATE STORAGE.
+C
+      LOCD   = 1
+      LOCHY  = LOCD  + N
+      LOCHZ  = LOCHY + M
+      LOCW   = LOCHZ + N
+      LTOTAL = LOCW  + MAX0(M,N) - 1
+      IF (LTOTAL .GT. LENRW) GO TO 900
+C
+      CALL LSTP( M,N,NDUPLC,NPOWER,DAMP,X,
+     1   B, RW(LOCD), RW(LOCHY), RW(LOCHZ), RW(LOCW), ACOND, RNORM )
+C
+C     ------------------------------------------------------------------
+C     SOLVE THE PROBLEM DEFINED BY  APROD, DAMP  AND  B.
+C     ------------------------------------------------------------------
+C
+C     COPY THE RHS VECTOR  B  INTO  U  (LSQR WILL OVERWRITE  U)
+C     AND SET THE OTHER INPUT PARAMETERS FOR LSQR.
+C
+      CALL SCOPY ( M,B,1,U,1 )
+      ATOL   = 1.0E-6
+      BTOL   = ATOL
+      CONLIM = 10.0*ACOND
+      ITNLIM = M + N + 50
+      NOUT   = 6
+      WRITE(NOUT, 1000) M,N,NDUPLC,NPOWER,DAMP,ACOND,RNORM
+C
+      CALL LSQR( M,N,APROD,DAMP,
+     1   LENIW,LENRW,IW,RW,
+     2   U,V,W,X,SE,
+     3   ATOL,BTOL,CONLIM,ITNLIM,NOUT,
+     4   ISTOP,ANORM,ACOND,RNORM,ARNORM,XNORM )
+C
+C     ------------------------------------------------------------------
+C     EXAMINE THE RESULTS.
+C     WE PRINT THE RESIDUAL NORMS  RNORM  AND  ARNORM  GIVEN BY LSQR,
+C     AND THEN COMPUTE THEIR TRUE VALUES IN TERMS OF THE SOLUTION  X
+C     OBTAINED BY LSQR.  AT LEAST ONE OF THEM SHOULD BE SMALL.
+C     ------------------------------------------------------------------
+      ONE    = 1.0
+      DAMPSQ = DAMP**2
+      WRITE(NOUT, 2000)
+      WRITE(NOUT, 2100) RNORM,ARNORM,XNORM
+C
+C     COMPUTE  U = A*X - B.
+C     THIS IS THE NEGATIVE OF THE USUAL RESIDUAL VECTOR.
+C     IT WILL BE CLOSE TO ZERO ONLY IF  B  IS A COMPATIBLE RHS
+C     AND  X  IS CLOSE TO A SOLUTION.
+C
+      CALL SCOPY ( M,B,1,U,1 )
+      CALL SSCAL ( M,(-ONE),U,1 )
+      CALL APROD ( 1,M,N,X,U,LENIW,LENRW,IW,RW )
+C
+C     COMPUTE  V = A(TRANSPOSE)*U  +  DAMP**2 * X.
+C     THIS WILL BE CLOSE TO ZERO IN ALL CASES IF  X  IS CLOSE TO
+C     A SOLUTION.
+C
+      CALL SCOPY ( N,X,1,V,1 )
+      CALL SSCAL ( N,DAMPSQ,V,1 )
+      CALL APROD ( 2,M,N,V,U,LENIW,LENRW,IW,RW )
+C
+C     COMPUTE THE NORMS ASSOCIATED WITH  X, U, V.
+C
+      XNORM  = SNRM2( N,X,1 )
+      RNORM  = SQRT ( SNRM2( M,U,1 )**2  +  DAMPSQ*XNORM**2 )
+      ARNORM = SNRM2( N,V,1 )
+      WRITE(NOUT, 2200) RNORM,ARNORM,XNORM
+C
+C     PRINT THE SOLUTION AND STANDARD ERROR ESTIMATES FROM LSQR.
+C
+      WRITE(NOUT, 3000) (J,X(J), J=1,N)
+      WRITE(NOUT, 3100) (J,SE(J),J=1,N)
+      RETURN
+C
+C
+C     NOT ENOUGH WORKSPACE.
+C
+  900 WRITE(NOUT, 9000) LTOTAL
+      RETURN
+C
+ 1000 FORMAT(1H1 / 27H LEAST-SQUARES TEST PROBLEM, 6X,
+     1   2HP(, 4I5, 1PE12.2, 2H )
+     2   // 16H CONDITION NO. =, 1PE12.4, 4X,
+     3      20H RESIDUAL FUNCTION =, 1PE17.9)
+ 2000 FORMAT(// 17X, 30H RESIDUAL NORM (ABAR*X - BBAR),
+     1           3X, 28H RESIDUAL NORM (NORMAL EQNS),
+     2           3X, 18H SOLUTION NORM (X)
+     3        / 17X, 30H -----------------------------,
+     4           3X, 28H ---------------------------,
+     5           3X, 18H ----------------- /)
+ 2100 FORMAT(18H ESTIMATED BY LSQR, 8X, 1PE14.6, 17X, E14.6, 12X, E14.6)
+ 2200 FORMAT(18H COMPUTED FROM X  , 8X, 1PE14.6, 17X, E14.6, 12X, E14.6)
+ 3000 FORMAT(// 9H SOLUTION / 5(I6, G14.6))
+ 3100 FORMAT(/ 16H STANDARD ERRORS / 5(I6, G14.6))
+ 9000 FORMAT(/ 28H XXX INSUFFICIENT WORKSPACE.,
+     1   39H  THE LENGTH OF  RW  SHOULD BE AT LEAST, I6)
+C     END OF TEST
+      END
+      REAL       DAMP1,DAMP2,DAMP3,DAMP4,ZERO                            980.
+C                                                                        981.
+C     EXAMPLE MAIN PROGRAM                                               982.
+C                                                                        983.
+      ZERO  = 0.0                                                        984.
+      DAMP1 = 0.1                                                        985.
+      DAMP2 = 0.01                                                       986.
+      DAMP3 = 0.001                                                      987.
+      DAMP4 = 0.0001                                                     988.
+      CALL TEST( 10,10,1,1,ZERO  )                                       989.
+      CALL TEST( 20,10,1,1,DAMP3 )                                       990.
+      CALL TEST( 40,40,4,2,ZERO  )                                       991.
+      CALL TEST( 60,40,4,2,DAMP2 )                                       992.
+      STOP                                                               993.
+      END                                                                994.
+      SUBROUTINE  SCOPY(N,SX,INCX,SY,INCY)
+C
+C     COPY SINGLE PRECISION SX TO SINGLE PRECISION SY.
+C     FOR I = 0 TO N-1, COPY  SX(LX+I*INCX) TO SY(LY+I*INCY),
+C     WHERE LX = 1 IF INCX .GE. 0, ELSE LX = (-INCX)*N, AND LY IS
+C     DEFINED IN A SIMILAR WAY USING INCY.
+C
+      REAL SX(1),SY(1)
+      IF(N.LE.0)RETURN
+      IF(INCX.EQ.INCY) IF(INCX-1) 5,20,60
+    5 CONTINUE
+C
+C        CODE FOR UNEQUAL OR NONPOSITIVE INCREMENTS.
+C
+      IX = 1
+      IY = 1
+      IF(INCX.LT.0)IX = (-N+1)*INCX + 1
+      IF(INCY.LT.0)IY = (-N+1)*INCY + 1
+      DO 10 I = 1,N
+        SY(IY) = SX(IX)
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      RETURN
+C
+C        CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP SO REMAINING VECTOR LENGTH IS A MULTIPLE OF 7.
+C
+   20 M = MOD(N,7)
+      IF( M .EQ. 0 ) GO TO 40
+      DO 30 I = 1,M
+        SY(I) = SX(I)
+   30 CONTINUE
+      IF( N .LT. 7 ) RETURN
+   40 MP1 = M + 1
+      DO 50 I = MP1,N,7
+        SY(I) = SX(I)
+        SY(I + 1) = SX(I + 1)
+        SY(I + 2) = SX(I + 2)
+        SY(I + 3) = SX(I + 3)
+        SY(I + 4) = SX(I + 4)
+        SY(I + 5) = SX(I + 5)
+        SY(I + 6) = SX(I + 6)
+   50 CONTINUE
+      RETURN
+C
+C        CODE FOR EQUAL, POSITIVE, NONUNIT INCREMENTS.
+C
+   60 CONTINUE
+      NS = N*INCX
+          DO 70 I=1,NS,INCX
+          SY(I) = SX(I)
+   70     CONTINUE
+      RETURN
+      END
+      REAL FUNCTION SNRM2 ( N, SX, INCX)
+      INTEGER          NEXT
+      REAL   SX(1),  CUTLO, CUTHI, HITEST, SUM, XMAX, ZERO, ONE
+      DATA   ZERO, ONE /0.0E0, 1.0E0/
+C
+C     EUCLIDEAN NORM OF THE N-VECTOR STORED IN SX() WITH STORAGE
+C     INCREMENT INCX .
+C     IF    N .LE. 0 RETURN WITH RESULT = 0.
+C     IF N .GE. 1 THEN INCX MUST BE .GE. 1
+C
+C           C.L.LAWSON, 1978 JAN 08
+C
+C     FOUR PHASE METHOD     USING TWO BUILT-IN CONSTANTS THAT ARE
+C     HOPEFULLY APPLICABLE TO ALL MACHINES.
+C         CUTLO = MAXIMUM OF  SQRT(U/EPS)  OVER ALL KNOWN MACHINES.
+C         CUTHI = MINIMUM OF  SQRT(V)      OVER ALL KNOWN MACHINES.
+C     WHERE
+C         EPS = SMALLEST NO. SUCH THAT EPS + 1. .GT. 1.
+C         U   = SMALLEST POSITIVE NO.   (UNDERFLOW LIMIT)
+C         V   = LARGEST  NO.            (OVERFLOW  LIMIT)
+C
+C     BRIEF OUTLINE OF ALGORITHM..
+C
+C     PHASE 1    SCANS ZERO COMPONENTS.
+C     MOVE TO PHASE 2 WHEN A COMPONENT IS NONZERO AND .LE. CUTLO
+C     MOVE TO PHASE 3 WHEN A COMPONENT IS .GT. CUTLO
+C     MOVE TO PHASE 4 WHEN A COMPONENT IS .GE. CUTHI/M
+C     WHERE M = N FOR X() REAL AND M = 2*N FOR COMPLEX.
+C
+C     VALUES FOR CUTLO AND CUTHI..
+C     FROM THE ENVIRONMENTAL PARAMETERS LISTED IN THE IMSL CONVERTER
+C     DOCUMENT THE LIMITING VALUES ARE AS FOLLOWS..
+C     CUTLO, S.P.   U/EPS = 2**(-102) FOR  HONEYWELL.  CLOSE SECONDS ARE
+C                   UNIVAC AND DEC AT 2**(-103)
+C                   THUS CUTLO = 2**(-51) = 4.44089E-16
+C     CUTHI, S.P.   V = 2**127 FOR UNIVAC, HONEYWELL, AND DEC.
+C                   THUS CUTHI = 2**(63.5) = 1.30438E19
+C     CUTLO, D.P.   U/EPS = 2**(-67) FOR HONEYWELL AND DEC.
+C                   THUS CUTLO = 2**(-33.5) = 8.23181D-11
+C     CUTHI, D.P.   SAME AS S.P.  CUTHI = 1.30438D19
+C     DATA CUTLO, CUTHI / 8.232D-11,  1.304D19 /
+C     DATA CUTLO, CUTHI / 4.441E-16,  1.304E19 /
+      DATA CUTLO, CUTHI / 4.441E-16,  1.304E19 /
+C
+      IF(N .GT. 0) GO TO 10
+         SNRM2  = ZERO
+         GO TO 300
+C
+   10 ASSIGN 30 TO NEXT
+      SUM = ZERO
+      NN = N * INCX
+C                                                 BEGIN MAIN LOOP
+      I = 1
+   20    GO TO NEXT,(30, 50, 70, 110)
+   30 IF( ABS(SX(I)) .GT. CUTLO) GO TO 85
+      ASSIGN 50 TO NEXT
+      XMAX = ZERO
+C
+C                        PHASE 1.  SUM IS ZERO
+C
+   50 IF( SX(I) .EQ. ZERO) GO TO 200
+      IF( ABS(SX(I)) .GT. CUTLO) GO TO 85
+C
+C                                PREPARE FOR PHASE 2.
+      ASSIGN 70 TO NEXT
+      GO TO 105
+C
+C                                PREPARE FOR PHASE 4.
+C
+  100 I = J
+      ASSIGN 110 TO NEXT
+      SUM = (SUM / SX(I)) / SX(I)
+  105 XMAX = ABS(SX(I))
+      GO TO 115
+C
+C                   PHASE 2.  SUM IS SMALL.
+C                             SCALE TO AVOID DESTRUCTIVE UNDERFLOW.
+C
+   70 IF( ABS(SX(I)) .GT. CUTLO ) GO TO 75
+C
+C                     COMMON CODE FOR PHASES 2 AND 4.
+C                     IN PHASE 4 SUM IS LARGE.  SCALE TO AVOID OVERFLOW.
+C
+  110 IF( ABS(SX(I)) .LE. XMAX ) GO TO 115
+         SUM = ONE + SUM * (XMAX / SX(I))**2
+         XMAX = ABS(SX(I))
+         GO TO 200
+C
+  115 SUM = SUM + (SX(I)/XMAX)**2
+      GO TO 200
+C
+C
+C                  PREPARE FOR PHASE 3.
+C
+   75 SUM = (SUM * XMAX) * XMAX
+C
+C
+C     FOR REAL OR D.P. SET HITEST = CUTHI/N
+C     FOR COMPLEX      SET HITEST = CUTHI/(2*N)
+C
+   85 HITEST = CUTHI/FLOAT( N )
+C
+C                   PHASE 3.  SUM IS MID-RANGE.  NO SCALING.
+C
+      DO 95 J =I,NN,INCX
+      IF(ABS(SX(J)) .GE. HITEST) GO TO 100
+   95    SUM = SUM + SX(J)**2
+      SNRM2 = SQRT( SUM )
+      GO TO 300
+C
+  200 CONTINUE
+      I = I + INCX
+      IF ( I .LE. NN ) GO TO 20
+C
+C              END OF MAIN LOOP.
+C
+C              COMPUTE SQUARE ROOT AND ADJUST FOR SCALING.
+C
+      SNRM2 = XMAX * SQRT(SUM)
+  300 CONTINUE
+      RETURN
+      END
+      SUBROUTINE  SSCAL(N,SA,SX,INCX)
+C
+C     REPLACE SINGLE PRECISION SX BY SINGLE PRECISION SA*SX.
+C     FOR I = 0 TO N-1, REPLACE SX(1+I*INCX) WITH  SA * SX(1+I*INCX)
+C
+      REAL SA,SX(1)
+      IF(N.LE.0)RETURN
+      IF(INCX.EQ.1)GOTO 20
+C
+C        CODE FOR INCREMENTS NOT EQUAL TO 1.
+C
+      NS = N*INCX
+          DO 10 I = 1,NS,INCX
+          SX(I) = SA*SX(I)
+   10     CONTINUE
+      RETURN
+C
+C        CODE FOR INCREMENTS EQUAL TO 1.
+C
+C
+C        CLEAN-UP LOOP SO REMAINING VECTOR LENGTH IS A MULTIPLE OF 5.
+C
+   20 M = MOD(N,5)
+      IF( M .EQ. 0 ) GO TO 40
+      DO 30 I = 1,M
+        SX(I) = SA*SX(I)
+   30 CONTINUE
+      IF( N .LT. 5 ) RETURN
+   40 MP1 = M + 1
+      DO 50 I = MP1,N,5
+        SX(I) = SA*SX(I)
+        SX(I + 1) = SA*SX(I + 1)
+        SX(I + 2) = SA*SX(I + 2)
+        SX(I + 3) = SA*SX(I + 3)
+        SX(I + 4) = SA*SX(I + 4)
+   50 CONTINUE
+      RETURN
+      END

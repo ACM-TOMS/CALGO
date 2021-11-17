@@ -1,0 +1,145 @@
+### -*-maple-*-
+########################################################################
+### This program investigates Pade approximations to Psi(x)/(x-x0) in
+### [1,2],  where x0 = 1.4616... is the root of Psi(x) = 0 for x > 0.
+### It provides functions for computing rational polynomials of degree
+### [p,q], estimating their error, and outputting the results in
+### tabular form suitable for insertion in Fortran programs.
+### [23-Jul-2000]
+########################################################################
+
+interface(quiet=true):
+
+with(numapprox):
+
+printdata := proc(the_name,c,nc)
+		local k, cont:
+		printf("      INTEGER n%s\n", the_name):
+		printf("      PARAMETER (n%s = %.0f)\n", the_name, evalf(nc)):
+		printf("      REAL*16 %s(n%s)\n", the_name, the_name):
+		printf("      DATA %s /\n", the_name):
+		for k from 1 to nc
+		do
+			if (evalb(k = nc))
+			then
+				cont := " /"
+			else
+				cont := ","
+			fi:
+			printf("     X  %62.55e%s\n", evalf(c[k]), cont):
+		od
+	end:
+
+psiapprox1 := proc(y) evalf((y - x0)*subs('x'=y,the_approx)) end:
+psiapprox2 := proc(x) evalf((x - x0) *
+			sum('cnum[k]*x^(k-1)', 'k' = 1..nops(the_numer)) /
+			sum('cden[k]*x^(k-1)', 'k' = 1..nops(the_denom))) end:
+psiexact   := proc(x) evalf(Psi(x)) end:
+
+pq_approx :=
+	proc(np, nq)
+		global cden, cnum, the_approx, the_denom, the_numer:
+		local k, max_relerr, p1, p2, pe, relerr, x0hid, x0hin,
+			x0lo, xxx, x_max_relerr:
+
+		printf("\nAttempting Pade approximation of degree [%d,%d]: ", np, nq):
+		the_approx := pade(Psi('x') / ('x' - x0), 'x' = 1.5, [np,nq]):
+
+		## Extract the numerator and denominator polynomials separately
+		the_numer := numer(the_approx):
+		the_denom := denom(the_approx):
+
+		## pade() does not necessary return the requested
+		## degrees, so to avoid duplication of results,
+		## discard results that fail to match the requested
+		## degrees, sigh...
+		if (evalb(nops(the_numer) <> (np + 1)) or
+		    evalb(nops(the_denom) <> (nq + 1)))
+		then
+			printf("FAILED\n"):
+			RETURN(FAIL):
+		else
+			printf("OKAY\n"):
+		fi:
+
+		## Maple stupidly lacks a built-in function to
+		## retrieve polynomial coefficients in order, so do
+		## the job one at a time.
+		for k from 1 to nops(the_numer) do cnum[k] := coeff(the_numer,'x',k-1) od:
+		for k from 1 to nops(the_denom) do cden[k] := coeff(the_denom,'x',k-1) od:
+
+		## NB: do NOT use the variable x here: it destroys the ones above. Use
+		##     xxx instead!
+
+		# This debug printing is suppressed now that the code works!
+		# printf("\n\n%7s\t%15s\t%15s\t%9s\n",
+		# 	"x", "psiapprox1(x)", "psi(x)", "relerr"):
+		# for xxx from 1 to 2 by 0.1
+		# do
+		# 	p1 := psiapprox1(xxx):
+		# 	pe := psiexact(xxx):
+		# 	printf("%7.2f\t%15.10f\t%15.10f\t%9.2e\n",
+		# 		xxx, p1, pe, (p1-pe)/pe)
+		# od:
+
+		# printf("\n\n%7s\t%15s\t%15s\t%9s\n",
+		# 	"x", "psiapprox2(x)", "psi(x)", "relerr"):
+		# for xxx from 1 to 2 by 0.1
+		# do
+		# 	p2 := psiapprox2(xxx):
+		# 	pe := psiexact(xxx):
+		# 	printf("%7.2f\t%15.10f\t%15.10f\t%9.2e\n",
+		# 		xxx, p2, pe, (p2-pe)/pe)
+		# od:
+
+		max_relerr := 0.0:
+		x_max_relerr := 1:
+		for xxx from 1 to 2 by 0.002
+		do
+			p2 := psiapprox2(xxx):
+			pe := psiexact(xxx):
+			if (evalb(pe <> 0))
+			then
+				relerr := evalf(abs((p2-pe)/pe)):
+				if (evalb(max_relerr <= relerr))
+				then
+					x_max_relerr := xxx:
+					max_relerr := relerr:
+				fi:
+			fi:
+		od:
+
+		printf("*\n"):
+		printf("*\n*     %s = %.2e\n",
+			"Maximum relative error in psi(x)/(x - x0)", max_relerr):
+		printf("*     at x = %.4f for x on [1,2] with Pade degree [%d,%d]\n",
+			 x_max_relerr, np, nq):
+		printf("*\n"):
+		printdata("p", cnum, nops(the_numer)):
+		printdata("q", cden, nops(the_denom)):
+
+	end:
+
+# Digits := 50 suffices for approximations with relative error down to
+# about 3.0e-25
+Digits := 250:
+x0 := fsolve(Psi(x) = 0, x, 1.46 .. 1.47):
+x0hid := trunc(2^22):
+x0hin := trunc(x0 * x0hid):
+x0lo := evalf(x0 - x0hin/x0hid):
+
+printf("************************************************************************\n"):
+printf("* NB: Remember to change all e exponents to q for use in Fortran!\n"):
+printf("************************************************************************\n"):
+printf("*     Only zero of psi(x) for x >= 0\n"):
+printf("*     REAL*16 x0\n"):
+printf("*     PARAMETER (x0 = \n"):
+printf("*    X   %.55e)\n", x0):
+printf("*     x0 = (x0hin/x0hid) + x0lo\n"):
+printf("      REAL*16 x0hin\n"):
+printf("      PARAMETER (x0hin = %.1fq+00\n", x0hin):
+printf("      REAL*16 x0hid\n"):
+printf("      PARAMETER (x0hid = %.1fq+00\n", x0hid):
+printf("      REAL*16 x0lo\n"):
+printf("      PARAMETER (x0lo = \n"):
+printf("     X   %.55e)\n", x0lo):

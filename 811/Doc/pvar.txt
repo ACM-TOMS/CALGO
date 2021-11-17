@@ -1,0 +1,497 @@
+***********************************************************************
+*                                                                     *
+*         PVAR - A PROXIMAL BUNDLE ALGORITHM FOR NONSMOOTH            *
+*                OPTIMIZATION.                                        *
+*                                                                     *
+***********************************************************************
+
+
+1. Introduction:
+----------------
+
+      The double-precision FORTRAN 77 basic subroutine PVAR is designed
+to find a close approximation to a local minimum of a nonlinear
+nonsmooth function F(X) with simple bounds on variables and general
+linear constraints. Here X is a vector of N variables and F(X), is
+assumed to be a locally Lipschitz continuous function. Simple bounds
+are assumed in the form
+
+               X(I) unbounded if  IX(I) = 0,
+      XL(I) <= X(I)           if  IX(I) = 1,
+               X(I) <= XU(I)  if  IX(I) = 2,
+      XL(I) <= X(I) <= XU(I)  if  IX(I) = 3,
+      XL(I)  = X(I)  = XU(I)  if  IX(I) = 5,
+
+where 1 <= I <= N. General linear constraints are assumed in the form
+
+               C(I) unbounded if  IC(I) = 0,
+      CL(I) <= C(I)           if  IC(I) = 1,
+               C(I) <= CU(I)  if  IC(I) = 2,
+      CL(I) <= C(I) <= CU(I)  if  IC(I) = 3,
+      CL(I)  = C(I)  = CU(I)  if  IC(I) = 5,
+
+where C(I) = A_I*X, 1 <= I <= NC, are linear functions. To simplify
+user's work, three additional easy to use subroutines are added. They
+call the basic general subroutine PVAR:
+
+      PVARU - unconstrained nonsmooth optimization,
+      PVARS - nonsmooth optimization with simple bounds,
+      PVARL - nonsmooth optimization with simple bounds and general
+              linear constraints.
+
+All subroutines contain a description of formal parameters and
+extensive comments. Furthermore, two test programs TVARU and TVARL are
+included, which contain several test problems (see e.g. [4]). These
+test programs serve as examples for using the subroutines, verify their
+correctness and demonstrate their efficiency.
+      In this short guide, we describe all subroutines which can be
+called from the user's program. A detailed description of methods is
+given in [1], [2], [3]. In the description of formal parameters, we
+introduce a type of the argument that specifies whether the argument
+must have a value defined on entry to the subroutine (I), whether it
+is a value which will be returned (O), or both (U), or whether it is
+an auxiliary value (A). Note that the arguments of the type I can be
+changed on output under some circumstances, especially if improper
+input values were given. Besides formal parameters, we can use a
+COMMON /STAT/ block containing statistical information. This block,
+used in each subroutine has the following form:
+
+      COMMON /STAT/ NDECF,NRES,NRED,NREM,NADD,NIT,NFV,NFG,NFH
+
+The arguments have the following meaning:
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NDECF     O   Positive INTEGER variable that indicates the number of
+                matrix decompositions.
+  NRES      O   Positive INTEGER variable that indicates the number of
+                restarts.
+  NRED      O   Positive INTEGER variable that indicates the number of
+                reductions.
+  NREM      O   Positive INTEGER variable that indicates the number of
+                constraint deletions during the QP solutions.
+  NADD      O   Positive INTEGER variable that indicates the number of
+                constraint additions during the QP solutions.
+  NIT       O   Positive INTEGER variable that indicates the number of
+                iterations.
+  NFV       O   Positive INTEGER variable that indicates the number of
+                function evaluations.
+  NFG       O   Positive INTEGER variable that specifies the number of
+                gradient evaluations.
+  NFH       O   Positive INTEGER variable that specifies the number of
+                Hessian evaluations.
+
+
+2. Subroutines PVARU, PVARS, PVARL:
+-----------------------------------
+
+The calling sequences are
+
+      CALL PVARU(NF,NA,X,RA,IPAR,RPAR,F,GMAX,ITERM)
+      CALL PVARS(NF,NA,NB,X,IX,XL,XU,IA,RA,IPAR,RPAR,FP,GMAX,ITERM)
+      CALL PVARL(NF,NA,NB,NC,X,IX,XL,XU,CF,IC,CL,CU,CG,IA,RA,IPAR,
+     &           RPAR,FP,GMAX,ITERM)
+
+The arguments have the following meaning.
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NF        I   Positive INTEGER variable that specifies the number of
+                variables of the objective function.
+  NA        I   Nonnegative INTEGER variable that specifies the maximum
+                bundle dimension. The choice NA=0 causes that the
+                default value NA=NF+3 will be taken.
+  NB        I   Nonnegative INTEGER variable that specifies whether the
+                simple bounds are suppressed (NB=0) or accepted (NB>0).
+  NC        I   Nonnegative INTEGER variable that specifies the number
+                of linear constraints; if NC=0 the linear constraints
+                are suppressed.
+  X(NF)     U   On input, DOUBLE PRECISION vector with the initial
+                estimate to the solution. On output, the approximation
+                to the minimum.
+  IX(NF)    I   On input (significant only if NB>0) INTEGER vector
+                containing the simple bounds types:
+                   IX(I)=0 - the variable X(I) is unbounded,
+                   IX(I)=1 - the lower bound X(I) >= XL(I),
+                   IX(I)=2 - the upper bound X(I) <= XU(I),
+                   IX(I)=3 - the two side bound XL(I) <= X(I) <= XU(I),
+                   IX(I)=5 - the variable X(I) is fixed (given by its
+                             initial estimate).
+  XL(NF)    I   DOUBLE PRECISION vector with lower bounds for variables
+                (significant only if NB>0).
+  XU(NF)    I   DOUBLE PRECISION vector with upper bounds for variables
+                (significant only if NB>0).
+  CF(NC)    A   DOUBLE PRECISION vector which contains values of
+                constraint functions (only if NC>0).
+  IC(NC)    I   On input (significant only if NC>0) INTEGER vector which
+                contains constraint types:
+                  IC(K)=0 - the constraint CF(K) is not used,
+                  IC(K)=1 - the lower constraint CF(K) >= CL(K),
+                  IC(K)=2 - the upper constraint CF(K) <= CU(K),
+                  IC(K)=3 - the two side constraint
+                            CL(K) <= CF(K) <= CU(K),
+                  IC(K)=5 - the equality constraint CF(K) = CL(K).
+  CL(NC)    I   DOUBLE PRECISION vector with lower bounds for constraint
+                functions (significant only if NC>0).
+  CU(NC)    I   DOUBLE PRECISION vector with upper bounds for constraint
+                functions (significant only if NC>0).
+  CG(NF*NC) I   DOUBLE PRECISION matrix whose columns are normals of the
+                linear constraints (significant only if NC>0).
+  IA(NIA)   A   INTEGER working array of the dimension of at least
+                NIA=NF+NA+1.
+  RA(NRA)   A   DOUBLE PRECISION working array of the dimension of at
+                least NRA=NF*(NF+11)/2+NA*(NF+2).
+  IPAR(7)   A   INTEGER parameters:
+                  IPAR(1)=MEX,   IPAR(2)=MOS,   IPAR(3)=MTESX,
+                  IPAR(4)=MTESF, IPAR(5)=MIT,   IPAR(6)=MFV,
+                  IPAR(7)=IPRNT.
+                Parameters MEX, MOS, MTESX, MTESF, MIT, MFV, IPRNT are
+                described in Section 3 together with other parameters
+                of the subroutine PVAR.
+  RPAR(7)   A   DOUBLE PRECISION parameters:
+                  RPAR(1)=TOLX,  RPAR(2)=TOLF,  RPAR(3)=TOLB,
+                  RPAR(4)=TOLG,  RPAR(5)=ETA,   RPAR(6)=EPS,
+                  RPAR(7)=XMAX.
+                Parameters TOLX, TOLF, TOLB, TOLG, ETA, EPS, XMAX are
+                described in Section 3 together with other parameters
+                of the subroutine PVAR.
+  F         O   DOUBLE PRECISION value of the objective function at the
+                solution X.
+  GMAX      O   DOUBLE PRECISION maximum absolute value of a partial
+                derivative of the Lagrangian function.
+  ITERM     O   INTEGER variable that indicates the cause of termination:
+                  ITERM= 1 - if |X - XO| was less than or equal to TOLX
+                             in MTESX subsequent iterations,
+                  ITERM= 2 - if |F - FO| was less than or equal to TOLF
+                             in MTESF subsequent iterations,
+                  ITERM= 3 - if F is less than or equal to TOLB,
+                  ITERM= 4 - if GMAX is less than or equal to TOLG,
+                  ITERM=11 - if NFV exceeded MFV,
+                  ITERM=12 - if NIT exceeded MIT,
+                  ITERM< 0 - if the method failed.
+
+The subroutines PVARU, PVARS, PVARL require the user supplied subroutine
+FUNDER that defines the objective function and its subgradient and has
+the form
+
+      SUBROUTINE FUNDER(NF,X,F,G)
+
+The arguments of the user supplied subroutine have the following meaning.
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NF        I   Positive INTEGER variable that specifies the number of
+                variables of the objective function.
+  X(NF)     I   DOUBLE PRECISION an estimate to the solution.
+  F         O   DOUBLE PRECISION value of the objective function at the
+                point X.
+  G(NF)     O   DOUBLE PRECISION subgradient of the objective function
+                at the point X.
+
+
+3. Subroutine PVAR:
+-------------------
+
+This general subroutine is called from all the subroutines described
+in Section 2. The calling sequence is
+
+      CALL PVAR(NF,NA,NB,NC,X,IX,XL,XU,CF,IC,CL,CU,CG,ICA,CFD,CR,CZ,
+     & AF,AX,AG,G,GN,H,S,SN,XO,GO,GP,GS,TOLX,TOLF,TOLB,TOLG,ETA,EPS,
+     & XMAX,GMAX,F,MEX,MOS,MTESX,MTESF,MIT,MFV,IPRNT,ITERM).
+
+The arguments NF, NA, NB, NC, X, IX, XL, XU, CF, IC, CL, CU, CG,
+GMAX, F, ITERM, have the same meaning as in Section 2. Other
+arguments have the following meaning:
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  ICA(NC)   A   INTEGER vector containing indices of active constraints.
+  CFD(NC)   A   DOUBLE PRECISION vector of constraint function
+                increments.
+  CR(NCR)   A   DOUBLE PRECISION matrix containing triangular
+                decomposition of the orthogonal projection kernel
+                (NCR is equal to NF*(NF+1)/2).
+  CZ(NF*NF) A   DOUBLE PRECISION matrix containing orthogonal basis
+                of linear manifold defined by active constraints.
+  AF(4*NA)  A   DOUBLE PRECISION vector of bundle function values.
+  AX(NF*NA) A   DOUBLE PRECISION matrix whose columns are bundle
+                points.
+  AG(NF*NA) A   DOUBLE PRECISION matrix whose columns are bundle
+                gradients.
+  G(NF)     A   DOUBLE PRECISION subgradient of the objective function.
+  GN(NF)    A   DOUBLE PRECISION Reduced aggregated subgradient of the
+                objective function.
+  H(NH)     A   DOUBLE PRECISION variable metric approximation of the
+                Hessian matrix.
+  S(NF)     A   DOUBLE PRECISION direction vector.
+  SN(NF)    A   DOUBLE PRECISION reduced direction vector.
+  XO(NF)    A   DOUBLE PRECISION vector which contains increments of
+                variables.
+  GO(NF)    A   DOUBLE PRECISION vector which contains increments of
+                gradients.
+  GP(NF)    A   DOUBLE PRECISION Aggregated subgradient of the objective
+                function.
+  GS(NF)    A   DOUBLE PRECISION Auxiliary vector.
+  TOLX      I   DOUBLE PRECISION tolerance for the change of the
+                coordinate vector X; the choice TOLX=0 causes that the
+                default value TOLX=1.0D-16 will be taken.
+  TOLF      I   DOUBLE PRECISION tolerance for the change of function
+                values; the choice TOLF=0 causes that the default
+                value TOLF=1.0D-8 will be taken.
+  TOLB      I   DOUBLE PRECISION minimum acceptable function value;
+                the choice TOLB=0 causes that the default value
+                TOLB=-1.0D60 will be taken.
+  TOLG      I   DOUBLE PRECISION tolerance for the Lagrangian function
+                gradient; the choice TOLG=0 causes that the default
+                value TOLG=1.0D-6 will be taken.
+  ETA       I   DOUBLE PRECISION distance measure parameter.
+  EPS       I   DOUBLE PRECISION parameter for constraint deletion;
+                the choice EPS=0 causes that the default value
+                EPS=5.0D-1 will be taken.
+  XMAX      I   DOUBLE PRECISION maximum stepsize; the choice XMAX=0
+                causes that the default value 1.0D3 will be taken.
+  MEX       I   INTEGER version of nonsmooth variable metric method:
+                  MEX=0 - convex version,
+                  MET=1 - nonconvex version.
+  MOS       I   INTEGER distance measure exponent (MOS=1 or MOS=2).
+                The choice MOS=0 causes that the default value MOS=1
+                will be taken.
+  MTESX     I   INTEGER variable that specifies the maximum number of
+                iterations with changes of the coordinate vector X
+                smaller than TOLX; the choice MTESX=0 causes that the
+                default value MTESX=20 will be taken.
+  MTESF     I   INTEGER variable that specifies the maximum number of
+                iterations with changes of function values smaller
+                than TOLF; the choice MTESF=0 causes that the default
+                value MTESF=2 will be taken.
+  MIT       I   INTEGER variable that specifies the maximum number of
+                iterations; the choice MIT=0 causes that the default
+                value 200 will be taken.
+  MFV       I   INTEGER variable that specifies the maximum number of
+                function evaluations; the choice |MFV|=0 causes that
+                the default value 500 will be taken.
+  IPRNT     I   INTEGER variable that specifies PRINT:
+                  IPRNT= 0 - print is suppressed,
+                  IPRNT= 1 - basic print of final results,
+                  IPRNT=-1 - extended print of final results,
+                  IPRNT= 2 - basic print of intermediate and final
+                             results,
+                  IPRNT=-2 - extended print of intermediate and final
+                             results.
+
+     The subroutine PVAR has a modular structure. The following list
+contains its most important subroutines:
+
+      PLLPB1 - Primal null space method for solving a linear
+               programming subproblem with linear constraints.
+      PS1L07 - Simplified line search using function values and
+               derivatives.
+      PS1L08 - Nonsmooth line search using function values and
+               derivatives.
+      PUDVI2 - Special nonsmooth variable metric updates.
+
+The subroutine PVAR requires the user supplied subroutine FUNDER
+which is described in Section 2.
+
+
+4. Subroutine PLLPB1:
+---------------------
+
+Since the primal null space method for linear programming subproblems
+can be used separately in many applications, we describe the subroutine
+PLLPB1 in more details. The calling sequence is
+
+      CALL PLLPB1(NF,NC,X,IX,XO,XL,XU,CF,CFD,IC,ICA,CL,CU,CG,CR,
+     & CZ,G,GO,S,MFP,KBF,KBC,ETA9,EPS7,EPS9,UMAX,GMAX,N,ITERL)
+
+The arguments NF, NC, X, IX, XL, XU, CF, IC, CL, CU, CG have
+the same meaning as in Section 2 (only with the difference that the
+arguments X and CF are of the type (I), i.e. they  must have a value
+defined on entry to PLLPB1 and they are not changed). The arguments CFD,
+ICA, CR, CZ have the same meaning as in Section 3 (only with the
+difference that the arguments CFD, ICA, CR, CZ are of the type (O),
+i.e. their values can be used subsequently). Other arguments have the
+following meaning:
+
+ Argument  Type Significance
+ ---------------------------------------------------------------------
+  G(NF)     I   DOUBLE PRECISION gradient of the objective function.
+  XO(NF)    A   DOUBLE PRECISION auxiliary vector.
+                approximate Hessian (NH is equal to NF*(NF+1)/2).
+  S(NF)     O   DOUBLE PRECISION direction vector.
+  MFP       I   INTEGER variable that specifies the type of the
+                computed point.
+                  MFP=1 - computation is terminated whenever an
+                          arbitrary feasible point is found,
+                  MFP=2 - computation is terminated whenever an
+                          optimum feasible point is found,
+                  MFP=3 - computation starts from the previously
+                          reached point and is terminated whenever
+                          an optimum feasible point is found.
+  KBF       I   INTEGER variable that specifies simple bounds on
+                variables.
+                  KBF=0 - simple bounds are suppressed,
+                  KBF=1 - one sided simple bounds,
+                  KBF=2 - two sided simple bounds.
+  KBC       I   INTEGER variable that specifies general linear
+                constraints.
+                  KBC=0 - linear constraints are suppressed,
+                  KBC=1 - one sided linear constraints,
+                  KBC=2 - two sided linear constraints.
+  ETA9      I   DOUBLE PRECISION maximum floating point number.
+  EPS7      I   DOUBLE PRECISION tolerance for linear independence
+                of constraints (the recommended value is 1.0D-10).
+  EPS9      I   DOUBLE PRECISION tolerance for the definition of active
+                constraints (the recommended value is 1.0D-8).
+  UMAX      O   DOUBLE PRECISION maximum absolute value of the negative
+                Lagrange multiplier.
+  GMAX      O   DOUBLE PRECISION infinity norm of the gradient of the
+                Lagrangian function.
+  N         O   INTEGER dimension of the manifold defined by active
+                constraints.
+  ITERL     O   INTEGER variable that indicates the type of the
+                computed feasible point.
+                  ITERL= 1 - an arbitrary feasible point was found,
+                  ITERL= 2 - the optimum feasible point was found,
+                  ITERL=-1 - an arbitrary feasible point does not
+                             exist,
+                  ITERL=-2 - the optimum feasible point does not
+                             exist.
+
+
+5. Form of printed results:
+---------------------------
+      The form of printed results is specified by the parameter IPRNT
+as is described in Section 3. Here we demonstrate individual forms of
+printed results by the simple use of the program TVARU described in the
+next section (with NEXT=11). If we set IPRNT=1, then the printed results
+will have the form
+
+NIT=  14  NFV=  14  NFG=  14  F= -.79999998D+01  G= .4535D-06  ITERM=  4
+
+If we set IPRNT=-1, then the printed results will have the form
+
+EXIT FROM PVAR :
+NIT=  14  NFV=  14  NFG=  14  F= -.79999998D+01  G= .4535D-06  ITERM=  4
+X= -.1000072D+01 -.1728811D-09
+
+If we set IPRNT=2, then the printed results will have the form
+
+ENTRY TO PVAR :
+NIT=   0  NFV=   1  NFG=   1  F=  .60207973D+02  G= .1329D+02
+NIT=   1  NFV=   2  NFG=   2  F=  .43113601D+02  G= .1229D+02
+NIT=   2  NFV=   3  NFG=   3  F=  .26633740D+02  G= .1346D+02
+NIT=   3  NFV=   4  NFG=   4  F=  .11345282D+02  G= .1495D+02
+NIT=   4  NFV=   5  NFG=   5  F=  .37878798D+01  G= .1600D+02
+NIT=   5  NFV=   6  NFG=   6  F= -.52179782D+01  G= .1600D+02
+NIT=   6  NFV=   7  NFG=   7  F= -.52179782D+01  G= .6225D+01
+NIT=   7  NFV=   8  NFG=   8  F= -.65520912D+01  G= .1600D+02
+NIT=   8  NFV=   9  NFG=   9  F= -.77403014D+01  G= .1600D+02
+NIT=   9  NFV=  10  NFG=  10  F= -.79743187D+01  G= .1600D+02
+NIT=  10  NFV=  11  NFG=  11  F= -.79987188D+01  G= .1600D+02
+NIT=  11  NFV=  12  NFG=  12  F= -.79999678D+01  G= .1600D+02
+NIT=  12  NFV=  13  NFG=  13  F= -.79999994D+01  G= .1600D+02
+NIT=  13  NFV=  14  NFG=  14  F= -.79999998D+01  G= .1600D+02
+EXIT FROM PVAR :
+NIT=  14  NFV=  14  NFG=  14  F= -.79999998D+01  G= .4535D-06  ITERM=  4
+
+If we set IPRNT=-2, then the printed results will have the form
+
+ENTRY TO PVAR :
+NIT=   0  NFV=   1  NFG=   1  F=  .60207973D+02  G= .1329D+02
+NIT=   1  NFV=   2  NFG=   2  F=  .43113601D+02  G= .1229D+02
+NIT=   2  NFV=   3  NFG=   3  F=  .26633740D+02  G= .1346D+02
+NIT=   3  NFV=   4  NFG=   4  F=  .11345282D+02  G= .1495D+02
+NIT=   4  NFV=   5  NFG=   5  F=  .37878798D+01  G= .1600D+02
+NIT=   5  NFV=   6  NFG=   6  F= -.52179782D+01  G= .1600D+02
+NIT=   6  NFV=   7  NFG=   7  F= -.52179782D+01  G= .6225D+01
+NIT=   7  NFV=   8  NFG=   8  F= -.65520912D+01  G= .1600D+02
+NIT=   8  NFV=   9  NFG=   9  F= -.77403014D+01  G= .1600D+02
+NIT=   9  NFV=  10  NFG=  10  F= -.79743187D+01  G= .1600D+02
+NIT=  10  NFV=  11  NFG=  11  F= -.79987188D+01  G= .1600D+02
+NIT=  11  NFV=  12  NFG=  12  F= -.79999678D+01  G= .1600D+02
+NIT=  12  NFV=  13  NFG=  13  F= -.79999994D+01  G= .1600D+02
+NIT=  13  NFV=  14  NFG=  14  F= -.79999998D+01  G= .1600D+02
+EXIT FROM PVAR :
+NIT=  14  NFV=  14  NFG=  14  F= -.79999998D+01  G= .4535D-06  ITERM=  4
+X= -.1000072D+01 -.1728811D-09
+
+
+6. Verification of the subroutines:
+-----------------------------------
+
+      Subroutine PVARU can be verified and tested using the program
+TVARU. This program calls the subroutines TIUD19 (initiation), TFFU19
+(function evaluation) and TFGU19 (subgradient evaluation) containing
+20 academic test problems with at most 50 variables [4]. The results
+obtained by the program TVARU (with MEX=0) on a PC computer with
+Microsoft Power Station Fortran compiler have the following form.
+
+NIT=  33  NFV=  33  NFG=  33  F=  .31998143D-07  G= .6222D-07  ITERM=  4
+NIT=  15  NFV=  16  NFG=  16  F=  .94894120D-10  G= .4745D-10  ITERM=  4
+NIT=  17  NFV=  17  NFG=  17  F=  .19522247D+01  G= .9348D-06  ITERM=  4
+NIT=  17  NFV=  17  NFG=  17  F=  .20000000D+01  G= .2918D-07  ITERM=  4
+NIT=  20  NFV=  20  NFG=  20  F= -.29999997D+01  G= .4258D-06  ITERM=  4
+NIT=  19  NFV=  19  NFG=  19  F=  .72000001D+01  G= .1901D-06  ITERM=  4
+NIT=  10  NFV=  10  NFG=  10  F= -.14142133D+01  G= .1414D-06  ITERM=  4
+NIT=  55  NFV=  59  NFG=  59  F= -.99999247D+00  G= .4052D-06  ITERM=  4
+NIT=  35  NFV=  35  NFG=  35  F= -.99999978D+00  G= .9370D-06  ITERM=  4
+NIT=  14  NFV=  14  NFG=  14  F= -.79999998D+01  G= .4535D-06  ITERM=  4
+NIT=  35  NFV=  36  NFG=  36  F= -.43999995D+02  G= .5050D-05  ITERM=  2
+NIT=  30  NFV=  31  NFG=  31  F=  .22600186D+02  G= .5327D-05  ITERM=  2
+NIT=  46  NFV=  47  NFG=  47  F= -.32348674D+02  G= .9524D-05  ITERM=  2
+NIT=  32  NFV=  32  NFG=  32  F= -.29197004D+01  G= .3444D-06  ITERM=  4
+NIT=  74  NFV=  76  NFG=  76  F=  .55981840D+00  G= .7330D-06  ITERM=  4
+NIT=  89  NFV=  89  NFG=  89  F= -.84140570D+00  G= .3911D-06  ITERM=  4
+NIT= 176  NFV= 176  NFG= 176  F=  .97859847D+01  G= .9253D-06  ITERM=  4
+NIT=  77  NFV=  78  NFG=  78  F=  .16703846D+02  G= .1430D-04  ITERM=  2
+NIT= 123  NFV= 123  NFG= 123  F=  .14683216D-05  G= .9099D-06  ITERM=  4
+NIT=  23  NFV=  23  NFG=  23  F=  .00000000D+00  G= .3200D-22  ITERM=  4
+
+The rows corresponding to individual test problems contain the number of
+iterations NIT, the number of function evaluations NFV, the number of
+gradient evaluations NFG, the final value of the objective function F,
+the value of the criterion for the termination G and the cause of
+termination ITERM.
+      Subroutine PVARL can be verified and tested using the program
+TVARL. This program calls the subroutines TIUD22 (initiation), TAFU22
+(function evaluation), TAGU22 (subgradient evaluation) containing
+6 academic test problems with at most 20 variables [4]. The results
+obtained by the program TVARL on a PC computer with Microsoft Power
+Station Fortran compiler have the following form.
+
+NIT=  10  NFV=  10  NFG=  10  F= -.38965950D+00  G= .4188D-06  ITERM=  4
+NIT=   4  NFV=   4  NFG=   4  F= -.33035714D+00  G= .8804D-32  ITERM=  4
+NIT=  14  NFV=  14  NFG=  14  F= -.44891078D+00  G= .3474D-07  ITERM=  4
+NIT=  88  NFV=  89  NFG=  89  F= -.42928061D+00  G= .2323D+01  ITERM=  2
+NIT=  24  NFV=  24  NFG=  24  F= -.18596186D+01  G= .2939D-06  ITERM=  4
+NIT=  25  NFV=  25  NFG=  25  F=  .10183094D+00  G= .9428D-07  ITERM=  4
+NIT=  93  NFV=  93  NFG=  93  F=  .37907365D-05  G= .7469D-06  ITERM=  4
+NIT= 137  NFV= 138  NFG= 138  F=  .24306604D+02  G= .2434D-05  ITERM=  2
+NIT= 119  NFV= 120  NFG= 120  F=  .13372950D+03  G= .1969D-04  ITERM=  2
+NIT= 138  NFV= 139  NFG= 139  F=  .50695309D+00  G= .5476D-01  ITERM=  2
+
+
+References:
+-----------
+
+[1] Luksan L., Vlcek J.: Globally convergent variable metric method
+    for convex nonsmooth unconstrained minimization. Journal of
+    Optimization Theory and Applications Vol.102, 1999, pp.593-613.
+
+[2] Vlcek J., Luksan L.: Globally convergent variable metric method
+    for nonconvex nondifferentiable unconstrained minimization.
+    Technical Report B 8/1999. Department of Mathematical Information
+    Technology. University of Jyvaskyla, 1999.
+
+[3] Luksan L., Vlcek J.: NDA: Algorithms for Nondifferentiable
+    Optimization. Research Report V-797, Institute of Computer Science,
+    Academy of Sciences of the Czech Republic, Prague, Czech Republic,
+    2000.
+
+[4] Luksan L., Vlcek J.: Subroutines for Testing Nonsmooth
+    Unconstrained and Linearly Constrained Optimization Problems.
+    Research Report V-798, Institute of Computer Science,
+    Academy of Sciences of the Czech Republic, Prague, Czech Republic,
+    2000.
+

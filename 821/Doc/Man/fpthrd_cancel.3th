@@ -1,0 +1,188 @@
+.TH FPTHRD_CANCEL 3F "" "FPTHRD API"
+
+.SH NAME
+fpthrd_cancel, fpthrd_setcancelstate, fpthrd_setcanceltype, fpthrd_testcancel \- Thread cancellation
+
+.SH SYNOPSIS
+.B USE fpthrd
+
+.BI "CALL fpthrd_cancel(" thred " [, " ierr "])"
+
+.BI "CALL fpthrd_setcancelstate(" state ", " oldstate " [, " 
+.IB ierr "])"
+
+.BI "CALL fpthrd_setcanceltype(" type ", " oldtype " [, " 
+.IB ierr "])"
+
+.BI "CALL fpthrd_testcancel()"
+
+.BI "TYPE(FPTHRD_T) :: " thred
+.br
+.BI "INTEGER :: " state ", " oldstate ", " 
+.IB type ", " oldtype ", " ierr
+
+.SH DESCRIPTION
+
+Cancellation is the mechanism by which a thread can terminate the
+execution of another thread. More precisely, a thread can send a
+cancellation request to another thread. Depending on its settings, the
+target thread can then either ignore the request, honor it
+immediately, or defer it until it reaches a cancellation point.
+
+.SS Cancel
+.B "fpthrd_cancel"
+sends a cancellation request to the thread denoted
+by the 
+.I "thred"
+argument.
+
+When a thread eventually honors a cancellation request, it performs as
+if 
+.B "fpthrd_exit(FPTHRD_CANCELED)"
+has been called at that point.
+Thus, the thread stops executing with the return value 
+.BR "FPTHRD_CANCELED" .
+See
+.BR "fpthrd_exit" (3F)
+for more information.
+
+.SS State
+.B "fpthrd_setcancelstate"
+changes the cancellation state for the
+calling thread\-that is, whether cancellation requests are ignored
+or not. The 
+.I "state"
+argument is the new cancellation state: either
+.B "FPTHRD_CANCEL_ENABLE"
+to enable cancellation, or
+.B "FPTHRD_CANCEL_DISABLE"
+to disable cancellation (cancellation
+requests are ignored). If 
+.I "oldstate"
+is not 
+.BR "NULL" ,
+the previous
+cancellation state is stored in the location 
+.IR "oldstate" ,
+and can thus be restored later by another call to
+.BR "fpthrd_setcancelstate" .
+Threads are always created by 
+.BR "fpthrd_create" (3F)
+with cancellation
+enabled;
+.IR "i.e." ,
+the default cancellation state is
+.BR "FPTHRD_CANCEL_ENABLE" .
+
+
+.SS Type
+.B "fpthrd_setcanceltype"
+changes the type of responses to cancellation
+requests for the calling thread: asynchronous (immediate) or deferred.
+The 
+.I "type"
+argument is the new cancellation type: either
+.B "FPTHRD_CANCEL_ASYNCHRONOUS"
+to cancel the calling thread as soon as
+the cancellation request is received, or 
+.B "FPTHRD_CANCEL_DEFERRED"
+to
+keep the cancellation request pending until the next cancellation
+point. If 
+.I "oldtype"
+is not 
+.BR "NULL" ,
+the previous
+cancellation state is stored in the location pointed to by 
+.IR "oldtype" ,
+and can thus be restored later by another call to
+.BR "fpthrd_setcanceltype" .
+Threads are always created by 
+.BR "fpthrd_create" (3F)
+with cancellation deferred; 
+.IR "i.e." ,
+the default cancellation type is
+.BR "FPTHRD_CANCEL_DEFERRED" .
+
+.SS Test
+.B "fpthrd_testcancel"
+does nothing except test for pending
+cancellation and immediately accepting a waiting request. 
+Its purpose is to introduce explicit
+checks for cancellation in long sequences of code that do not call
+cancellation point routines otherwise.
+
+.SH "CANCELLATION POINTS"
+Cancellation points are those points in the program execution where a
+test for pending cancellation requests is performed and cancellation
+is executed if positive. The following FPTHRD routines
+are cancellation points:
+
+.BR "fpthrd_testcancel" (3F)
+.br
+.BR "fpthrd_join" (3F)
+.br
+.BR "fpthrd_cond_wait" (3F)
+.br
+.BR "fpthrd_cond_timedwait" (3F)
+
+All other FPTHRD routines are guaranteed not to be
+cancellation points. That is, they never perform cancellation in
+deferred cancellation mode.
+
+.SH "DIAGNOSTICS"
+
+.BR "fpthrd_cancel" ,
+.B "fpthrd_setcancelstate"
+and
+.B "fpthrd_setcanceltype"
+return 0 in the optional
+.I "ierr"
+on success and a non-zero error code
+on error.
+.B "fpthrd_testcancel"
+does not require the
+.I "ierr" 
+error parameter
+since the thread either cancels (if a cancel
+request is pending) or continues execution (if no request has been
+generated).
+
+.B "fpthrd_cancel"
+returns the following error code on error:
+.RS
+.TP
+.B "ESRCH"
+No thread could be found corresponding to that specified by the 
+.I "thred"
+ID.
+.RE
+
+.B "fpthrd_setcancelstate"
+returns the following error code on error:
+.RS
+.TP
+.B "EINVAL"
+The 
+.I "state"
+argument is not 
+.B "FPTHRD_CANCEL_ENABLE"
+nor
+.BR "FPTHRD_CANCEL_DISABLE" .
+.RE
+
+.B "fpthrd_setcanceltype"
+returns the following error code on error:
+.RS
+.TP
+.B "EINVAL"
+The 
+.I "type"
+argument is not 
+.B "FPTHRD_CANCEL_DEFERRED"
+nor
+.BR "FPTHRD_CANCEL_ASYNCHRONOUS" .
+.RE
+
+.SH "SEE ALSO"
+.BR "fpthrd_exit" (3F)

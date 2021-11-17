@@ -1,0 +1,369 @@
+***********************************************************************
+*                                                                     *
+* PMAX - A PRIMAL INTERIOR-POINT VARIABLE METRIC AND DISCRETE NEWTON  *
+*        METHODS WITH DIRECT DECOMPOSITION LINE-SEARCH SUBALGORITHM   *
+*        FOR LARGE-SCALE MINIMAX OPTIMIZATION.                        *
+*                                                                     *
+***********************************************************************
+
+
+1. Introduction:
+----------------
+
+      The double-precision FORTRAN 77 basic subroutine PMAX is designed
+to find a close approximation to a local minimum of a special nonsmooth
+objectine function, which has the form
+
+      F(X) =  MAX(FA_1(X), FA_2(X), ..., FA_NA(X)),
+
+if IEXT<0, or
+
+      F(X) =  MAX(|FA_1(X)|, |FA_2(X)|, ..., |FA_NA(X)|),
+
+if IEXT=0, or
+
+      F(X) =  MAX(-FA_1(X), -FA_2(X), ..., -FA_NA(X)),
+
+if IEXT>0. Here X is a vector of NF variables and FA_I(X), 1<=I<=NA,
+are twice continuously differentiable functions. We assume that
+NF and NA are large, but partial functions FA_I(X), 1<=I<=NA,
+depend on a small number of variables.  This implies that the mapping
+AF(X) = [FA_1(X), FA_2(X), ..., FA_NA(X)] has a sparse Jacobian
+matrix, which will be denoted by AG(X) (it has NA rows and NF columns).
+The sparsity pattern of the Jacobian matrix is stored in the coordinate
+form if ISPAS=1 or in the standard compressed row format if ISPAS=2
+using arrays IAG and JAG. For example, if the Jacobian matrix has the
+following pattern
+
+                AG = | * * 0 * |
+                     | * * * 0 |
+                     | * 0 0 * |
+                     | 0 * * 0 |
+                     | * 0 * 0 |
+
+(asterisks denote nonzero elements) then arrays IAG and JAG contain
+elements
+
+IAG(1)=1, IAG(2)=1, IAG(3)=1, IAG(4)=2,  IAG(5)=2,  IAG(6)=2,
+IAG(7)=3, IAG(8)=3, IAG(9)=4, IAG(10)=4, IAG(11)=5, IAG(12)=5,
+JAG(1)=1, JAG(2)=2, JAG(3)=4, JAG(4)=1,  JAG(5)=2,  JAG(6)=3,
+JAG(7)=1, JAG(8)=4, JAG(9)=2, JAG(10)=3, JAG(11)=1, JAG(12)=3
+
+if ISPAS=1 or
+
+IAG(1)=1, IAG(2)=4, IAG(3)=7, IAG(4)=9,  IAG(5)=11, IAG(6)=13,
+JAG(1)=1, JAG(2)=2, JAG(3)=4, JAG(4)=1,  JAG(5)=2,  JAG(6)=3,
+JAG(7)=1, JAG(8)=4, JAG(9)=2, JAG(10)=3, JAG(11)=1, JAG(12)=3
+
+if ISPAS=2. In the first case, nonzero elements can be sorted in an
+arbitrary order (not only by rows as in the above example). Arrays
+IAG and JAG have to be declared with lengths NA+MA and MA at least,
+respectively, where MA is the number of nonzero elements. In the
+second case, nonzero elements can be sorted only by rows. Components
+of IAG contain total numbers of nonzero elements in all previous
+rows increased by 1 and elements of JAG contain corresponding column
+indices (note that IAG has NA+1 elements and the last element is
+equal to MA+1). Arrays IAG and JAG have to be declared with length
+NA+1 and MA at least, respectively.
+      To simplify user's work, an additional easy to use subroutine
+PMAXU is added. It calls the basic general subroutine PMAX. All
+subroutines contain a description of formal parameters and extensive
+comments. Furthermore, test program TMAXU is included, which contains
+several test problems (see e.g. [2]). This test program serves as an
+example for using the subroutine PMAXU, verifies its correctness and
+demonstrates its efficiency.
+      In this short guide, we describe all subroutines which can be
+called from the user's program. A detailed description of the method is
+given in [1]. In the description of formal parameters, we introduce a
+type of the argument that specifies whether the argument must have a
+value defined on entry to the subroutine (I), whether it is a value
+which will be returned (O), or both (U), or whether it is an auxiliary
+value (A). Note that the arguments of the type I can be changed on
+output under some circumstances, especially if improper input values
+were given. Besides formal parameters, we can use a COMMON /STAT/ block
+containing statistical information. This block, used in each subroutine
+has the following form:
+
+      COMMON /STAT/ NRES,NDEC,NIN,NIT,NFV,NFG,NFH
+
+The arguments have the following meaning:
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NRES      O   Positive INTEGER variable that indicates the number of
+                restarts.
+  NDEC      O   Positive INTEGER variable that indicates the number of
+                matrix decompositions.
+  NIN       O   Positive INTEGER variable that indicates the number of
+                inner iterations (for solving linear systems).
+  NIT       O   Positive INTEGER variable that indicates the number of
+                iterations.
+  NFV       O   Positive INTEGER variable that indicates the number of
+                function evaluations.
+  NFG       O   Positive INTEGER variable that specifies the number of
+                gradient evaluations.
+  NFH       O   Positive INTEGER variable that specifies the number of
+                Hessian evaluations.
+
+
+2. Subroutine PMAXU:
+--------------------
+
+The calling sequence is
+
+      CALL PMAXU(NF,NA,MA,X,AF,IAG,JAG,IPAR,RPAR,F,GMAX,IEXT,ISPAS,IPRNT,
+     & ITERM)
+
+The arguments have the following meaning.
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NF        I   Positive INTEGER variable that specifies the number of
+                variables of the minimax objective function.
+  NA        I   Positive INTEGER variable that specifies the number of
+                partial functions.
+  MA        I   Number of nonzero elements in the Jacobian matrix. This
+                parameter is used as input only if ISPAS=1 (it defines
+                dimensions of arrays IAG and JAG in this case).
+  X(NF)     U   On input, DOUBLE PRECISION vector with the initial
+                estimate to the solution. On output, the approximation
+                to the minimum.
+  AF(NA)    O   DOUBLE PRECISION vector which contains values of partial
+                functions.
+  IAG(NA+1) I   INTEGER array which contains pointers of the first
+                elements in rows of the Jacobian matrix.
+  JAG(MA)   I   INTEGER array which contains column indices of the
+                nonzero elements.
+  IPAR(7)   I   INTEGER parameters:
+                  IPAR(1)=MIT,  IPAR(2)=MFV,  IPAR(3)=MFG,
+                  IPAR(4)=IEST, IPAR(5)=MED,  IPAR(6)-NONE,
+                  IPAR(7)=IFIL.
+                Parameters MIT, MFV, MFG, IEST, MED are described in
+                Section 3 together with other parameters of the subroutine
+                PMAX. Parameter IFIL specifies a relative size of the
+                space reserved for fill-in. The choice IFIL=0 causes that
+                the default value IFIL=1 will be taken.
+  RPAR(9)   I   DOUBLE PRECISION parameters:
+                  RPAR(1)=XMAX,  RPAR(2)=TOLX,  RPAR(3)=TOLF,
+                  RPAR(4)=TOLB,  RPAR(5)=TOLG,  RPAR(6)=FMIN,
+                  RPAR(7)-NONE,  RPAR(6)=ETA4,  RPAR(9)=ETA5.
+                Parameters XMAX, TOLX, TOLF, TOLB, TOLG, FMIN, ETA4,
+                ETA5 are described in Section 3 together with other
+                parameters of the subroutine PMAX.
+  F         O   DOUBLE PRECISION value of the objective function at the
+                solution X.
+  GMAX      O   DOUBLE PRECISION maximum absolute value of a partial
+                derivative of the Lagrangian function.
+  IEXT      I   INTEGER variable that specifies the type of minimax:
+                  IEXT< 0 - minimization of the maximum positive value.
+                  IEXT= 0 - minimization of the maximum absolute value.
+                  IEXT> 0 - minimization of the maximum negative value.
+  ISPAS     I   INTEGER variable that specifies sparse structure of the
+                Jacobian matrix:
+                  ISPAS= 1 - the coordinate form is used,
+                  ISPAS= 2 - the standard row compresed format is used.
+  IPRNT     I   INTEGER variable that specifies PRINT:
+                  IPRNT= 0 - print is suppressed,
+                  IPRNT= 1 - basic print of final results,
+                  IPRNT=-1 - extended print of final results,
+                  IPRNT= 2 - basic print of intermediate and final
+                             results,
+                  IPRNT=-2 - extended print of intermediate and final
+                             results.
+  ITERM     O   INTEGER variable that indicates the cause of termination:
+                  ITERM= 1 - if |X - XO| was less than or equal to TOLX
+                             in two subsequent iterations,
+                  ITERM= 2 - if |F - FO| was less than or equal to TOLF
+                             in two subsequent iterations,
+                  ITERM= 3 - if F is less than or equal to TOLB,
+                  ITERM= 4 - if GMAX is less than or equal to TOLG,
+                  ITERM= 6 - if termination criterion was not satisfied,
+                             but the solution is probably acceptable,
+                  ITERM=11 - if NIT exceeded MIT,
+                  ITERM=12 - if NFV exceeded MFV,
+                  ITERM=13 - if NFG exceeded MFG,
+                  ITERM< 0 - if the method failed. Values ITERM<=-40
+                             detect a lack of space. In this case,
+                             parameter IPAR(7)=IFIL has to be increased
+                             (IFIL=2, IFIL=3, etc.).
+
+      The subroutine PMAXU requires the user supplied subroutines FUN and
+DFUN that define partial functions and their gradients and have the form
+
+      SUBROUTINE  FUN(NF,KA,X,FA)
+      SUBROUTINE DFUN(NF,KA,X,GA)
+
+The arguments of the user supplied subroutines have the following
+meaning.
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NF        I   Positive INTEGER variable that specifies the number of
+                variables of the objective function.
+  KA        I   INTEGER index of the partial function.
+  X(NF)     I   DOUBLE PRECISION an estimate to the solution.
+  FA        O   DOUBLE PRECISION value of the KA-th partial function at
+                the point X.
+  GA(NF)    O   DOUBLE PRECISION gradient of the KA-th partial function
+                at the point X. Note that only nonzero elements of this
+                gradient have to be assigned.
+
+
+3. Subroutine PMAX:
+-------------------
+
+      This general subroutine is called from all subroutines described
+in Section 2. The calling sequence is
+
+      CALL PMAX(NF,NA,MMAX,X,IX,AF,AFO,AG,AGO,GA,AH,AZL,AZU,G,H,IH,JH,
+     & IA,IAG,JAG,S,XO,GO,GS,GP,COL,PSL,PERM,INVP,WN11,WN12,WN13,WN14,
+     & XMAX,TOLX,TOLF,TOLB,TOLG,FMIN,ETA4,ETA5,GMAX,F,MIT,MFV,MFG,IEST,
+     & MED,IEXT,IPRNT,ITERM)
+
+The arguments NF, NA, X, AF, IAG, JAG, GMAX, F, IEXT, IPRNT, ITERM have
+the same meaning as in Section 2. Other arguments have the following
+meaning:
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  MMAX       I   INTEGER size of array H.
+  IX(NF)     A   INTEGER auxiliary array.
+  AFO(NA)    A   DOUBLE PRECISION auxiliary array.
+  AG(MA)     A   DOUBLE PRECISION nonzero elements of the Jacobian
+                 matrix
+  AGO(MA)    A   DOUBLE PRECISION difference between the current and the
+                 old Jacobian matrices. This array is used only if MED=1.
+  GA(NF)     A   DOUBLE PRECISION gradient of the partial function.
+  AH(MH)     A   DOUBLE PRECISION approximation of the partitioned
+                 Hessian matrix. This array is used only if MED=1.
+  AZL(NA)    A   DOUBLE PRECISION lower Lagrange multipliers.
+  AZU(NA)    A   DOUBLE PRECISION upper Lagrange multipliers.
+  G(NF)      A   DOUBLE PRECISION gradient of the objective function.
+  H(MMAX)    A   DOUBLE PRECISION nonzero elements of the approximation
+                 of the Hessian matrix and nonzero elements of the
+                 Choleski factor.
+  IH(NF+1)   I   INTEGER array which contains pointers of the diagonal
+                 elements in the upper part of the Hessian matrix.
+  JH(MMAX)   I   INTEGER array which contains column indices of the
+                 nonzero elements and additional working space for the
+                 Choleski factor.
+  IA(NA)     A   INTEGER auxiliary array.
+  S(NF)      A   DOUBLE PRECISION direction vector.
+  XO(NF)     A   DOUBLE PRECISION array which contains increments of
+                 variables.
+  GO(NF)     A   DOUBLE PRECISION array which contains increments of
+                 gradients.
+  GS(NF)     A   DOUBLE PRECISION auxiliary array.
+  GP(NF)     A   DOUBLE PRECISION auxiliary array.
+  COL(NF)    A   INTEGER auxiliary array.
+  PSL(NF+1)  A   INTEGER pointer vector in the compact form of the
+                 Choleski factor.
+  PERM(NF)   A   INTEGER permutation vector.
+  INVP(NF)   A   INTEGER inverse permutation vector.
+  WN11(NF+1) A   INTEGER auxiliary array.
+  WN12(NF+1) A   INTEGER auxiliary array.
+  WN13(NF+1) A   INTEGER auxiliary array.
+  WN14(NF+1) A   INTEGER auxiliary array.
+  XMAX       I   DOUBLE PRECISION maximum stepsize; the choice XMAX=0
+                 causes that the default value 1.0D+16 will be taken.
+  TOLX       I   DOUBLE PRECISION tolerance for the change of the
+                 coordinate vector X; the choice TOLX=0 causes that the
+                 default value TOLX=1.0D-16 will be taken.
+  TOLF       I   DOUBLE PRECISION tolerance for the change of function
+                 values; the choice TOLF=0 causes that the default
+                 value TOLF=1.0D-14 will be taken.
+  TOLB       I   DOUBLE PRECISION minimum acceptable function value;
+                 the choice TOLB=0 causes that the default value
+                 TOLB=FMIN+1.0D-16 will be taken.
+  TOLG       I   DOUBLE PRECISION tolerance for the Lagrangian function
+                 gradient; the choice TOLG=0 causes that the default
+                 value TOLG=1.0D-6 will be taken.
+  FMIN       I   DOUBLE PRECISION lower bound for the minimum function
+                 value.
+  ETA4       I   DOUBLE PRECISION coefficient for the barrier parameter
+                 decrease; the choice ETA4=0 causes that the default
+                 value ETA5=8.5D-1 will be taken.
+  ETA5       I   DOUBLE PRECISION minimum permitted value of the barrier
+                 parameter; the choice ETA5=0 causes that the default
+                 value ETA5=1.0D-10 will be taken.
+  MIT        I   INTEGER variable that specifies the maximum number of
+                 iterations; the choice MIT=0 causes that the default
+                 value 9000 will be taken.
+  MFV        I   INTEGER variable that specifies the maximum number of
+                 function evaluations; the choice MFV=0 causes that
+                 the default value 9000 will be taken.
+  MFG        I   INTEGER variable that specifies the maximum number of
+                 gradient evaluations; the choice MFG=0 causes that
+                 the default value 10000 will be taken.
+  IEST       I   INTEGER estimation of the minimum functiom value for
+                 the line search:
+                   IEST=0 - estimation is not used,
+                   IEST=1 - lower bound FMIN is used as an estimation
+                            for the minimum function value.
+  MED        I   INTEGER variable that specifies the method used.
+                   MED=1 - partitioned variable metric method,
+                   MED=2 - safeguarded discrete Newton method.
+
+The choice of parameter XMAX can be sensitive in many cases. First, the
+objective function can be evaluated only in a relatively small region
+(if it contains exponentials) so that the maximum stepsize is necessary.
+Secondly, the problem can be very ill-conditioned far from the solution
+point so that large steps can be unsuitable. Finally, if the problem has
+more local solutions, a suitably chosen maximum stepsize can lead to
+obtaining a better local solution. A suitable choice of parameter ETA5
+(larger than 1.0d-8) can sometimes improve the efficiency of the method.
+      The subroutine PMAX requires the user supplied subroutines FUN
+and DFUN which are described in Section 2.
+
+4. Verification of the subroutines:
+-----------------------------------
+
+      Subroutine PMAXU can be verified and tested using the program
+TMAXU. This program calls the subroutines TIUB14 (initiation), TAFU14
+(function evaluation) and TAGU14 (gradient evaluation) containing
+22 unconstrained test problems with at most 200 variables [2]. The
+results obtained by the program TMAXU on a PC computer with Microsoft
+Power Station Fortran compiler have the following form.
+
+NIT=   53  NFV=   66  NFG=   54  F= 0.260681654E-14  G= 0.120E-07  ITERM=  4
+NIT=  107  NFV=  160  NFG=  108  F= 0.502441303E-12  G= 0.262E-06  ITERM=  4
+NIT=   33  NFV=   41  NFG=   34  F= 0.535439934E-08  G= 0.814E-06  ITERM=  4
+NIT=   51  NFV=   93  NFG=   52  F= 0.540217976      G= 0.383E-06  ITERM=  4
+NIT=   23  NFV=   24  NFG=   24  F= 0.132910215E-08  G= 0.482E-06  ITERM=  4
+NIT=   46  NFV=   52  NFG=   47  F= 0.216701250E-08  G= 0.436E-06  ITERM=  4
+NIT=   48  NFV=  113  NFG=   49  F= 0.260162540      G= 0.430E-06  ITERM=  4
+NIT=   21  NFV=   58  NFG=   22  F=  282.380956      G= 0.806E-06  ITERM=  4
+NIT=   59  NFV=  146  NFG=   60  F= 0.185849706      G= 0.287E-06  ITERM=  4
+NIT=  159  NFV=  215  NFG=  160  F=-0.251638288      G= 0.250E-06  ITERM=  4
+NIT=   70  NFV=   96  NFG=   71  F= 0.538829394E-01  G= 0.139E-07  ITERM=  4
+NIT=  136  NFV=  245  NFG=  137  F= 0.941962422      G= 0.207E-06  ITERM=  4
+NIT=    2  NFV=    4  NFG=    3  F= 0.456380111E-19  G= 0.304E-11  ITERM=  3
+NIT=    5  NFV=    6  NFG=    6  F= 0.162409086E-08  G= 0.671E-06  ITERM=  4
+NIT=  116  NFV=  120  NFG=  117  F= 0.199003538E-01  G= 0.436E-06  ITERM=  4
+NIT=  110  NFV=  214  NFG=  111  F=-0.388943896E-02  G= 0.518E-05  ITERM=  2
+NIT=   33  NFV=   49  NFG=   34  F=-0.110417781E-06  G= 0.764E-06  ITERM=  4
+NIT=   62  NFV=   77  NFG=   63  F= 0.744234285E-09  G= 0.611E-07  ITERM=  4
+NIT=    9  NFV=   23  NFG=   10  F=  42.6746811      G= 0.373E-09  ITERM=  4
+NIT=   25  NFV=   32  NFG=   26  F=-0.497512435E-02  G= 0.422E-06  ITERM=  4
+NIT=   16  NFV=   23  NFG=   17  F= 0.298487756E-01  G= 0.595E-06  ITERM=  4
+NIT=   32  NFV=   82  NFG=   33  F= 0.577532726E-02  G= 0.972E-07  ITERM=  4
+NITER = 1216    NFVAL = 1939    NSUCC =   22
+TIME= 0:00:00.75
+
+The rows corresponding to individual test problems contain the number of
+iterations NIT, the number of function evaluations NFV, the number of
+gradient evaluations NFG, the final value of the objective function F,
+the norm of gradient G and the cause of termination ITERM.
+
+References:
+-----------
+
+[1] Luksan L., Matonoha C., Vlcek J.: LSA: Algorithms for large-scale
+    unconstrained and box constrained optimization Technical Report V-896.
+    Prague, ICS AS CR, 2004.
+
+[2] Luksan L., Vlcek J.: Sparse and partially separable test problems
+    for unconstrained and equality constrained optimization. Research
+    Report V-767, Institute of Computer Science, Academy of Sciences
+    of the Czech Republic, Prague, Czech Republic, 1998.
+

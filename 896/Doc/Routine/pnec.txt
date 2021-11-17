@@ -1,0 +1,385 @@
+***********************************************************************
+*                                                                     *
+*    PNEC - A DISCRETE NEWTON METHOD WITH ITERATIVE CG-BASED          *
+*           TRUST-REGION SUBALGORITHMS FOR LARGE-SCALE OPTIMIZATION   *
+*           PROBLEMS WITH SPARSE HESSIAN MATRICES.                    *
+*                                                                     *
+***********************************************************************
+
+
+1. Introduction:
+----------------
+
+      The double-precision FORTRAN 77 basic subroutine PNEC is designed
+to find a close approximation to a local minimum of a nonlinear
+function F(X) with simple bounds on variables. Here X is a vector of NF
+variables and F(X) is a smooth function. We suppose that NF is large
+and the sparsity pattern of the Hessian matrix is known. Simple bounds
+are assumed in the form
+
+               X(I) unbounded if  IX(I) = 0,
+      XL(I) <= X(I)           if  IX(I) = 1,
+               X(I) <= XU(I)  if  IX(I) = 2,
+      XL(I) <= X(I) <= XU(I)  if  IX(I) = 3,
+      XL(I)  = X(I)  = XU(I)  if  IX(I) = 5,
+
+where 1 <= I <= NF. The sparsity pattern of the Hessian matrix (only
+the upper part) is stored in the coordinate form if ISPAS=1 or in the
+standard compressed row format if ISPAS=2 using arrays IH and JH. For
+example, if the Jacobian matrix has the following pattern
+
+                H = | * * * 0 * |
+                    | * * 0 * 0 |
+                    | * 0 * 0 * |
+                    | 0 * 0 * 0 |
+                    | * 0 * 0 * |
+
+(asterisks denote nonzero elements) then arrays IH and JH contain
+elements
+
+IH(1)=1, IH(2)=1, IH(3)=1, IH(4)=1, IH(5)=2, IH(6)=2, IH(7)=3,
+IH(8)=3, IH(9)=4, IH(10)=5,
+JH(1)=1, JH(2)=2, JH(3)=3, JH(4)=5, JH(5)=2, JH(6)=4, JH(7)=3,
+JH(8)=5, JH(9)=4, JH(10)=5
+
+if ISPAS=1 or
+
+IH(1)=1, IH(2)=5, IH(3)=7, IH(4)=9, IH(5)=10, IH(6)=11,
+JH(1)=1, JH(2)=2, JH(3)=3, JH(4)=5, JH(5)=2, JH(6)=4, JH(7)=3,
+JH(8)=5, JH(9)=4, JH(10)=5
+
+if ISPAS=2. In the first case, nonzero elements in the upper part of
+the Hessian matrix can be sorted in an arbitrary order (not only by
+rows as in the above example) and arrays IH and JH have to be declared
+with lengths NF+MH at least, where MH is the number of nonzero elements.
+In the second case, nonzero elements can be sorted only by rows.
+Components of IH contain addresses of the diagonal elements in this
+sequence and components of JH contain corresponding column indices
+(note that IH has NF+1 elements and the last element is equal to MH+1).
+Arrays IH and JH have to be declared with lengths NF+1 and MH at least,
+respectively.
+      To simplify user's work, two additional easy to use subroutines
+are added. They call the basic general subroutine PNEC:
+
+      PNECU - unconstrained large-scale optimization,
+      PNECS - large-scale optimization with simple bounds.
+
+All subroutines contain a description of formal parameters and
+extensive comments. Furthermore, two test programs TNECU and TNECS are
+included, which contain several test problems (see e.g. [2]). These
+test programs serve as examples for using the subroutines, verify their
+correctness and demonstrate their efficiency.
+      In this short guide, we describe all subroutines which can be
+called from the user's program. A detailed description of the method is
+given in [1]. In the description of formal parameters, we introduce a
+type of the argument that specifies whether the argument must have a
+value defined on entry to the subroutine (I), whether it is a value
+which will be returned (O), or both (U), or whether it is an auxiliary
+value (A). Note that the arguments of the type I can be changed on
+output under some circumstances, especially if improper input values
+were given. Besides formal parameters, we can use a COMMON /STAT/ block
+containing statistical information. This block, used in each subroutine
+has the following form:
+
+      COMMON /STAT/ NRES,NDEC,NIN,NIT,NFV,NFG,NFH
+
+The arguments have the following meaning:
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NRES      O   Positive INTEGER variable that indicates the number of
+                restarts.
+  NDEC      O   Positive INTEGER variable that indicates the number of
+                matrix decompositions.
+  NIN       O   Positive INTEGER variable that indicates the number of
+                inner iterations (for solving linear systems).
+  NIT       O   Positive INTEGER variable that indicates the number of
+                iterations.
+  NFV       O   Positive INTEGER variable that indicates the number of
+                function evaluations.
+  NFG       O   Positive INTEGER variable that specifies the number of
+                gradient evaluations.
+  NFH       O   Positive INTEGER variable that specifies the number of
+                Hessian evaluations.
+
+
+2. Subroutines PNECU, PNECS:
+----------------------------
+
+The calling sequences are
+
+      CALL PNECU(NF,MH,X,IH,JH,IPAR,RPAR,F,GMAX,ISPAS,IPRNT,ITERM)
+      CALL PNECS(NF,MH,X,IX,XL,XU,IH,JH,IPAR,RPAR,F,GMAX,ISPAS,IPRNT,
+     & ITERM)
+
+The arguments have the following meaning.
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NF        I   Positive INTEGER variable that specifies the number of
+                variables of the objective function.
+  MH        I   Number of nonzero elements in the upper part of the
+                Hessian matrix. This parameter is used as input only if
+                ISPAS=1 (it defines dimensions of arrays IH and JH in
+                this case).
+  X(NF)     U   On input, DOUBLE PRECISION vector with the initial
+                estimate to the solution. On output, the approximation
+                to the minimum.
+  IX(NF)    I   On input (significant only if NB>0) INTEGER vector
+                containing the simple bounds types:
+                   IX(I)=0 - the variable X(I) is unbounded,
+                   IX(I)=1 - the lower bound X(I) >= XL(I),
+                   IX(I)=2 - the upper bound X(I) <= XU(I),
+                   IX(I)=3 - the two side bound XL(I) <= X(I) <= XU(I),
+                   IX(I)=5 - the variable X(I) is fixed (given by its
+                             initial estimate).
+  XL(NF)    I   DOUBLE PRECISION vector with lower bounds for variables
+                (significant only if NB>0).
+  XU(NF)    I   DOUBLE PRECISION vector with upper bounds for variables
+                (significant only if NB>0).
+  IH(NF+1)  I   INTEGER array which contains pointers of the diagonal
+                elements in the upper part of the Hessian matrix.
+  JH(MH)    I   INTEGER array which contains column indices of the
+                nonzero elements and additional working space for the
+                Choleski factor.
+  IPAR(7)   I   INTEGER parameters:
+                  IPAR(1)=MIT,  IPAR(2)=MFV,  IPAR(3)=MFG,
+                  IPAR(4)=IEST, IPAR(5)=MOS1, IPAR(6)=MOS2,
+                  IPAR(7)=IFIL.
+                Parameters MIT, MFV, MFG, IEST, MOS1, MOS2 are
+                described in Section 3 together with other parameters
+                of the subroutine PNEC. Parameter IFIL specifies a
+                relative size of the space reserved for fill-in. The
+                choice IFIL=0 causes that the default value IFIL=1 will
+                be taken.
+  RPAR(9)   I   DOUBLE PRECISION parameters:
+                  RPAR(1)=XMAX,  RPAR(2)=TOLX,  RPAR(3)=TOLF,
+                  RPAR(4)=TOLB,  RPAR(5)=TOLG,  RPAR(6)=FMIN,
+                  RPAR(7)=XDEL,  RPAR(8)-NONE,  RPAR(9)-NONE.
+                Parameters XMAX, TOLX, TOLF, TOLB, TOLG, FMIN, XDEL
+                are described in Section 3 together with other
+                parameters of the subroutine PNEC.
+  F         O   DOUBLE PRECISION value of the objective function at the
+                solution X.
+  GMAX      O   DOUBLE PRECISION maximum absolute value of a partial
+                derivative of the Lagrangian function.
+  ISPAS     I   INTEGER variable that specifies sparse structure of the
+                Hessian matrix:
+                  ISPAS= 1 - the coordinate form is used,
+                  ISPAS= 2 - the standard row compresed format is used.
+  IPRNT     I   INTEGER variable that specifies PRINT:
+                  IPRNT= 0 - print is suppressed,
+                  IPRNT= 1 - basic print of final results,
+                  IPRNT=-1 - extended print of final results,
+                  IPRNT= 2 - basic print of intermediate and final
+                             results,
+                  IPRNT=-2 - extended print of intermediate and final
+                             results.
+  ITERM     O   INTEGER variable that indicates the cause of termination:
+                  ITERM= 1 - if |X - XO| was less than or equal to TOLX
+                             in two subsequent iterations,
+                  ITERM= 2 - if |F - FO| was less than or equal to TOLF
+                             in two subsequent iterations,
+                  ITERM= 3 - if F is less than or equal to TOLB,
+                  ITERM= 4 - if GMAX is less than or equal to TOLG,
+                  ITERM= 6 - if termination criterion was not satisfied,
+                             but the solution is probably acceptable,
+                  ITERM=11 - if NIT exceeded MIT,
+                  ITERM=12 - if NFV exceeded MFV,
+                  ITERM=13 - if NFG exceeded MFG,
+                  ITERM< 0 - if the method failed. Values ITERM<=-40
+                             detect a lack of space. In this case,
+                             parameter IPAR(7)=IFIL has to be increased
+                             (IFIL=2, IFIL=3, etc.).
+
+      The subroutines PNECU, PNECS require the user supplied subroutines
+OBJ and DOBJ that define the objective function and its gradient and have
+the form
+
+      SUBROUTINE  OBJ(NF,X,F)
+      SUBROUTINE DOBJ(NF,X,G)
+
+The arguments of the user supplied subroutines have the following
+meaning.
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NF        I   Positive INTEGER variable that specifies the number of
+                variables of the objective function.
+  X(NF)     I   DOUBLE PRECISION an estimate to the solution.
+  F         O   DOUBLE PRECISION value of the objective function at the
+                point X.
+  G(NF)     O   DOUBLE PRECISION gradient of the objective function
+                at the point X.
+
+
+3. Subroutine PNEC:
+-------------------
+
+      This general subroutine is called from all subroutines described
+in Section 2. The calling sequence is
+
+      CALL PNEC(NF,NB,MMAX,X,IX,XL,XU,GF,HF,IH,JH,S,XO,GO,XS,GS,COL,
+     & WN11,WN12,IW,XMAX,TOLX,TOLF,TOLB,TOLG,FMIN,XDEL,GMAX,F,MIT,MFV,
+     & MFG,IEST,MOS1,MOS2,IPRNT,ITERM)
+
+The arguments NF, NB, X, IX, XL, XU, IH, JH, GMAX, F, IPRNT, ITERM,
+have the same meaning as in Section 2. Other arguments have the following
+meaning:
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  MMAX       I   INTEGER size of array H.
+  GF(NF)     A   DOUBLE PRECISION gradient of the objective function.
+  HF(MMAX)   A   DOUBLE PRECISION nonzero elements of the original
+                 Hessian matrix and nonzero elements of the Choleski
+                 factor.
+  S(NF)      A   DOUBLE PRECISION direction vector.
+  XO(NF)     A   DOUBLE PRECISION array which contains increments of
+                 variables.
+  GO(NF)     A   DOUBLE PRECISION array which contains increments of
+                 gradients.
+  XS(NF)     A   DOUBLE PRECISION auxiliary array.
+  GS(NF)     A   DOUBLE PRECISION auxiliary array.
+  COL(NF)    A   INTEGER auxiliary array.
+  WN11(NF+1) A   INTEGER auxiliary array.
+  WN12(NF+1) A   INTEGER auxiliary array.
+  IW(NF+1)   A   INTEGER auxiliary array.
+  XMAX       I   DOUBLE PRECISION maximum stepsize; the choice XMAX=0
+                 causes that the default value 1.0D+16 will be taken.
+  TOLX       I   DOUBLE PRECISION tolerance for the change of the
+                coordinate vector X; the choice TOLX=0 causes that the
+                default value TOLX=1.0D-16 will be taken.
+  TOLF      I   DOUBLE PRECISION tolerance for the change of function
+                values; the choice TOLF=0 causes that the default
+                value TOLF=1.0D-14 will be taken.
+  TOLB      I   DOUBLE PRECISION minimum acceptable function value;
+                the choice TOLB=0 causes that the default value
+                TOLB=FMIN+1.0D-16 will be taken.
+  TOLG      I   DOUBLE PRECISION tolerance for the Lagrangian function
+                gradient; the choice TOLG=0 causes that the default
+                value TOLG=1.0D-6 will be taken.
+  FMIN      I   DOUBLE PRECISION lower bound for the minimum function
+                value.
+  XDEL      I   DOUBLE PRECISION trust region stepsize; the choice
+                XDEL=0 causes that a suitable default value is
+                computed.
+  MIT       I   INTEGER variable that specifies the maximum number of
+                iterations; the choice MIT=0 causes that the default
+                value 5000 will be taken.
+  MFV       I   INTEGER variable that specifies the maximum number of
+                function evaluations; the choice MFV=0 causes that
+                the default value 5000 will be taken.
+  MFG       I   INTEGER variable that specifies the maximum number of
+                gradient evaluations; the choice MFG=0 causes that
+                the default value 10000 will be taken.
+  IEST      I   INTEGER estimation of the minimum functiom value for
+                the line search:
+                  IEST=0 - estimation is not used,
+                  IEST=1 - lower bound FMIN is used as an estimation
+                           for the minimum function value.
+  MOS1      I   INTEGER number of Lanczos steps for determination of
+                the Levenberg-Marquardt parameter (recommended value
+                is MOS1=5).
+  MOS2      I   INTEGER choice of preconditioning strategy:
+                  MOS2=1 - preconditioning is not used,
+                  MOS2=2 - preconditioning by the incomplete
+                            Gill-Murray decomposition,
+                  MOS2=3 - preconditioning by the incomplete
+                            Gill-Murray decomposition combined with
+                            preliminary solution of the preconditioned
+                            system.
+
+The choice of parameter XMAX can be sensitive in many cases. First, the
+objective function can be evaluated only in a relatively small region
+(if it contains exponentials) so that the maximum stepsize is necessary.
+Secondly, the problem can be very ill-conditioned far from the solution
+point so that large steps can be unsuitable. Finally, if the problem has
+more local solutions, a suitably chosen maximum stepsize can lead to
+obtaining a better local solution.
+      The subroutine PNEC requires the user supplied subroutines OBJ
+and DOBJ which are described in Section 2.
+
+4. Verification of the subroutines:
+-----------------------------------
+
+      Subroutine PNECU can be verified and tested using the program
+TNECU. This program calls the subroutines TIUS14 (initiation), TFFU14
+(function evaluation) and TFGU14 (gradient evaluation) containing
+22 unconstrained test problems with at most 1000 variables [2]. The
+results obtained by the program TNECU on a PC computer with Microsoft
+Power Station Fortran compiler have the following form.
+
+NIT= 1447  NFV= 1450  NFG= 5792  F= 0.173249493E-16  G= 0.138E-06  ITERM=  3
+NIT=   79  NFV=   89  NFG=  400  F= 0.169144088E-20  G= 0.382E-09  ITERM=  3
+NIT=   18  NFV=   19  NFG=  114  F= 0.180692317E-09  G= 0.316E-06  ITERM=  4
+NIT=   24  NFV=   25  NFG=  100  F=  269.499543      G= 0.136E-08  ITERM=  4
+NIT=   11  NFV=   12  NFG=   72  F= 0.990922474E-10  G= 0.511E-06  ITERM=  4
+NIT=   17  NFV=   21  NFG=  252  F= 0.166904871E-10  G= 0.898E-06  ITERM=  4
+NIT=   11  NFV=   12  NFG=   72  F=  336.937181      G= 0.629E-06  ITERM=  4
+NIT=    6  NFV=   11  NFG=  126  F=  761774.954      G= 0.237E-05  ITERM=  2
+NIT=    7  NFV=    8  NFG=   16  F=  316.436141      G= 0.362E-08  ITERM=  4
+NIT=   70  NFV=   74  NFG=  639  F= -133.630000      G= 0.221E-07  ITERM=  4
+NIT=   71  NFV=   72  NFG=  432  F=  10.7765879      G= 0.237E-10  ITERM=  4
+NIT=  133  NFV=  134  NFG=  536  F=  982.273617      G= 0.203E-07  ITERM=  4
+NIT=    7  NFV=    8  NFG=   32  F= 0.402530175E-26  G= 0.153E-13  ITERM=  3
+NIT=    2  NFV=    3  NFG=   18  F= 0.129028794E-08  G= 0.820E-06  ITERM=  4
+NIT=   10  NFV=   11  NFG=   44  F=  1.92401599      G= 0.217E-06  ITERM=  4
+NIT=   12  NFV=   15  NFG=   78  F= -427.404476      G= 0.894E-09  ITERM=  4
+NIT=    8  NFV=    9  NFG=   54  F=-0.379921091E-01  G= 0.391E-09  ITERM=  4
+NIT=    8  NFV=    9  NFG=   54  F=-0.245741193E-01  G= 0.705E-10  ITERM=  4
+NIT=    7  NFV=    8  NFG=   48  F=  59.5986241      G= 0.106E-08  ITERM=  4
+NIT=   10  NFV=   11  NFG=   66  F= -1.00013520      G= 0.277E-11  ITERM=  4
+NIT=   11  NFV=   12  NFG=   72  F=  2.13866377      G= 0.154E-06  ITERM=  4
+NIT=   46  NFV=   51  NFG=  282  F=  1.00000000      G= 0.376E-08  ITERM=  4
+NITER = 2015    NFVAL = 2064    NITCG = 1182    NSUCC =   22
+TIME= 0:00:02.92
+
+The rows corresponding to individual test problems contain the number of
+iterations NIT, the number of function evaluations NFV, the number of
+gradient evaluations NFG, the final value of the objective function F,
+the norm of gradient G and the cause of termination ITERM.
+      Subroutine PNECS can be verified and tested using the program
+TNECS. This program calls the subroutines TIUS14 (initiation), TFFU14
+(function evaluation), TFGU14 (gradient evaluation) containing 22 box
+constrained test problems with at most 1000 variables [2]. The results
+obtained by the program TNECS on a PC computer with Microsoft Power
+Station Fortran compiler have the following form.
+
+NIT= 1436  NFV= 1439  NFG= 5748  F=  3.98662385      G= 0.138E-08  ITERM=  4
+NIT=   79  NFV=   89  NFG=  400  F= 0.169144088E-20  G= 0.382E-09  ITERM=  3
+NIT=   18  NFV=   19  NFG=  114  F= 0.180692317E-09  G= 0.316E-06  ITERM=  4
+NIT=   24  NFV=   25  NFG=  100  F=  269.499543      G= 0.136E-08  ITERM=  4
+NIT=   11  NFV=   12  NFG=   72  F= 0.990922474E-10  G= 0.511E-06  ITERM=  4
+NIT=   17  NFV=   21  NFG=  252  F= 0.166904871E-10  G= 0.898E-06  ITERM=  4
+NIT=   11  NFV=   12  NFG=   72  F=  336.937181      G= 0.629E-06  ITERM=  4
+NIT=    6  NFV=   11  NFG=  126  F=  761774.954      G= 0.237E-05  ITERM=  2
+NIT=    7  NFV=    8  NFG=   16  F=  316.436141      G= 0.362E-08  ITERM=  4
+NIT=   70  NFV=   74  NFG=  639  F= -133.630000      G= 0.221E-07  ITERM=  4
+NIT=   27  NFV=   31  NFG=  168  F=  86.8673060      G= 0.416E-06  ITERM=  4
+NIT=  133  NFV=  134  NFG=  536  F=  982.273617      G= 0.203E-07  ITERM=  4
+NIT=    7  NFV=    8  NFG=   32  F= 0.402530175E-26  G= 0.153E-13  ITERM=  3
+NIT=    2  NFV=    3  NFG=   18  F= 0.129028794E-08  G= 0.820E-06  ITERM=  4
+NIT=   10  NFV=   11  NFG=   44  F=  1.92401599      G= 0.217E-06  ITERM=  4
+NIT=   12  NFV=   15  NFG=   78  F= -427.404476      G= 0.894E-09  ITERM=  4
+NIT=    8  NFV=    9  NFG=   54  F=-0.379921091E-01  G= 0.391E-09  ITERM=  4
+NIT=    8  NFV=    9  NFG=   54  F=-0.245741193E-01  G= 0.705E-10  ITERM=  4
+NIT=    7  NFV=    8  NFG=   48  F=  59.5986241      G= 0.106E-08  ITERM=  4
+NIT=   10  NFV=   11  NFG=   66  F= -1.00013520      G= 0.277E-11  ITERM=  4
+NIT=   11  NFV=   12  NFG=   72  F=  2.13866377      G= 0.154E-06  ITERM=  4
+NIT=   46  NFV=   51  NFG=  282  F=  1.00000000      G= 0.376E-08  ITERM=  4
+NITER = 1960    NFVAL = 2012    NITCG = 1127    NSUCC =   22
+TIME= 0:00:02.88
+
+References:
+-----------
+
+[1] Luksan L., Matonoha C., Vlcek J.: LSA: Algorithms for large-scale
+    unconstrained and box constrained optimization Technical Report V-896.
+    Prague, ICS AS CR, 2004.
+
+[2] Luksan L., Vlcek J.: Sparse and partially separable test problems
+    for unconstrained and equality constrained optimization. Research
+    Report V-767, Institute of Computer Science, Academy of Sciences
+    of the Czech Republic, Prague, Czech Republic, 1998.
+

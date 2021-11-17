@@ -1,0 +1,389 @@
+      REAL WORK(1000),TNODE(4)                                          MAIN   1
+      INTEGER IWORK(200)                                                MAIN   2
+      EXTERNAL F,G,LEFT                                                 MAIN   3
+      LOGICAL LEFT                                                      MAIN   4
+C                                                                       MAIN   5
+C          TEST DRIVER TO ILLUSTRATE THE USE OF HEAP SUBROUTINES FOR    MAIN   6
+C            QUADRATURE.                                                MAIN   7
+C          THIS PROGRAM CALLS THE ADAPTIVE QUADRATURE SUBROUTINE AGQ    MAIN   8
+C            TO INTEGRATE THE TWO FUNCTIONS                             MAIN   9
+C                  F(X)=EXP(X)                                          MAIN  10
+C            AND                                                        MAIN  11
+C                  G(X)=1./SQRT(X)                                      MAIN  12
+C            ON (0., 1.) TO AN ABSOLUTE ACCURACY OF 1.E-05              MAIN  13
+C          THE DEFINITIONS OF THE ARGUMENTS TO SUBROUTINE AGQ ARE GIVEN MAIN  14
+C            IN THE COMMENTS FOR THAT SUBROUTINE.                       MAIN  15
+C          FOR EACH OF THESE TWO PROBLEMS THIS TEST PROGRAM PRINTS      MAIN  16
+C            Q = THE COMPUTED ESTIMATE OF THE INTEGRAL                  MAIN  17
+C            E = THE COMPUTED ESTIMATE OF THE ERROR                     MAIN  18
+C            N = THE NUMBER OF SUBINTERVALS IN THE FINAL PARTITION OF   MAIN  19
+C                  THE INTERVAL (0., 1.)                                MAIN  20
+C            IFLAG = A SUCCESS (0) OR FAILURE (1) INDICATOR.            MAIN  21
+C                                                                       MAIN  22
+      CALL AGQ(0.,1.,F,1.E-05,Q,E,N,100,WORK,IWORK,IFLAG)               MAIN  23
+      WRITE (6,102)                                                     MAIN  24
+      WRITE(6,100) Q,E,N,IFLAG                                          MAIN  25
+      CALL AGQ(0.,1.,G,1.E-05,Q,E,N,100,WORK,IWORK,IFLAG)               MAIN  26
+      WRITE(6,100) Q,E,N,IFLAG                                          MAIN  27
+C                                                                       MAIN  28
+C          AFTER THE SECOND PROBLEM WE REORGANIZE THE HEAP SO THAT THE  MAIN  29
+C            ROOT INTERVAL IS THE LEFTMOST ONE, AND THEN PRINT THE      MAIN  30
+C            SUBINTERVALS USED LEFT TO RIGHT.                           MAIN  31
+C                                                                       MAIN  32
+      CALL HPBLD(100,4,WORK,N,IWORK,LEFT)                               MAIN  33
+      M=N                                                               MAIN  34
+      WRITE(6,103)                                                      MAIN  35
+      DO 1 I=1,M                                                        MAIN  36
+         CALL HPACC(100,4,WORK,N,IWORK,TNODE,1)                         MAIN  37
+         WRITE(6,101) (TNODE(J), J=1,4)                                 MAIN  38
+         CALL HPDEL(100,4,WORK,N,IWORK,LEFT)                            MAIN  39
+    1 CONTINUE                                                          MAIN  40
+C                                                                       MAIN  41
+  100 FORMAT(1X,2E16.8,2I10)                                            MAIN  42
+  101 FORMAT( 1X,4E16.8)                                                MAIN  43
+  102 FORMAT(16H   QUAD. EST.   ,16H    ERR. EST.   ,10H NO. INTS ,10H SMAIN  44
+     1UCCESS=0  )                                                       MAIN  45
+  103 FORMAT(65H FINAL SUBINTERVALS...ERR EST, QUAD EST,  L. END PT,  RTMAIN  46
+     1. END PT    )                                                     MAIN  47
+      STOP                                                              MAIN  48
+      END                                                               MAIN  49
+      LOGICAL FUNCTION LEFT(A,B,NCHAR)                                  LEFT   1
+      DIMENSION A(1), B(1)
+C
+C          A TEST HEAP FUNCTION.
+C          THIS FUNCTION SETS LEFT = TRUE IF THE THIRD COMPONENT OF
+C            NODE A IS .LT. THE THIRD COMPONENT OF NODE B.
+C          FOR THE TEST PROBLEM THIS COMPONENT CONTAINS THE LEFT END-
+C            POINT OF THE INTERVAL DEFINED BY THE NODE.
+C
+      LEFT= A(3) .LT. B(3)
+      RETURN
+      END
+      FUNCTION F(X)                                                     F      1
+      F=EXP(X)
+      RETURN
+      END
+      FUNCTION G(X)                                                     G      1
+      G=1./SQRT(X)
+      RETURN
+      END
+      SUBROUTINE AGQ(A,B,F,EPS,Q,E,N,NMAX,XNODES,T,IFLAG)               AGQ    1
+C
+C          1-D ADAPTIVE QUADRATURE-EXAMPLE USING HEAPS
+C   INPUT
+C        A, B =  LIMITS OF INTEGRATION  A.LT.B
+C        F = NAME OF USER SUPPLIED INTEGRAND FUNCTION, FUNCTION F(X)
+C        EPS = REQUESTED ABSOLUTE ACCURACY OF QUADRATURE
+C        NMAX = MAX NUMBER OF NODES ALLOWED
+C        XNODES = ARRAY FOR NODE STORAGE, DIMENSIONED AT LEAST 4*NMAX
+C        T = INTEGER ARRAY USED INTERNALLY, DIMENSIONED AT LEAST NMAX
+C   OUTPUT
+C        Q = QUADRATURE ESTIMATE
+C        E = ERROR ESTIMATE
+C        N = NUMBER OF NODES REQUIRED FOR THE QUADRATURE
+C        IFLAG = ERROR INDICATOR
+C          = 0 PROGRAM APPARENTLY SUCCESSFUL
+C          = 1 NODE STORAGE EXCEEDED, CALCULATION TERMINATED
+C
+C        EACH NODE IN THE HEAP REPRESENTS A SUBINTERVAL AND IS
+C          A FOUR WORD ARRAY.
+C            NODE(1) = ERROR ESTIMATE
+C            NODE(2) = QUADRATURE ESTIMATE
+C            NODE(3) = LEFT INTERVAL ENDPOINT
+C            NODE(4) = RIGHT INTERVAL ENDPOINT
+C
+      EXTERNAL GREATR,F
+      LOGICAL GREATR
+      REAL TNODE(4),N1(4),N2(4),XNODES(1)
+      INTEGER T(1)
+C
+      CALL HPINIT(NMAX,N,T)
+      CALL QINIT(TNODE,A,B)
+      E=TNODE(1)
+      Q=TNODE(2)
+C
+C        INSERT INITIAL NODE
+C
+      CALL HPINS(NMAX,4,XNODES,N,T,TNODE,GREATR)
+C
+    1 IF(E .LE. EPS) RETURN
+         CALL HPACC(NMAX,4,XNODES,N,T,TNODE,1)
+         CALL HPDEL(NMAX,4,XNODES,N,T,GREATR)
+         CALL QSDVD(TNODE,N1,N2,F)
+         CALL HPINS(NMAX,4,XNODES,N,T,N1,GREATR)
+         CALL HPINS(NMAX,4,XNODES,N,T,N2,GREATR)
+         E=E-TNODE(1)+N1(1)+N2(1)
+         Q=Q-TNODE(2)+N1(2)+N2(2)
+         IFLAG=1
+         IF(N .GE. NMAX-1) RETURN
+         IFLAG=0
+         GO TO 1
+      END
+      SUBROUTINE QINIT(NODE,A,B)                                        QINIT  1
+C
+C          INITIALIZES THE FIRST INTERVAL TO A NODE BY SETTING THE
+C          ERROR ESTIMATE AND QUADRATURE ESTIMATE TO 1000. AND 0. RESP.
+C
+      REAL NODE(4)
+      NODE(1)=1000.
+      NODE(2)=0.0
+      NODE(3)=A
+      NODE(4)=B
+      RETURN
+      END
+      SUBROUTINE QSDVD(NODE,R,L,F)                                      QSDVD  1
+C
+C          SUBDIVIDES A NODE INTO TWO EQUAL HALVES.
+C          THE ENDPOINTS OF THE NEW NODES ARE COMPUTED HERE.  THE ERROR
+C          AND QUADRATURE ESTIMATES FOR THE LEFT (L) AND RIGHT (R)
+C          HALVES ARE COMPUTED BY THE SUBROUTINE QUAD.
+C
+      EXTERNAL F
+      REAL NODE(4),R(4),L(4)
+      L(3)=NODE(3)
+      R(4)=NODE(4)
+      L(4)=(L(3)+R(4))/2.
+      R(3)=L(4)
+      CALL QUAD(L,F)
+      CALL QUAD(R,F)
+      RETURN
+      END
+      SUBROUTINE QUAD(NODE,F)                                           QUAD   1
+C
+C          ESTIMATES INTEGRAL OF F ON NODE USING 2 AND 3 POINT GAUSS.
+C          THE 3 POINT FORMULA GIVES ESTIMATE AND DIFFERENCE OF 2 AND 3
+C          GIVES ERROR ESTIMATE
+C
+      REAL NODE(4)
+      XL=(NODE(4)-NODE(3))/2.
+      XM=(NODE(4)+NODE(3))/2.
+      Q2=XL*(F(XL*(-.5773502692)+XM)+F(XL*(.5773502692)+XM))
+      Q3=XL*((F(XL*(-.7745966692)+XM)+F(XL*(.7745966692)+XM))/1.8+
+     1 F(XM)/1.125)
+      NODE(1)=ABS(Q2-Q3)
+      NODE(2)=Q3
+      RETURN
+      END
+C        H E A P  PACKAGE                                               HPINIT 1
+C          A COLLECTION OF PROGRAMS WHICH MAINTAIN A HEAP DATA          HPINIT 2
+C          STRUCTURE.  BY CALLING THESE SUBROUTINES IT IS POSSIBLE TO   HPINIT 3
+C          INSERT, DELETE, AND ACCESS AN EXISTING HEAP OR TO BUILD A    HPINIT 4
+C          NEW HEAP FROM AN UNORDERED COLLECTION OF NODES. THE HEAP     HPINIT 5
+C          FUNCTION IS AN ARGUMENT TO THE SUBROUTINES ALLOWING VERY     HPINIT 6
+C          GENERAL ORGANIZATIONS.                                       HPINIT 7
+C            THE USER MUST DECIDE ON THE MAXIMUM NUMBER OF NODES        HPINIT 8
+C          ALLOWED AND DIMENSION THE REAL ARRAY DATA AND THE INTEGER    HPINIT 9
+C          ARRAY T USED INTERNALLY BY THE PACKAGE.  THESE VARIABLES ARE HPINIT10
+C          THEN PASSED THROUGH THE CALL SEQUENCE BETWEEN THE HEAP       HPINIT11
+C          PROGRAMS BUT ARE NOT IN GENERAL ACCESSED BY THE USER.  HE    HPINIT12
+C          MUST ALSO PROVIDE A HEAP FUNCTION WHOSE NAME MUST BE INCLUD- HPINIT13
+C          ED IN AN EXTERNAL STATEMENT IN THE USER PROGRAM WHICH CALLS  HPINIT14
+C          THE HEAP SUBROUTINES.  TWO SIMPLE HEAP FUNCTIONS ARE         HPINIT15
+C          PROVIDED WITH THE PACKAGE.                                   HPINIT16
+C                                                                       HPINIT17
+      SUBROUTINE HPINIT(NMAX,N,T)                                       HPINIT18
+C
+C   PURPOSE
+C         THIS ROUTINE INITIALIZES THE HEAP PROGRAMS.
+C         IT IS CALLED ONCE AT THE START OF EACH NEW CALCULATION
+C   INPUT
+C         NMAX = MAXIMUM NUMBER OF NODES ALLOWED BY USER.
+C   OUTPUT
+C         N = CURRENT NUMBER OF NODES IN HEAP = 0.
+C         T = INTEGER ARRAY OF POINTERS TO POTENTIAL HEAP NODES.
+C
+      INTEGER T(1)
+      DO 1 I = 1, NMAX
+    1    T(I)=I
+      N = 0
+      RETURN
+      END
+      SUBROUTINE HPINS(NMAX,NCHAR,DATA,N,T,NODE,HPFUN)                  HPINS  1
+C
+C   PURPOSE
+C         THIS ROUTINE INSERTS A NODE INTO AN ALREADY EXISTING HEAP.
+C             THE RESULTING TREE IS RE-HEAPED.
+C
+C   INPUT
+C         NMAX = MAXIMUM NUMBER OF NODES ALLOWED BY USER.
+C         NCHAR = NUMBER OF WORDS PER NODE.
+C         DATA = WORK AREA FOR STORING NODES.
+C         N = CURRENT NUMBER OF NODES IN THE TREE.
+C         T = INTEGER ARRAY OF POINTERS TO HEAP NODES.
+C         NODE = A REAL ARRAY, NCHAR WORDS LONG, WHICH
+C                CONTAINS THE NODAL INFORMATION TO BE INSERTED.
+C         HPFUN = NAME OF USER WRITTEN FUNCTION TO DETERMINE
+C                THE ROOT NODE.
+C   OUTPUT
+C         DATA = WORK AREA WITH NEW NODE INSERTED.
+C         N = UPDATED NUMBER OF NODES.
+C         T = UPDATED INTEGER POINTER ARRAY.
+C
+      DIMENSION T(1),NODE(1),DATA(1)
+      REAL NODE
+      INTEGER T
+      LOGICAL HPFUN
+      IF(N .EQ. NMAX) RETURN
+      N=N+1
+      J= (T(N)-1)*NCHAR
+      DO 1 I= 1,NCHAR
+         IPJ=I+J
+    1    DATA(IPJ) = NODE(I)
+      J=N
+    2 CONTINUE
+      IF(J .EQ. 1) RETURN
+      JT=T(J)
+      J2=J/2
+      JT2=T(J2)
+      JL=(JT2-1)*NCHAR+1
+      JR=(JT-1)*NCHAR+1
+      IF(HPFUN(DATA(JL),DATA(JR),NCHAR)) RETURN
+      T(J2)=T(J)
+      T(J)=JT2
+      J=J/2
+      GO TO 2
+      END
+      SUBROUTINE HPBLD(NMAX,NCHAR,DATA,NELTS,T,HPFUN)                   HPBLD  1
+C
+C   PURPOSE
+C          BUILDS A HEAP, IN  T , FROM AN ARRAY OF  NELTS  ELEMENTS
+C            IN DATA, WHICH ARE SPACED NCHAR APART.
+C            AT CONCLUSION OF CALCULATION  THE ROOT SATISFIES
+C            HPFUN(ROOT,SON) = .TRUE. FOR ANY SON.
+C          USES SUBROUTINE HPGRO BY FEEDING IT ONE ELEMENT OF
+C          THE ARRAY AT A TIME.
+C
+C   INPUT
+C         NMAX = MAXIMUN NUMBER OF NODES ALLOWED BY USER.
+C         NCHAR = NUMBER OF WORDS PER NODE.
+C         DATA = WORK AREA IN WHICH THE NODES ARE STORED.
+C         NELTS = CURRENT NUMBER OF NODES.
+C         T = INTEGER ARRAY OF POINTERS TO HEAP NODES.
+C         HPFUN = NAME OF USER WRITTEN FUNCTION TO DETERMINE ROOT NODE.
+C   OUTPUT
+C         DATA = WORK AREA IN WHICH THE NODES ARE STORED.
+C         T = INTEGER ARRAY OF POINTERS TO HEAP NODES.
+C              IN PARTICULAR T(1) POINTS TO THE ROOT.
+C
+      EXTERNAL HPFUN
+      LOGICAL HPFUN
+      DIMENSION DATA(1)
+      INTEGER T(1)
+      IF(NMAX .LT. NELTS) RETURN
+      INDEX = NELTS/2
+    1 CONTINUE
+      IF( INDEX .EQ. 0) RETURN
+         CALL HPGRO(NMAX,NCHAR,DATA,NELTS,T,HPFUN,INDEX)
+         INDEX = INDEX-1
+         GO TO 1
+      END
+      SUBROUTINE HPDEL(NMAX,NCHAR,DATA,NCELLS,T,HPFUN)                  HPDEL  1
+C
+C   PURPOSE
+C          DELETE ROOT ELEMENT OF HEAP.  RESULTING TREE IS REHEAPED.
+C   INPUT
+C         NMAX = MAXIMUN NUMBER OF NODES ALLOWED BY USER.
+C         NCHAR = NUMBER OF WORDS PER NODE.
+C         DATA = WORK AREA IN WHICH THE NODES ARE STORED.
+C        NCELLS = CURRENT NUMBER OF NODES.
+C        T = INTEGER ARRAY OF POINTERS TO NODES.
+C         HPFUN = NAME OF USER WRITTEN FUNCTION TO DETERMINE ROOT NODE.
+C   OUTPUT
+C         NCELLS = UPDATED NUMBER OF NODES.
+C         T = UPDATED INTEGER POINTER ARRAY TO NODES.
+C
+      EXTERNAL HPFUN
+      LOGICAL HPFUN
+      DIMENSION DATA(1)
+      INTEGER T(1)
+      IF(NCELLS .EQ. 0) RETURN
+      JUNK=T(1)
+      T(1)=T(NCELLS)
+      T(NCELLS)=JUNK
+      NCELLS=NCELLS-1
+      CALL HPGRO(NMAX,NCHAR,DATA,NCELLS,T,HPFUN,1)
+      RETURN
+      END
+      SUBROUTINE HPACC(NMAX,NCHAR,DATA,N,T,NODE,K)                      HPACC  1
+C
+C   PURPOSE
+C          TO ACCESS THE K-TH NODE OF THE HEAP,
+C          1 .LE. K .LE. N .LE. NMAX
+C   INPUT
+C        NMAX = MAXIMUM NUMBER OF NODES ALLOWED BY USER.
+C        DATA = WORK AREA FOR STORING NODES.
+C        N = CURRENT NUMBER OF NODES IN THE HEAP.
+C        T = INTEGER ARRAY OF POINTERS TO HEAP NODES.
+C        NODE = A REAL ARRAY, NCHAR WORDS LONG, IN WHICH NODAL IN-
+C          FORMATION WILL BE INSERTED.
+C        K = THE INDEX OF THE NODE TO BE FOUND AND INSERTED INTO NODE.
+C
+C   OUTPUT
+C        NODE =  A REAL ARRAY.    CONTAINS IN NODE(1),...,NODE(NCHAR)
+C          THE ELEMENTS OF THE K-TH NODE.
+C
+      REAL DATA(1), NODE(1)
+      INTEGER T(1)
+      IF (K .LT. 1 .OR. K .GT. N .OR. N .GT. NMAX) RETURN
+      J=(T(K)-1)*NCHAR
+      DO 1 I=1,NCHAR
+         IPJ=I+J
+    1    NODE(I)=DATA(IPJ)
+      RETURN
+      END
+      LOGICAL FUNCTION GREATR(A,B,NCHAR)                                GREATR 1
+       REAL A(1),B(1)
+      GREATR= A(1) .GT. B(1)
+      RETURN
+      END
+      LOGICAL FUNCTION LESS(A,B,NCHAR)                                  LESS   1
+      REAL A(1),B(1)
+      LESS= A(1) .LT. B(1)
+      RETURN
+      END
+      SUBROUTINE HPGRO(NMAX,KD,DATA,NELTS,T,HPFUN,KTEMP)                HPGRO  1
+C
+C   PURPOSE
+C          FORMS A HEAP OUT OF A TREE. USED PRIVATELY BY HPBLD.
+C          THE ROOT OF THE TREE IS STORED IN LOCATION T(KTEMP).
+C          FIRST SON IS IN LOCATION T(2KTEMP), NEXT SON
+C          IS IN LOCATION T(2KTEMP+1).
+C          THIS PROGRAM ASSUMES EACH BRANCH OF THE TREE IS A HEAP.
+C
+      DIMENSION T(1),DATA(1)
+      INTEGER T
+      LOGICAL HPFUN
+      IF(NELTS .GT. NMAX) RETURN
+C
+      K=KTEMP
+    1 I=2*K
+C
+C          TEST IF ELEMENT IN I TH POSITION IS A LEAF.
+C
+      IF( I .GT. NELTS ) RETURN
+C
+C          IF THERE IS MORE THAN ONE SON, FIND WHICH SON IS SMALLEST.
+C
+      IF( I .EQ. NELTS ) GO TO 2
+      ITEMP=T(I)
+      ITP1=T(I+1)
+      IL=(ITP1-1)*KD+1
+      IR=(ITEMP-1)*KD+1
+      IF(HPFUN(DATA(IL),DATA(IR),KD)) I=I+1
+C
+C          IF A SON IS LARGER THAN FATHER, INTERCHANGE
+C          THIS DESTROYS HEAP PROPERTY, SO MUST RE-HEAP REMAINING
+C          ELEMENTS
+C
+    2 CONTINUE
+      KT=T(K)
+      ITEMP=T(I)
+      IL=(KT-1)*KD+1
+      IR=(ITEMP-1)*KD+1
+      IF(HPFUN(DATA(IL),DATA(IR),KD)) RETURN
+         ITEMP=T(I)
+         T(I)=T(K)
+         T(K)=ITEMP
+         K=I
+      GO TO 1
+      END

@@ -1,0 +1,63 @@
+function sf = legtranMMs(x,nj,mm,nn,kk,P) 
+% Compute a Legendre transform synthesis
+%  Input: 
+%    x - complex spectral coeffecients (n,m)
+%    nj = number of Gauss latitudes
+%    mm, nn,kk are the truncation parameters
+%    P - associated Legendre functions ordered (j,n,m)
+% Output:
+%    sf - matrix of Fourier coefficients ordered (m,j)
+% Local:
+%    S  - matrix of Fourier coeffients
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Written by John Drake
+% Based on Spherical harmonic transform formulation as matrix multiply
+% of Ren-Cang Lee.  
+% Date: Oct. 2002
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+njo2=nj/2;
+%For efficiency, create the X array = [Re(x),Im(x), Re(xt),Im(xt)]
+xt=x;                    %this needs to be twidled
+%Matrix multiply to get Legendre transform P*X
+S = zeros(njo2,2,mm+1);
+timtots=0.0;
+for m=0:mm
+
+    use_original = 0;
+    if (use_original),
+      for n = m:nn
+        sgn = (-1)^(n-m);
+        xt(n+1,m+1) = sgn*x(n+1,m+1);  % it is twidled here
+      end
+    else
+	n = m:2:nn;
+	xt(n+1,m+1) = x(n+1,m+1);
+	n = (m+1):2:nn;
+	xt(n+1,m+1) = -x(n+1,m+1);
+    end;
+    Pm = P(:,m+1:mm+1,m+1);
+    Xm = [x(m+1:mm+1,m+1) xt(m+1:nn+1,m+1) ];
+    tmatrix = cputime;
+    S(:,:,m+1) = Pm*Xm;  % here is the famous matrix-matrix multiply
+    timtots = timtots + (cputime-tmatrix);
+end
+%Reshape S for standard input to ifft
+sf=zeros(mm+1,nj);
+use_conj = 0;
+for m=0:mm
+    j=1:njo2;
+
+	if (use_conj),
+          sf(m+1,j) = S(j,1,m+1)';     %Hmm.. why the conjugate?
+          sf(m+1,nj-j+1)=S(j,2,m+1)';
+        else
+          sf(m+1,j) = transpose(S(j,1,m+1));     % no conjugate
+          sf(m+1,nj-j+1)=transpose(S(j,2,m+1));
+        end;
+
+    
+end
+timtots            %print the time in matrix multiply
+
+
+

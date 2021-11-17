@@ -1,0 +1,18 @@
+module mod_Entry
+
+use mod_uscr_begin
+use mod_uscr_end
+use mod_uscr_insert_entry
+use mod_uscr_insert_entries
+use mod_uscr_insert_col
+use mod_uscr_insert_row
+use mod_uscr_insert_clique
+use mod_uscr_insert_block
+use mod_uscr_block_begin
+use mod_uscr_variable_block_begin
+use mod_usgp
+use mod_ussp
+use mod_INS_ROUTINER
+use mod_INSERTING
+
+end module mod_Entry

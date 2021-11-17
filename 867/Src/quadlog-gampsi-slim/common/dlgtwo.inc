@@ -1,0 +1,12 @@
+*
+*     dlgtwo = ln(2)
+*
+      DOUBLE PRECISION    dlgtwo
+      PARAMETER           (dlgtwo =
+     X    0.6931471805599453094172321214581765680755001343602552541d+00)
+*
+*     dlg2in = 1/ln(2)
+*
+      DOUBLE PRECISION    dlg2in
+      PARAMETER           (dlg2in =
+     X    1.442695040888963407359924681001892137426645954152985934d+00)

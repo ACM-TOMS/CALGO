@@ -1,0 +1,1958 @@
+C      ALGORITHM 722, COLLECTED ALGORITHMS FROM ACM.
+C      THIS WORK PUBLISHED IN TRANSACTIONS ON MATHEMATICAL SOFTWARE,
+C      VOL. 19, NO. 4, DECEMBER, 1993, PP. 443-451.
+ /*
+
+     The compiler directives BEG, BEF, LEG, and LEF designate
+     four possible floating-point systems as follows.
+
+     Stored double values may be thought of as an array of two
+     long values, lx[0] and lx[1].  When the exponent field
+     is stored in lx[0], thusly
+
+        ........ xx ........
+        7ff00000    00000000
+        ..lx[0].    ..lx[1].
+
+     we designate the storage scheme as BE for Big Endian.  When
+     the exponent field is stored in lx[1]
+
+        ........ xx ........
+        00000000    7ff00000
+        ..lx[0].    ..lx[1].
+
+     we designate the storage scheme as LE for Little Endian.  
+
+     Systems that support the IEEE graceful underflow are
+     designated with G; those that support only flush-to-zero
+     underflow are designated with F.  We assume that G systems
+     also support the IEEE infinity and NaN arithmetic, but
+     that F systems support neither.
+
+ */
+
+#ifdef BEG
+#define RMinx RMinDeNorm
+#define HighDMinx DZero
+#define LowDMinx DMinDeNorm
+#define highpart(x) *((long *) &x)
+#define lowpart(x) *((long *) &x + 1)
+#endif
+
+#ifdef BEF
+#define RMinx RMinNorm
+#define HighDMinx DMinNorm
+#define LowDMinx DZero
+#define highpart(x) *((long *) &x)
+#define lowpart(x) *((long *) &x + 1)
+#endif
+
+#ifdef LEG
+#define RMinx RMinDeNorm
+#define HighDMinx DZero
+#define LowDMinx DMinDeNorm
+#define highpart(x) *((long *) &x + 1)
+#define lowpart(x) *((long *) &x)
+#endif
+
+#ifdef LEF
+#define RMinx RMinNorm
+#define HighDMinx DMinNorm
+#define LowDMinx DZero
+#define highpart(x) *((long *) &x + 1)
+#define lowpart(x) *((long *) &x)
+#endif
+
+#define Zero  0.0e0
+#define Half  0.5e0
+#define One   1.0e0
+#define RHalf ((float) 0.5)
+#define ROne  ((float) 1.0)
+
+#define RExpShift       23
+#define RExpBias        ((long) 127)
+#define RMinNormExp     ((long) -126)
+#define RMinNormBiasExp ((long) 1)
+#define RMaxNormBiasExp ((long) 254)
+#define RExpMask        0x7f800000L
+#define RMinNorm        0x00800000L
+#define RMinDeNorm      0x00000001L
+#define RMaxDenorm      0x007fffffL
+#define MRMaxDenorm     0x807fffffL
+
+#define DExpShift       20
+#define DExpBias        ((long) 1023)
+#define DMinNormExp     ((long) -1022)
+#define DMinNormBiasExp ((long) 1)
+#define DMaxNormBiasExp ((long) 2046)
+#define DExpMask        0x7ff00000L
+#define SignMask        0x80000000L
+#define DMinNorm        0x00100000L
+#define DZero           0x00000000L
+#define DMinDeNorm      0x00000001L
+#define DMaxDenorm      0x000fffffL
+#define MDMaxDenorm     0x800fffffL
+
+#define allof(x) *((long *) &x)
+#define Abs(xxx) ((xxx>Zero)?(xxx):(-xxx))
+
+
+ /*
+    isnan(arg) returns true (1) if arg is NaN, and false (0)
+    otherwise.  It exploits the IEEE requirement that NaNs
+    compare as unequal to all values, including themselves.
+
+    W. J. Cody, J. T. Coonen, June 11, 1990
+
+ */
+
+int isnan(arg)
+double arg;
+{
+        return  arg != arg;
+}
+
+ /*
+    finite(arg) returns true (1) if arg is finite, and false (0)
+    otherwise.  It is independent of float.h.  NaN arguments are
+    filtered with isnan() to avoid spurious Invalid Operation
+    exceptions.
+
+    W. J. Cody, J. T. Coonen, June 11, 1990
+
+ */
+
+int finite(arg)
+    double arg;
+
+{
+    int isnan();
+
+        if (isnan(arg))
+              return 0;
+           else
+              return (Abs(arg) < One) || (arg*Half != arg);
+}
+
+/*
+    copysign(argx,argy) returns argx with the algebraic sign of argy,
+    even when one or both arguments are NaN.
+
+    W. J. Cody, J. T. Coonen, June 12, 1990
+
+*/
+
+double copysign(argVal,argSign)
+
+       double argVal,argSign;
+
+{
+       double z;
+
+       /* Work with local copy of argVal. */
+       z = argVal;
+
+       highpart(z) = (highpart(z) & ~SignMask) |
+                     (highpart(argSign) & SignMask);
+
+       return  z;
+
+}
+
+ /*
+    scalb(arg,n) returns arg * 2 ** n computed by adding n to
+    the floating-point exponent of arg, where n is long,
+    and scalb and arg are double.  This function may generate
+    overflow or underflow.
+
+    W. J. Cody, J. T. Coonen, April 24, 1992
+
+ */
+
+double scalb(arg,n)
+       double arg;
+       long n;
+{
+        int    finite(), isnan();
+        long   i, tempExp;
+        double z, logbz, scaling, copysign(), logb();
+
+        /* Work with local copy of argument. */
+        z = arg;
+
+        /* Handle special cases of NaN, inf, 0. */
+        if (isnan(z) || !finite(z) || z == Zero) return arg;
+
+        /* Extract exponent using logb, then normalize z, if  */
+        /* necessary, by doubling.  Watch for infinite return */
+        /* from denormals in flushing systems.                */
+        logbz = logb(z);
+        if (!finite(logbz)) return copysign(Zero, arg);
+
+        tempExp = logbz;
+        for (i=0; i<DMinNormExp-tempExp; i++)
+           z += z;
+
+        /* Zero out old exponent, and build new one. */
+        highpart(z) &= ~DExpMask;
+        tempExp += DExpBias + n;
+
+        /* If new exponent too small, force minimum normalized      */
+        /* exponent, and denormalize result by multiplying by the   */
+        /* appropriate power of 1/2, possibly triggering underflow. */
+        /* Pin very negative exponents to -60, since that is more   */
+        /* than sufficient to force denormalization "completely off */
+        /* the right-hand side."                                    */
+        if (tempExp < DMinNormBiasExp) {
+              highpart(z) |= DMinNormBiasExp << DExpShift;
+              if (tempExp < -60)
+                    tempExp = -60;
+              for (i=tempExp,scaling=One;i<1;i++)
+                    scaling *= Half;
+              z *= scaling;
+        } else if (tempExp > DMaxNormBiasExp) {
+        /* If new exponent too large, trigger overflow.  */
+              highpart(z) |= DMaxNormBiasExp << DExpShift;
+              z += z;  /* Oveflow according to rounding mode. */
+        } else
+        /* Otherwise, new exponent is okay.  Plant it and continue. */
+              highpart(z) |= tempExp << DExpShift;
+
+        return z;
+}
+
+ /*
+    logb(arg) returns the floating-point exponent of arg as a
+    signed integer, where logb and arg are double precision, and
+    arg is considered as being represented with infinite range.
+    For arg positive and finite, 1 <= |scalb(arg,-N)| < 2, where
+    N is the long equivalent of logb(arg).  Special cases
+    are as follows:
+
+    1) logb(NaN) = NaN,
+    2) logb(infinity) = infinity, and
+    3) logb(0) = -infinity  and signals division by zero.
+    4) logb(denormal) = logb(0) on machines that flush to zero.
+
+    W. J. Cody, J. T. Coonen, April 24, 1992
+
+ */
+
+double logb(arg)
+       double arg;
+{
+        int finite(), isnan();
+        long expAdj;
+        double z, copysign();
+
+        /* Work with local copy of argument with positive sign. */
+        z = copysign(arg,One);
+
+        /* logb(NaN) is NaN. */
+        if (isnan(z))
+           return arg ;
+
+        /* logb(Infinity) is +Infinity. */
+        if (!finite(z))
+           return z ;
+
+        /* Renormalize, if necessary, a nonzero value and build    */
+        /* exponent correction.  Denormals that arise in systems   */
+        /* that flush underflows to zero may be forced to zero in  */
+        /* this loop.                                              */
+        for (expAdj = 0; highpart(z) < DMinNorm && z != 0; expAdj--)
+           z += z;
+
+        /* logb(0) is -Infinity, with division by zero. */
+        if (z == Zero)
+           return copysign(One/z,-One);
+
+        /* Grab exponent and return. */
+
+        return (double) ((highpart(z) >> DExpShift) - DExpBias + expAdj);
+
+}
+
+
+/*
+    nextafter(argx,argy) returns the next representable neighbor to
+    argx in the direction toward argy, where the function and arguments
+    are double-precision.  The following special cases arise:
+
+    1) if argx != argx or argy != argy, at least one of the arguments
+       is a NaN, and one of the input NaNs is returned;
+    2) if argx = argy, argx is returned; and
+    3) if the result is zero, underflow is signalled.
+
+    W. J. Cody, J. T. Coonen, March 30, 1992
+
+*/
+
+double nextafter(argx,argy)
+       double argx,argy;
+
+{
+       int isnan();
+       double z, forceException, copysign();
+
+       /* If one argument is NaN, return NaN. */
+       if (isnan(argx) || isnan(argy)) return argx + argy;
+
+       /* If arguments are equal, return argx. */
+       if (argx == argy) return argx;
+
+       /* Work with local copy of argx. */
+       z = argx;
+
+        /* Initialize special variable used to stimulate side-  */
+        /* effects despite a compiler's desire to strip "dead"  */
+        /* code.                                                */
+        forceException = Zero;
+
+       /* Return signed smallest non-zero value when argx = zero. */
+       if (argx == Zero) {
+             highpart(z) = HighDMinx;
+             lowpart(z) = LowDMinx;
+             z = copysign(z,argy);
+             }
+       /* Otherwise, use integer arithmetic to increment or      */
+       /* decrement least significant half of z, being careful   */
+       /* with carries and borrows involving most significant    */
+       /* half.                                                  */
+          else if (((argx < Zero) && (argx < argy)) ||
+                   ((argx > Zero) && (argx > argy))) {
+                   --lowpart(z);
+                   if (lowpart(z) == -1)
+                      --highpart(z);
+                   }
+                else {
+                   ++lowpart(z);
+                   if (lowpart(z) == 0)
+                      ++highpart(z);
+                   }
+
+    /* Now trigger the underflow signal (with 0 result for    */
+    /* machines that flush) if the result is denormal, and    */
+    /* trigger overflow if the result is +/-INF.  If z is     */
+    /* denormal on a flushing machine, argx must have been    */
+    /* the tiniest normal number, so just halve argx to force */
+    /* the appropriate underflow to zero.  Denormal (or zero) */
+    /* z on a graceful underflow machine is correct, but      */
+    /* requires that the underflow signal be triggered.       */
+
+       if ((highpart(z) & ~MDMaxDenorm) == DZero)
+#if defined(BEF) || defined(LEF)
+          z = argx * Half;  /* Force underflow to 0 with signal. */
+#else
+    /* z is either denormal or zero.  argx is denormal, zero  */
+    /* or the teeniest normal.  So   z * z + argx * argx      */
+    /* is guaranteed to underflow.  The subsequent test       */
+    /* forces the result to a double variable, despite the    */
+    /* optimizing whims of compilers.                         */
+          forceException = z * z + argx * argx;
+#endif
+    /* If z is infinite, it's correct, but overflow must be   */
+    /* signaled.                                              */
+       else if (!finite(z))
+          forceException = argx * argx;
+
+    /* Now use forceException in a seemingly nontrivial       */
+    /* expression to be sure the side-effects above are       */
+    /* generated.  In fact, the test below always fails.      */
+      if ((highpart(forceException) & SignMask) == SignMask)
+             z = Zero;
+    return  z;
+}
+
+
+ /*
+    isnanf(arg) returns true (1) if arg is NaN, and false (0)
+    otherwise.  It exploits the IEEE requirement that NaNs
+    compare as unequal to all values, including themselves.
+
+    W. J. Cody, J. T. Coonen, June 11, 1990
+ */
+
+int isnanf(arg)
+    float arg;
+
+{
+        return  arg != arg;
+}
+
+ /*
+    finitef(arg) returns true (1) if arg is finite, and false (0)
+    otherwise.  It is independent of float.h.  NaN arguments are
+    filtered with isnan() to avoid spurious Invalid Operation
+    exceptions.
+
+    W. J. Cody, J. T. Coonen, June 11, 1990
+ */
+
+int finitef(arg)
+    float arg;
+
+{
+    int isnanf();
+
+        if (isnanf(arg))
+              return 0;
+           else
+              return (Abs(arg) < One) || (arg*Half != arg);
+}
+
+/*
+    copysignf(argx,argy) returns argx with the algebraic sign of argy,
+    even when one or both arguments are NaN.
+
+    W. J. Cody, J. T. Coonen, June 19, 1990
+
+*/
+
+float copysignf(argVal,argSign)
+
+      float argVal,argSign;
+
+{
+       float s,v;
+
+       /* Work with local copies of arguments */
+       v = argVal;
+       s = argSign;
+
+       allof(v) = (allof(v) & ~SignMask) |
+                  (allof(s) & SignMask);
+
+       return  v ;
+
+}
+
+ /*
+    scalbf(arg,n) returns arg * 2 ** n computed by adding n to
+    the floating-point exponent of arg, where n is long,
+    and scalbf and arg are float.  This function may generate
+    overflow or underflow.
+
+    W. J. Cody, J. T. Coonen, April 24, 1992
+
+ */
+
+float scalbf(arg,n)
+      float arg;
+      long n;
+{
+       int       finitef(), isnanf();
+       long      i, tempExp;
+       float     z, logbz, scaling, copysignf(), logbf();
+
+        /* Work with local copy of argument. */
+        z = arg;
+
+        /* Handle special cases of NaN, inf, 0. */
+        if (isnanf(z) || !finitef(z) || z == Zero) return arg;
+
+        /* Extract exponent using logbf, then normalize z, if */
+        /* necessary, by doubling.  Watch for infinite return */
+        /* from denormals in flushing systems.                */
+        logbz = logbf(z);
+        if (!finitef(logbz))
+           return copysignf(Zero, arg);
+
+        tempExp = logbz;
+        for (i=0; i<RMinNormExp-tempExp; i++)
+           z += z;
+
+        /* Zero out old exponent, and build new one. */
+        allof(z) &= ~RExpMask;
+        tempExp += RExpBias + n;
+
+        /* If new exponent too small, force minimum normalized      */
+        /* exponent, and denormalize result by multiplying by the   */
+        /* appropriate power of 1/2, possibly triggering underflow. */
+        /* Pin very negative exponents to -30, since that is more   */
+        /* than sufficient to force denormalization "completely off */
+        /* the right-hand side.                                     */
+        if (tempExp < RMinNormBiasExp) {
+              allof(z) |= RMinNormBiasExp << RExpShift;
+              if (tempExp < -30)
+                    tempExp = -30;
+              for (i=tempExp,scaling=ROne;i<1;i++)
+                    scaling *= RHalf;
+              z *= scaling;
+           }
+        /* If new exponent too large, trigger overflow.  */
+        else if (tempExp > RMaxNormBiasExp) {
+              allof(z) |= RMaxNormBiasExp << RExpShift;
+              z += z;    /* Oveflow according to rounding mode. */
+           }
+
+        /* Otherwise, new exponent is okay.  Plant it and continue. */
+        else
+              allof(z) |= tempExp << RExpShift;
+
+        return z;
+}
+
+ /*
+    logbf(arg) returns the floating-point exponent of arg as a
+    signed integer, where logbf and arg are float precision, and
+    arg is considered as being represented with infinite range.
+    For arg positive and finite, 1 <= |scalbf(arg,-)| < 2, where
+    N is the long equivalent of logbf(arg).  Special cases
+    are as follows:
+
+    1) logbf(NaN) = NaN,
+    2) logbf(infinity) = infinity, and
+    3) logbf(0) = -infinity  and signals division by zero.
+    4) logb(denormal) = logb(0) on machines that flush to zero.
+
+    W. J. Cody, J. T. Coonen, April 24, 1992
+
+ */
+
+float logbf(arg)
+       float arg;
+{
+        int finitef(), isnanf();
+        long expAdj;
+        float z, copysignf();
+
+        /* Work with local copy of argument with positive sign. */
+        z = copysignf(arg,ROne);
+
+        /* logbf(NaN) is NaN. */
+        if (isnanf(z))
+           return arg ;
+
+        /* logbf(Infinity) is +Infinity. */
+        if (!finitef(z))
+           return z ;
+
+        /* Renormalize, if necessary, a nonzero value and build exponent */
+        /* correction.  Denormals that arise in systems that flush       */
+        /* underflows to zero may be forced to zero in this loop.        */
+        for (expAdj = 0; allof(z) < RMinNorm && z != 0; expAdj--)
+           z += z;
+
+        /* logbf(0) is -Infinity, with division by zero. */
+        if (z == Zero) return copysignf(ROne/z,-ROne);
+
+        /* Grab exponent and return. */
+
+        return (float) ((allof(z) >> RExpShift) - RExpBias + expAdj);
+
+}
+
+/*
+    nextafterf(argx,argy) returns the next representable neighbor to
+    argx in the direction toward argy, where the function and arguments
+    are float-precision.  The following special cases arise:
+
+    1) if argx != argx or argy != argy, at least one of the arguments
+       is a NaN, and one of the input NaNs is returned;
+    2) if argx = argy, argx is returned; and
+    3) if the result is zero, underflow is signalled.
+
+    W. J. Cody, J. T. Coonen, March 30, 1992
+*/
+
+float nextafterf(argx,argy)
+
+       float argx,argy;
+
+{
+       int isnanf();
+       float z, forceException, copysignf();
+
+       /* If one argument is NaN, return NaN. */
+       if (isnanf(argx) || isnanf(argy)) return argx + argy ;
+
+       /* If arguments are equal, return argx. */
+       if (argx == argy) return argx ;
+
+       /* Work with local copy of argx. */
+       z = argx;
+
+           /* Initialize special variable used to stimulate side-  */
+           /* effects despite a compiler's desire to strip "dead"  */
+           /* code.                                                */
+           forceException = Zero;
+
+       /* Return signed smallest non-zero value when argx = zero. */
+       if (argx == Zero) {
+             allof(z) = RMinx;
+             z = copysignf(z,argy);
+             }
+       /* Otherwise, use integer arithmetic to increment or      */
+       /* decrement z.                                           */
+          else if (argx < Zero) {
+             if (argx < argy) 
+                   --allof(z);
+                else
+                   ++allof(z);
+             }
+          else if (argx < argy)
+                   ++allof(z);
+                else
+                   --allof(z);
+
+    /* Now trigger the underflow signal (with 0 result for    */
+    /* machines that flush) if the result is denormal, and    */
+    /* trigger overflow if the result is +/-INF.  If z is     */
+    /* denormal on a flushing machine, argx must have been    */
+    /* the tiniest normal number, so just halve argx to force */
+    /* the appropriate underflow to zero.  Denormal (or zero) */
+    /* z on a graceful underflow machine is correct, but      */
+    /* requires that the underflow signal be triggered.       */
+
+       if ((allof(z) & ~MRMaxDenorm) == Zero)
+#if defined(BEF) || defined(LEF)
+          z = argx * RHalf; /* Force underflow to 0 with signal. */
+
+#else
+
+    /* z is either denormal or zero.  argx is denormal, zero  */
+    /* or the teeniest normal.  So   z * z + argx * argx      */
+    /* is guaranteed to underflow.  The subsequent test       */
+    /* forces the result to a float variable, despite the     */
+    /* optimizing whims of compilers.                         */
+          forceException = z * z + argx * argx;
+#endif
+        /* If z is infinite, it's correct, but overflow       */
+        /* must be signaled.                                  */
+       else if (!finitef(z))
+          forceException = argx * argx;
+
+        /* Now use forceException in a seemingly nontrivial       */
+        /* expression to be sure the side-effects above are       */
+        /* are generated.  In fact, the test below always fails.  */
+          if ((allof(forceException) & SignMask) == SignMask)
+                 z = Zero;  
+       return  z ;
+}
+
+/* ************************************************************** */
+
+ /*
+     Test driver for logbf, scalbf and nextafterf functions.
+
+     Author: W. J. Cody
+             Argonne National Laboratory
+
+     Latest revision: January 2, 1991
+
+     **********
+
+     The compiler directive QC is for use with Microsoft Quick C
+     on IBM XTs, ATs, and compatibles with Intel i80x87 floating-
+     point coprocessor chips.
+
+ */
+
+#include <math.h>
+#include <stdio.h>
+
+#ifdef QC
+#include <float.h>
+#define CW_NEW (CW_DEFAULT | EM_ZERODIVIDE | EM_OVERFLOW | EM_DENORMAL )
+#define MASK_ALL (0xFFFF)
+#endif
+
+#ifdef BEG
+#define VER 1
+#endif
+
+#ifdef BEF
+#define VER 2
+#endif
+
+#ifdef LEG
+#define VER 1
+#endif
+
+#ifdef LEF
+#define VER 2
+#endif
+
+#define REAL float
+#define ZERO 0.0
+#define IRNAN irnan1
+
+static long int irnan1  = { 0x7f800004L } ;
+#define ABS(xxx) ((xxx>ZERO)?(xxx):(-xxx))
+
+main()
+
+{
+
+      long int ibeta,iexp,irnd,it,machep,maxexp,minexp,negep,ngrd;
+      long int i,n;
+      float eps,epsneg,xmax,xmin;
+      float *x,xx,yy,zz,tt,logbf(),scalbf(),nextafterf();
+      float one,mone,copysignf(),test();
+      union wjc{
+              long int jj;
+              float xbig;
+         } uval;
+
+#ifdef QC
+   _clear87();
+   _control87(CW_NEW, MASK_ALL);
+#endif
+
+      printf(" Testing nextafterf \n");
+      rmachar(&ibeta,&it,&irnd,&ngrd,&machep,&negep,
+              &iexp,&minexp,&maxexp,&eps,&epsneg,&xmin,&xmax);
+
+      printf(" float MACHAR constants\n");
+      printf("ibeta = %d\n",ibeta);
+      printf("it    = %d\n",it);
+      printf("irnd  = %d\n",irnd);
+      printf("ngrd  = %d\n",ngrd);
+      printf("machep = %d\n",machep);
+      printf("negep = %d\n",negep);
+      printf("iexp = %d\n",iexp);
+      printf("minexp = %d\n",minexp);
+      printf("maxexp = %d\n",maxexp);
+
+#define DISPLAY(s,x) { \
+        uval.xbig = x ; \
+        printf(s); \
+        printf(" %24.16e ",(double)(float) x) ; \
+        printf(" %8lX ",uval.jj) ; \
+        printf("\n"); \
+        }
+
+      DISPLAY("eps   ",eps);
+      DISPLAY("epsneg",epsneg);
+      DISPLAY("xmin  ",xmin);
+      DISPLAY("xmax  ",xmax);
+
+      printf(" \n Tests with moderate numbers \n");
+      printf(" \n");
+      yy = eps;
+      DISPLAY("yy                  =",yy);
+      zz = epsneg;
+      DISPLAY("zz                  =",zz);
+      xx = nextafterf(yy,zz);
+      DISPLAY("nextafterf(yy,zz)   =",xx);
+      xx = nextafterf(-yy,zz);
+      DISPLAY("nextafterf(-yy,zz)  =",xx);
+
+      one = 1.0;
+      mone = -1.0;
+      printf(" \n");
+      n = (long int) logbf(yy);
+      printf("n = (long int) logbf(yy)  = %d \n",n);
+      tt = scalbf(yy,-n);
+      DISPLAY("scalbf(yy,-n)       =",tt);
+      n = (long int) logbf(-yy);
+      printf("n = (long int) logbf(-yy) = %d \n",n);
+      tt = scalbf(-yy,-n);
+      DISPLAY("scalbf(-yy,-n)      =",tt);
+
+      printf(" \n");
+      yy = 2.0e0 - eps;
+      DISPLAY("yy                  =",yy);
+      zz = 4.0e0;
+      DISPLAY("zz                  =",zz);
+      xx = nextafterf(yy,zz);
+      DISPLAY("nextafterf(yy,zz)   =",xx);
+      tt = nextafterf(-yy,-zz);
+      DISPLAY("nextafterf(-yy,-zz) =",tt);
+
+      printf(" \n");
+      n = (long int) logbf(yy);
+      printf("n = (long int) logbf(yy)  = %d \n",n);
+      tt = scalbf(yy,-n);
+      DISPLAY("scalbf(yy,-n)       =",tt);
+      n = (long int) logbf(-yy);
+      printf("n = (long int) logbf(-yy) = %d \n",n);
+      tt = scalbf(-yy,-n);
+      DISPLAY("scalbf(-yy,-n)      =",tt);
+
+      printf(" \n");
+      yy = xx;
+      DISPLAY("yy                  =",yy);
+      zz = 0.0e0;
+      DISPLAY("zz                  =",zz);
+      xx = nextafterf(yy,zz);
+      DISPLAY("nextafterf(yy,zz)   =",xx);
+      xx = nextafterf(-yy,zz);
+      DISPLAY("nextafterf(-yy,zz)  =",xx);
+
+      printf(" \n");
+      n = (long int) logbf(yy);
+      printf("n = (long int) logbf(yy)  = %d \n",n);
+      tt = scalbf(yy,-n);
+      DISPLAY("scalbf(yy,-n)       =",tt);
+      n = (long int) logbf(-yy);
+      printf("n = (long int) logbf(-yy) = %d \n",n);
+      tt = scalbf(-yy,-n);
+      DISPLAY("scalbf(-yy,-n)      =",tt);
+
+      printf(" \n Tests near smallest positive number \n");
+      printf(" \n");
+      yy = 0.0e0;
+      DISPLAY("yy                  =",yy);
+      zz = 1.0e0;
+      DISPLAY("zz                  =",zz);
+      xx = nextafterf(yy,zz);
+      DISPLAY("nextafterf(yy,zz)   =",xx);
+      tt = nextafterf(-yy,zz);
+      DISPLAY("nextafterf(-yy,zz)  =",tt);
+      tt = nextafterf(-yy,-zz);
+      DISPLAY("nextafterf(-yy,-zz) =",tt);
+
+      printf(" \n");
+      yy = xx;
+      DISPLAY("yy                  =",yy);
+      zz = -yy;
+      DISPLAY("zz                  =",zz);
+      xx = nextafterf(yy,zz);
+      DISPLAY("nextafterf(yy,zz)   =",xx);
+      xx = nextafterf(-yy,zz);
+      DISPLAY("nextafterf(-yy,zz)  =",xx);
+      tt = nextafterf(-yy,-zz);
+      DISPLAY("nextafterf(-yy,-zz) =",tt);
+      tt = copysignf(tt,one);
+      DISPLAY("copysignf(-0.0,1.0) =",tt);
+      tt = copysignf(tt,mone);
+      DISPLAY("copysignf(0.0,-1.0) =",tt);
+
+      printf(" \n");
+      n = (long int) logbf(yy);
+      printf("n = (long int) logbf(yy)  = %d \n",n);
+      tt = scalbf(yy,-n);
+      DISPLAY("scalbf(yy,-n)       =",tt);
+      n = (long int) logbf(-yy);
+      printf("n = (long int) logbf(-yy) = %d \n",n);
+      tt = scalbf(-yy,-n);
+      DISPLAY("scalbf(-yy,-n)      =",tt);
+
+   if (VER == 1) {
+      printf(" \n");
+      tt = 11.0e0 * yy;
+      DISPLAY("tt                  =",tt);
+      n = -1;
+      xx = scalbf(tt,n);
+      DISPLAY("scalbf(tt,-1)       =",xx);
+      xx = tt * 0.5;
+      DISPLAY("tt * 0.5            =",xx);
+      n = -2;
+      xx = scalbf(tt,n);
+      DISPLAY("scalbf(tt,-2)       =",xx);
+      xx = tt * 0.25;
+      DISPLAY("tt * 0.25           =",xx);
+      n = -3;
+      xx = scalbf(tt,n);
+      DISPLAY("scalbf(tt,-3)       =",xx);
+      xx = tt * 0.125;
+      DISPLAY("tt * 0.125          =",xx);
+      n = 3;
+      xx = scalbf(tt,n);
+      DISPLAY("scalbf(tt,3)        =",xx);
+     }
+
+      printf(" \n");
+      DISPLAY("yy                  =",yy);
+      zz = 1.0e0;
+      DISPLAY("zz                  =",zz);
+      xx = nextafterf(yy,zz);
+      DISPLAY("nextafterf(yy,zz)   =",xx);
+      tt = nextafterf(-yy,zz);
+      DISPLAY("nextafterf(-yy,zz)  =",tt);
+
+      printf(" \n");
+      yy = xx;
+      DISPLAY("yy                  =",yy);
+      DISPLAY("zz                  =",zz);
+      xx = nextafterf(yy,zz);
+      DISPLAY("nextafterf(yy,zz)   =",xx);
+      xx = nextafterf(-yy,zz);
+      DISPLAY("nextafterf(-yy,zz)  =",xx);
+
+      printf(" \n");
+      n = (long int) logbf(yy);
+      printf("n = (long int) logbf(yy)  = %d \n",n);
+      tt = scalbf(yy,-n);
+      DISPLAY("scalbf(yy,-n)       =",tt);
+      n = (long int) logbf(-yy);
+      printf("n = (long int) logbf(-yy) = %d \n",n);
+      tt = scalbf(-yy,-n);
+      DISPLAY("scalbf(-yy,-n)      =",tt);
+
+      printf(" \n Test near largest positive number \n");
+      printf(" \n");
+      yy = xmax;
+      DISPLAY("yy                  =",yy);
+      DISPLAY("zz                  =",zz);
+      xx = nextafterf(yy,zz);
+      DISPLAY("nextafterf(yy,zz)   =",xx);
+      xx = nextafterf(-yy,zz);
+      DISPLAY("nextafterf(-yy,zz)  =",xx);
+      tt = copysignf(yy,mone);
+      DISPLAY("copysignf(yy,-1.0)  =",tt);
+      tt = copysignf(tt,one);
+      DISPLAY("copysignf(-yy,1.0)  =",tt);
+
+      printf(" \n");
+      n = (long int) logbf(yy);
+      printf("n = (long int) logbf(yy)  = %d \n",n);
+      xx = scalbf(yy,-n);
+      DISPLAY("scalbf(yy,-n)       =",xx);
+      n = (long int) logbf(-yy);
+      printf("n = (long int) logbf(-yy) = %d \n",n);
+      xx = scalbf(-yy,-n);
+      DISPLAY("scalbf(-yy,-n)      =",xx);
+
+    if (irnd != 5) 
+      printf(" \n No tests with infinity and NaN \n");
+
+    if (irnd == 5) {
+      printf(" \n Tests with infinity \n");
+      printf(" \n");
+      yy = xmax;
+      DISPLAY("yy                  =",yy);
+      zz = scalbf(yy,-machep);
+      DISPLAY("zz                  =",zz);
+      tt = copysignf(zz,mone);
+      DISPLAY("copysignf(Inf,-1.0) =",tt);
+      tt = copysignf(tt,zz);
+      DISPLAY("copysignf(-Inf,Inf) =",tt);
+      xx = nextafterf(yy,zz);
+      DISPLAY("nextafterf(yy,zz)   =",xx);
+      xx = nextafterf(zz,yy);
+      DISPLAY("nextafterf(zz,yy)   =",xx);
+      xx = nextafterf(-zz,yy);
+      DISPLAY("nextafterf(-zz,yy)  =",xx);
+      tt = logbf(zz);
+      DISPLAY("logbf(zz)           =",tt);
+
+      printf(" \n Tests with NaN \n");
+      printf(" \n");
+      x = (float *) &IRNAN;
+      yy = *x;
+      DISPLAY("yy                  =",yy);
+      zz = xmax;
+      DISPLAY("zz                  =",zz);
+      tt = test(yy);
+      DISPLAY("Using a NaN returns  ",tt);
+      tt = copysignf(yy,mone);
+      DISPLAY("copysignf(NaN,-1.0) =",tt);
+      xx = copysignf(tt,one);
+      DISPLAY("copysignf(-NaN,1.0) =",xx);
+      xx = nextafterf(yy,zz);
+      DISPLAY("nextafterf(yy,zz)   =",xx);
+      xx = nextafterf(-yy,zz);
+      DISPLAY("nextafterf(-yy,zz)  =",xx);
+      xx = nextafterf(zz,yy);
+      DISPLAY("nextafterf(zz,yy)   =",xx);
+      xx = nextafterf(-zz,yy);
+      DISPLAY("nextafterf(-zz,yy)  =",xx);
+
+      xx = logbf(yy);
+      DISPLAY("logbf(yy)           =",xx);
+      i = 10;
+      xx = scalbf(yy,i);
+      DISPLAY("scalbf(yy,10)       =",xx);
+     }
+
+      printf(" \n Special test with 0.0 \n");
+      printf(" \n");
+      yy = 0.0e0;
+      DISPLAY("yy                  =",yy);
+      i = 10;
+      xx = scalbf(yy,i);
+      DISPLAY("scalbf(yy,10)       =",xx);
+      xx = logbf(yy);
+      DISPLAY("logbf(yy)           =",xx);
+
+      return(0);
+
+}
+
+
+/*
+
+This file combines the single and double precision versions of machar,
+selected by cc -DSP or cc -DDP.  This feature provided by D. G. Hough,
+August 3, 1988.
+
+*/
+ 
+
+
+rmachar(ibeta,it,irnd,ngrd,machep,negep,iexp,minexp,
+        maxexp,eps,epsneg,xmin,xmax)
+
+      long int *ibeta,*iexp,*irnd,*it,*machep,*maxexp,*minexp,*negep,*ngrd;
+      REAL *eps,*epsneg,*xmax,*xmin;
+
+/*
+
+   This subroutine is intended to determine the parameters of the
+    floating-point arithmetic system specified below.  The
+    determination of the first three uses an extension of an algorithm
+    due to M. Malcolm, CACM 15 (1972), pp. 949-951, incorporating some,
+    but not all, of the improvements suggested by M. Gentleman and S.
+    Marovich, CACM 17 (1974), pp. 276-277.  An earlier version of this
+    program was published in the book Software Manual for the
+    Elementary Functions by W. J. Cody and W. Waite, Prentice-Hall,
+    Englewood Cliffs, NJ, 1980.  The present program is a
+    translation of the Fortran 77 program in W. J. Cody, "MACHAR:
+    A subroutine to dynamically determine machine parameters".
+    TOMS (14), 1988.
+ 
+   Parameter values reported are as follows:
+ 
+        ibeta   - the radix for the floating-point representation
+        it      - the number of base ibeta digits in the floating-point
+                  significand
+        irnd    - 0 if floating-point addition chops
+                  1 if floating-point addition rounds, but not in the
+                    IEEE style
+                  2 if floating-point addition rounds in the IEEE style
+                  3 if floating-point addition chops, and there is
+                    partial underflow
+                  4 if floating-point addition rounds, but not in the
+                    IEEE style, and there is partial underflow
+                  5 if floating-point addition rounds in the IEEE style,
+                    and there is partial underflow
+        ngrd    - the number of guard digits for multiplication with
+                  truncating arithmetic.  It is
+                  0 if floating-point arithmetic rounds, or if it
+                    truncates and only  it  base  ibeta digits
+                    participate in the post-normalization shift of the
+                    floating-point significand in multiplication;
+                  1 if floating-point arithmetic truncates and more
+                    than  it  base  ibeta  digits participate in the
+                    post-normalization shift of the floating-point
+                    significand in multiplication.
+        machep  - the largest negative integer such that
+                  1.0+FLOAT(ibeta)**machep .NE. 1.0, except that
+                  machep is bounded below by  -(it+3)
+        negeps  - the largest negative integer such that
+                  1.0-FLOAT(ibeta)**negeps .NE. 1.0, except that
+                  negeps is bounded below by  -(it+3)
+        iexp    - the number of bits (decimal places if ibeta = 10)
+                  reserved for the representation of the exponent
+                  (including the bias or sign) of a floating-point
+                  number
+        minexp  - the largest in magnitude negative integer such that
+                  FLOAT(ibeta)**minexp is positive and normalized
+        maxexp  - the smallest positive power of  BETA  that overflows
+        eps     - the smallest positive floating-point number such
+                  that  1.0+eps .NE. 1.0. In particular, if either
+                  ibeta = 2  or  IRND = 0, eps = FLOAT(ibeta)**machep.
+                  Otherwise,  eps = (FLOAT(ibeta)**machep)/2
+        epsneg  - A small positive floating-point number such that
+                  1.0-epsneg .NE. 1.0. In particular, if ibeta = 2
+                  or  IRND = 0, epsneg = FLOAT(ibeta)**negeps.
+                  Otherwise,  epsneg = (ibeta**negeps)/2.  Because
+                  negeps is bounded below by -(it+3), epsneg may not
+                  be the smallest number that can alter 1.0 by
+                  subtraction.
+        xmin    - the smallest non-vanishing normalized floating-point
+                  power of the radix, i.e.,  xmin = FLOAT(ibeta)**minexp
+        xmax    - the largest finite floating-point number.  In
+                  particular  xmax = (1.0-epsneg)*FLOAT(ibeta)**maxexp
+                  Note - on some machines  xmax  will be only the
+                  second, or perhaps third, largest number, being
+                  too small by 1 or 2 units in the last digit of
+                  the significand.
+ 
+      Latest revision - August 4, 1988
+ 
+      Author - W. J. Cody
+               Argonne National Laboratory
+ 
+*/
+
+{
+      long int i,iz,j,k;
+      long int mx,itmp,nxres;
+      REAL a,b,beta,betain,one,y,z,zero;
+      REAL betah,t,tmp,tmpa,tmp1,two;
+
+      (*irnd) = 1;
+      one = (REAL)(*irnd);
+      two = one + one;
+      a = two;
+      b = a;
+      zero = 0.0e0;
+
+/*
+  determine ibeta,beta ala malcolm
+*/
+
+      tmp = ((a+one)-a)-one;
+
+      while (tmp == zero) {
+         a = a+a;
+         tmp = a+one;
+         tmp1 = tmp-a;
+         tmp = tmp1-one;
+      }
+
+      tmp = a+b;
+      itmp = (int)(tmp-a);
+      while (itmp == 0) {
+         b = b+b;
+         tmp = a+b;
+         itmp = (int)(tmp-a);
+      }
+
+      *ibeta = itmp;
+      beta = (REAL)(*ibeta);
+
+/*
+  determine irnd, it
+*/
+
+      (*it) = 0;
+      b = one;
+      tmp = ((b+one)-b)-one;
+
+      while (tmp == zero) {
+         *it = *it+1;
+         b = b*beta;
+         tmp = b+one;
+         tmp1 = tmp-b;
+         tmp = tmp1-one;
+      }
+
+      *irnd = 0;
+      betah = beta/two;
+      tmp = a+betah;
+      tmp1 = tmp-a;
+      if (tmp1 != zero) *irnd = 1;
+      tmpa = a+beta;
+      tmp = tmpa+betah;
+      if ((*irnd == 0) && (tmp-tmpa != zero)) *irnd = 2;
+
+/*
+  determine negep, epsneg
+*/
+
+      (*negep) = (*it) + 3;
+      betain = one / beta;
+      a = one;
+ 
+      for (i = 1; i<=(*negep); i++) {
+         a = a * betain;
+      }
+ 
+      b = a;
+      tmp = (one-a);
+      tmp = tmp-one;
+
+      while (tmp == zero) {
+         a = a*beta;
+         *negep = *negep-1;
+         tmp1 = one-a;
+         tmp = tmp1-one;
+      }
+
+      (*negep) = -(*negep);
+      (*epsneg) = a;
+
+/*
+  determine machep, eps
+*/
+
+      (*machep) = -(*it) - 3;
+      a = b;
+      tmp = one+a;
+
+      while (tmp-one == zero) {
+         a = a*beta;
+         *machep = *machep+1;
+         tmp = one+a;
+      }
+
+      *eps = a;
+      
+/*
+  determine ngrd
+*/
+
+      (*ngrd) = 0;
+      tmp = one+*eps;
+      tmp = tmp*one;
+      if (((*irnd) == 0) && (tmp-one) != zero) (*ngrd) = 1;
+
+/*
+  determine iexp, minexp, xmin
+
+  loop to determine largest i such that
+         (1/beta) ** (2**(i))
+    does not underflow.
+    exit from loop is signaled by an underflow.
+*/
+
+      i = 0;
+      k = 1;
+      z = betain;
+      t = one+*eps;
+      nxres = 0;
+
+      for (;;) {
+         y = z;
+         z = y * y;
+
+/*
+  check for underflow
+*/
+
+         a = z * one;
+         tmp = z*t;
+         if ((a+a == zero) || (ABS(z) > y)) break;
+         tmp1 = tmp*betain;
+         if (tmp1*beta == z) break;
+         i = i + 1;
+         k = k+k;
+      }
+
+/*
+  determine k such that (1/beta)**k does not underflow
+    first set  k = 2 ** i
+*/
+
+      (*iexp) = i + 1;
+      mx = k + k;
+      if (*ibeta == 10) {
+
+/*
+  for decimal machines only
+*/
+
+         (*iexp) = 2;
+         iz = *ibeta;
+         while (k >= iz) {
+            iz = iz * (*ibeta);
+            (*iexp) = (*iexp) + 1;
+         }
+         mx = iz + iz - 1;
+      }
+ 
+/*
+  loop to determine minexp, xmin.
+    exit from loop is signaled by an underflow.
+*/
+
+      for (;;) {
+         (*xmin) = y;
+         y = y * betain;
+         a = y * one;
+         tmp = y*t;
+         tmp1 = a+a;
+         if ((tmp1 == zero) || (ABS(y) >= (*xmin))) break;
+         k = k + 1;
+         tmp1 = tmp*betain;
+         tmp1 = tmp1*beta;
+
+         if ((tmp1 == y) && (tmp != y)) {
+            nxres = 3;
+            *xmin = y;
+            break;
+         }
+
+      }
+
+      (*minexp) = -k;
+
+/*
+  determine maxexp, xmax
+*/
+
+      if ((mx <= k+k-3) && ((*ibeta) != 10)) {
+         mx = mx + mx;
+         (*iexp) = (*iexp) + 1;
+      }
+
+      (*maxexp) = mx + (*minexp);
+
+/*
+  Adjust *irnd to reflect partial underflow.
+*/
+
+      (*irnd) = (*irnd)+nxres;
+
+/*
+  Adjust for IEEE style machines.
+*/
+
+      if ((*irnd) >= 2) (*maxexp) = (*maxexp)-2;
+
+/*
+  adjust for machines with implicit leading bit in binary
+    significand and machines with radix point at extreme
+    right of significand.
+*/
+
+      i = (*maxexp) + (*minexp);
+      if (((*ibeta) == 2) && (i == 0)) (*maxexp) = (*maxexp) - 1;
+      if (i > 20) (*maxexp) = (*maxexp) - 1;
+      if (a != y) (*maxexp) = (*maxexp) - 2;
+      (*xmax) = one - (*epsneg);
+      tmp = (*xmax)*one;
+      if (tmp != (*xmax)) (*xmax) = one - beta * (*epsneg);
+      (*xmax) = (*xmax) / (beta * beta * beta * (*xmin));
+      i = (*maxexp) + (*minexp) + 3;
+      if (i > 0) {
+ 
+         for (j = 1; j<=i; j++ ) {
+             if ((*ibeta) == 2) (*xmax) = (*xmax) + (*xmax);
+             if ((*ibeta) != 2) (*xmax) = (*xmax) * beta;
+         }
+
+      }
+ 
+    return;
+
+}
+
+
+float test(argx)
+      float argx;
+{
+      return (argx);
+}
+
+/* ************************************************************** */
+
+ /*
+     Test driver for logb, scalb and nextafter functions.
+
+     Author: W. J. Cody
+             Argonne National Laboratory
+
+     Latest revision: January 2, 1991
+
+     **********
+
+     The compiler directive QC is for use with Microsoft Quick C
+     on IBM XTs, ATs, and compatibles with Intel i80x87 floating-
+     point coprocessor chips.
+
+     The compiler directives BEG, BEF, LEG, and LEF designate
+     four possible floating-point systems as follows.
+ 
+     Stored double values may be thought of as an array of two
+     long int values, lx[0] and lx[1].  When the exponent field
+     is stored in lx[0], thusly
+
+        ........ xx ........
+        7ff00000    00000000
+        ..lx[0].    ..lx[1].
+ 
+     we designate the storage scheme as MN.  When the exponent
+     field is stored in lx[1]
+
+        ........ xx ........
+        00000000    7ff00000
+        ..lx[0].    ..lx[1].
+ 
+     we designate the storage scheme as NM.  
+
+     Systems that support the IEEE graceful underflow are
+     designated with G; those that support only flush-to-zero
+     underflow are designated with F.  We assume that G systems
+     also support the IEEE infinity and NaN arithmetic, but
+     that F systems support neither.
+
+ */
+
+
+#include <math.h>
+#include <stdio.h>
+
+#ifdef QC
+#include <float.h>
+#define CW_NEW (CW_DEFAULT | EM_ZERODIVIDE | EM_OVERFLOW | EM_DENORMAL )
+#define MASK_ALL (0xFFFF)
+#endif
+
+#ifdef BEG
+#define INAN inan1
+#define VER 1
+#endif
+
+#ifdef BEF
+#define INAN inan1
+#define VER 2
+#endif
+
+#ifdef LEG
+#define INAN inan2
+#define VER 1
+#endif
+
+#ifdef LEF
+#define INAN inan2
+#define VER 2
+#endif
+
+static long int inan1[2]  = {0x7ff00004L, 0 } ;
+static long int inan2[2]  = {0, 0x7ff00004L } ;
+#define ZERO 0.0
+#define ABS(xxx) ((xxx>ZERO)?(xxx):(-xxx))
+
+main()
+
+{
+
+      long int ibeta,iexp,irnd,it,machep,maxexp,minexp,negep,ngrd;
+      long int i,n;
+      double eps,epsneg,xmax,xmin;
+      double *x,xx,yy,zz,tt,logb(),scalb(),nextafter();
+      double one,mone,copysign(),test();
+      union wjc{
+              long int jj[2];
+              double xbig;
+         } uval;
+
+#ifdef QC
+   _clear87();
+   _control87(CW_NEW, MASK_ALL);
+#endif
+
+      printf(" Testing nextafter \n");
+      dmchar(&ibeta,&it,&irnd,&ngrd,&machep,&negep,
+              &iexp,&minexp,&maxexp,&eps,&epsneg,&xmin,&xmax);
+
+      printf(" Double precision MACHAR constants\n");
+      printf("ibeta = %d\n",ibeta);
+      printf("it    = %d\n",it);
+      printf("irnd  = %d\n",irnd);
+      printf("ngrd  = %d\n",ngrd);
+      printf("machep = %d\n",machep);
+      printf("negep = %d\n",negep);
+      printf("iexp = %d\n",iexp);
+      printf("minexp = %d\n",minexp);
+      printf("maxexp = %d\n",maxexp);
+
+#define DISPLAY(s,x) { \
+        uval.xbig = x ; \
+        printf(s); \
+        printf(" %24.16e ",(double) x) ; \
+        for(i=0;i<2;i++) printf(" %8lX ",uval.jj[i]) ; \
+        printf("\n"); \
+        }
+
+      DISPLAY("eps   ",eps);
+      DISPLAY("epsneg",epsneg);
+      DISPLAY("xmin  ",xmin);
+      DISPLAY("xmax  ",xmax);
+
+      printf(" \n Tests with moderate numbers \n");
+      printf(" \n");
+      yy = eps;
+      DISPLAY("yy                 =",yy);
+      zz = epsneg;
+      DISPLAY("zz                 =",zz);
+      xx = nextafter(yy,zz);
+      DISPLAY("nextafter(yy,zz)   =",xx);
+      xx = nextafter(-yy,zz);
+      DISPLAY("nextafter(-yy,zz)  =",xx);
+
+      one = 1.0e0;
+      mone = -1.0e0;
+      printf(" \n");
+      n = (long int) logb(yy);
+      printf("n = (long int) logb(yy)  = %d \n",n);
+      tt = scalb(yy,-n);
+      DISPLAY("scalb(yy,-n)       =",tt);
+      n = (long int) logb(-yy);
+      printf("n = (long int) logb(-yy) = %d \n",n);
+      tt = scalb(-yy,-n);
+      DISPLAY("scalb(-yy,-n)      =",tt);
+
+      printf(" \n");
+      yy = 2.0e0 - eps;
+      DISPLAY("yy                 =",yy);
+      zz = 4.0e0;
+      DISPLAY("zz                 =",zz);
+      xx = nextafter(yy,zz);
+      DISPLAY("nextafter(yy,zz)   =",xx);
+      tt = nextafter(-yy,-zz);
+      DISPLAY("nextafter(-yy,-zz) =",tt);
+
+      printf(" \n");
+      n = (long int) logb(yy);
+      printf("n = (long int) logb(yy)  = %d \n",n);
+      tt = scalb(yy,-n);
+      DISPLAY("scalb(yy,-n)       =",tt);
+      n = (long int) logb(-yy);
+      printf("n = (long int) logb(-yy) = %d \n",n);
+      tt = scalb(-yy,-n);
+      DISPLAY("scalb(-yy,-n)      =",tt);
+
+      printf(" \n");
+      yy = xx;
+      DISPLAY("yy                 =",yy);
+      zz = 0.0e0;
+      DISPLAY("zz                 =",zz);
+      xx = nextafter(yy,zz);
+      DISPLAY("nextafter(yy,zz)   =",xx);
+      tt = nextafter(-yy,zz);
+      DISPLAY("nextafter(-yy,zz)  =",tt);
+
+      printf(" \n");
+      n = (long int) logb(yy);
+      printf("n = (long int) logb(yy)  = %d \n",n);
+      tt = scalb(yy,-n);
+      DISPLAY("scalb(yy,-n)       =",tt);
+      n = (long int) logb(-yy);
+      printf("n = (long int) logb(-yy) = %d \n",n);
+      tt = scalb(-yy,-n);
+      DISPLAY("scalb(-yy,-n)      =",tt);
+
+      printf(" \n Tests near smallest positive number \n");
+      printf(" \n");
+      yy = 0.0e0;
+      DISPLAY("yy                 =",yy);
+      zz = 1.0e0;
+      DISPLAY("zz                 =",zz);
+      xx = nextafter(yy,zz);
+      DISPLAY("nextafter(yy,zz)   =",xx);
+      tt = nextafter(-yy,zz);
+      DISPLAY("nextafter(-yy,zz)  =",tt);
+      tt = nextafter(-yy,-zz);
+      DISPLAY("nextafter(-yy,-zz) =",tt);
+
+      printf(" \n");
+      yy = xx;
+      DISPLAY("yy                 =",yy);
+      zz = -yy;
+      DISPLAY("zz                 =",zz);
+      xx = nextafter(yy,zz);
+      DISPLAY("nextafter(yy,zz)   =",xx);
+      tt = nextafter(-yy,zz);
+      DISPLAY("nextafter(-yy,zz)  =",tt);
+      tt = nextafter(-yy,-zz);
+      DISPLAY("nextafter(-yy,-zz) =",tt);
+      tt = copysign(tt,one);
+      DISPLAY("copysign(-0.0,1.0) =",tt);
+      tt = copysign(tt,mone);
+      DISPLAY("copysign(0.0,-1.0) =",tt);
+
+      printf(" \n");
+      n = (long int) logb(yy);
+      printf("n = (long int) logb(yy)  = %d \n",n);
+      tt = scalb(yy,-n);
+      DISPLAY("scalb(yy,-n)       =",tt);
+      n = (long int) logb(-yy);
+      printf("n = (long int) logb(-yy) = %d \n",n);
+      tt = scalb(-yy,-n);
+      DISPLAY("scalb(-yy,-n)      =",tt);
+
+   if (VER == 1) {
+      printf(" \n");
+      tt = 11.0e0 * yy;
+      DISPLAY("tt                 =",tt);
+      n = -1;
+      xx = scalb(tt,n);
+      DISPLAY("scalb(tt,-1)       =",xx);
+      xx = tt * 0.5;
+      DISPLAY("tt * 0.5           =",xx);
+      n = -2;
+      xx = scalb(tt,n);
+      DISPLAY("scalb(tt,-2)       =",xx);
+      xx = tt * 0.25;
+      DISPLAY("tt * 0.25          =",xx);
+      n = -3;
+      xx = scalb(tt,n);
+      DISPLAY("scalb(tt,-3)       =",xx);
+      xx = tt * 0.125;
+      DISPLAY("tt * 0.125         =",xx);
+      n = 3;
+      xx = scalb(tt,n);
+      DISPLAY("scalb(tt,3)        =",xx);
+     }
+
+      printf(" \n");
+      DISPLAY("yy                 =",yy);
+      zz = 1.0e0;
+      DISPLAY("zz                 =",zz);
+      xx = nextafter(yy,zz);
+      DISPLAY("nextafter(yy,zz)   =",xx);
+      tt = nextafter(-yy,zz);
+      DISPLAY("nextafter(-yy,zz)  =",tt);
+
+      printf(" \n");
+      yy = xx;
+      DISPLAY("yy                 =",yy);
+      DISPLAY("zz                 =",zz);
+      xx = nextafter(yy,zz);
+      DISPLAY("nextafter(yy,zz)   =",xx);
+      tt = nextafter(-yy,zz);
+      DISPLAY("nextafter(-yy,zz)  =",tt);
+
+      printf(" \n");
+      n = (long int) logb(yy);
+      printf("n = (long int) logb(yy)  = %d \n",n);
+      tt = scalb(yy,-n);
+      DISPLAY("scalb(yy,-n)       =",tt);
+      n = (long int) logb(-yy);
+      printf("n = (long int) logb(-yy) = %d \n",n);
+      tt = scalb(-yy,-n);
+      DISPLAY("scalb(-yy,-n)      =",tt);
+
+      printf(" \n Test near largest positive number \n");
+      printf(" \n");
+      yy = xmax;
+      DISPLAY("yy                 =",yy);
+      DISPLAY("zz                 =",zz);
+      xx = nextafter(yy,zz);
+      DISPLAY("nextafter(yy,zz)   =",xx);
+      tt = nextafter(-yy,zz);
+      DISPLAY("nextafter(-yy,zz)  =",tt);
+      tt = copysign(yy,mone);
+      DISPLAY("copysign(yy,-1.0)  =",tt);
+      tt = copysign(-tt,one);
+      DISPLAY("copysign(-yy,1.0)  =",tt);
+
+      printf(" \n");
+      n = (long int) logb(yy);
+      printf("n = (long int) logb(yy)  = %d \n",n);
+      tt = scalb(yy,-n);
+      DISPLAY("scalb(yy,-n)       =",tt);
+      n = (long int) logb(-yy);
+      printf("n = (long int) logb(-yy) = %d \n",n);
+      tt = scalb(-yy,-n);
+      DISPLAY("scalb(-yy,-n)      =",tt);
+
+    if (irnd != 5) 
+      printf(" \n No tests with infinity and NaN \n");
+
+    if (irnd == 5) {
+      printf(" \n Tests with infinity \n");
+      printf(" \n");
+      yy = xmax;
+      DISPLAY("yy                 =",yy);
+      zz = scalb(yy,-machep);
+      DISPLAY("zz                 =",zz);
+      tt = copysign(zz,mone);
+      DISPLAY("copysign(Inf,-1.0) =",tt);
+      tt = copysign(tt,zz);
+      DISPLAY("copysign(-Inf,Inf) =",tt);
+      xx = nextafter(yy,zz);
+      DISPLAY("nextafter(yy,zz)   =",xx);
+      xx = nextafter(zz,yy);
+      DISPLAY("nextafter(zz,yy)   =",xx);
+      xx = nextafter(-zz,yy);
+      DISPLAY("nextafter(-zz,yy)  =",xx);
+      xx = logb(zz);
+      DISPLAY("logb(zz)           =",xx);
+
+      printf(" \n Tests with NaN \n");
+      printf(" \n");
+      x = (double *) INAN;
+      yy = *x;
+      DISPLAY("yy                 =",yy);
+      zz = xmax;
+      DISPLAY("zz                 =",zz);
+      tt = test(yy);
+      DISPLAY("Using a NaN returns ",tt);
+      tt = copysign(yy,mone);
+      DISPLAY("copysign(NaN,-1.0) =",tt);
+      tt = copysign(tt,yy);
+      DISPLAY("copysign(-NaN,NaN) =",tt);
+      xx = nextafter(yy,zz);
+      DISPLAY("nextafter(yy,zz)   =",xx);
+      tt = nextafter(-yy,zz);
+      DISPLAY("nextafter(-yy,zz)  =",tt);
+      xx = nextafter(zz,yy);
+      DISPLAY("nextafter(zz,yy)   =",xx);
+      tt = nextafter(-zz,yy);
+      DISPLAY("nextafter(-zz,yy)  =",tt);
+
+      tt = logb(yy);
+      DISPLAY("logb(yy)           =",tt);
+      i = 10;
+      tt = scalb(yy,i);
+      DISPLAY("scalb(yy,10)       =",tt);
+     }
+
+      printf(" \n Special test with 0.0 \n");
+      printf(" \n");
+      yy = 0.0e0;
+      DISPLAY("yy                 =",yy);
+      i = 10;
+      tt = scalb(yy,i);
+      DISPLAY("scalb(yy,10)       =",tt);
+      tt = logb(yy);
+      DISPLAY("logb(yy)           =",tt);
+
+      return(0);
+
+}
+
+
+dmchar(ibeta,it,irnd,ngrd,machep,negep,iexp,minexp,
+        maxexp,eps,epsneg,xmin,xmax)
+
+      long int *ibeta,*iexp,*irnd,*it,*machep,*maxexp,*minexp;
+      long int *negep,*ngrd;
+      double *eps,*epsneg,*xmax,*xmin;
+
+/*
+
+      Latest revision - July 26, 1988
+ 
+      Author - W. J. Cody
+               Argonne National Laboratory
+ 
+*/
+
+{
+      int i,iz,j,k;
+      int mx,itmp,nxres;
+      double a,b,beta,betain,one,y,z,zero;
+      double betah,t,tmp,tmpa,tmp1,two;
+
+      (*irnd) = 1;
+      one = (double)(*irnd);
+      two = one + one;
+      a = two;
+      b = a;
+      zero = 0.0e0;
+
+/*
+  determine ibeta,beta ala malcolm
+*/
+
+      tmp = ((a+one)-a)-one;
+
+      while (tmp == zero) {
+         a = a+a;
+         tmp = a+one;
+         tmp1 = tmp-a;
+         tmp = tmp1-one;
+      }
+
+      tmp = a+b;
+      itmp = (int)(tmp-a);
+      while (itmp == 0) {
+         b = b+b;
+         tmp = a+b;
+         itmp = (int)(tmp-a);
+      }
+
+      *ibeta = itmp;
+      beta = (double)(*ibeta);
+
+/*
+  determine irnd, it
+*/
+
+      (*it) = 0;
+      b = one;
+      tmp = ((b+one)-b)-one;
+
+      while (tmp == zero) {
+         *it = *it+1;
+         b = b*beta;
+         tmp = b+one;
+         tmp1 = tmp-b;
+         tmp = tmp1-one;
+      }
+
+      *irnd = 0;
+      betah = beta/two;
+      tmp = a+betah;
+      tmp1 = tmp-a;
+      if (tmp1 != zero) *irnd = 1;
+      tmpa = a+beta;
+      tmp = tmpa+betah;
+      if ((*irnd == 0) && (tmp-tmpa != zero)) *irnd = 2;
+
+/*
+  determine negep, epsneg
+*/
+
+      (*negep) = (*it) + 3;
+      betain = one / beta;
+      a = one;
+ 
+      for (i = 1; i<=(*negep); i++) {
+         a = a * betain;
+      }
+ 
+      b = a;
+      tmp = (one-a);
+      tmp = tmp-one;
+
+      while (tmp == zero) {
+         a = a*beta;
+         *negep = *negep-1;
+         tmp1 = one-a;
+         tmp = tmp1-one;
+      }
+
+      (*negep) = -(*negep);
+      (*epsneg) = a;
+
+/*
+  determine machep, eps
+*/
+
+      (*machep) = -(*it) - 3;
+      a = b;
+      tmp = one+a;
+
+      while (tmp-one == zero) {
+         a = a*beta;
+         *machep = *machep+1;
+         tmp = one+a;
+      }
+
+      *eps = a;
+
+/*
+  determine ngrd
+*/
+
+      (*ngrd) = 0;
+      tmp = one+*eps;
+      tmp = tmp*one;
+      if (((*irnd) == 0) && (tmp-one) != zero) (*ngrd) = 1;
+
+/*
+  determine iexp, minexp, xmin
+
+  loop to determine largest i such that
+         (1/beta) ** (2**(i))
+    does not underflow.
+    exit from loop is signaled by an underflow.
+*/
+
+      i = 0;
+      k = 1;
+      z = betain;
+      t = one+*eps;
+      nxres = 0;
+
+      for (;;) {
+         y = z;
+         z = y * y;
+
+/*
+  check for underflow
+*/
+
+         a = z * one;
+         tmp = z*t;
+         if ((a+a == zero) || (ABS(z) > y)) break;
+         tmp1 = tmp*betain;
+         if (tmp1*beta == z) break;
+         i = i + 1;
+         k = k+k;
+      }
+
+/*
+  determine k such that (1/beta)**k does not underflow
+    first set  k = 2 ** i
+*/
+
+      (*iexp) = i + 1;
+      mx = k + k;
+      if (*ibeta == 10) {
+
+/*
+  for decimal machines only
+*/
+
+         (*iexp) = 2;
+         iz = *ibeta;
+         while (k >= iz) {
+            iz = iz * (*ibeta);
+            (*iexp) = (*iexp) + 1;
+         }
+         mx = iz + iz - 1;
+      }
+ 
+/*
+  loop to determine minexp, xmin.
+    exit from loop is signaled by an underflow.
+*/
+
+      for (;;) {
+         (*xmin) = y;
+         y = y * betain;
+         a = y * one;
+         tmp = y*t;
+         tmp1 = a+a;
+         if ((tmp1 == zero) || (ABS(y) >= (*xmin))) break;
+         k = k + 1;
+         tmp1 = tmp*betain;
+         tmp1 = tmp1*beta;
+
+         if ((tmp1 == y) && (tmp != y)) {
+            nxres = 3;
+            *xmin = y;
+            break;
+         }
+
+      }
+
+      (*minexp) = -k;
+
+/*
+  determine maxexp, xmax
+*/
+
+      if ((mx <= k+k-3) && ((*ibeta) != 10)) {
+         mx = mx + mx;
+         (*iexp) = (*iexp) + 1;
+      }
+      (*maxexp) = mx + (*minexp);
+
+/*
+  Adjust *irnd to reflect partial underflow.
+*/
+
+      (*irnd) = (*irnd)+nxres;
+
+/*
+  Adjust for IEEE style machines.
+*/
+
+      if ((*irnd) >= 2) (*maxexp) = (*maxexp)-2;
+
+/*
+  adjust for machines with implicit leading bit in binary
+    significand and machines with radix point at extreme
+    right of significand.
+*/
+
+      i = (*maxexp) + (*minexp);
+      if (((*ibeta) == 2) && (i == 0)) (*maxexp) = (*maxexp) - 1;
+      if (i > 20) (*maxexp) = (*maxexp) - 1;
+      if (a != y) (*maxexp) = (*maxexp) - 2;
+      (*xmax) = one - (*epsneg);
+      tmp = (*xmax)*one;
+      if (tmp != (*xmax)) (*xmax) = one - beta * (*epsneg);
+      (*xmax) = (*xmax) / (beta * beta * beta * (*xmin));
+      i = (*maxexp) + (*minexp) + 3;
+      if (i > 0) {
+ 
+         for (j = 1; j<=i; j++ ) {
+             if ((*ibeta) == 2) (*xmax) = (*xmax) + (*xmax);
+             if ((*ibeta) != 2) (*xmax) = (*xmax) * beta;
+         }
+
+      }
+
+    return;
+
+}
+
+
+double test(x)
+      double x;
+{
+      return (x);
+}

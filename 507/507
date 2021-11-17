@@ -1,0 +1,249 @@
+   PROCEDURE QUINAT(INTEGER VALUE N1,N2; REAL ARRAY X,Y,B,C,D,E,F(*));
+   COMMENT  QUINAT COMPUTES THE COEFFICIENTS OF A QUINTIC NATURAL SPLINE
+      S(X) INTERPOLATING THE ORDINATES Y(I) AT POINTS X(I), I = N1
+      THROUGH N2.  FOR XX IN (X(I),X(I+1)) THE VALUE OF THE SPLINE
+      FUNCTION S(XX) IS GIVEN BY THE FIFTH DEGREE POLYNOMIAL:
+      S(XX) = ((((F(I)*T+E(I))*T+D(I))*T+C(I))*T+B(I))*T+Y(I)
+      WITH T = XX - X(I).
+      INPUT:
+        N1,N2  SUBSCRIPT OF FIRST AND LAST DATA POINT RESPECTIVELY,
+               IT IS REQUIRED THAT N2 > N1 + 1,
+        X,Y(N1::N2)  ARRAYS WITH X(I) AS ABSCISSA AND Y(I) AS ORDINATE
+               OF THE I-TH DATA POINT.  THE ELEMENTS OF THE ARRAY X
+               MUST BE STRICTLY MONOTONE INCREASING (BUT SEE BELOW FOR
+               EXCEPTIONS TO THIS).
+      OUTPUT:
+        B,C,D,E,F(N1::N2)  ARRAYS COLLECTING THE COEFFICIENTS OF THE
+               QUINTIC NATURAL SPLINE S(XX) AS DESCRIBED ABOVE.
+               SPECIFICALLY  B(I) = S'(X(I)),  C(I) = S"(X(I))/2,
+               D(I) = S"'(X(I))/6,  E(I) = S""(X(I))/24,
+               F(I) = S""'(X(I)+0)/120.  F(N2) IS NEITHER USED OR
+               ALTERED.  THE ARRAYS B,C,D,E,F MUST ALWAYS BE DISTINCT.
+      OPTIONS:
+        1.  THE REQUIREMENT THAT THE ELEMENTS OF THE ARRAY X BE
+            STRICTLY MONOTONE INCREASING CAN BE RELAXED TO ALLOW TWO
+            OR THREE CONSECUTIVE ABSCISSAS TO BE EQUAL AND THEN
+            SPECIFYING VALUES OF THE FIRST AND SECOND DERIVATIVES OF
+            THE SPLINE FUNCTION AT SOME OF THE INTERPOLATING POINTS.
+            SPECIFICALLY
+            IF X(J) = X(J+1) THEN S(X(J)) = Y(J) AND S'(X(J)) = Y(J+1),
+            IF X(J) = X(J+1) = X(J+2) THEN IN ADDITION S"(X(J)) =Y(J+2).
+            NOTE THAT S""(X) IS DISCONTINUOUS AT A DOUBLE KNOT AND IN
+            ADDITION S"'(X) IS DISCONTINUOUS AT A TRIPLE KNOT.  AT A
+            DOUBLE KNOT, X(J) = X(J+1), THE OUTPUT COEFFICIENTS HAVE THE
+            FOLLOWING VALUES:
+              B(J) = S'(X(J))      = B(J+1)
+              C(J) = S"(X(J))/2    = C(J+1)
+              D(J) = S"'(X(J))/6   = D(J+1)
+              E(J) = S""(X(J)-0)/24    E(J+1) = S""(X(J)+0)/24
+              F(J) = S""'(X(J)-0)/120  F(J+1) = S""'(X(J)+0)/120
+            THE REPRESENTATION OF S(XX) REMAINS VALID IN ALL INTERVALS
+            PROVIDED THE REDEFINITION Y(J+1) := Y(J) IS MADE
+            IMMEDIATELY AFTER THE CALL OF THE PROCEDURE QUINAT.  AT A
+            TRIPLE KNOT, X(J) = X(J+1) = X(J+2), THE OUTPUT COEFFICIENTS
+            HAVE THE FOLLOWING VALUES:
+              B(J) = S'(X(J))       = B(J+1) = B(J+2)
+              C(J) = S"(X(J))/2     = C(J+1) = C(J+2)
+              D(J) = S"'(X(J)-0)/6   D(J+1) = 0  D(J+2) = S"'(X(J)+0)/6
+              E(J) = S""(X(J)-0)/24  E(J+1) = 0  E(J+2) = S""(X(J)+0)/24
+              F(J) = S""'(X(J)-0)/120  F(J+1)=0  F(J+2)=S""'(X(J)+0)/120
+            THE REPRESENTATION OF S(XX) REMAINS VALID IN ALL INTERVALS
+            PROVIDED THE REDEFINITION Y(J+2) := Y(J+1) := Y(J) IS MADE
+            IMMEDIATELY AFTER THE CALL OF THE PROCEDURE QUINAT.
+          2. THE ARRAY X MAY BE MONOTONE DECREASING INSTEAD OF
+             INCREASING;
+   IF N2 > N1 + 1 THEN
+   BEGIN
+      INTEGER M;
+      REAL B1,P,PQ,PQQR,PR,P2,P3,Q,QR,Q2,Q3,R,R2,S,T,U,V;
+      COMMENT COEFFICIENTS OF A POSITIVE DEFINITE, PENTADIAGONAL
+         MATRIX STORED IN D,E,F(N1+1::N2-2);
+      M:=N2-2;
+      Q:=X(N1+1)-X(N1);  R:=X(N1+2)-X(N1+1);
+      Q2:=Q*Q;  R2:=R*R;  QR:=Q+R;
+      D(N1):=E(N1):=0.0;
+      D(N1+1):=IF Q=0.0 THEN 0.0 ELSE 6.0*Q*Q2/(QR*QR);
+      FOR I:=N1+1 STEP 1 UNTIL M DO
+      BEGIN
+         P:=Q;  Q:=R;  R:=X(I+2)-X(I+1);
+         P2:=Q2;  Q2:=R2;  R2:=R*R;  PQ:=QR;  QR:=Q+R;
+         IF Q=0.0 THEN D(I+1):=E(I):=F(I-1):=0.0 ELSE
+         BEGIN
+            Q3:=Q2*Q;  PR:=P*R;  PQQR:=PQ*QR;
+            D(I+1):=6.0*Q3/(QR*QR);
+            D(I):=D(I)+(Q+Q)*(15.0*PR*PR+(P+R)*Q*(20.0*PR+7.0*Q2)
+                        +Q2*(8.0*(P2+R2)+21.0*PR+Q2+Q2))/(PQQR*PQQR);
+            D(I-1):=D(I-1)+6.0*Q3/(PQ*PQ);
+            E(I):=Q2*(P*QR+3.0*PQ*(QR+R+R))/(PQQR*QR);
+            E(I-1):=E(I-1)+Q2*(R*PQ+3.0*QR*(PQ+P+P))/(PQQR*PQ);
+            F(I-1):=Q3/PQQR;
+         END;
+      END;
+      IF ABS(R) > 0.0  THEN D(M):=D(M)+6.0*R*R2/(QR*QR);
+      COMMENT FIRST AND SECOND ORDER DIVIDED DIFFERENCES OF THE GIVEN
+         FUNCTION VALUES,STORED IN B(N1+1::N2) AND C(N1+2::N2)
+         RESPECTIVELY, TAKE CARE OF DOUBLE AND TRIPLE KNOTS;
+      S:=Y(N1);
+      FOR I:=N1+1 STEP 1 UNTIL N2 DO
+      IF X(I)=X(I-1) THEN B(I):=Y(I) ELSE
+      BEGIN
+         B(I):=(Y(I)-S)/(X(I)-X(I-1));
+         S:=Y(I);
+      END;
+      FOR I:N=N1+2 STEP 1 UNTIL N2 DO
+      IF(X(I)=X(I-2) THEN
+      BEGIN C(I):=Y(I)*0.5; B(I):=B(I-1) END
+      ELSE C(I):=(B(I)-B(I-1))/(X(I)-X(I-2));
+      COMMENT SOLVE THE LINEAR SYSTEM WITH C(I+2)-C(I+1)
+         AS RIGHT-HAND SIDE;
+      IF M > N1 THEN
+      BEGIN
+         P:=C(N1):=E(M):=F(N1):=F(M-1):=F(M):=0.0;
+         C(N1+1):=C(N1+3)-C(N1+2); D(N1+1):=1.0/D(N1+1);
+      END;
+      FOR I:=N1+2 STEP 1 UNTIL M DO
+      BEGIN
+         Q:=D(I-1)*E(I-1);
+      D(I):=1.0/(D(I)-P*F(I-2)-Q*E(I-1));
+         E(I):=E(I)-Q*F(I-1);
+         C(I):=C(I+2)-C(I+1)-P*C(I-2)-Q*C(I-1);
+         P:=D(I-1)*F(I-1);
+      END;
+      M:=N1+1;  C(N2-1):=C(N2):=0.0;
+      FOR I:=N2-2 STEP -1 UNTIL M DO
+         C(I):=(C(I)-E(I)*C(I+1)-F(I)*C(I+2))*D(I);
+      COMMENT INTEGRATE THE THIRD DERIVATIVE OF S(X);
+      M:=N2-1;
+      Q:=X(N1+1)-X(N1); R:=X(N1+2)-X(N1+1); B1:=(N1+1);
+      Q3:=Q*Q*Q; QR:=Q+R;
+      V:=T:=IF QR=0.0 THEN 0.0 ELSE C(N1+1)/QR;
+      F(N1):=IF Q=0.0 THEN 0.0 ELSE V/Q;
+      FOR I:=N1+1 STEP 1 UNTIL M DO
+      BEGIN
+         P:=Q;  Q:=R;
+         R:=IF I=N2-1 THEN 0.0 ELSE X(I+2)-X(I+1);
+         P3:=Q3;  Q3:=Q*Q*Q; PQ:=QR;  QR=Q+R;
+         S:=R;  T:=IF QR=0.0 THEN 0.0 ELSE (C(I+1)-C(I))/QR;
+         U:=V;  V:=T-S;
+         IF PQ=0.0 THEN
+         BEGIN C(I):=0.5*Y(I+1); D(I):=E(I):=F(I):=0.0 END
+         ELSE
+         BEGIN
+            F(I):=IF Q=0.0 THEN F(I-1) ELSE V/Q;
+            E(I):=5.0*S;
+            D(I):=10.0*(C(I)-Q*S);
+            C(I):=D(I)*(P-Q)+(B(I+1)-B(I)+(U-E(I))*P3
+                  -(V+E(I))*Q3)/PQ;
+            B(I):=(P*(B(I+1)-V*Q3)+Q*(B(I)-U*P3))/PQ
+                  -P*Q*(D(I)+E(I)*(Q-P));
+      END;
+      END I;
+      COMMENT END POINTS X(N1) AND X(N2);
+      P:=X(N1+1)-X(N1); S:=F(N1)*P*P*P;
+      E(N1):=D(N1):=0.0;
+      C(N1):=C(N1+1)-10.0*S;
+      C(N1):=B1-(C(N1)+S)*P;
+      Q:=X(N2)-X(N2-1);  T:=F(N2-1)*Q*Q*Q;
+      E(N2):=D(N2):=0.0;
+      C(N2):=C(N2-1)+10.0*T;
+      B(N2):=B(N2)+(C(N2)-T)*Q;
+   END QUINAT;
+   PROCEDURE QUINEQ(INTEGER VALUE N1,N2; REAL ARRAY Y,B,C,D,E,F(*));
+   COMMENT  QUINEQ COMPUTES THE COEFFICIENTS OF A QUINTIC NATURAL SPLINE
+      S(X) INTERPOLATING THE ORDINATES Y(I) AT EQUIDISTANT POINTS X(I),
+      I = N1 THROUGH N2.  FOR XX IN (X(I),X(I+1)) THE VALUE OF THE
+      SPLINE FUNCTION S(XX) IS GIVEN BY THE FIFTH DEGREE POLYNOMIAL:
+      S(XX) = ((((F(I)*T+E(I))*T+D(I))*T+C(I))*T+B(I))*T+Y(I)
+      WITH T = (XX - X(I))/(X(I+1) - X(I)).
+      INPUT:
+        N1, N2  SUBSCRIPT OF FIRST AND LAST DATA POINT RESPECTIVELY,
+                IT IS REQUIRED THAT N2 > N1 + 1,
+        Y(N1::N2)  THE GIVEN FUNCTION VALUES (ORDINATES).
+      OUTPUT:
+        B,C,D,E,F(N1::N2)  ARRAYS COLLECTING THE COEFFICIENTS OF THE
+                QUINTIC NATURAL SPLINE S(XX) AS DESCRIBED ABOVE.
+                SPECIFICALLY B(I) = S'(X(I)), C(I) = S"(X(I))/2,
+                 D(I) = S"'(X(I))/6,  E(I) = S""(X(I))/24,
+                 F(I) = S""'(X(I)+0)/120.  F(N2) IS NEITHER USED
+                 NOR ALTERED.  THE ARRAYS Y,B,C,D MUST ALWAYS BE
+                 DISTINCT.  IF E AND F ARE NOT WANTED, THE CALL
+                 QUINEQ(N1,N2,Y,B,C,D,D,D) MAY BE USED TO SAVE STORAGE
+                 LOCATIONS;
+   IF N2>N1+1 THEN
+   BEGIN
+      INTEGER N;
+      REAL P,Q,R,S,T,U,V;
+      N:=N2-3;  P:=Q:=R:=S:=T:=0.0;
+      FOR I:=N1 STEP 1 UNTIL N DO
+      BEGIN
+         U:=P*R;  B(I):=1.0/(66.0-U*R-Q);
+         C(I):=R:=26.0-U;
+         D(I):=Y(I+3)-3.0*(Y(I+2)-Y(I+1))-Y(I)-U*S-Q*T;
+         Q:=P;  P:=B(I);  T:=S;  S:=D(I)
+      END I;
+      D(N+1):=N(N+2):=0.0;
+      FOR I:=N STEP -1 UNTIL N1 DO
+         D(I):=(D(I)-C(I)*D(I+1)-D(I+2))*B(I);
+      N:=N2-1; Q:=0.0;  R:=T:=V:=D(N1);
+      FOR I:=N1+1 STEP 1 UNTIL N DO
+      BEGIN
+         P:=Q;  Q:=R;  R:=D(I);  S:=T;
+         F(I):=T:=P-Q-Q+R;
+         E(I):=U:=5.0*(-P+Q);
+         D(I):=10.0*(P+Q);
+         C(I):=0.5*(Y(I+1)+Y(I-1)+S-T)-Y(I)-U;
+         B(I):=0.5*(Y(I+1)-Y(I-1)-S-T)-D(I)
+      END I;
+      F(N1):=V;  E(N1):=E(N2):=D(N1):=D(N2):=0.0;
+      C(N1):=C(N1+1)-10.0*V;  C(N2):=C(N2-1)+10.0*T;
+      B(N1):=Y(N1+1)-Y(N1)-C(N1)-V;  B(N2):=Y(N2)-Y(N2-1)+C(N2)-T
+   END QUINEQ;
+   PROCEDURE QUINDF(INTEGER VALUE N1,N2; REAL ARRAY X,Y,B,C,D,E,F(*));
+   COMMENT QUINDF COMPUTES THE COEFFICIENTS OF A QUINTIC NATURAL SPLINE
+      S(X) FOR WHICH THE ORDINATES Y(I) AND THE FIRST DERIVATIVES B(I)
+      ARE SPECIFIED AT POINTS X(I), I = N1 THROUGH N2.  FOR XX IN
+      (X(I),X(I+1)) THE VALUE OF THE SPLINE FUNCTION S(XX) IS GIVEN
+      BY THE FIFTH DEGREE POLYNOMIAL:
+      S(XX) = (((F(I)*T+E(I))*T+D(I))*T+C(I))*T+B(I))*T+Y(I)
+      WITH T = XX - X(I).
+      INPUT:
+        N1, N2  SUBSCRIPT OF FIRST AND LAST DATA POINT RESPECTIVELY,
+                IT IS REQUIRED THAT N2 > N1,
+        X,Y,B(N1::N2)  ARRAYS WITH X(I) AS ABSCISSA, Y(I) AS ORDINATE
+                AND B(I) AS FIRST DERIVATIVE AT THE I-TH DATA POINT.
+                THE ELEMENTS OF THE ARRAY X MUST BE STRICTLY MONOTONE
+                INCREASING OR DECREASING.
+      OUTPUT:
+        C,D,E,F(N1::N2)  ARRAYS COLLECTING THE COEFFICIENTS OF THE
+                QUINTIC NATURAL SPLINE S(XX) AS DESCRIBED ABOVE.
+                E(N2) AND F(N2) ARE NEITHER USED NOR ALTERED.  THE
+                ARRAYS C,D,E,F MUST ALWAYS BE DISTINCT;
+   IF N2 > N1 THEN
+      BEGIN
+      INTEGER  M2;
+      REAL CC,G,H,HH,H2,HH2,P,PP,Q,QQ,R,RR;
+      M2:=N2-1;  CC:=HH:=PP:=QQ:=RR:=G:=0.0;
+      FOR I:=N1 STEP 1 UNTIL M2 DO
+      BEGIN
+         H:=1.0/(X(I+1)-X(I));  H2:=H*H;  D(I):=3.0*(HH+H) - G*HH;
+         P:=(Y(I+1)-Y(I))*H*H2;  Q:=(B(I+1)+B(I))*H2;
+         R:=(B(I+1)-B(I))*H2;
+         C(I):=CC:=10.0*(P-PP) - 5.0*(Q-QQ) + R + RR + G*CC;
+         G:=H/D(I);  HH:=H;  HH2:=H2;  PP:=P;  QQ:=Q;  RR:=R
+      END I;
+      C(N2):=(-10.0*PP + 5.0*QQ + RR + G*CC)/(3.0*HH - G*HH);
+      FOR I:=M2 STEP -1 UNTIL N1 DO
+      BEGIN
+         D(I+1):=1.0/(X(I+1)-X(I));  C(I):=(C(I) + C(I+1)*D(I+1))/D(I)
+      END I;
+      FOR I:=N1 STEP 1 UNTIL M2 DO
+      BEGIN
+         H:=D(I+1);  H2:=H*H;
+         P:=(Y(I+1)-Y(I))*H*H2 - B(I)*H2 - C(I)*H;
+         Q:=(B(I+1)-B(I))*H2 - C(I)*(H+H);
+         R:=(C(I+1)-C(I))*H;
+         G:=Q - 3.0*P;  RR:=R - 3.0*(P+G);  QQ:= -RR - RR + G;
+         F(I):=RR*H2;  E(I):=QQ*H;  D(I):= -RR - QQ + P
+      END I;
+      D(N2):=0.0
+   END QUINDF;

@@ -1,0 +1,4484 @@
+C      ALGORITHM 701 , COLLECTED ALGORITHMS FROM ACM.
+C      THIS WORK PUBLISHED IN TRANSACTIONS ON MATHEMATICAL SOFTWARE,
+C      VOL. 17, NO. 4, DECEMBER, 1991, PP. 519-532.
+** Sample main program ... remove the asterisks in the first column
+** to obtain a working code (suitable for Vaxes)
+**
+*********************************************************************
+**
+*      PROGRAM MAIN
+**
+*********************************************************************
+**
+*      PARAMETER (NW=150000,NH=10000)
+*      INTEGER IWRK(NW)
+*      REAL HWRK(NH)
+**-------------------------------------------------------------------
+**   DEC20 CODE
+**-------------------------------------------------------------------
+**      IBASE = 100000
+**      LGINT = 34359738367
+**      ITRMI = 5
+**      ITRMO = 6
+**-------------------------------------------------------------------
+**   CRAY CODE
+**-------------------------------------------------------------------
+**      CALL LINK(' UNIT5=TERMINAL, UNIT10 = D, UNIT11 = R11,
+**     *  UNIT12 = (R12, CREATE, HARDCOPY),
+**     *  UNIT13 = (R13, CREATE, HARDCOPY) //')
+**      LGINT = 9223372036854775807
+**      IBASE = 10000000
+**      ITRMI = 5
+**      ITRMO = 5
+**-------------------------------------------------------------------
+**   VAX CODE
+**-------------------------------------------------------------------
+*      LGINT = 2147483647
+*      IBASE = 10000
+*      ITRMI = 5
+*      ITRMO = 6
+**-------------------------------------------------------------------
+**    SUN CODE
+**-------------------------------------------------------------------
+**      LGINT = 2147483647
+**      IBASE = 10000
+**      ITRMI = 5
+**      ITRMO = 6
+**-------------------------------------------------------------------
+**    MACINTOSH CODE
+**-------------------------------------------------------------------
+**      LGINT = 2147483647
+**      IBASE = 10000
+**      ITRMI = 9
+**      ITRMO = 9
+**-------------------------------------------------------------------
+*      CALL SECOND(T1)
+*      CALL DIALOG(IWRK,NW,HWRK,NH,ITRMI,ITRMO,IBASE,LGINT)
+*      CALL SECOND(T2)
+*      WRITE(ITRMO,*) ' TOTAL TIME = ',T2-T1
+*      STOP
+*      END
+*
+********************************************************************
+*
+      SUBROUTINE GOLIA(IOUT)
+*
+* THIS SUBROUTINE WRITES AN IDENTIFYING MESSAGE TO CHANNEL IOUT.
+* THE MESSAGE SHOULD BE MODIFIED APPROPRIATELY WHENEVER THE PROGRAM
+* IS MODIFIED.  IF NO MESSAGE IS DESIRED THE FOLLOWING WRITE
+* STATEMENT SHOULD BE COMMENTED OUT.
+*
+********************************************************************
+*
+      WRITE (IOUT,100)
+100   FORMAT(' >>> this is GOLIATH, version 2.09, April 11, 1990',
+     *' (insert machine name) version '/)
+      RETURN
+      END
+*
+*      SUBROUTINE SECOND(T)
+*      REAL T
+*      RETURN
+*      END
+*
+********************************************************************
+*
+      SUBROUTINE ANALYZ(ITRMO,IBASE,LGINT,IORAT,IOINT,IORES,IOLOG,LOG,
+     X JOB,ITYPE,ISTOP,IBLANK,IWRK,NWRK,HWRK,NH)
+*
+*                      *** Goliath ***
+*
+* A system for the exact analysis of sparse rectangular rational
+* linear systems.  Developed by
+*
+* Peter Alfeld and David Eyre
+* Department of Mathematics
+* University of Utah
+* Salt Lake City, Utah 84112
+* (801) 581-6842 or (801) 581-6851
+* ALFELD@SCIENCE.UTAH.EDU
+* EYRE@SCIENCE.UTAH.EDU
+*
+* This system obtains a linear system with rational or integer coefs.
+* from a file, and prints the results of the analysis into a file.
+*
+* For a detailed documentation see the Collected Algorithms of the ACM
+*
+* Most of the input parameters can be set interactively using the
+* SUBROUTINE DIALOG.  The parameters have the following meanings:
+*
+* ITRMO:   output channel number, normally the terminal.
+*
+* IBASE:   The base of the fixed radix output, normally a power of 10.
+*          It must be possible to represent the square of IBASE in one
+*          INTEGER word.
+*
+* LGINT:   The largest integer that can be represented on the machine
+*
+* IORAT:   Channel number of a rational input file
+*
+* IOINT:   Channel number of an integer intermediate or input file.
+*
+* IORES:   Channel number for the result file
+*
+* IOLOG:   Channel number for file receiving intermediate output.
+*
+* LOG:     Amount of intermediate output, directed to IOLOG.
+*          Possibilities include:
+*          0 no output
+*          1 Operation statistics at end of run
+*          2 Elimination info during first run only
+*          3 All matrix information, pass 1 only
+*          4 All info, all passes, caution!
+*
+* JOB:     Type of task to be completed. Possibilities include:
+*          0 Analysis of Rank and Row dependencies
+*          1 Solution of Linear Systems
+*          2 Analysis of Null Space
+*          3 Solution of Linear Systems and Analysis of Null Space
+*          4 Conversion of rational file to integer file
+*
+* ITYPE:   Type of input file. Possibilities include:
+*          0 Arbitrary Precision Integer
+*          1 Single Precision Rational
+*          2 Arbitrary Precision Rational
+*
+* ISTOP:   stopping criterion.  Possibilities include:
+*           -2 Modified Hadamard bound
+*           -1 Convergence criterion
+*            0 Hadamard bound
+*          N>0 specified number of passes
+*
+* IBLANK:  describes form of fixed radix output
+*          0 no blanks between terms
+*          1 blank between spaces
+*
+* IWRK:    1 dimensional Integer work array of sufficient size
+*
+* NWRK:    Size of IWRK
+*
+* HWRK:    1 dimensional real work array.
+*
+* NH:      size of HWRK.  It must be greater than
+*          # of rows  + # of columns + # of right hand sides
+*
+********************************************************************
+*
+      INTEGER IPARM(0:15),IWRK(NWRK),MPARM(7),MINFO(4)
+      REAL HWRK(NH)
+*-------------------------------------------------------------------
+* Transfer parameters to IPARM and MINFO
+* These arrays are explained in the subroutine RSDANA
+*-------------------------------------------------------------------
+      IF (ITYPE.GT.0) THEN
+         READ(IORAT,*) (MINFO(I),I=1,4)
+         REWIND IORAT
+      ELSEIF (ITYPE.EQ.0) THEN
+         READ(IOINT,*) (MINFO(I),I=1,4)
+         REWIND IOINT
+      ENDIF
+      IPARM(0) = MINFO(1)
+      IPARM(1) = MINFO(2) + MINFO(3)
+      IPARM(2) = MINFO(3)
+      IPARM(3) = IOINT
+      IPARM(4) = IORES
+      IPARM(5) = IOLOG
+      IPARM(6) = ITRMO
+      IPARM(7) = LOG
+      IPARM(8) = JOB
+      IPARM(9) = IBASE
+      IPARM(10) = ISTOP
+      IPARM(11) = LGINT
+      IPARM(12) = 0
+      IPARM(13) = IBLANK
+      IPARM(14) = ITYPE
+      IPARM(15) = IORAT
+*-------------------------------------------------------------------
+*   EXECUTE MPCON
+*-------------------------------------------------------------------
+      MPARM(7) = 0
+      IF (IPARM(14) .GT. 0) THEN
+        MPARM(1) = IPARM(15)
+        MPARM(2) = IPARM(3)
+        MPARM(3) = IPARM(9)
+        MPARM(4) = 0
+        IF ( IPARM(14) .EQ. 1 ) MPARM(4) = 1
+        MPARM(5) = IPARM(7)
+        MPARM(6) = IPARM(6)
+        MPARM(7) = INT(SQRT(FLOAT(IPARM(11)))/1.3)
+        CALL MPCON (MPARM,IWRK,NWRK)
+      ENDIF
+      IF (IPARM(8).NE.4) THEN
+        IF ( IPARM(10) .GT. 0 ) THEN
+          IPARM(12) = IPARM(12) + 100
+        ELSEIF ( MPARM(7) .GT. 0 ) THEN
+          IPARM(12) = MPARM(7) + 10
+        ELSE
+          J = (NWRK-1) / 2
+          IPARM(12) = IPR(IPARM,IWRK(1),IWRK(J+1),J) + 10
+        ENDIF
+*-------------------------------------------------------------------
+*   EXECUTE RSDANA
+*-------------------------------------------------------------------
+        JWRK = IWORK (IPARM)
+        NSTOR = MAX0(0,(NWRK-JWRK-2)/2)
+        CALL RSDANA (IPARM,IWRK(JWRK+1),NSTOR,IWRK(1),JWRK,HWRK,NH)
+      ENDIF
+      RETURN
+      END
+*
+********************************************************************
+*
+      SUBROUTINE DIALOG(IWRK,NWRK,HWRK,NH,ITRMI,ITRMO,IBASE,LGINT)
+*
+* THIS SUBROUTINE ACCESSES ANALYZ AFTER A DIALOG WITH THE USER.
+* DATA ARE READ FROM A FILE, AND RESULTS ARE DIRECTED TO A FILE.
+*
+* THE PARAMETERS OF DIALOG HAVE THE FOLLOWING MEANINGS:
+*
+* IWRK:    A 1-DIMENSIONAL INTEGER WORK ARRAY.  THE LARGER IT IS THE
+*          LARGER ARE THE PROBLEMS THAT CAN BE SOLVED.  HOWEVER, IT
+*          SHOULD NOT EXCEED THE MAXIMUM REQUIRED WORKSPACE BY TOO
+*          LARGE A FACTOR THEN DISK OPERATIONS REQUIRED BY SWAPPING
+*          MAY DECREASE EFFICIENCY.
+* NWRK:    PHYSICAL DIMENSION OF IWRK.
+* HWRK:    REAL WORK ARRAY
+* NH:      SIZE OF HWRK, REQUIRED MINIMUM VALUE IS
+*             NH > (# OF ROWS) + (# OF COLUMNS) + (# OF RHS)
+* ITRMI:   UNIT NUMBER FOR INPUT FROM TERMINAL
+* ITRMO:   UNIT NUMBER FOR OUTPUT TO TERMINAL
+* IBASE:   THE BASE FOR MULTIPLE PRECISION OUTPUT.  FOR BETTER
+*          LEGIBILITY IT SHOULD BE A POWER OF 10.
+* LGINT:   THE LARGEST INTEGER THAT CAN BE EXPRESSED ON THE MACHINE.
+*
+*
+*
+* THE PROBLEM SOLVED IS:
+*
+*                   AX = B
+*     WHERE:
+*            A IS AN NXM RATIONAL MATRIX
+*            X IS THE MXP RATIONAL UNKNOWN MATRIX
+*            B IS AN NXP RATIONAL RIGHT HAND SIDE.
+*
+*     INPUT FOR THIS PROGRAM IS INTERACTIVE, AND IT WILL ACCEPT
+*     FILES IN EITHER RATIONAL OR INTEGER FORMAT.  RATIONAL FORMAT
+*     FILES ARE PROCESSED BY MPCON.  THEN THE ACTUAL ANALYSIS IS
+*     PERFORMED IN RSDANA.
+*
+* THIS SUBROUTINE USES IO CHANNELS 90,91,92,93 INTERNALLY
+* AS FOLLOWS:
+*    I90: INTEGER INPUT FILE
+*    I91: INTEGER FILE NAME
+*    I92: RESULT FILE NAME
+*    I93: LOG FILE NAME
+* IF OTHER CHANNEL NUMBERS ARE REQUIRED THE FOLLOWING PARAMETER
+* STATEMENT SHOULD BE ALTERED APPROPRIATELY:
+*
+********************************************************************
+*
+      PARAMETER(I90=90,I91=91,I92=92,I93=93)
+*   DATA STRUCTURE DECLARATION
+*-------------------------------------------------------------------
+      INTEGER IWRK(NWRK)
+      REAL HWRK(NH)
+      CHARACTER*25 FNM1,FNM2
+      CALL GOLIA(ITRMO)
+*-------------------------------------------------------------------
+*   INPUT FROM THE USER - DATA FILE CONTAINING MATRIX AND RHS
+*-------------------------------------------------------------------
+      WRITE (ITRMO,1100) NWRK
+      READ (ITRMI,*) NW
+      IF (0.GE.NW.OR.NW.GT.NWRK) NW = NWRK
+      WRITE (ITRMO,1080)
+      READ (ITRMI,*) ITYPE
+      IF ( ITYPE .GT. 0 ) THEN
+        WRITE (ITRMO,1010)
+        READ (ITRMI,1000) FNM1
+        OPEN (I91,FILE=FNM1,STATUS='OLD')
+        WRITE (ITRMO,1090)
+        READ (ITRMI,1000) FNM1
+        OPEN (I90,FILE=FNM1,STATUS='UNKNOWN')
+      ELSEIF (ITYPE .EQ. 0 ) THEN
+        WRITE (ITRMO,1010)
+        READ (ITRMI,1000) FNM1
+        OPEN (I90,FILE=FNM1,STATUS='OLD')
+      ENDIF
+      IOINT = I90
+      IORAT = I91
+*-------------------------------------------------------------------
+*   INPUT FROM THE USER - DATA OUTPUT
+*-------------------------------------------------------------------
+      WRITE (ITRMO,1030)
+      READ (ITRMI,*) JOB
+      IF (JOB.LT.4) THEN
+*-------------------------------------------------------------------
+*   INPUT FROM THE USER - OUTPUT FILE THAT WILL STORE RESULTS
+*-------------------------------------------------------------------
+        WRITE (ITRMO,1020)
+        READ (ITRMI,1000) FNM2
+        IF (FNM2(1:1) .EQ. '0') THEN
+          IORES = 0
+        ELSE
+          OPEN (I92,FILE=FNM2,STATUS='UNKNOWN')
+          IORES = I92
+        ENDIF
+        WRITE (ITRMO,1040)
+        READ (ITRMI,*) IBLANK
+*-------------------------------------------------------------------
+*   INPUT FROM THE USER - TERMINATION CRITERION
+*-------------------------------------------------------------------
+        WRITE (ITRMO,1050)
+        READ (ITRMI,*) ISTOP
+*-------------------------------------------------------------------
+*   INPUT FROM THE USER - DATA FILE WITH INTERMEDIATE OUTPUT
+*-------------------------------------------------------------------
+        WRITE (ITRMO,1060)
+        READ (ITRMI,*) LOG
+        IF ( LOG .GT. 1 ) THEN
+          WRITE (ITRMO,1070)
+          READ (ITRMI,1000) FNM2
+          OPEN (I93,FILE=FNM2,STATUS='UNKNOWN')
+        ENDIF
+        IOLOG = I93
+      ELSE
+        LOG = 0
+      ENDIF
+      CALL ANALYZ(ITRMO,IBASE,LGINT,IORAT,IOINT,IORES,IOLOG,LOG,
+     X JOB,ITYPE,ISTOP,IBLANK,IWRK,NW,HWRK,NH)
+*-------------------------------------------------------------------
+*   CLOSE OPENED FILES AND SHUT DOWN
+*-------------------------------------------------------------------
+      CLOSE (I90)
+      CLOSE (I91)
+      CLOSE (I92)
+      CLOSE (I93)
+      RETURN
+ 1000 FORMAT (A25)
+ 1010 FORMAT (/' enter input file name:  ')
+ 1020 FORMAT (/' enter output file name (enter 0 for no hardcopy):')
+ 1030 FORMAT (/' enter desired computation:',/
+     *         '     0 = rank, dependencies',/
+     *         '     1 = rank and rhs solutions',/
+     *         '     2 = rank and null space basis',/
+     *         '     3 = rank, rhs and null space basis',/
+     *         '     4 = rational ----> integer conversion')
+ 1040 FORMAT (/' enter the mp output style:',/
+     *         '     0 = no spaces between terms',/
+     *         '     1 = one space between terms')
+ 1050 FORMAT (/' enter termination criterion:',/
+     *         '    -2 = modified hadamard bound',/
+     *         '    -1 = convergence criterion',/
+     *         '     0 = hadamard bound',/
+     *         '     n = specific pass count')
+ 1060 FORMAT (/' enter intermediate output parameter:',/
+     *         '     0 = none ',/
+     *         '     1 = terminal progress report',/
+     *         '     2 = reduction stage info, pass one only',/
+     *         '     3 = all matrix, pass one only',/
+     *         '     4 = all info - all passes ***caution***')
+ 1070 FORMAT (/' enter intermediate output file name: ')
+ 1080 FORMAT (/' enter input file type:  ',/
+     *         '     0 = integer ',/
+     *         '     1 = rational',/
+     *         '     2 = arbitrary precision rational')
+ 1090 FORMAT (/' enter integer file name:  ')
+ 1100 FORMAT (/' enter size of workspace (up to',I12,')')
+      END
+*
+********************************************************************
+*
+      SUBROUTINE GJPIV (K,JZRO,IWRK,NWRK,IHTBL,NSTOR)
+*
+*   PERFORMS COLUMN PIVOTING OF THE AUGMENTED MATRIX. THE PIVOT
+*     SELECTION IS BASED ON
+*
+*       1.  AKJ NOT EQUAL TO ZERO
+*       2.  JTH COLUMN HAVING THE LEAST NONZERO ELEMENTS
+*
+*     ROW PIVOTING IS PERFORMED IF THE KTH ROW IS THE 0
+*     VECTOR BY ROTATING THE KTH ROW THE LAST ROW IN THE
+*     MATRIX.  THEN THE K+1ST ROW BECOMES THE KTH ROW AND
+*     COLUMN PIVOTING IS PERFORMED ON THE IT AS ABOVE.
+*     THE NUMBER OF NONZERO ELEMENTS IN ANY GIVEN COLUMN
+*     IS COUNTED WITH THE IPIV ARRAY.
+*
+*   GLOBAL VARIABLES:
+*
+*     1.  K - INTEGER - CURRENT STAGE
+*     2.  JZRO - INTEGER - SIGNALS WHEN MATRIX HAS ONLY ZEROS
+*           BELOW THE KTH ROW, I.E. REDUCTION IS COMPLETE
+*               =  0 THEN ONLY ZEROS LEFT
+*               =  1 THEN CONTINUE
+*     3.  IWRK - NWRK INTEGER ARRAY - SEE DRIVER FOR SPECIFICATION
+*     4.  IHTBL - NSTOR INTEGER ARRAY - SEE DRIVER FOR SPECIFICATION
+*
+*   COMMON VARIABLES CHANGED:
+*
+*   LOCAL VARIABLES:
+*
+*     1.  NKROW - INTEGER - FLAG SIGNALING ROW PIVOTING NECESSARY
+*     2.  IPCOL - INTEGER - POTENTIAL PIVOT COLUMN
+*     3.  IDUM - INTEGER - VOLATILE
+*
+*   NOTE:  COMMON VARIABLES LISTED IN DRIVER
+*
+********************************************************************
+*
+      INTEGER IHTBL(2,0:NSTOR),IWRK(NWRK)
+      INTEGER IDUM,IPCOL,NKROW
+      COMMON /WPARM/ MINFO,IHPRM,IROW,ICOL,IDEP,IPIV,LST,IPRM,IPIN,
+     *  IAPRM,KODE,IRHS,JWRK,KNUM,KGCD,IMAT,KUN13,IBASE,
+     *  ITER,ICPRM,IDIAG,ITRM,IBASIC,ITRI,INULL,IRANK,IZERO,LMAX,
+     *  NPRME,MHZ,ISOLH,KUN12
+*-------------------------------------------------------------------
+*   INITIALIZE - CHECK TO SEE IF MATRIX IS REDUCED
+*-------------------------------------------------------------------
+ 10   CONTINUE
+      NKROW = 0
+      IMIN = IWRK(MINFO+1) + 1
+      IF ( IWRK(IROW+K) .EQ. IWRK(IDEP+2) ) THEN
+        JZRO = 0
+        IMIN = 0
+        GO TO 40
+      ENDIF
+*-------------------------------------------------------------------
+*   FIND NONZERO COLUMN ENTRIES IN ROW K.  IF A NONZERO PIVOT
+*     IS FOUND SEARCH ITS COLUMN.  ELSE CHECK TO SEE IF IT IS A
+*     NEW MINIMUM AND CONTINUE.
+*-------------------------------------------------------------------
+      DO 20, J = K, IWRK(MINFO+2)
+        KEY = IRHASH(IWRK(IROW+K),IWRK(ICOL+J),0,IWRK(IHPRM+1),
+     *    IHTBL,NSTOR)
+        IF ( IHTBL(2,KEY) .NE. 0 ) THEN
+          NKROW = NKROW + 1
+          IDUM = IWRK(IPIV+IWRK(ICOL+J))
+          IF (IDUM .LT. IMIN) THEN
+            IMIN = IDUM
+            IPCOL = J
+          ENDIF
+        ENDIF
+ 20   CONTINUE
+*-------------------------------------------------------------------
+*   IF NO ENTRY IN THE K ROW IS NONZERO THEN ROW PIVOT AND
+*     REPEAT THE COLUMN MINIMIZATION.
+*-------------------------------------------------------------------
+      IF (NKROW .EQ. 0) THEN
+        IWRK(IDEP+1) = IWRK(IDEP+1) + 1
+        IWRK(IDEP+IWRK(IDEP+1)+1) = IWRK(IROW+K)
+        IDUM = IWRK(IROW+K)
+        DO 30, I = K+1, IWRK(MINFO+1)
+          IWRK(IROW+I-1) = IWRK(IROW+I)
+ 30     CONTINUE
+        IWRK(IROW+IWRK(MINFO+1)) = IDUM
+        GO TO 10
+      ENDIF
+*-------------------------------------------------------------------
+*   SWAP ROWS FROM MINIMIZING COUNTER
+*-------------------------------------------------------------------
+      IDUM = IWRK(ICOL+K)
+      IWRK(ICOL+K) = IWRK(ICOL+IPCOL)
+      IWRK(ICOL+IPCOL) = IDUM
+ 40   CONTINUE
+      RETURN
+      END
+*
+********************************************************************
+*
+      SUBROUTINE GJRES (IWRK,NWRK,IHTBL,NSTOR)
+*
+*   COMPUTES INTERMEDIATE RESULTS MODULO ICPRM OF THE PRINCIPAL
+*     MINOR, PARTICULAR SOLUTION, AND NULL SPACE BY RECOVERING,
+*     FOR EACH ELEMENT IN THE SOLUTION, THE NEW RESIDUES AND ITS
+*     PREVIOUS MIXED RADIX FORM AND UPDATES THE MIXED RADIX FORM
+*     IN RADIXM.  CHECKS THE RANK OF THE CURRENT PASS AND CHECKS
+*     THE RIGHT HAND SIDE FOR CONSISTENCY.  HASHES SOLUTION INTO
+*     SOLUTION HASH TABLE.
+*
+*   GLOBAL VARIABLES:
+*
+*     1.  IWRK - NWRK INTEGER ARRAY - SEE DRIVER FOR SPECIFICATION
+*     2.  IHTBL - NSTOR INTEGER ARRAY - SEE DRIVER FOR SPECIFICATION
+*
+*   COMMON VARIABLES USED:
+*     1.  IRANK - RANK FLAG THAT IS SET
+*           =  1 RANK INCREASED
+*           =  0 RANK UNCHANGED
+*           = -1 RANK DECREASED
+*     2.  IZERO - OUTPUT FLAG FOR ZERO COEFFICIENTS
+*           =  0  IF ALL COEFFICIENTS ARE ZERO
+*           =  1  IF ALL COEFFICIENTS ARE NONZERO
+*
+*   LOCAL VARIABLES:
+*
+*     1.  JZ - INTEGER - VOLATILE
+*
+********************************************************************
+*
+      INTEGER IHTBL(2,0:NSTOR),IWRK(NWRK)
+      INTEGER JZ
+      LOGICAL TEST
+      COMMON /WPARM/ MINFO,IHPRM,IROW,ICOL,IDEP,IPIV,LST,IPRM,IPIN,
+     *  IAPRM,KODE,IRHS,JWRK,KNUM,KGCD,IMAT,KUN13,IBASE,
+     *  ITER,ICPRM,IDIAG,ITRM,IBASIC,ITRI,INULL,IRANK,IZERO,LMAX,
+     *  NPRME,MHZ,ISOLH,KUN12
+*-------------------------------------------------------------------
+*   FROM THE MAIN DIAGONAL CHECK FOR DECREASED RANK.
+*-------------------------------------------------------------------
+      IZERO = 1
+      IRANK = 0
+      JZ = 1
+      IF ( ITER .NE. 1 ) THEN
+        DO 10, I = 1, IWRK(MINFO+7)
+          KEY = IRHASH(IWRK(IROW+I),IWRK(ICOL+I),0,IWRK(IHPRM+1),
+     *      IHTBL,NSTOR)
+          JZ = JZ * IHTBL(2,KEY)
+ 10     CONTINUE
+        IF ( JZ .NE. 1 ) THEN
+          IRANK = -1
+          RETURN
+        ENDIF
+*-------------------------------------------------------------------
+*   CHECK FOR INCREASED RANK AND SOLUTION CONSISTENCY WITH THE ROW
+*     COUNTER VECTOR
+*-------------------------------------------------------------------
+        DO 30, I = IWRK(MINFO+7)+1, IWRK(MINFO+1)
+          JZ = IWRK(IROW+I)
+          IF ( IWRK(IPIV+JZ) .NE. 0 ) THEN
+            DO 20, J = 1, IWRK(MINFO+3)
+              KEY = IRHASH(JZ,IWRK(MINFO+2)+J,0,IWRK(IHPRM+1),
+     *          IHTBL,NSTOR)
+              IF ( IHTBL(2,KEY) .NE. 0 ) THEN
+                IWRK(IRHS+J) = 1
+                IWRK(IPIV+JZ) = IWRK(IPIV+JZ) - 1
+              ENDIF
+ 20         CONTINUE
+            IF ( IWRK(IPIV+JZ) .NE. 0 ) IRANK = 1
+          ENDIF
+ 30     CONTINUE
+      ENDIF
+*-------------------------------------------------------------------
+*   UPDATE COEFFICIENT OF THE LEADING MINOR
+*-------------------------------------------------------------------
+      TEST = .TRUE.
+      CALL RADIXM (KNUM,IDIAG,TEST,IWRK,NWRK)
+*-------------------------------------------------------------------
+*   COMPUTE THE PARTICULAR SOLUTION FOR THE CURRENT PASS WHEN
+*     GAUSS-JORDAN DECOMPOSTION IS USED.  TAKE INTO ACCOUNT
+*     PIVOTING.
+*-------------------------------------------------------------------
+      ITN = ITER-1
+      IF (IBASIC.EQ.1 .AND. ITRI.EQ.0) THEN
+        DO 50, J = IWRK(MINFO+2)+1, IWRK(MINFO+3)+IWRK(MINFO+2)
+          JS = J
+          DO 40, I = 1, IWRK(MINFO+7)
+            IST = IWRK(IROW+I)
+            IS = IWRK(ICOL+I)
+            KEY = IRHASH(IST,JS,0,IWRK(IHPRM+1),IHTBL,NSTOR)
+            KK = MOD(IHTBL(2,KEY)*IDIAG,ICPRM)
+            CALL JRHASH (IS,JS,LST,ITN,0,JZ,IWRK,NWRK,IHTBL,NSTOR)
+            IF ( KK.NE.0 .OR. JZ.NE.0 ) THEN
+              CALL RADIXM (LST,KK,TEST,IWRK,NWRK)
+              CALL JSHASH (IS,JS,LST,ITER,IWRK,NWRK,IHTBL,NSTOR)
+            ENDIF
+ 40       CONTINUE
+ 50     CONTINUE
+*-------------------------------------------------------------------
+*   COMPUTE AND OUTPUT THE PARTICULAR SOLUTION FOR THE CURRENT PASS
+*     WHEN TRIANGULAR DECOMPOSTION IS USED - BACK SUBSTITUTION
+*-------------------------------------------------------------------
+      ELSEIF (IBASIC.EQ.1 .AND. ITRI.EQ.1) THEN
+        DO 80, J = IWRK(MINFO+2)+1, IWRK(MINFO+3)+IWRK(MINFO+2)
+          JS = J
+          DO 70, I = IWRK(MINFO+7), 1, -1
+            IST = IWRK(IROW+I)
+            IS = IWRK(ICOL+I)
+            KEY = IRHASH(IST,JS,0,IWRK(IHPRM+1),IHTBL,NSTOR)
+            KK  = IHTBL(2,KEY)
+            DO 60, K = I+1, IWRK(MINFO+7), 1
+              KEY = IRHASH(IST,IWRK(ICOL+K),0,IWRK(IHPRM+1),
+     *          IHTBL,NSTOR)
+              KK  = MOD( KK - MOD(IWRK(KODE+K)*IHTBL(2,KEY),ICPRM),
+     *          ICPRM)
+ 60         CONTINUE
+            IWRK(KODE+I) = KK
+            KK  = MOD(KK*IDIAG,ICPRM)
+            CALL JRHASH (IS,JS,LST,ITN,0,JZ,IWRK,NWRK,IHTBL,NSTOR)
+            IF ( KK.NE.0 .OR. JZ.NE.0 ) THEN
+              CALL RADIXM (LST,KK,TEST,IWRK,NWRK)
+              CALL JSHASH (IS,JS,LST,ITER,IWRK,NWRK,IHTBL,NSTOR)
+            ENDIF
+ 70       CONTINUE
+ 80     CONTINUE
+      ENDIF
+*-------------------------------------------------------------------
+*   OUTPUT NULL SPACE FOR THE CURRENT PASS
+*-------------------------------------------------------------------
+      IF (INULL .EQ. 1) THEN
+        DO 100, I = 1, IWRK(MINFO+7)
+          IS = IWRK(ICOL+I)
+          DO 90, J = IWRK(MINFO+7)+1, IWRK(MINFO+2)
+            JS = J
+            KEY = IRHASH(IWRK(IROW+I),IWRK(ICOL+J),0,IWRK(IHPRM+1),
+     *        IHTBL,NSTOR)
+            KK = MOD(IHTBL(2,KEY)*IDIAG,ICPRM)
+            CALL JRHASH (IS,JS,LST,ITN,0,JZ,IWRK,NWRK,IHTBL,NSTOR)
+            IF ( KK.NE.0 .OR. JZ.NE.0 ) THEN
+              CALL RADIXM (LST,KK,TEST,IWRK,NWRK)
+              CALL JSHASH (IS,JS,LST,ITER,IWRK,NWRK,IHTBL,NSTOR)
+            ENDIF
+ 90       CONTINUE
+ 100    CONTINUE
+      ENDIF
+      IF ( TEST ) IZERO = 0
+      RETURN
+      END
+*
+********************************************************************
+*
+      SUBROUTINE GJRRED (K,IP,IWRK,NWRK,IHTBL,NSTOR)
+*
+*   ROW REDUCES THE KTH COLUMN OF THE AUGMENTED MATRIX MODULO
+*     ICPRM WITH GAUSS OR GAUSS-JORDAN ROW REDUCTION AS APPROP.
+*     PIVOTING FOR THE KTH STAGE SHOULD ALREADY BE DECIDED.
+*     ASSUMES THAT IF AKK IS ZERO THEN THE MATRIX IS REDUCED TO
+*     IDENTITY FORM AND RETURNS.  COUNTS THE NUMBER OF NONZERO
+*     ELEMENTS IN ANY GIVEN COLUMN ON THE FIRST PASS OR ROW ON
+*     SUCCESSIVE PASSES IN THE IPIV ARRAY.  THIS IS USED IN
+*     PIVOTING ON THE FIRST PASS AND RANK DETERMINATION ON
+*     SUCCESSIVE PASSES.
+*
+*   GLOBAL VARIABLES:
+*
+*     1.  K - INTEGER - CURRENT STAGE
+*     2.  IP - INTEGER - FLAG FOR PIVOT COUNTER
+*              = 0  COUNT COLUMN ZEROES FOR PIVOTING
+*              = ANYTHING ELSE THEN COUNT ROW ZEORES FOR
+*                  RANK DETERMINATION
+*     3.  IWRK - NWRK INTEGER ARRAY - SEE DRIVER FOR SPECIFICATION
+*     4.  IHTBL - NSTOR INTEGER ARRAY - SEE DRIVER FOR SPECIFICATION
+*
+*   COMMON VARIABLES CHANGED:
+*
+*   LOCAL VARIABLES:
+*
+*     1.  JAIJ,JAKK,JAIK - INTEGERS - OBVIOUS MATRIX ELEMENTS
+*     2.  IAIJ - INTEGER - AIJ BEFORE REDUCTION FOR PIVOT COUNTER
+*     3.  KK - VOLATILE
+*
+********************************************************************
+*
+      INTEGER IHTBL(2,0:NSTOR),IWRK(NWRK)
+      INTEGER JAIJ,JAKK,JAIK,IAIJ
+      COMMON /WPARM/ MINFO,IHPRM,IROW,ICOL,IDEP,IPIV,LST,IPRM,IPIN,
+     *  IAPRM,KODE,IRHS,JWRK,KNUM,KGCD,IMAT,KUN13,IBASE,
+     *  ITER,ICPRM,IDIAG,ITRM,IBASIC,ITRI,INULL,IRANK,IZERO,LMAX,
+     *  NPRME,MHZ,ISOLH,KUN12
+*-------------------------------------------------------------------
+*   LOAD AKK AND COMPUTE ITS MULTIPICATIVE INVERSE FOR GAUSSIAN
+*     REDUCTION TO THE APPRPRIATE FORM.  UPDATE IDIAG WHICH STORES
+*     THE PIVOT ELEMENT INFORMATION.
+*-------------------------------------------------------------------
+      KEY = IRHASH(IWRK(IROW+K),IWRK(ICOL+K),0,IWRK(IHPRM+1),
+     *  IHTBL,NSTOR)
+      JAKK = IHTBL(2,KEY)
+      IF ( JAKK .EQ. 0 ) RETURN
+      IHTBL(2,KEY) = 1
+      IDIAG = MOD(IDIAG*JAKK,ICPRM)
+      JAKK = INV(JAKK,ICPRM)
+*-------------------------------------------------------------------
+*   LOAD KTH ROW ARRAY FOR ELIMINATION, MULTIPLY BY JAKK INVERSE
+*     AND RESTORE
+*-------------------------------------------------------------------
+      DO 10, J = K+1, IWRK(MINFO+2)+IWRK(MINFO+3)
+        KEY = IRHASH(IWRK(IROW+K),IWRK(ICOL+J),0,IWRK(IHPRM+1),
+     *    IHTBL,NSTOR)
+        IWRK(LST+J) = MOD(IHTBL(2,KEY)*JAKK,ICPRM)
+        IHTBL(2,KEY) = IWRK(LST+J)
+ 10   CONTINUE
+*-------------------------------------------------------------------
+*   SEARCH KTH COLUMN FOR NONZERO ENTRIES - PERFORM GAUSSIAN ELIM.
+*     IF NULL SPACE IS NOT NEEDED, ELSE PERFORM GAUSS-JORDAN
+*     ELIMINATION SO THAT
+*           AIJ := AIJ - AIK*AKJ.
+*     NOTE THAT AKJ IS STORED IN IWRK(LST+J).
+*-------------------------------------------------------------------
+      IF ( ITRI .EQ. 1 ) THEN
+        II = K + 1
+      ELSE
+        II = 1
+      ENDIF
+      DO 30, I = II, IWRK(MINFO+1)
+        IF ( I .EQ. K ) GO TO 30
+        KEY = IRHASH(IWRK(IROW+I),IWRK(ICOL+K),0,IWRK(IHPRM+1),
+     *    IHTBL,NSTOR)
+        JAIK = IHTBL(2,KEY)
+        IF (JAIK .NE. 0) THEN
+          IHTBL(2,KEY) = 0
+          IF ( IP .NE. 0 )
+     *      IWRK(IPIV+IWRK(IROW+I)) = IWRK(IPIV+IWRK(IROW+I)) - 1
+          DO 20, J =  K+1, IWRK(MINFO+2)+IWRK(MINFO+3)
+            KEY = IRHASH(IWRK(IROW+I),IWRK(ICOL+J),0,IWRK(IHPRM+1),
+     *        IHTBL,NSTOR)
+            JAIJ = IHTBL(2,KEY)
+            IAIJ = JAIJ
+            IF (JAIJ .EQ. 0) KEY = ISHASH(IWRK(IROW+I),IWRK(ICOL+J),
+     *        0,IWRK(IHPRM+1),IHTBL,NSTOR)
+            JAIJ = MOD( JAIJ - MOD(JAIK*IWRK(LST+J),ICPRM), ICPRM)
+            IHTBL(2,KEY) = JAIJ
+*-------------------------------------------------------------------
+*   RECORD FILLIN FOR PIVOTING ON FIRST PASS
+*-------------------------------------------------------------------
+            IF ( IP .EQ. 0 ) THEN
+              IF ( IAIJ .EQ. 0 .AND. JAIJ .NE. 0) THEN
+                IWRK(IPIV+IWRK(ICOL+J)) = IWRK(IPIV+IWRK(ICOL+J)) + 1
+                IF ( J .LE. IWRK(MINFO+2) )
+     *            IWRK(MINFO+9) = IWRK(MINFO+9) + 1
+              ELSEIF ( IAIJ .NE. 0 .AND. JAIJ .EQ. 0) THEN
+                IWRK(IPIV+IWRK(ICOL+J)) = IWRK(IPIV+IWRK(ICOL+J)) - 1
+              ENDIF
+*-------------------------------------------------------------------
+*   RECORD FILLIN FOR RANK DETERMINATION ON SUBSEQUENT PASSES
+*-------------------------------------------------------------------
+            ELSE
+              IF ( IAIJ .EQ. 0 .AND. JAIJ .NE. 0) THEN
+                IWRK(IPIV+IWRK(IROW+I)) = IWRK(IPIV+IWRK(IROW+I)) + 1
+              ELSEIF ( IAIJ .NE. 0 .AND. JAIJ .EQ. 0) THEN
+                IWRK(IPIV+IWRK(IROW+I)) = IWRK(IPIV+IWRK(IROW+I)) - 1
+              ENDIF
+            ENDIF
+ 20       CONTINUE
+        ENDIF
+ 30   CONTINUE
+      RETURN
+      END
+*
+********************************************************************
+*
+      SUBROUTINE GJWRT (K,IWRK,NWRK,IHTBL,NSTOR)
+*
+*   THIS ROUTINE WRITES PIVOTING AND MATRIX REDUCTION INFORMATION
+*     TO A FILE AS A CHECK PROCEDURE.
+*
+*   GLOBAL VARIABLES:
+*
+*     1.  K - INTEGER - CURRENT STAGE IN G.E.
+*     2.  IWRK - NWRK INTEGER ARRAY - SEE DRIVER FOR SPECIFICATION
+*     3.  IHTBL - NSTOR INTEGER ARRAY - SEE DRIVER FOR SPECIFICATION
+*
+*   GLOBAL COMMONS USED:
+*
+*     1.  KUN13 - OUTPUT UNIT NUMBER
+*     2.  IMAT - MATRIX PRINT FLAG
+*
+********************************************************************
+*
+      INTEGER IHTBL(2,0:NSTOR),IWRK(NWRK)
+      COMMON /WPARM/ MINFO,IHPRM,IROW,ICOL,IDEP,IPIV,LST,IPRM,IPIN,
+     *  IAPRM,KODE,IRHS,JWRK,KNUM,KGCD,IMAT,KUN13,IBASE,
+     *  ITER,ICPRM,IDIAG,ITRM,IBASIC,ITRI,INULL,IRANK,IZERO,LMAX,
+     *  NPRME,MHZ,ISOLH,KUN12
+*-------------------------------------------------------------------
+*   PRINT OUT THE PIVOT SEQUENCE
+*-------------------------------------------------------------------
+      WRITE (KUN13,1050) K
+      WRITE (KUN13,1040) IWRK(ICOL+K)
+      WRITE (KUN13,1000)
+      WRITE (KUN13,*) (IWRK(IPIV+IWRK(ICOL+J)),J=1,IWRK(MINFO+2))
+      WRITE (KUN13,1020)
+      WRITE (KUN13,*) (IWRK(ICOL+J),J=1,IWRK(MINFO+2))
+      WRITE (KUN13,1030)
+      WRITE (KUN13,*) (IWRK(IROW+J),J=1,IWRK(MINFO+1))
+*-------------------------------------------------------------------
+*   PRINT OUT THE MATRIX
+*-------------------------------------------------------------------
+      IF ( IMAT .GE. 3 ) THEN
+        WRITE (KUN13,1010)
+        DO 20, I = 1, IWRK(MINFO+1)
+          DO 10, J = 1, IWRK(MINFO+2)+IWRK(MINFO+3)
+            KEY = IRHASH(IWRK(IROW+I),IWRK(ICOL+J),0,IWRK(IHPRM+1),
+     *        IHTBL,NSTOR)
+            IF(IHTBL(2,KEY) .NE. 0 )
+     *        WRITE (KUN13,1100) I,J,IHTBL(2,KEY)
+ 10       CONTINUE
+ 20     CONTINUE
+      ENDIF
+*
+ 1000 FORMAT (/' pivoting counter vector:')
+ 1010 FORMAT (/' matrix at this stage: ')
+ 1020 FORMAT (/' column ordering:')
+ 1030 FORMAT (/' row ordering:')
+ 1040 FORMAT (/' current pivot column:',I5)
+ 1050 FORMAT (//' stage #: ',I5)
+ 1100 FORMAT (1X,I6,I6,I11)
+      END
+*
+********************************************************************
+*
+      INTEGER FUNCTION INV(IX,IP)
+*
+*   EUCLID'S EXTENDED ALGORITHM IS USED TO FIND THE MULTIPLICATIVE
+*     INVERSE, INV, MODULO IP OF IX.
+*
+*                        *****WARNING*****
+*
+*     THIS FUNCTION ASSUMES THAT IX AND IP ARE RELATIVELY PRIME.
+*
+********************************************************************
+*
+      INTEGER IP,IR0,IX0,IR1,IX1,IR2,IX2,IQ
+      IR0 = IP
+      IX0 = 0
+      IR1 = IX
+      IX1 = 1
+ 10   CONTINUE
+      IF (IABS(IR1) .NE. 1) THEN
+        IQ = IR0/IR1
+        IR2 = IR0 - IQ*IR1
+        IX2 = IX0 - IQ*IX1
+        IR0 = IR1
+        IX0 = IX1
+        IR1 = IR2
+        IX1 = IX2
+        GO TO 10
+      ENDIF
+      INV = MOD(IX1,IP)
+      IF (IR1 .LT. 0) INV = -INV
+      RETURN
+      END
+*
+********************************************************************
+*
+      INTEGER FUNCTION IPR (IPARM,IW1,IW2,N)
+*
+*   COMPUTES AN OVER-ESTIMATE OF THE NUMBER OF PRIMES REQUIRED
+*     FOR RSDANA.  IT IS NOT NECESSARY TO CALL THIS ROUTINE IF
+*     MPCON HAS BEEN PREVIOUSLY CALLED.
+*
+*     THE ESTIMATE MAY BE GROSSLY LARGE.  IT ESTIMATES THE HADAMARD
+*     BOUND AS
+*
+*                DET(A) < MAX(AIJ)*(N**(N/2)).
+*
+*   INPUT GLOBAL VARIABLES:
+*
+*     IPARM - (0:15) ELEMENT INTEGER ARRAY - SAME INPUT AS RSDANA.
+*     IW1-2 - N INTEGER ARRAYS - WORK SPACE BIG ENOUGH TO STORE THE
+*       LARGEST ELEMENT OF THE MATRIX
+*
+********************************************************************
+*
+      INTEGER IPARM(0:15),IW1(N),IW2(N),MINFO(4)
+*-------------------------------------------------------------------
+*   ESTIMATE THE PRIMES
+*-------------------------------------------------------------------
+      IW2(1) = 0
+      REWIND (IPARM(3))
+      READ (IPARM(3),*) (MINFO(I),I=1,4),JBASE
+      DO 10, K = 1, MINFO(4)
+        READ (IPARM(3),*) I,J,NTRM
+        READ (IPARM(3),*) (IW1(II),II=1,NTRM)
+        IW1(1) = IW1(1)*NTRM
+        CALL MPMAX (IW2,IW1,N,IN)
+        IF (IN.EQ.2) CALL MPCOPY(IW2,IW1,N)
+ 10   CONTINUE
+      REWIND (IPARM(3))
+*-------------------------------------------------------------------
+*   ESTIMATE THE PRIMES
+*-------------------------------------------------------------------
+      AMAX = 2.*FLOAT(MAX0(MINFO(1),MINFO(2)))
+      AMAX = (AMAX/2.)*(ALOG10(AMAX))
+      BMAX = ALOG10(FLOAT(IW2(2))) + (ALOG10(FLOAT(IPARM(9)))
+     *  * (FLOAT(IABS(IW2(1))) - 2))
+      AMAX = AMAX*(1. + BMAX)
+      BMAX = ALOG10(SQRT(FLOAT(IPARM(11))) * 0.7)
+      IPR = INT(1.1*AMAX / BMAX) + 1
+      RETURN
+      END
+*
+********************************************************************
+*
+      INTEGER FUNCTION IRHASH (I,J,K,IHPRM,IHTBL,NSTOR)
+*
+*   RECOVERS (I,J,K) DATA LOCATION IN HASHING TABLE.  NOTE, K SHOULD
+*     BE 0 WHEN THE ROW REDUCTION IS PERFORMED, AND VARIABLE ELSE.
+*
+*   GLOBAL VARIABLES:
+*
+*     1. I,J,K - ARRAY LOCATION TO BE RECOVERED - WHERE
+*         I - ROW INDEX
+*         J - COLUMN INDEX
+*         K - ITERATION NUMBER
+*     2. IHPRM - INTEGER ARRAY - CONTAINS HASHING PARAMETERS
+*       (1) = LENGTH OF THE HASH TABLE
+*       (2) = HASHING MULTIPLIER
+*       (3) = ELIMINATION HASH TABLE SIZE
+*       (4) = UNUSED HERE
+*       (5) = COLUMNS OF AUGMENTED MATRIX
+*       (6) = MAX. ROWS OR (COLUMNS+1)
+*       (7) = ELIMINATION MAX. DOUBLE HASHES TRIED
+*       (8) = UNUSED HERE
+*       (9) = TOTAL DOUBLE HASHES TRIED
+*       (10) = TOTAL HASH STORAGES TRIED
+*       (11) = TERMINAL OUTPUT UNIT NUMBER
+*     3. IHTBL - NSTOR INTEGER ARRAY - SEE DRIVER
+*
+*   LOCAL VARIABLES:
+*
+*     1.  IFKY - INTEGER - KEY FUNCTION VALUE
+*     2.  IHKY - INTEGER - HASH FUNCTION VALUE
+*     3.  JKEY - INTEGER - KEY AT IHKY
+*     4.  NUMH - INTEGER - ITERATION COUNTER
+*     5.  INC - INTEGER - DOUBLE HASH INCREMENT
+*
+********************************************************************
+*
+      INTEGER IFKY,IHKY,JKEY,INC
+      INTEGER IHTBL(2,0:NSTOR),IHPRM(11)
+*-------------------------------------------------------------------
+*   COMPUTE KEY AND HASH LOCATION - RECOVERY IS SUCCESSFUL IF
+*   HASH IS 0 OR IF HASH = KEY - ELSE DOUBLE HASH AND TRY AGAIN
+*-------------------------------------------------------------------
+      IFKY = ((((K*IHPRM(6)) + (I-1))) * IHPRM(5)) + J
+      IHKY = MOD(IFKY+(I*IHPRM(2)+J)+(I*J*K),IHPRM(3))
+      INC = MOD(IFKY,IHPRM(3)-2)+1
+      NUMH = 0
+ 10   CONTINUE
+      JKEY = IHTBL(1,IHKY)
+      IF (JKEY .EQ. 0 .OR. JKEY.EQ.IFKY ) THEN
+        GO TO 20
+      ELSE
+        IHKY = MOD((IHKY+INC),IHPRM(3))
+        NUMH = NUMH + 1
+        IF (NUMH .GT. IHPRM(7)) THEN
+          IHKY = NSTOR
+          GO TO 20
+        ENDIF
+      ENDIF
+      GO TO 10
+*-------------------------------------------------------------------
+*   SUCCESS - ASSIGN IRHASH AND RETURN
+*-------------------------------------------------------------------
+ 20   CONTINUE
+      IRHASH = IHKY
+      RETURN
+      END
+*
+********************************************************************
+*
+      INTEGER FUNCTION ISHASH (I,J,K,IHPRM,IHTBL,NSTOR)
+*
+*   GETS INDEX TO STORE DATA IN THE HASHING TABLE.  NOTE, K SHOULD
+*     BE 0 WHEN THE ROW REDUCTION IS PERFORMED, AND VARIABLE ELSE.
+*
+*   GLOBAL VARIABLES:
+*
+*     1. I,J,K - ARRAY LOCATION TO BE RECOVERED - WHERE
+*         I - ROW INDEX
+*         J - COLUMN INDEX
+*         K - ITERATION NUMBER
+*     2. IHPRM - INTEGER ARRAY - CONTAINS HASHING PARAMETERS
+*       (1) = LENGTH OF THE HASH TABLE
+*       (2) = HASHING MULTIPLIER
+*       (3) = ELIMINATION HASH TABLE SIZE
+*       (4) = UNUSED HERE
+*       (5) = COLUMNS OF AUGMENTED MATRIX
+*       (6) = MAX. ROWS OR (COLUMNS+1)
+*       (7) = ELIMINATION MAX. DOUBLE HASHES TRIED
+*       (8) = UNUSED HERE
+*       (9) = TOTAL DOUBLE HASHES TRIED
+*       (10) = TOTAL HASH STORAGES TRIED
+*       (11) = TERMINAL OUTPUT UNIT NUMBER
+*     3. IHTBL - NSTOR INTEGER ARRAY - SEE DRIVER
+*
+*   LOCAL VARIABLES:
+*
+*     1.  IFKY - INTEGER - KEY FUNCTION VALUE
+*     2.  IHKY - INTEGER - HASH FUNCTION VALUE
+*     3.  JKEY - INTEGER - KEY AT IHKY
+*     4.  NUMH - INTEGER - ITERATION COUNTER
+*     5.  INC - INTEGER - DOUBLE HASH INCREMENT
+*
+*
+********************************************************************
+*
+      INTEGER IHTBL(2,0:NSTOR),IHPRM(11)
+      INTEGER IFKY,IHKY,JKEY,INC
+*--------------------------------------------------------------------
+*   COMPUTE KEY AND HASH LOCATION - ALLOW STORAGE IF
+*     1.  KEY = 0  (NEW ENTRY)
+*     2.  THE KEY MATCHES (OVERWRITE)
+*     3.  TABLE AT THE IHKY IS = 0 BY ROW REDUCTION
+*   ELSE DOUBLE HASH AND TRY AGAIN
+*--------------------------------------------------------------------
+      NUMH = 0
+      IFKY = ((((K*IHPRM(6)) + (I-1))) * IHPRM(5)) + J
+      IHKY = MOD(IFKY+(I*IHPRM(2)+J)+(I*J*K),IHPRM(3))
+      INC = MOD(IFKY,IHPRM(3)-2)+1
+ 10   CONTINUE
+      JKEY = IHTBL(1,IHKY)
+      IF (JKEY.EQ.0 .OR. JKEY.EQ.IFKY .OR. IHTBL(2,IHKY).EQ.0) THEN
+        GO TO 20
+      ELSE
+        IHKY = MOD((IHKY+INC),IHPRM(3))
+        NUMH = NUMH + 1
+        IF (NUMH.GT.IHPRM(3) .AND. IHPRM(11).GT.0) THEN
+          ITRM = IHPRM(11)
+          WRITE (ITRM,1000)
+          STOP
+        ELSEIF (NUMH.GT.IHPRM(3)) THEN
+          IHPRM(11) = -1
+        ENDIF
+        GO TO 10
+      ENDIF
+*-------------------------------------------------------------------
+*   SUCCESS - ASSIGN KEY AND RETURN - CHECK FOR MAX ITERATE
+*-------------------------------------------------------------------
+ 20   CONTINUE
+      IF (NUMH .GT. IHPRM(7)) IHPRM(7) = NUMH
+      IF (K .EQ. 0) IHPRM(10) = IHPRM(10) + 1
+      IF (K .EQ. 0) IHPRM(9) = IHPRM(9) + NUMH
+      IHTBL(1,IHKY) = IFKY
+      ISHASH = IHKY
+      RETURN
+ 1000 FORMAT (//1X,'***********************************************'
+     *           ,/'  MAX ITERATES EXCEEDED - HASH STRUCTURE FULL'
+     *           ,/' PARAMETER NSTOR MUST BE INCREASED TO CONTINUE'
+     *          ,/' ***********************************************')
+      END
+*
+********************************************************************
+*
+      INTEGER FUNCTION IWORK (IPARM)
+*
+*   COMPUTES THE AMOUNT OF WORK SPACE REQUIRED FOR RSDANA.
+*
+*   INPUT GLOBAL VARIABLES:
+*
+*     IPARM - (0:15) ELEMENT INTEGER ARRAY - SAME INPUT AS RSDANA.
+*
+********************************************************************
+*
+      INTEGER IPARM(0:15),LMAX,MAXP
+*
+      MAXP = INT(SQRT(FLOAT(IPARM(11))))
+      LMAX  = 2*(INT( FLOAT(IPARM(12)) * ALOG10(FLOAT(MAXP)/(2.0)) /
+     *  ALOG10(FLOAT(IPARM(9))) ) + 10)
+*
+      IWORK = 1000 + (3*IPARM(0)) + (2*IPARM(1)) + (3*IPARM(12)) +
+     *  (2*MAX0(IPARM(0),IPARM(1)+IPARM(2))) + (12*LMAX)
+*
+      RETURN
+      END
+*
+********************************************************************
+*
+      SUBROUTINE JRHASH (I,J,L,ITN,IOV,JZ,IWRK,NWRK,IHTBL,NSTOR)
+*
+*   RECOVERS (I,J) SOLUTION DATA ELEMENT IN SOLUTION HASHING TABLE
+*     RETURNS IT AT L POSITION IN IWRK.  REQUIRED INPUT IS A
+*     NONZERO VALUE I AND J, AND SOME VALUE OF ITN.
+*
+*   GLOBAL VARIABLES:
+*
+*     1. I,J   - ROW AND COLUMN SOLUTION ELEMENT TO RECOVER
+*     2. L     - ADDRESS OF THE OUTPUT IN IWRK
+*     3. ITN   - MAXIMUM NUMBER OF TERMS
+*     4. IOV   - FLAG TO ZERO THE ENTRY ONCE RECOVERED
+*              = 0  THEN ZERO
+*              = ANYTHING ELSE THEN DONT
+*     5. JZ    - SIGNALS WHEN ELEMENT RECOVERED IS ZERO
+*              = 0 IF (L = 0)
+*              = 1 ELSE
+*
+*   LOCAL VARIABLES:
+*
+*     1.  IFKY - KEY FUNCTION VALUE
+*     2.  IHKY - HASH FUNCTION VALUE
+*     3.  JKEY - KEY FUNCTION VALUE
+*     4.  INC - DOUBLE HASH INCREMENT
+*     5.  NUMH - DOUBLE HASH COUNTER
+*
+*
+********************************************************************
+*
+      INTEGER IHTBL(2,0:NSTOR),IWRK(NWRK),L,ITN,IOV,JZ
+      INTEGER IFKY,IHKY,JKEY,INC,NUMH,LK,LK1
+      COMMON /WPARM/ MINFO,IHPRM,IROW,ICOL,IDEP,IPIV,LST,IPRM,IPIN,
+     *  IAPRM,KODE,IRHS,JWRK,KNUM,KGCD,IMAT,KUN13,IBASE,
+     *  ITER,ICPRM,IDIAG,ITRM,IBASIC,ITRI,INULL,IRANK,IZERO,LMAX,
+     *  NPRME,MHZ,ISOLH,KUN12
+*-------------------------------------------------------------------
+*   INITIALIZE - COMPUTE IFKY, MULTIPLIER, IHKY AND DOUBLE HASH
+*     INCREMENT
+*-------------------------------------------------------------------
+      JZ = 0
+      IF ( ITN .EQ. 0 ) RETURN
+      JKEY = (I-1)*IWRK(IHPRM+5) + J
+      DO 20, K = 1, (ITN+MOD(ITN,2))/2
+        NUMH = 0
+        LK   = 2*K
+        LK1  = LK - 1
+        IFKY = JKEY + (K*IWRK(IHPRM+5)*IWRK(MINFO+1))
+        IHKY = MOD(K*((I*IWRK(IHPRM+2))+J),IWRK(IHPRM+4)) + MHZ
+        INC  = MOD(IFKY,IWRK(IHPRM+4)-2)+1
+*-------------------------------------------------------------------
+*   FIND ZERO TERMS
+*-------------------------------------------------------------------
+ 10     CONTINUE
+        IF ( IHTBL(1,IHKY).EQ.0 ) THEN
+          IWRK(L+LK1) = 0
+          IWRK(L+LK) = 0
+*-------------------------------------------------------------------
+*   SUCCESSFUL HASH WITH NONZERO TERMS - UNPACK THE TERMS
+*-------------------------------------------------------------------
+        ELSEIF ( IHTBL(1,IHKY).EQ.IFKY ) THEN
+          JZ = 1
+          KK = IHTBL(2,IHKY)
+          IWRK(L+LK) = MOD(KK,IWRK(IPRM+1))
+          IWRK(L+LK1) = (KK-IWRK(L+LK)) / IWRK(IPRM+1)
+          IF ( IWRK(L+LK) .GE. (IWRK(IAPRM+LK)+1)/2 )
+     *      IWRK(L+LK) = IWRK(L+LK)-IWRK(IAPRM+LK)
+          IF ( IWRK(L+LK1) .GE. (IWRK(IAPRM+LK1)+1)/2 )
+     *      IWRK(L+LK1) = IWRK(L+LK1)-IWRK(IAPRM+LK1)
+          IF ( IOV .EQ. 0 ) THEN
+            IHTBL(1,IHKY) = -1
+            IHTBL(2,IHKY) =  0
+          ENDIF
+*-------------------------------------------------------------------
+*   UNSUCCESSFUL HASH - TRY AGAIN IF LIMIT NOT EXCEEDED
+*-------------------------------------------------------------------
+        ELSE
+          IHKY = MOD((IHKY-MHZ)+INC,IWRK(IHPRM+4)) + MHZ
+          NUMH = NUMH + 1
+          IF ( NUMH .GT. IWRK(IHPRM+8) ) THEN
+            IWRK(L+LK) = 0
+            IWRK(L+LK1) = 0
+            GO TO 20
+          ENDIF
+          GO TO 10
+        ENDIF
+ 20   CONTINUE
+      RETURN
+      END
+*
+********************************************************************
+*
+      SUBROUTINE JSHASH (I,J,L,ITN,IWRK,NWRK,IHTBL,NSTOR)
+*
+*   STORES THE SOLUTION ELEMENT IN IWRK(L) - IWRK(L+ITN)
+*     IN THE SOLUTION HASHING TABLE.  REQUIRED INPUT IS A NONZERO
+*     VALUE I AND J, AND SOME NONNEGATIVE VALUE FOR ITN.
+*
+*   GLOBAL VARIABLES:
+*
+*     1.  I,J  - ROW AND COLUMN MATRIX LOCATION TO STORE
+*     2.  L - ADDRESS OF ELEMENT IN IWRK
+*     3.  ITN  - NUMBER OF TERMS OF L TO STORE
+*     4.  IWRK - NWRK INTEGER ARRAY - SEE DRIVER
+*     5.  IHTBL - NSTOR INTEGER ARRAY - SEE DRIVER
+*
+*   LOCAL VARIABLES:
+*
+*     1.  IFKY - KEY FUNCTION VALUE
+*     2.  IHKY - HASH FUNCTION VALUE
+*     3.  JKEY - KEY FUNCTION VALUE
+*     4.  INC  - DOUBLE HASH INCREMENT
+*     5.  NUMH - ITERATION COUNTER
+*
+*
+********************************************************************
+*
+      INTEGER IHTBL(2,0:NSTOR),IWRK(NWRK),I,J,L,ITN
+      INTEGER IFKY,IHKY,JKEY,INC,LK,LK1
+      COMMON /WPARM/ MINFO,IHPRM,IROW,ICOL,IDEP,IPIV,LST,IPRM,IPIN,
+     *  IAPRM,KODE,IRHS,JWRK,KNUM,KGCD,IMAT,KUN13,IBASE,
+     *  ITER,ICPRM,IDIAG,ITRM,IBASIC,ITRI,INULL,IRANK,IZERO,LMAX,
+     *  NPRME,MHZ,ISOLH,KUN12
+*-------------------------------------------------------------------
+*   INITIALIZE - COMPUTE IFKY, MULTIPLIER, IHKY AND DOUBLE HASH
+*     INCREMENT - SKIP THE ZERO TERMS
+*-------------------------------------------------------------------
+      JKEY = (I-1)*IWRK(IHPRM+5) + J
+      IWRK(L+ITN+1) = 0
+      DO 20, K = 1, (ITN+MOD(ITN,2))/2
+        NUMH = 0
+        LK   = 2*K
+        LK1  = LK - 1
+        IF ( (IWRK(L+LK).EQ.0) .AND. (IWRK(L+LK1).EQ.0) ) GO TO 20
+        IFKY = JKEY + (K*IWRK(IHPRM+5)*IWRK(MINFO+1))
+        IHKY = MOD(K*((I*IWRK(IHPRM+2))+J),IWRK(IHPRM+4)) + MHZ
+        INC  = MOD(IFKY,IWRK(IHPRM+4)-2)+1
+*--------------------------------------------------------------------
+*   STORE TERMS - ALLOW STORAGE IF KEY <= 0 OR IF THE KEY MATCHES.
+*     WHEN STORAGE IS ALLOWED PACK THE TERMS SO THAT TWO CONSECUTIVE
+*     TERM OCCUPY ONE HASH LOCATION.
+*--------------------------------------------------------------------
+ 10     CONTINUE
+        IF (IHTBL(1,IHKY).LE.0 .OR. IHTBL(1,IHKY).EQ.IFKY) THEN
+          IHTBL(1,IHKY) = IFKY
+          ILK = IWRK(L+LK)
+          ILK1 = IWRK(L+LK1)
+          IF ( ILK .LT. 0 ) ILK = ILK + IWRK(IAPRM+LK)
+          IF ( ILK1 .LT. 0 ) ILK1 = ILK1 + IWRK(IAPRM+LK1)
+          IHTBL(2,IHKY) = (ILK1*IWRK(IPRM+1)) + ILK
+*-------------------------------------------------------------------
+*   DOUBLE HASH UNTIL SUCCESS - CHECK TO INSURE THE SOLUTION HASH
+*     TABLE IS NOT FULL
+*-------------------------------------------------------------------
+        ELSE
+          IHKY = MOD((IHKY-MHZ)+INC,IWRK(IHPRM+4)) + MHZ
+          NUMH = NUMH + 1
+          IF (NUMH .GT. IWRK(IHPRM+4)) THEN
+            ISOLH = 1
+            IWRK(IHPRM+8) = IWRK(IHPRM+4)
+            RETURN
+          ELSEIF (NUMH .GT. IWRK(IHPRM+8)) THEN
+            IWRK(IHPRM+8) = NUMH
+          ENDIF
+          GO TO 10
+        ENDIF
+ 20   CONTINUE
+      RETURN
+      END
+*
+********************************************************************
+*
+      SUBROUTINE MPADD (IX,IY,IZ,N,IBASE)
+*
+*   TO ADD MP NONNEGATIVE INTEGERS IX + IY = IZ.
+*
+*   GLOBAL VARIABLES:
+*
+*     1.  IX - N INTEGER ARRAY - COEFFICIENTS OF IX
+*     2.  IY - N INTEGER ARRAY - COEFFICIENTS OF IY
+*     3.  IZ - N INTEGER ARRAY - COEFFICIENTS OF IZ
+*     4.  N - INTEGER - NUMBER OF ARRAY ELEMENTS
+*     5.  IBASE - INTEGER - NUMBER BASE OF IX,IY,IZ
+*
+*   REF:  D.E. KNUTH, 'THE ART OF COMPUTER PROGRAMMING',
+*      SEC. 4.3.1
+*
+********************************************************************
+*
+      INTEGER IX(N),IY(N),IZ(N),IBASE
+*
+      NX = IABS(IX(1))
+      NY = IABS(IY(1))
+      NZ = MAX0(NX,NY)
+      MZ = MIN0(NX,NY)
+      K = 0
+      DO 10, J = 0, MZ-2
+        INT = IX(NX-J) + IY(NY-J) + K
+        IF (INT .LT. IBASE) THEN
+          IZ(NZ-J) = INT
+          K = 0
+        ELSE
+          IZ(NZ-J) = INT - IBASE
+          K = 1
+        ENDIF
+ 10   CONTINUE
+      IF ( NZ .EQ. MZ ) THEN
+        IZ(2) = (K*IBASE) + IZ(2)
+      ELSEIF ( NZ .EQ. NX ) THEN
+        INT = IX(NZ-MZ+1) + K
+        IF (INT.GE.IBASE) THEN
+          INT = INT-IBASE
+          K = 1
+        ELSE
+          K = 0
+        END IF
+        IZ(NZ-MZ+1) = INT
+        DO 20, J= NZ-MZ, 2, -1
+          IF (K.EQ.0) THEN
+            IZ(J) = IX(J)
+          ELSE
+            INT = IX(J) + K
+            IF (INT.GE.IBASE) THEN
+              INT = INT - IBASE
+              K = 1
+            ELSE
+              K = 0
+            END IF
+            IZ(J) = INT
+          END IF
+ 20     CONTINUE
+      ELSE
+        INT = IY(NZ-MZ+1) + K
+        IF (INT.GE.IBASE) THEN
+          INT = INT-IBASE
+          K = 1
+        ELSE
+          K = 0
+        END IF
+        IZ(NZ-MZ+1) = INT
+        DO 30, J= NZ-MZ, 2, -1
+          IF (K.EQ.0) THEN
+            IZ(J) = IY(J)
+          ELSE
+            INT = IY(J) + K
+            IF (INT.GE.IBASE) THEN
+              INT = INT - IBASE
+              K = 1
+            ELSE
+              K = 0
+            END IF
+            IZ(J) = INT
+          END IF
+ 30     CONTINUE
+      ENDIF
+      IZ(1) = NZ
+      IF (K.EQ.1) THEN
+        DO 40 I = IZ(1),2,-1
+          IZ(I+1) = IZ(I)
+ 40     CONTINUE
+        IZ(2) = 1
+        IZ(1) = IZ(1) + 1
+      END IF
+      IF (IZ(2) .EQ. 0) CALL MPPACK(IZ,N)
+      RETURN
+      END
+*
+********************************************************************
+*
+      SUBROUTINE MPBASE(IX,N,MBASE,NBASE,IW1)
+*
+*   TO CONVERT MULTIPLE PRECISION IX RADIX MBASE TO
+*     IX RADIX NBASE.  MBASE AND NBASE MUST BE ONE WORD
+*     INTEGERS, SO THAT THEIR SQUARE IS LESS THAN THE
+*     COMPUTER WORD.
+*
+*   GLOBAL VARIABLES:
+*
+*     1.  IX - N INTEGER ARRAY - NUMBER TO BE CONVERTED ON
+*           INPUT - SAME NUMBER DIFFERENT BASE ON OUTPUT.
+*     2.  N - INTEGER - NUMBER OF ARRAY ELEMENTS IN IX
+*     3.  MBASE - BASE ON INPUT
+*     4.  NBASE - BASE ON OUTPUT.
+*
+********************************************************************
+*
+      INTEGER IX(N),MBASE,NBASE,IW1(N)
+      ISIGN = 1
+      IF ( IX(1) .LT. 0 ) ISIGN = -1
+*--------------------------------------------------------------------
+*   PERFORM DIVISION OF IX WITH NBASE - RESULTS IN QUOTIENT AND
+*     REMAINDER = JTH DECIMAL OF IX BASE(NBASE)
+*--------------------------------------------------------------------
+      J = 0
+      NTRM = IABS(IX(1))
+ 10   CONTINUE
+      INT = IX(2)
+      J = J+1
+      DO 20, I = 2,NTRM,1
+        IREM = MOD(INT,NBASE)
+        IX(I) = (IX(I) - IREM) / NBASE
+        IX(I+1) = IX(I+1) + (IREM*MBASE)
+        INT = IX(I+1)
+ 20   CONTINUE
+      IW1(J) = IREM
+*--------------------------------------------------------------------
+*   DONE IF QUOTIENT IS ZERO
+*--------------------------------------------------------------------
+      IMAX = 0
+      DO 30, I = 2, NTRM
+        IMAX = MAX0(IMAX,IX(I))
+ 30   CONTINUE
+      IF (IMAX .GT. 0) GO TO 10
+*--------------------------------------------------------------------
+*   EXCHANGE TEMP WITH IX - RETURN
+*--------------------------------------------------------------------
+      DO 40 I = 1, J
+        IX(J-I+2) = IW1(I)
+ 40   CONTINUE
+      IX(1) = ISIGN * (J+1)
+      IF ( IX(2) .EQ. 0 ) CALL MPPACK (IX,N)
+      RETURN
+      END
+*
+********************************************************************
+*
+      SUBROUTINE MPCON (MPARM,IWRK,NWRK)
+*
+*   READS A REGULAR FORMAT OR ARBITRARY PRECISION INPUT DATA
+*     FILE WITH RATIONAL COEFFICIENTS OF A MATRIX.  CONVERTS
+*     THE RATIONALS TO INTEGERS ROW-WISE.  IT THEN OUTPUTS TO A
+*     FILE THAT IS USED AS INPUT TO RSDANA.
+*
+*
+****INPUTS
+*
+*   GLOBAL VARIABLES:
+*
+*       1.  MPARM - 7 INTEGER ARRAY - CONTROL PARAMETERS WHERE
+*         (1) - INPUT FILE UNIT NUMBER
+*         (2) - OUTPUT FILE UNIT NUMBER
+*         (3) - INTEGER - OUTPUT RADIX
+*         (4) - FLAG TO SIGNAL HOW TO READ INPUT
+*              = 0  => ARBITRARY PRECISION
+*              = 1  => REGULAR FORMAT
+*         (5) - TERMINAL OUTPUT FLAG
+*              = 0  => NO INTERMEDIATE OUTPUT
+*              > 1  => OUTPUT
+*         (6) - TERMINAL OUTPUT UNIT NUMBER
+*         (7) - COMPUTER WORD
+*
+*       2.  IWRK  - NWRK INTEGER ARRAY - LARGEST WORK SPACE
+*             AVAILABLE (USUALLY IT WILL BE THE HASH TABLE)
+*
+*   INPUTS FILE STRUCTURE:  EITHER DATA FILE TYPE SHOULD CONTAIN
+*     THE AUGMENTED MATRIX SORTED BY ROWS INCLUDING THE RIGHT HAND
+*     SIDES NUMBERED AS THEY WOULD BE IN THE AUGMENTED MATRIX.
+*     ZERO ELEMENTS SHOULD NOT BE INCLUDED.  THE ALLOWED DATA
+*     STRUCTURES ARE;
+*
+*
+*     1.  REGULAR DATA FILE:
+*
+*        NROW, NCOL, NRHS, NELE
+*        I, J, NIJ, DIJ           - REPEATED NELE TIMES
+*
+*
+*     2.  ARBITRARY PRECISION DATA FILE:
+*
+*        NROW, NCOL, NRHS, NELE
+*        I, J,          ]
+*        NIJ            ]  -- REPEATED NELE TIMES
+*        DIJ            ]
+*
+*     WHERE:    NROW =  # OF ROWS
+*               NCOL =  # OF COLUMNS
+*               NRHS =  # OF RIGHT HAND SIDES
+*               NELE =  # OF NONZERO ELEMENTS
+*               (I,J) =  IS THE MATRIX INDEX
+*               NIJ = THE NUMERATOR OF THE (I,J) ELEMENT
+*               DIJ = THE DEMONINATOR OF THE (I,J) ELEMENT
+*
+*  *****************************************************************
+*  *   VERY IMPORTANT FOR ARBITRARY PRECISON DATA:  EVERY NIJ, DIJ  *
+*  *      MUST BE TERMINATED WITH A "$"                            *
+*  *****************************************************************
+*
+*
+*     EXAMPLE OF A REGULAR DATA FILE TO SOLVE AX = B WHERE A IS A
+*       3X2 MATRIX AND B IS A 3X1 VECTOR
+*
+*         5*A = [ 1  0 ]
+*               [ 0  3 ]    AND 5*B = [ 1, 0, 5 ]'
+*               [ 0  5 ]
+*
+*     THEN THE DATA FILE SHOULD CONTAIN
+*
+*     3, 2, 1, 5  (THE MATRIX INFORMATION)
+*     1, 1, 1, 5  (I.E. THE 1,1 ELEMENT OF A)
+*     1, 3, 1, 5  (I.E. THE 1,1 ELEMENT OF B OR 1,3 ELEMENT OF A AUG.)
+*     2, 2, 3, 5  (   ...    )
+*     3, 2, 1, 1
+*     3, 3, 1, 1
+*
+*
+****OUTPUT
+*
+*
+*       1.  IF AN ERROR HAS OCCURRED IN INPUT MPARM(1) WILL BE SET
+*            TO -1
+*
+*       2.  MPARM(7) IS OVERWRITTEN WITH AN OVERESTIMATE
+*            OF THE NUMBER OF PRIMES RSDANA WILL USE TO FIND
+*            THE EXACT SOLUTION OF THE PROBLEM.  UNFORTUNATELY
+*            THE ESTIMATE MAY BE GROSSLY LARGE.  IT ESTIMATES
+*            THE HADAMARD BOUND AS
+*
+*                DET(A) < MAX(AIJ)*(N**(N/2)).
+*
+*       3.  OUTPUT DATA FILE   -  STRUCTURE CONTAINS
+*
+*        NROW, NCOL, NRHS, NELE, JBASE
+*        I, J, NTRM                    ]
+*        (AIJ)K       K=1,2,...,NTRM   ]   - REPEATED NELE TIMES
+*        0, 0, NTRM               ]
+*        (D)K       K=1,2,...,NTRM   ]   - DIAGONAL DETERMINANT
+*
+*        WHERE: NROW =  # OF ROWS
+*               NCOL =  # OF COLUMNS
+*               NRHS =  # OF RIGHT HAND SIDES
+*               NELE =  # OF NONZERO ELEMENTS
+*               I,J  =  ELEMENT MATRIX INDEX
+*               NTRM =  NUMBER OF TERMS RADIX(JBASE) OF AIJ
+*               (AIJ)K = AIJ ELEMENT WHERE K IS THE TERM INDEX
+*                AND (AIJ)1 REPRESENTS THE SIGN OF THE ELEMENT.
+*               (D)K = DETERMINANT OF THE DIAGONAL MATRIX WHICH
+*                TRANSFORMS A INTO AN INTEGER MATRIX.  STRUCTURE
+*                OF (D)K IS THE SAME AS (AIJ)K.
+*
+*               THE RECONSTRUCTION OF AN MP NUMBER IS
+*
+*        AIJ = (AIJ)1 * ( (AIJ)2*(JBASE**(NTMR-2)) +
+*                         (AIJ)3*(JBASE**(NTMR-3)) +
+*                           ...
+*                         (AIJ)NTRM-1*JBASE + (AIJ)NTRM )
+*
+*
+*        TO READ THE DATA INTO A 3-DIMENSIONAL ARRAY AND CONVERT IT
+*          TO MP FORMAT FOLLOW THE SAMPLE OF CODE
+*
+*        READ (I,*) NROW,NCOL,NRHS,NELE,JBASE
+*        DO 10, L = 1, NELE
+*          READ (I,*) I,J,NTRM
+*          READ (I,*) (A(I,J,K),K=1,NTRM)
+*          A(I,J,1) = A(I,J,1)*NTRM
+*  10    CONTINUE
+*
+********************************************************************
+*
+      INTEGER IWRK(NWRK),MPARM(7)
+      INTEGER MINFO(4)
+      LOGICAL TEST
+      CHARACTER*1 A(80)
+*-------------------------------------------------------------------
+*   INPUT PARAMETER CHECKS - I/O UNIT NUMBERS
+*-------------------------------------------------------------------
+      IER = 0
+      TEST = .TRUE.
+      IF (MPARM(6) .LE. 0) THEN
+        MPARM(6) = 3
+        WRITE (MPARM(6),1100)
+        WRITE (MPARM(6),1110)
+        IER = 1
+      ENDIF
+      IF (MPARM(1).LE.0) THEN
+        TEST = .FALSE.
+      ELSE
+        INQUIRE (MPARM(1),OPENED=TEST)
+      ENDIF
+      IF ( TEST ) GO TO 10
+        IF ( IER .EQ. 0 ) WRITE (MPARM(6),1100)
+        WRITE (MPARM(6),1120)
+        IER = 1
+ 10   CONTINUE
+      IF (MPARM(2).LE.0) THEN
+        TEST = .FALSE.
+      ELSE
+        INQUIRE (MPARM(2),OPENED=TEST)
+      ENDIF
+      IF ( TEST ) GO TO 20
+        IF ( IER .EQ. 0 ) WRITE (MPARM(6),1100)
+        WRITE (MPARM(6),1130)
+        IER = 1
+ 20   CONTINUE
+*-------------------------------------------------------------------
+*   INPUT PARAMETER CHECKS - I/O UNIT NUMBERS
+*-------------------------------------------------------------------
+      IF ( MPARM(3).LT.2 ) THEN
+        IF ( IER .EQ. 0 ) WRITE (MPARM(6),1100)
+        WRITE (MPARM(6),1140)
+        IER = 1
+      ENDIF
+      IF (MPARM(4).LT.0 .OR. MPARM(4).GT.1) THEN
+        IF ( IER .EQ. 0 ) WRITE (MPARM(6),1100)
+        WRITE (MPARM(6),1150)
+        IER = 1
+      ENDIF
+      IF (MPARM(5).LT.0 ) THEN
+        IF ( IER .EQ. 0 ) WRITE (MPARM(6),1100)
+        WRITE (MPARM(6),1160)
+        IER = 1
+      ENDIF
+      IF ( IER .EQ. 1 ) THEN
+        MPARM(1) = -1
+        WRITE (MPARM(6),1170)
+        RETURN
+      ENDIF
+*-------------------------------------------------------------------
+*   INITIALIZE WORK SPACE
+*-------------------------------------------------------------------
+      DO 30, I = 1,NWRK
+        IWRK(I) = 0
+ 30   CONTINUE
+*-------------------------------------------------------------------
+*   READ THE MATRIX PARAMETERS - FIND THE MAX NUMBER OF NONZERO
+*     ELEMENTS IN ANY COLUMN.
+*-------------------------------------------------------------------
+      READ (MPARM(1),*) (MINFO(I), I=1,4)
+      WRITE (MPARM(2),*) (MINFO(I), I=1,4),MPARM(3)
+      IF (MINFO(1) .EQ. 1) THEN
+        MCOL = MINFO(2) + 2
+      ELSE
+        MCOL = 3
+      ENDIF
+      IR = 0
+      JC = 0
+      DO 70, I = 1, MINFO(4)
+        IF ( MPARM(4) .EQ. 1 ) THEN
+          READ (MPARM(1),*) II,J,KK,LL
+        ELSE
+          READ (MPARM(1),*) II,J
+*-------------------------------------------------------------------
+*   NEED TO FIND THE NEXT PAIR I,J
+*--------------------------------------------------------------------
+          DO 60, KTEMP =1,2
+ 40         CONTINUE
+            READ (MPARM(1),1000) (A(JTEMP),JTEMP=1,80)
+            DO 50, JTEMP = 1,80
+              IF (A(JTEMP).EQ.'$') GO TO 60
+ 50         CONTINUE
+            GO TO 40
+ 60       CONTINUE
+        ENDIF
+        IF (II .EQ. IR) THEN
+          JC = JC + 1
+        ELSE
+          MCOL = MAX(MCOL,JC)
+          JC = 1
+          IR = II
+        ENDIF
+ 70   CONTINUE
+      MCOL = MCOL + 1
+*-------------------------------------------------------------------
+*   SPLIT THE WORK SPACE
+*-------------------------------------------------------------------
+      NVEC = (2*MCOL) + 15
+      NTRM = NWRK / NVEC
+      LDNM = (MCOL * NTRM)
+      ICOL = (2 * MCOL * NTRM) + 1
+      LCMD = ICOL + NTRM
+      LST  = LCMD + NTRM
+      IW1  = LST + NTRM
+      IW2  = IW1 + NTRM
+      IW3  = IW2 + NTRM
+      IW4  = IW3 + NTRM
+      IW5  = IW4 + NTRM
+      IW6  = IW5 + NTRM
+      IDET = IW6 + NTRM + NTRM
+      IEST = IDET + NTRM + NTRM
+      IWRK(IDET) = 2
+      IWRK(IDET+1) = 1
+*-------------------------------------------------------------------
+*   READ MATRIX ONE ROW AT A TIME - COMPUTE LCM OF THE
+*      DENOMINATORS PAIRWISE.
+*-------------------------------------------------------------------
+      REWIND (MPARM(1))
+      READ (MPARM(1),*) (MINFO(I), I=1,4)
+      L = 0
+      IROW = 1
+      IF (MPARM(5).GE.1) WRITE (MPARM(6),1020)
+*      IF (MPARM(5).GE.1) WRITE (MPARM(6),1030) IROW
+      IWRK(LCMD) = 2
+      IWRK(LCMD+1) = 1
+      DO 120 I = 1, MINFO(4)
+        IF ( MPARM(4) .EQ. 0 ) THEN
+          READ (MPARM(1),*) IR,IC
+        ELSE
+          READ (MPARM(1),*) IR,IC,INUM,IDEN
+        ENDIF
+        IF ( IR.EQ.IROW ) THEN
+          L = L+1
+          IWRK(ICOL+L) = IC
+          NUMER = ((L-1)*NTRM) + 1
+          IDENM = ((L-1)*NTRM) + 1 + LDNM
+          IF ( MPARM(4) .EQ. 0 ) THEN
+            CALL MPREAD (IWRK(NUMER),NTRM,MPARM(1),MPARM(3),
+     *        IWRK(LST))
+            CALL MPREAD (IWRK(IDENM),NTRM,MPARM(1),MPARM(3),
+     *        IWRK(LST))
+          ELSE
+            CALL MPMAKE (INUM,IWRK(NUMER),NTRM,MPARM(3))
+            CALL MPMAKE (IDEN,IWRK(IDENM),NTRM,MPARM(3))
+          ENDIF
+          DO 80, J = LST, IDET-1, NTRM
+            IWRK(J) = 0
+ 80       CONTINUE
+          CALL MPCOPY (IWRK(LST),IWRK(IDENM),NTRM)
+          CALL MPLCM (IWRK(LST),IWRK(LCMD),NTRM,MPARM(3),IWRK(IW1),
+     *      IWRK(IW3),IWRK(IW4),IWRK(IW5),IWRK(IW6))
+*-------------------------------------------------------------------
+*   NEW ROW IS FOUND - MULTIPLY OLD ROW BY LCMD AND OUTPUT
+*-------------------------------------------------------------------
+        ELSE
+          DO 100  J = 1, L, 1
+            DO 90, JJ = LST, IDET-1, NTRM
+              IWRK(JJ) = 0
+ 90         CONTINUE
+            ISIGN = 1
+            NUMER = ((J-1)*NTRM) + 1
+            IDENM = ((J-1)*NTRM) + 1 + LDNM
+            IF ( IWRK(NUMER)*IWRK(IDENM) .LT. 0 ) ISIGN = -1
+            CALL MPMULT (IWRK(NUMER),IWRK(LCMD),IWRK(LST),NTRM,
+     *        MPARM(3))
+            CALL MPDIV (IWRK(LST),IWRK(IDENM),IWRK(NUMER),IWRK(IW2),
+     *        NTRM,MPARM(3),IWRK(IW4),IWRK(IW6))
+            NN = IABS(IWRK(NUMER))
+            WRITE (MPARM(2),*) IROW,IWRK(ICOL+J),NN
+            WRITE (MPARM(2),1010) ISIGN,(IWRK(NUMER+K),K=1,NN-1)
+            WRITE (MPARM(2),1020)
+            CALL MPMAX (IWRK(NUMER),IWRK(IEST),NTRM,NN)
+            IF (NN.EQ.1) CALL MPCOPY (IWRK(IEST),IWRK(NUMER),NTRM)
+ 100      CONTINUE
+*-------------------------------------------------------------------
+*   INITIALIZE NEW ROW
+*-------------------------------------------------------------------
+          CALL MPMULT (IWRK(IDET),IWRK(LCMD),IWRK(LST),NTRM,MPARM(3))
+          CALL MPCOPY (IWRK(IDET),IWRK(LST),NTRM)
+          DO 110, JJ = 1, IDET-1, NTRM
+            IWRK(JJ) = 0
+ 110      CONTINUE
+          L = 1
+          IROW = IR
+          IWRK(ICOL+1) = IC
+          NUMER = 1
+          IDENM = LDNM + 1
+*         IF (MPARM(5).GE.1) WRITE (MPARM(6),1030) IROW
+          IF ( MPARM(4) .EQ. 0 ) THEN
+            CALL MPREAD (IWRK(NUMER),NTRM,MPARM(1),MPARM(3),
+     *        IWRK(LST))
+            CALL MPREAD (IWRK(IDENM),NTRM,MPARM(1),MPARM(3),
+     *        IWRK(LST))
+          ELSE
+            CALL MPMAKE (INUM,IWRK(NUMER),NTRM,MPARM(3))
+            CALL MPMAKE (IDEN,IWRK(IDENM),NTRM,MPARM(3))
+          ENDIF
+          CALL MPCOPY (IWRK(LCMD),IWRK(IDENM),NTRM)
+        ENDIF
+ 120  CONTINUE
+*-------------------------------------------------------------------
+*   END OF FILE - MULTIPLY LAST ROW BY LCMD AND OUTPUT
+*-------------------------------------------------------------------
+      DO 140  J = 1, L
+        DO 130, JJ = LST, IDET-1, NTRM
+          IWRK(JJ) = 0
+ 130    CONTINUE
+        ISIGN = 1
+        NUMER = ((J-1)*NTRM) + 1
+        IDENM = ((J-1)*NTRM) + 1 + LDNM
+        IF ( IWRK(NUMER)*IWRK(IDENM) .LT. 0 ) ISIGN = -1
+        CALL MPMULT (IWRK(NUMER),IWRK(LCMD),IWRK(LST),NTRM,
+     *    MPARM(3))
+        CALL MPDIV (IWRK(LST),IWRK(IDENM),IWRK(NUMER),IWRK(IW2),
+     *    NTRM,MPARM(3),IWRK(IW4),IWRK(IW6))
+        NN = IABS(IWRK(NUMER))
+        WRITE (MPARM(2),*) IROW,IWRK(ICOL+J),NN
+        WRITE (MPARM(2),1010) ISIGN,(IWRK(NUMER+K),K=1,NN-1)
+        WRITE (MPARM(2),1020)
+        CALL MPMAX (IWRK(NUMER),IWRK(IEST),NTRM,NN)
+        IF (NN.EQ.1) CALL MPCOPY (IWRK(IEST),IWRK(NUMER),NTRM)
+ 140  CONTINUE
+*-------------------------------------------------------------------
+*   OUTPUT THE DENOMINATOR OF THE DIAGONAL MATRIX
+*-------------------------------------------------------------------
+      CALL MPMULT (IWRK(IDET),IWRK(LCMD),IWRK(LST),NTRM,MPARM(3))
+      NN = IABS(IWRK(LST))
+      WRITE (MPARM(2),*) 0, 0, NN
+      WRITE (MPARM(2),1010) 1,(IWRK(LST+K),K=1,NN-1)
+      WRITE (MPARM(2),1020)
+      WRITE (MPARM(2),1040)
+      REWIND (MPARM(2))
+*-------------------------------------------------------------------
+*   ESTIMATE THE PRIMES
+*-------------------------------------------------------------------
+      AMAX = FLOAT(MAX0(MINFO(1),MINFO(2)))
+      AMAX = (AMAX/2.)*(ALOG10(AMAX))
+      BMAX = ALOG10(FLOAT(IWRK(IEST+1))) + (ALOG10(FLOAT(MPARM(3)))
+     *  * (FLOAT(IABS(IWRK(IEST))) - 2))
+      AMAX = AMAX*(1. + BMAX)
+      BMAX = ALOG10(SQRT(FLOAT(MPARM(7))) * 0.7)
+      MPARM(7) = INT(1.1*AMAX/BMAX) + 1
+      RETURN
+ 1000 FORMAT (80A1)
+ 1010 FORMAT (11(10I8/))
+ 1020 FORMAT (' ')
+ 1030 FORMAT (' preprocessing row ',I5)
+ 1040 FORMAT (' final element is determinant of scaling matrix')
+ 1100 FORMAT (/5X,
+     *  '********************************************************',/5X,
+     *  ' ',/5X,
+     *  '            input error(s) encountered in mpcon'
+     *  ' ',/5X)
+ 1110 FORMAT (/5X,'terminal unit number error ')
+ 1120 FORMAT (/5X,'matrix file unit error - unit not opened')
+ 1130 FORMAT (/5X,'output file unit error - unit not opened')
+ 1140 FORMAT (/5X,'base error ')
+ 1150 FORMAT (/5X,'file type must equal 0 or 1')
+ 1160 FORMAT (/5X,'intermediate output parameter error - allowed'
+     *  ' range (0-4)')
+ 1170 FORMAT (/5X,
+     *  '********************************************************',/)
+      END
+*
+********************************************************************
+*
+      SUBROUTINE MPCOPY (IX,IY,N)
+*
+*   COPY CONTENTS OF IY INTO IX.
+*
+*   GLOBAL VARIABLES:
+*     1.  IX - N INTEGER ARRAY - COEFFICIENTS OF IX
+*     2.  IY - N INTEGER ARRAY - COEFFICIENTS OF IY
+*     3.  N - INTEGER - NUMBER OF ARRAY ELEMENTS
+*
+********************************************************************
+*
+      INTEGER IX(N),IY(N)
+*
+      IF (IABS(IY(1)) .LE. 1) THEN
+        IX(1) = 0
+      ELSE
+        DO 20, I = 1, IABS(IY(1))
+          IX(I) = IY(I)
+ 20     CONTINUE
+      ENDIF
+      RETURN
+      END
+*
+********************************************************************
+*
+      SUBROUTINE MPDIV (IX,IY,IQ,IR,N,IBASE,JU,JV)
+*
+*   TO DIVIDE MP INTEGERS IX / IY.  RESULTS IN MP QUOTIENT, IQ,
+*     AND MP REMAINDER, IR.
+*
+*   GLOBAL VARIABLES:
+*
+*     1.  IX - N INTEGER ARRAY - COEFFICIENTS OF DIVIDEND
+*     2.  IY - N INTEGER ARRAY - COEFFICIENTS OF DIVISOR
+*     3.  IQ - N INTEGER ARRAY - COEFFICIENTS OF QUOTIENT
+*     4.  IR - N INTEGER ARRAY - COEFFICIENTS OF REMAINDER
+*     5.  N - INTEGER - NUMBER OF ARRAY ELEMENTS
+*     6.  IBASE - INTEGER - NUMBER IBASE OF IX,IY,IQ,IR
+*     7.  JU,JV - WORK SPACE
+*
+*   REF:  D.E. KNUTH, 'the art of computer programming',
+*      SEC. 4.3.1
+*
+********************************************************************
+*
+      INTEGER IX(N),IY(N),IQ(N),IR(N),IBASE,JU(0:N),JV(0:N)
+      INTEGER VHAT,QHAT
+*-------------------------------------------------------------------
+*   EASY CASES FIRST
+*-------------------------------------------------------------------
+      CALL MPMAX (IX,IY,N,IN)
+      IF ( IN .EQ. 0 ) THEN
+        IF ( IX(1)*IY(1) .GT. 0 ) THEN
+          IQ(1) = 2
+        ELSE
+          IQ(1) = -2
+        ENDIF
+        IQ(2) = 1
+        IR(1) = 0
+        RETURN
+      ELSEIF ( IN .EQ. 2 ) THEN
+        IQ(1) = 0
+        CALL MPCOPY (IR,IX,N)
+        RETURN
+      ELSEIF (IY(1).EQ.2 .AND. IY(2).EQ.1) THEN
+        CALL MPCOPY (IQ,IX,N)
+        IR(1) = 0
+        RETURN
+      ENDIF
+*-------------------------------------------------------------------
+*   INITIALIZE
+*-------------------------------------------------------------------
+      ISIGN = 1
+      IF (IX(1)*IY(1) .LT. 0) ISIGN = -1
+      NX = IABS(IX(1))
+      NY = IABS(IY(1))
+      NQ = NX - NY + 1
+      NR = NY - 1
+      IQ(1) = (NQ+1)*ISIGN
+      IR(1) = (NR+1)*ISIGN
+      DO 10, I = 2, NQ+1
+        IQ(I) = 0
+ 10   CONTINUE
+      DO 20, I = 2, NR+1
+        IR(I) = 0
+ 20   CONTINUE
+      DO 30, I = 0, NX+2
+        JU(I) = 0
+        JV(I) = 0
+ 30   CONTINUE
+*-------------------------------------------------------------------
+*   NORMALIZE
+*-------------------------------------------------------------------
+      NORM = (IBASE - MOD(IBASE,IY(2)+1)) / (IY(2) + 1)
+      K = 0
+      DO 40, I = NX, 2, -1
+        INT = IX(I)*NORM + K
+        JU(I-1) = MOD(INT,IBASE)
+        K = (INT - JU(I-1)) / IBASE
+ 40   CONTINUE
+      JU(0) = K
+      K = 0
+      DO 50, I = NY, 2, -1
+        INT = IY(I)*NORM + K
+        JV(I-1) = MOD(INT,IBASE)
+        K = (INT - JV(I-1)) / IBASE
+ 50   CONTINUE
+*-------------------------------------------------------------------
+*   DIVIDE JU(J:J+N) BY JV(1:N) FOR J = 0, NR.  CALCULATE AN
+*     ESTIMATE TO THE QUOTIENT FIRST (QHAT).
+*-------------------------------------------------------------------
+      DO 100, J = 0, NQ-1
+        INT = (JU(J)*IBASE) + JU(J+1)
+        IF (JU(J) .EQ. JV(1)) THEN
+          QHAT = IBASE - 1
+        ELSE
+          QHAT = (INT - MOD(INT,JV(1))) / JV(1)
+        ENDIF
+ 60     CONTINUE
+        IF (JV(2)*QHAT .GT. ((INT-(QHAT*JV(1)))*IBASE)
+     *      +JU(J+2)) THEN
+          QHAT = QHAT - 1
+        ELSE
+          GO TO 70
+        ENDIF
+        GO TO 60
+*-------------------------------------------------------------------
+*   MULTIPLY AND SUBTRACT
+*-------------------------------------------------------------------
+ 70     CONTINUE
+        KV = 0
+        KU = 0
+        DO 80, I = NR, 1, -1
+          INT = JV(I)*QHAT + KV
+          VHAT = MOD(INT,IBASE)
+          KV = (INT - VHAT) / IBASE
+          INT = JU(I+J) - VHAT + KU
+          IF (INT .LT. 0) THEN
+            JU(I+J) = INT + IBASE
+            KU = -1
+          ELSE
+            JU(I+J) = INT
+            KU = 0
+          ENDIF
+ 80     CONTINUE
+        JU(J) = JU(J) + KU - KV
+*-------------------------------------------------------------------
+*   TEST REMAINDER
+*-------------------------------------------------------------------
+        IQ(J+2) = QHAT
+        IF (JU(J) .LT. 0) THEN
+          IQ(J+2) = IQ(J+2) - 1
+          K = 0
+          DO 90, I = NR, 1, -1
+            INT = JU(J+I) + JV(I) + K
+            IF ( INT .LT. IBASE ) THEN
+              JU(J+I) = INT
+              K = 0
+            ELSE
+              JU(J+I) = INT - IBASE
+              K = 1
+            ENDIF
+ 90       CONTINUE
+          JU(J) = JU(J) + K
+          IF(JU(J).GE.IBASE) JU(J) = JU(J) - IBASE
+        ENDIF
+ 100  CONTINUE
+*-------------------------------------------------------------------
+*   UNNORMALIZE AND COMPUTE THE REMAINDER
+*-------------------------------------------------------------------
+      IF (IQ(2) .EQ. 0) CALL MPPACK(IQ,N)
+      K = 0
+      DO 110, I = NQ,NX-1
+        JU(I) = (K*IBASE) + JU(I)
+        K = MOD(JU(I),NORM)
+        IR(I-NQ+2) = (JU(I) - K) / NORM
+ 110  CONTINUE
+      IF (IABS(IR(1)).GT.1 .AND. IR(2).EQ.0) CALL MPPACK(IR,N)
+      CALL MPMAX (IR,IY,N,IN)
+      IF ( IN .EQ. 0 ) THEN
+        IR(1) = 0
+        IQ(IABS(IQ(1))) = IQ(IABS(IQ(1))) + 1
+      ENDIF
+      DO 130, I = IABS(IQ(1)), 3, -1
+ 120    CONTINUE
+        IF ( IQ(I) .GE. IBASE ) THEN
+          IQ(I) = IQ(I) - IBASE
+          IQ(I-1) = IQ(I-1) + 1
+         GO TO 120
+        ENDIF
+ 130  CONTINUE
+      RETURN
+      END
+*
+********************************************************************
+*
+      SUBROUTINE MPGCD (IX,IGCD,N,IBASE,IW1,IW2,JU,JV)
+*
+*   EUCLIDEAN ALGORITHM TO FIND THE GREATEST COMMON DIVISOR
+*     OF MP INTEGERS IX, AND IGCD.  THE ROUTINE OVERWRITES
+*     IGCD ON RETURN AND DESTROYS THE CONTENTS OF IX.
+*
+*   GLOBAL VARIABLES:
+*
+*     1.  IX - N INTEGER ARRAY - COEFFICIENTS OF IX
+*     2.  IGCD - N INTEGER ARRAY - OUTPUT IGCD COEFFICIENTS
+*     3.  N - INTEGER - NUMBER OF ARRAY ELEMENTS
+*     4.  IBASE - INTEGER BASE OF COEFFICIENTS
+*     5.  IW1,IW2,JU,JV - MP WORK SPACE
+*
+********************************************************************
+*
+      INTEGER IX(N),IGCD(N),IW1(N),IW2(N),JU(N),JV(N),IBASE
+*-------------------------------------------------------------------
+*   FIND LARGER OF IX AND IY AND TAKE THEIR ABS VALUE
+*-------------------------------------------------------------------
+      DO 10, I = 1, N
+        IW1(I) = 0
+        IW2(I) = 0
+        JU(I) = 0
+        JV(I) = 0
+ 10   CONTINUE
+      CALL MPMAX (IX,IGCD,N,IN)
+      IF ( IN .LE. 1 ) THEN
+        CALL MPCOPY (IW1,IX,N)
+        CALL MPCOPY (IW2,IGCD,N)
+      ELSE
+        CALL MPCOPY (IW1,IGCD,N)
+        CALL MPCOPY (IW2,IX,N)
+      ENDIF
+      IW1(1) = IABS(IW1(1))
+      IW2(1) = IABS(IW2(1))
+*-------------------------------------------------------------------
+*   EUCLIDEAN ALGORITHM
+*-------------------------------------------------------------------
+ 20   CONTINUE
+      IF ( IW2(1).EQ.1 .OR. IW2(1).EQ.0 ) THEN
+        GO TO 30
+      ELSEIF ( IW2(2).EQ.1 .AND. IW2(1).EQ.2 ) THEN
+        IW1(1) = 2
+        IW1(2) = 1
+        GO TO 30
+      ELSE
+        CALL MPDIV (IW1,IW2,IX,IGCD,N,IBASE,JU,JV)
+        CALL MPCOPY (IW1,IW2,N)
+        CALL MPCOPY (IW2,IGCD,N)
+      ENDIF
+      GO TO 20
+*-------------------------------------------------------------------
+*   SWAP IGCD WITH IW1 ONCE IGCD IS FOUND
+*-------------------------------------------------------------------
+ 30   CONTINUE
+      CALL MPCOPY (IGCD,IW1,N)
+      RETURN
+      END
+*
+********************************************************************
+*
+      SUBROUTINE MPLCM (IX,LCM,N,IBASE,MULT,IW1,IW2,JU,JV)
+*
+*   FINDS THE LEAST COMMON MULTIPLE OF MP INTEGERS IX,LCM
+*     FROM THE EUCLIDEAN ALGORITHM AND
+*           IX*LCM = GCD(IX,LCM)*LCM(IX,LCM)
+*     THE ROUTINE OVERWRITES LCM ON RETURN AND DESTROYS
+*     THE CONTENTS OF IX.
+*
+*   GLOBAL VARIABLES:
+*     1.  IX - N INTEGER ARRAY - COEFFICIENTS OF IX
+*     2.  IY - N INTEGER ARRAY - COEFFICIENTS OF IY
+*     3.  LCM - N INTEGER ARRAY - OUTPUT LCM COEFFICIENTS
+*     4.  N - INTEGER - NUMBER OF ARRAY ELEMENTS
+*     5.  IBASE - INTEGER - NUMBER BASE OF IX,IY,IZ
+*
+********************************************************************
+*
+      INTEGER IX(N),LCM(N),MULT(N),IW1(N),IW2(N),JU(0:N),JV(0:N),
+     *  IBASE
+*
+      CALL MPMULT (IX,LCM,MULT,N,IBASE)
+      CALL MPGCD (IX,LCM,N,IBASE,IW1,IW2,JU,JV)
+      CALL MPDIV (MULT,LCM,IW1,IW2,N,IBASE,JU,JV)
+      CALL MPCOPY (LCM,IW1,N)
+      RETURN
+      END
+*
+********************************************************************
+*
+      SUBROUTINE MPMAKE (IN,IOUT,N,JBASE)
+*
+*   TO CONVERT ON WORD IN TO MULTIPLE PRECISION OUTPUT WITH
+*     INTEGER RADIX JBASE.  THE RESULT IS STORED IN THE
+*     INTEGER ARRAY IOUT.  ASSUMES JBASE**2 IS WITHIN THE
+*     WORD SIZE BUT THAT JBASE**3 IS NOT.
+*
+*   GLOBAL VARIABLES:
+*
+*     1.  IN - INTEGER - INPUT INTGER
+*     2.  IOUT - N INTEGER ARRAY - OUTPUT EQUAL TO IN
+*     3.  N - INTEGER - SIZE OF IOUT
+*     4.  JBASE - RADIX OF IOUT
+*
+********************************************************************
+*
+      INTEGER IOUT(N),IN,JBASE
+*
+      IOUT(1) = 4
+      IF ( IN .LT. 0 ) IOUT(1) = -4
+      INN = IABS(IN)
+      IOUT(4) = MOD(INN,JBASE)
+      INN = (INN-IOUT(4)) / JBASE
+      IOUT(3) = MOD(INN,JBASE)
+      IOUT(2) = (INN-IOUT(3)) / JBASE
+      IF (IOUT(2) .EQ. 0) CALL MPPACK (IOUT,N)
+      RETURN
+      END
+*
+********************************************************************
+*
+      SUBROUTINE MPMAX (IX,IY,N,IN)
+*
+*   TO FIND MAXIMUM OF ABS(IX),ABS(IY).  THIS ROUTINE ASSUMES
+*     THE BASE OF IX AND IY ARE THE SAME.
+*
+*   GLOBAL VARIABLES:
+*
+*     1.  IX - N INTEGER ARRAY - COEFFICIENTS OF IX
+*     2.  IY - N INTEGER ARRAY - COEFFICIENTS OF IY
+*     3.  N - INTEGER - NUMBER OF ARRAY ELEMENTS
+*     4.  IN - INTEGER - OUTPUT AS
+*            IF IX = IY THEN IN = 0
+*            IF IX > IY THEN IN = 1
+*            IF IY > IX THEN IN = 2
+*
+********************************************************************
+*
+      INTEGER IX(N),IY(N),IN
+*
+      IN = 0
+      NX = IABS(IX(1))
+      NY = IABS(IY(1))
+      IF ( NX .GT. NY ) THEN
+        IN = 1
+        GO TO 20
+      ELSEIF ( NY .GT. NX ) THEN
+        IN = 2
+        GO TO 20
+      ELSE
+        I = 2
+        IN = 0
+ 10     IF (IX(I) .EQ. IY(I)) THEN
+          I = I + 1
+        ELSEIF (IX(I) .GT. IY(I)) THEN
+          IN = 1
+          GO TO 20
+        ELSE
+          IN = 2
+          GO TO 20
+        ENDIF
+        IF (I .LE. NX) GO TO 10
+      ENDIF
+ 20   RETURN
+      END
+*
+********************************************************************
+*
+      SUBROUTINE MPMULT (IX,IY,IZ,N,IBASE)
+*
+*   TO MULTIPLY MP INTEGERS IX * IY = IZ.
+*
+*   GLOBAL VARIABLES:
+*
+*     1.  IX - N INTEGER ARRAY - COEFFICIENTS OF IX
+*     2.  IY - N INTEGER ARRAY - COEFFICIENTS OF IY
+*     3.  IZ - N INTEGER ARRAY - COEFFICIENTS OF IZ
+*     4.  N - INTEGER - NUMBER OF ARRAY ELEMENTS
+*     5.  IBASE - INTEGER - NUMBER BASE OF IX,IY,IZ
+*
+*   REF:  D.E. KNUTH, 'the art of computer programming',
+*      SEC. 4.3.1
+*
+********************************************************************
+*
+      INTEGER IX(N),IY(N),IZ(N),IBASE
+*--------------------------------------------------------------------
+*   INITIALIZE
+*--------------------------------------------------------------------
+      NX = IABS(IX(1))
+      NY = IABS(IY(1))
+      IF ( NX .EQ. 0 .OR. NY .EQ. 0 ) THEN
+        IZ(1) = 0
+        RETURN
+      ENDIF
+      NZ = NX + NY
+      DO 10, I = 1, NZ
+        IZ(I) = 0
+ 10   CONTINUE
+      IZ(1) = NZ-1
+      IF ( IX(1)*IY(1) .LT. 0 ) IZ(1) = -IZ(1)
+*--------------------------------------------------------------------
+*   MULTIPLY
+*--------------------------------------------------------------------
+      DO 30, J = NY-1, 1, -1
+        K = 0
+        DO 20, I = NX-1, 1, -1
+          INT = IX(I+1)*IY(J+1)+IZ(I+J+1)+K
+          IZ(I+J+1) = MOD(INT,IBASE)
+          K = (INT-IZ(I+J+1))/IBASE
+ 20     CONTINUE
+        IZ(J+1) = K
+ 30   CONTINUE
+      IF (IZ(2) .EQ. 0) CALL MPPACK(IZ,N)
+      RETURN
+      END
+*
+********************************************************************
+*
+      SUBROUTINE MPOUT (IX,N,IUNIT,KFORM)
+*
+*   OUTPUTS MP INTEGERS TO IUNIT.  RETURNS IX UNCHANGED.
+*
+*   GLOBAL VARIABLES:
+*
+*   1.  IX - N INTEGER ARRAY - MP INTEGER TO OUTPUT
+*   2.  N - INTEGER - NUMBER OF ELEMENTS IN IX
+*   3.  IUNIT - INTEGER - UNIT NUMBER OF OUTPUT FILE
+*   4.  KFORM - FLAG INDICATING PRINT MODE WHERE:
+*          = (20*SPACE) + DIGITS
+*        AND WHERE
+*        SPACE = 0 - NO SPACES BETWEEN WORDS
+*              = 1 - ONE SPACE BETWEEN WORDS
+*        DIGITS = LOG10(BASE)   WHERE THE CURRENTLY
+*           SUPPORTED VALUES ARE 3-10
+*
+********************************************************************
+*
+      INTEGER IX(N)
+*--------------------------------------------------------------------
+*   FIRST DEAL WITH SPECIAL CASE THAT IX = 0
+*--------------------------------------------------------------------
+      IF (IX(1).EQ.0 .OR. IX(1).EQ.1) THEN
+        WRITE(IUNIT,1040)
+        RETURN
+      END IF
+      ISIGN = 1
+      IF (IX(1) .LT. 0) ISIGN = -1
+      IX(2) = IX(2)*ISIGN
+*--------------------------------------------------------------------
+*   OUTPUT BASED ON KFORM
+*--------------------------------------------------------------------
+      IF ( KFORM .LE. 11 ) THEN
+        IF ( KFORM .EQ. 5 ) THEN
+          WRITE (IUNIT,1005) (IX(I), I = 2, IABS(IX(1)))
+        ELSEIF ( KFORM .EQ. 6 ) THEN
+          WRITE (IUNIT,1006) (IX(I), I = 2, IABS(IX(1)))
+        ELSEIF ( KFORM .EQ. 7 ) THEN
+          WRITE (IUNIT,1007) (IX(I), I = 2, IABS(IX(1)))
+        ELSEIF ( KFORM .EQ. 4 ) THEN
+          WRITE (IUNIT,1004) (IX(I), I = 2, IABS(IX(1)))
+        ELSEIF ( KFORM .EQ. 8 ) THEN
+          WRITE (IUNIT,1008) (IX(I), I = 2, IABS(IX(1)))
+        ELSEIF ( KFORM .EQ. 9 ) THEN
+          WRITE (IUNIT,1009) (IX(I), I = 2, IABS(IX(1)))
+        ELSEIF ( KFORM .EQ. 3 ) THEN
+          WRITE (IUNIT,1003) (IX(I), I = 2, IABS(IX(1)))
+        ELSEIF ( KFORM .EQ. 10 ) THEN
+          WRITE (IUNIT,1010) (IX(I), I = 2, IABS(IX(1)))
+        ELSEIF ( KFORM .EQ. 11 ) THEN
+          WRITE (IUNIT,1011) (IX(I), I = 2, IABS(IX(1)))
+        ELSEIF ( KFORM .EQ. 1 ) THEN
+          WRITE (IUNIT,1001) (IX(I), I = 2, IABS(IX(1)))
+        ELSEIF ( KFORM .EQ. 2 ) THEN
+          WRITE (IUNIT,1002) (IX(I), I = 2, IABS(IX(1)))
+        ENDIF
+      ELSE
+        IF ( KFORM .EQ. 25 ) THEN
+          WRITE (IUNIT,1025) (IX(I), I = 2, IABS(IX(1)))
+        ELSEIF ( KFORM .EQ. 26 ) THEN
+          WRITE (IUNIT,1026) (IX(I), I = 2, IABS(IX(1)))
+        ELSEIF ( KFORM .EQ. 27 ) THEN
+          WRITE (IUNIT,1027) (IX(I), I = 2, IABS(IX(1)))
+        ELSEIF ( KFORM .EQ. 24 ) THEN
+          WRITE (IUNIT,1024) (IX(I), I = 2, IABS(IX(1)))
+        ELSEIF ( KFORM .EQ. 28 ) THEN
+          WRITE (IUNIT,1028) (IX(I), I = 2, IABS(IX(1)))
+        ELSEIF ( KFORM .EQ. 29 ) THEN
+          WRITE (IUNIT,1029) (IX(I), I = 2, IABS(IX(1)))
+        ELSEIF ( KFORM .EQ. 23 ) THEN
+          WRITE (IUNIT,1023) (IX(I), I = 2, IABS(IX(1)))
+        ELSEIF ( KFORM .EQ. 30 ) THEN
+          WRITE (IUNIT,1030) (IX(I), I = 2, IABS(IX(1)))
+        ELSEIF ( KFORM .EQ. 31 ) THEN
+          WRITE (IUNIT,1031) (IX(I), I = 2, IABS(IX(1)))
+        ELSEIF ( KFORM .EQ. 21 ) THEN
+          WRITE (IUNIT,1021) (IX(I), I = 2, IABS(IX(1)))
+        ELSEIF ( KFORM .EQ. 22 ) THEN
+          WRITE (IUNIT,1022) (IX(I), I = 2, IABS(IX(1)))
+        ENDIF
+      ENDIF
+*
+      IX(2) = IX(2)*ISIGN
+      RETURN
+*-------------------------------------------------------------------
+*   SPACE = 0 FORMAT STATEMENTS, NO SPACE
+*-------------------------------------------------------------------
+ 1001 FORMAT (5X,  I2,  65I1,    /,  65  (7X,65I1,/))
+ 1002 FORMAT (5X,  I3,  32I2.2,  /,  62  (7X,30I2.2,/))
+ 1003 FORMAT (5X,  I5,  15I3.3,  /,  62  (7X,16I3.3,/))
+ 1004 FORMAT (5X,  I6,  12I4.4,  /,  77  (7X,13I4.4,/))
+ 1005 FORMAT (5X,  I7,  10I5.5,  /,  91  (7X,11I5.5,/))
+ 1006 FORMAT (5X,  I8,  8I6.6,   /,  112 (7X,9I6.6,/))
+ 1007 FORMAT (5X,  I9,  7I7.7,   /,  125 (7X,8I7.7,/))
+ 1008 FORMAT (5X,  I10,  6I8.8,   /,  143 (7X,7I8.8,/))
+ 1009 FORMAT (5X,  I11, 5I9.9,   /,  167 (7X,6I9.9,/))
+ 1010 FORMAT (5X,  I12, 5I10.10, /,  167 (7X,6I10.10,/))
+ 1011 FORMAT (5X,  I13, 5I11.11, /,  167 (7X,6I11.11,/))
+*-------------------------------------------------------------------
+*   SPACE = 1 FORMAT STATEMENTS, ONE SPACE
+*-------------------------------------------------------------------
+ 1021 FORMAT (5X,  I3,  31I2.1,  /,  55  (7X,32I2.1,/))
+ 1022 FORMAT (5X,  I4,  19I3.2,  /,  62  (7X,20I3.2,/))
+ 1023 FORMAT (5X,  I5,  15I4.3,  /,  62  (7X,14I4.3,/))
+ 1024 FORMAT (5X,  I6,  12I5.4,  /,  77  (7X,13I5.4,/))
+ 1025 FORMAT (5X,  I7,  10I6.5,  /,  91  (7X,11I6.5,/))
+ 1026 FORMAT (5X,  I8,  8I7.6,   /,  112 (7X,9I7.6,/))
+ 1027 FORMAT (5X,  I9,  7I8.7,   /,  125 (7X,8I8.7,/))
+ 1028 FORMAT (5X,  I10,  6I9.8,   /,  143 (7X,7I9.8,/))
+ 1029 FORMAT (5X,  I11, 5I10.9,  /,  167 (7X,6I10.9,/))
+ 1030 FORMAT (5X,  I12, 5I11.10, /,  167 (7X,6I11.10,/))
+ 1031 FORMAT (5X,  I13, 5I12.11, /,  167 (7X,6I12.11,/))
+*-------------------------------------------------------------------
+* special Format statement for IX = 0
+*-------------------------------------------------------------------
+ 1040 FORMAT(' 0 ')
+      END
+*
+********************************************************************
+*
+      SUBROUTINE MPPACK (IX,N)
+*
+*   TO STRIP LEADING TERMS OF IX THAT ARE ZERO, I.E. RETURNS
+*     IX BUT WITH FEWER TERMS
+*
+*   GLOBAL VARIABLES:
+*
+*     1.  IX - N INTEGER ARRAY - COEFFICIENTS OF IX
+*     2.  N - INTEGER - NUMBER OF ARRAY ELEMENTS
+*
+********************************************************************
+*
+      INTEGER IX(N)
+*
+      NX = IABS(IX(1))
+      ISIGN = 1
+      IF (IX(1) .LT. 0) ISIGN = -1
+*
+ 10   CONTINUE
+      IF( IX(2) .EQ. 0 ) THEN
+        DO 20, J = 2, NX-1, 1
+          IX(J) = IX(J+1)
+ 20     CONTINUE
+        IX(NX) = 0
+        NX = NX-1
+      ELSE
+        GO TO 30
+      ENDIF
+      IF (NX .GT. 1) GO TO 10
+ 30   IX(1) = NX*ISIGN
+      IF (NX .EQ. 1) IX(1) = 0
+      RETURN
+      END
+*
+********************************************************************
+*
+      SUBROUTINE MPPWR (IX,NPWR,IY,N,IBASE,IW1,IW2,IW3)
+*
+*   EXPONENTIATES MP INTEGER IX TO NPWR (IX**NPWR).
+*     GIVES A MP INTEGER RESULT IN ARRAY IY.  USES THE
+*     RIGHT TO LEFT BINARY ALGORITHM.
+*
+*   GLOBAL VARIABLES:
+*
+*     1.  IX - N INTEGER ARRAY - COEFFICIENTS OF IX
+*     2.  NPWR - POWER OF IX DESIRED, NPWR > 0
+*     3.  IY - N INTEGER ARRAY - COEFFICIENTS OF IY
+*     4.  N  - NUMBER OF ARRAY ELEMENTS
+*     5.  IBASE - NUMBER BASE OF IX,IY,IZ
+*     6.  IW1-3 - N INTEGER ARRAYS - WORK SPACE
+*
+*   REF:  D.E. KNUTH, 'the art of computer programming',
+*      SEC. 4.6.3
+*
+********************************************************************
+*
+      INTEGER IX(N),IY(N),IBASE,NPWR,IW1(N),IW2(N),IW3(N)
+*--------------------------------------------------------------------
+*   INTIALIZE
+*--------------------------------------------------------------------
+      IF ( NPWR .LE. 0 ) RETURN
+      IY(1) = 2
+      IY(2) = 1
+      NN = NPWR
+      CALL MPCOPY (IW1,IX,N)
+*--------------------------------------------------------------------
+*   HALVE N AND DETERMINE WHETHER IT WAS EVEN OR ODD.  IF ODD
+*     THEN MULTIPLY IY BY IW1.  SQUARE IW1.  REPEAT UNTIL
+*     NN = 0.
+*--------------------------------------------------------------------
+ 10   CONTINUE
+      KK = MOD(NN,2)
+      NN = (NN - KK) / 2
+      IF ( KK .EQ. 1 ) THEN
+        CALL MPMULT (IW1,IY,IW2,N,IBASE)
+        CALL MPCOPY (IY,IW2,N)
+      ENDIF
+      IF ( NN .EQ. 0 ) GO TO 20
+      CALL MPCOPY (IW2,IW1,N)
+      CALL MPMULT (IW1,IW2,IW3,N,IBASE)
+      CALL MPCOPY (IW1,IW3,N)
+      GO TO 10
+ 20   CONTINUE
+      RETURN
+      END
+*
+********************************************************************
+*
+      SUBROUTINE MPREAD (IN,N,IUNIT,JBASE,IW1)
+*
+*   TO READ MULTIPLE PRECISION INPUT AND CONVERT IT TO INTEGER
+*     RADIX JBASE.  THE RESULT IS STORED IN THE INTEGER ARRAY IN.
+*
+*   THE PROCEDURE TO READ THE DATA IS TO READ EACH INTEGER
+*     AS A CHARACTER AND CONVERT ONE DIGIT AT A TIME TO
+*     INTEGER FORMAT.
+*
+*   WARNING:
+*
+*     THIS ROUTINE RELIES ON THE FORTRAN COMPILER FUNCTION ICHAR
+*     TO INCREMENT APLHA-NUMERICALLY I.E. IF ICHAR('0') = J THEN
+*     TO EXECUTE PROPERLY IT REQUIRES ICHAR('1') = J+1,
+*     ICHAR('2') = J+2, ... , ICHAR('9') = J+9.
+*
+*   GLOBAL VARIABLES:
+*
+*     1.  IN    - N INTEGER ARRAY - OUTPUT MP INTEGER RADIX JBASE
+*     2.  N     - PHYSICAL DIMENSION OF IN
+*     3.  IUNIT - INPUT FILE UNIT NUMBER.
+*     4.  JBASE - RADIX OF IN ON OUTPUT
+*     5.  IW1   - N INTEGER ARRAY - WORK SPACE IN MPBASE
+*
+********************************************************************
+*
+      PARAMETER ( MAXC = 1000)
+      CHARACTER*1 A(80)
+      INTEGER II(MAXC),IN(N),IW1(N)
+*--------------------------------------------------------------------
+*   INTIALIZE - GET INPUT AS CHARACTERS
+*--------------------------------------------------------------------
+      DO 10, I = 1, N
+        IN(I) = 0
+ 10   CONTINUE
+      I = 1
+      ISIGN = 1
+      INDEX = 0
+      IBASE = 4
+      IF ( MOD(JBASE,10) .EQ. 0 ) IBASE = INT(ALOG10(FLOAT(JBASE+1)))
+      ISHFT = ICHAR('0')
+*-------------------------------------------------------------------
+*   CONVERT CHARACTERS TO INTEGERS ONE AT A TIME
+*-------------------------------------------------------------------
+ 12   CONTINUE
+      READ (IUNIT,1000) (A(KKK),KKK=1,80)
+      DO 20 K = 1,80
+      IAK = ICHAR(A(K)) - ISHFT
+      IF ( A(K) .EQ. '$') THEN
+        I = I - 1
+        GO TO 30
+      ELSEIF ( A(K) .EQ. '-') THEN
+        INDEX = 1
+        ISIGN = -1
+        I = I + 1
+      ELSEIF ( IAK.GE.0 .AND. IAK.LE.9 ) THEN
+        II(I) = ICHAR(A(K)) - ISHFT
+        I = I + 1
+      ENDIF
+ 20   CONTINUE
+      GO TO 12
+*-------------------------------------------------------------------
+*   CONVERT SINGLE INTEGERS TO BASE 10**(IBASE) NUMBERS
+*-------------------------------------------------------------------
+ 30   CONTINUE
+      IF ( ISIGN .EQ. -1 ) I = I-1
+      JJ = MOD(I,IBASE)
+      IF ( JJ.EQ.0 ) THEN
+        KOUNT = 0
+        JJ = I/IBASE
+      ELSE
+        DO 40, K = 1, JJ
+          INDEX = INDEX+1
+          IN(2) = IN(2) + (II(INDEX)*(10**(JJ-K)))
+ 40     CONTINUE
+        KOUNT = 1
+        JJ = (I-JJ)/IBASE
+      ENDIF
+      DO 60, K = 1, JJ, 1
+        KOUNT = KOUNT + 1
+        DO 50, L = 0, IBASE-1
+          INDEX = INDEX + 1
+          IN(KOUNT+1) = IN(KOUNT+1) + (II(INDEX)*(10**(IBASE-1-L)))
+ 50     CONTINUE
+ 60   CONTINUE
+      IN(1) = ISIGN * (KOUNT + 1)
+*-------------------------------------------------------------------
+*   CONVERT RADIX 10**(IBASE) NUMBERS TO RADIX JBASE NUMBERS
+*-------------------------------------------------------------------
+      NBASE = 10**IBASE
+      IF ( JBASE .NE. NBASE ) CALL MPBASE (IN,N,NBASE,JBASE,IW1)
+      IF ( IN(2) .EQ. 0 ) CALL MPPACK (IN,N)
+      RETURN
+ 1000 FORMAT(80A1)
+      END
+*
+********************************************************************
+*
+      SUBROUTINE MPSUB (IX,IY,IZ,N,IBASE)
+*
+*   TO SUBTRACT MP NONNEGATIVE INTEGERS IX - IY = IZ, WHERE
+*     IX > IY
+*
+*   GLOBAL VARIABLES:
+*
+*     1.  IX - N INTEGER ARRAY - COEFFICIENTS OF IX
+*     2.  IY - N INTEGER ARRAY - COEFFICIENTS OF IY
+*     3.  IZ - N INTEGER ARRAY - COEFFICIENTS OF IZ
+*     4.  N - INTEGER - NUMBER OF ARRAY ELEMENTS
+*     5.  IBASE - INTEGER - NUMBER BASE OF IX,IY,IZ
+*
+*   REF:  D.E. KNUTH, 'the art of computer programming',
+*      SEC. 4.3.1
+*
+********************************************************************
+*
+      INTEGER IX(N),IY(N),IZ(N),IBASE
+*
+      NX = IABS(IX(1))
+      NY = IABS(IY(1))
+      NZ = MAX0(NX,NY)
+      MZ = MIN0(NX,NY)
+      K = 0
+      DO 10, J = 0, MZ-2
+        INT = IX(NX-J) - IY(NY-J) + K
+        IF (INT .LT. 0) THEN
+          IZ(NZ-J) = INT + IBASE
+          K = -1
+        ELSE
+          IZ(NZ-J) = INT
+          K = 0
+        ENDIF
+ 10   CONTINUE
+      IF ( NZ .NE. MZ ) THEN
+        IF ( NZ .EQ. NX ) THEN
+          IZ(NZ-MZ+1) = IX(NZ-MZ+1) + K
+          DO 20, J= NZ-MZ, 2, -1
+            IZ(J) = IX(J)
+ 20       CONTINUE
+        ELSE
+          IZ(NZ-MZ+1) = IY(NZ-MZ+1) + K
+          DO 30, J= NZ-MZ, 2, -1
+            IZ(J) = IY(J)
+ 30       CONTINUE
+        ENDIF
+      ENDIF
+      IZ(1) = NZ
+      IF (IZ(2) .EQ. 0) CALL MPPACK(IZ,N)
+      RETURN
+      END
+*
+*********************************************************************
+*
+      SUBROUTINE PRMS(NPRMS,IPRMS,NPMAX,IWORK,LNGTH)
+*
+*  THIS SUBROUTINE COMPUTES THE NPRMS PRIMES SMALLER THAN
+*  NPMAX AND STORES THEM IN THE ARRAY IWORK IN DESCENDING
+*  ORDER.
+*
+*  LAST CHANGE: 8/27/88
+*
+* THE PARAMETERS OF PRMS HAVE THE FOLLOWING MEANING:
+*
+*  NPRMS: ON INPUT, THE NUMBER OF PRIMES THAT ARE TO BE FOUND.
+*         ON OUTPUT, THE NUMBER OF PRIMES THAT HAVE BEEN FOUND.
+*         THE ONLY RASON WHY FEWER PRIMES THAN REQUESTED MIGHT BE
+*         FOUND IS THAT THERE ARE NOT SUFFICIENTLY MANY PRIMES
+*         SMALLER THAN NPMAX.
+*
+*  IPRMS: A ONE DIMENSIONAL INTEGER ARRAY OF SUFFICIENT SIZE THAT
+*         ON OUTPUT CONTAINS THE REQUIRED PRIMES IN DESCENDING
+*         ORDER
+*
+*  NPMAX: THE MAXIMUM SIZE OF THE PRIMES TO BE FOUND.  NPMAX IS NOT
+*         CHANGED BY THE SUBROUTINE AND MAY BE EVEN OR ODD.
+*
+*  IWORK: AN INTEGER WORK ARRAY THAT IS TO BE AS LARGE AS POSSIBLE.
+*         THE LARGER IT IS THE MORE EFFICIENT WILL BE THE GENERATION
+*         OF THE PRIMES.  THIS SUBROUTINE IS BASED ON AN INTEGER
+*         WORK ARRAY - RATHER THAN A LOGICAL ONE - SINCE ITS
+*         ANTICIPATED USE IS IN AN ENVIRONMENT WHERE LARGE INTEGER
+*         WORK SPACE IS AVAILABLE BUT NO ADDITIONAL MEMORY CAN BE
+*         SUPPLIED.
+*
+*  LNGTH: THE PHYSICAL LENGTH OF IWORK.
+*
+*  ERROR CONDITIONS:
+*
+*  THE SUBROUTINE DOES NOT USE ANY IO.  THE PARAMETER NPRMS WILL EQUAL
+*  ZERO ON OUTPUT IF ONE OF THE FOLLOWING CONDITIONS OCCURS:
+*
+*  1.  NPMAX < 2 ON INPUT.
+*
+*  2.  LNGTH < 2 ON INPUT
+*
+*  THE PRIME GENERATION IS BASED ON THE SIEVE OF ERATOSTHENES.
+*
+*********************************************************************
+*
+      INTEGER NPRMS,IPRMS(1),NPMAX,IWORK(1),LNGTH
+*
+* CHECK FOR INCONSISTENCIES IN INPUT DATA:
+*
+      IF (NPMAX.LT.2.OR.LNGTH.LT.2) THEN
+         NPRMS = 0
+         RETURN
+         ENDIF
+*
+* MAKE SURE UPPER BOUND IS ODD
+*
+      NPM = NPMAX - 1 + MOD(NPMAX,2)
+*
+* SET UP CALL FOR SIEVING ROUTINE.  ORDINARILY, IT WILL BE CALLED
+* JUST ONCE
+*
+      NP = NPRMS
+      NFOUND = 1
+      NCNT = 0
+*
+* CALL SIEVING ROUTINE
+*
+  100 CONTINUE
+      CALL PSIEVE(NP,IPRMS(NFOUND),NPM,IWORK,LNGTH)
+      NCNT = NCNT + NP
+      IF (NP.EQ.0.OR.NCNT.EQ.NPRMS) GO TO 200
+      NPM = IPRMS(NCNT) - 2
+      NP = NPRMS - NCNT
+      NFOUND = NCNT + 1
+      GO TO 100
+  200 CONTINUE
+      IF (NCNT.LT.NPRMS.AND.(IPRMS(NCNT).EQ.3.OR.NCNT.EQ.0)) THEN
+         NCNT = NCNT + 1
+         IPRMS(NCNT) = 2
+         ENDIF
+      IF (NPRMS.NE.NCNT) NPRMS = NCNT
+      END
+*
+      SUBROUTINE PSIEVE(NPRMS,IPRMS,NPMAX,IWORK,LNGTH)
+*
+* CALLING LIST IS IDENTICAL TO CALLING LIST FOR PRMS
+*
+      INTEGER NPRMS,IPRMS(1),NPMAX,IWORK(1),LNGTH
+*
+* THE FIRST FOUR PRIMES ARE STORED IN NFIRST(4)
+      INTEGER NFIRST(4)
+      NFIRST(1) =  3
+      NFIRST(2) =  5
+      NFIRST(3) =  7
+      NFIRST(4) = 11
+*
+* SET A SUITABLE SEARCH INTERVAL
+* USE THE FACT THAT THE DENSITY OF PRIMES IS APPROXIMATELY EQUAL
+* TO 1/LN(NPMAX), AND USE 1.1 TIMES THE INTERVAL FOR SAFETY.
+*
+      IROOT = IFIX(SQRT(FLOAT(NPMAX)))
+      IROOT = IROOT - 1 + MOD(IROOT,2)
+      NSRCH = MAX(100,IFIX(FLOAT(NPRMS)*ALOG(FLOAT(NPMAX))*1.1))
+      NSRCH = MIN(NSRCH,NPMAX-2,2*LNGTH,NPMAX-IROOT)
+      NSRCH = NSRCH + MOD(NSRCH,2)
+      NSRCH2 = NSRCH/2
+*
+* IWORK(I) WILL BE 1 IF NPRMS - 2*(I-1) IS PRIME
+* AND 0 OTHERWISE
+*
+* FIRST PRESUME ALL NUMBERS IN THE RANGE ARE PRIME
+*
+           DO 100 I = 1,NSRCH2
+           IWORK(I) = 1
+  100      CONTINUE
+*
+* LABEL ALL LOCATIONS 0 THAT ARE MULTIPLES OF 3,5,7, OR 11.
+*
+           DO 300 K = 1,4
+           IINC = NFIRST(K)
+           ISTART = NPMAX - MOD(NPMAX,IINC)
+           IF (MOD(ISTART,2).EQ.0) ISTART = ISTART - IINC
+           ISTART = (NPMAX - ISTART + 2)/2
+           ILAST = MIN(NSRCH2,(NPMAX-3*IINC)/2+1)
+                DO 200 I = ISTART,ILAST,IINC
+                IWORK(I) = 0
+  200           CONTINUE
+  300      CONTINUE
+*
+* NOW GO THROUGH ODD NUMBER GREATER THAN 11 AND IGNORE MULTIPLES OF
+* 3,5,7, OR 11.
+*
+           DO 500 IINC = 13,IROOT,2
+           IF (MOD(IINC,3).EQ.0.OR.MOD(IINC,5).EQ.0.OR.MOD(IINC,7)
+     X          .EQ.0.OR.MOD(IINC,11).EQ.0) GO TO 500
+           ISTART = NPMAX - MOD(NPMAX,IINC)
+           IF (MOD(ISTART,2).EQ.0) ISTART = ISTART - IINC
+           ISTART = (NPMAX - ISTART + 2)/2
+           ILAST = MIN(NSRCH2,(NPMAX-3*IINC)/2+1)
+                DO 400 I = ISTART,ILAST,IINC
+                IWORK(I) = 0
+  400           CONTINUE
+  500      CONTINUE
+*
+* WE HAVE FOUND THE PRIMES, NOW STORE THEM
+*
+      NPFND = 0
+           DO 600 I = 1,NSRCH2
+           IF (NPFND.EQ.NPRMS) GO TO 700
+           IF (IWORK(I).EQ.1) THEN
+           NPFND = NPFND + 1
+           IPRMS(NPFND) = NPMAX-2*(I-1)
+           ENDIF
+  600      CONTINUE
+  700 CONTINUE
+      NPRMS = NPFND
+      RETURN
+      END
+*
+*********************************************************************
+*
+      SUBROUTINE RADIXF(IC,N,IA,IWRK,NWRK)
+*
+*   GIVEN A MIXED-RADIX INTEGER COMPUTED WITH RADIXM THIS ROUTINE
+*     COMPUTES THE COEFFICIENTS OF ITS FIXED-RADIX REPRESENTATION.
+*     BOTH FORMS ARE STORED IN THE IWRK ARRAY.  THE INPUT MIXED
+*     RADIX FORM BEGINS AT LOCATION IC, AND THE OUTPUT FIXED RADIX
+*     FORM BEGINS AT LOCATION IA.  THE OUTPUT IS IN MP FORM.
+*
+*     GLOBAL VARIABLES:
+*
+*       1.  IC - MIXED RADIX COEFFICIENTS ADDRESS
+*       2.  N - INTEGER - # OF COEFS. OF MIXED RADIX FORM
+*       3.  IA - ADDRESS OF FIXED RADIX COEFFICIENTS
+*       4.  IWRK - NWRK INTEGER ARRAY - SEE DRIVER
+*
+*     COMMON VARIABLES USED:
+*       1.  IAPRM - ACTUAL PRIME ADDRESS
+*       2.  IBASE - OUTPUT BASE
+*
+*********************************************************************
+*
+      INTEGER IWRK(NWRK),IC,IA,N
+      INTEGER IQ,IQTMP,IPP,L,ISIGN
+      COMMON /WPARM/ MINFO,IHPRM,IROW,ICOL,IDEP,IPIV,LST,IPRM,IPIN,
+     *  IAPRM,KODE,IRHS,JWRK,KNUM,KGCD,IMAT,KUN13,IBASE,
+     *  ITER,ICPRM,IDIAG,ITRM,IBASIC,ITRI,INULL,IRANK,IZERO,LMAX,
+     *  NPRME,MHZ,ISOLH,KUN12
+      L = 1
+      IWRK(IA+1) = 0
+*-------------------------------------------------------------------
+*   AT THIS STAGE IWRK(IA+1) - IWRK(IA+L) IS THE FIXED-RADIX REP.
+*     OF IWRK(IC+N-I+2) - IWRK(IC+N). COMPUTE THE FIRST L COEFS.
+*     OF THE FIXED-RADIX REP. INCLUDING THE NEXT MIXED RADIX COEF.
+*-------------------------------------------------------------------
+      DO 30, I = 1, N
+        IPP = IWRK(IAPRM+N-I+1)
+        IQ = IWRK(IC+N-I+1)
+        DO 10, J = 1, L
+          IQTMP = IWRK(IA+J)*IPP + IQ
+          IQ = IQTMP/IBASE
+          IWRK(IA+J) = IQTMP - IQ*IBASE
+ 10     CONTINUE
+*-------------------------------------------------------------------
+*   REPEAT ... CONVERT NEXT TERM TO FIXED-RADIX FORM.
+*-------------------------------------------------------------------
+ 20     CONTINUE
+        IF ( IQ .NE. 0 ) THEN
+          L = L + 1
+          IQTMP = IQ/IBASE
+          IWRK(IA+L) = IQ - IQTMP*IBASE
+          IQ = IQTMP
+          GO TO 20
+        ENDIF
+ 30   CONTINUE
+*-------------------------------------------------------------------
+*   REORDER THE COEFFICIENTS.
+*-------------------------------------------------------------------
+      IF (L.GE.2) THEN
+        DO 40, I = 1, L/2
+          IQTMP = IWRK(IA+I)
+          IWRK(IA+I) = IWRK(IA+L-I+1)
+          IWRK(IA+L-I+1) = IQTMP
+ 40     CONTINUE
+      ENDIF
+*-------------------------------------------------------------------
+*   REPRESENT IN MP FORM
+*-------------------------------------------------------------------
+      ISIGN = 1
+      IF ( IWRK(IA+1) .LT. 0 ) ISIGN = -1
+      DO 50, I = L, 1, -1
+        IWRK(IA+I+1) = IABS(IWRK(IA+I))
+ 50   CONTINUE
+      IWRK(IA+1) = (L+1)*ISIGN
+      IF ( L .EQ. 0 ) IWRK(IA+1) = 0
+      RETURN
+      END
+*
+********************************************************************
+*
+      SUBROUTINE RADIXM (ILOC,IRES,TEST,IWRK,NWRK)
+*
+*   GIVEN THE RESIDUUM IRES MODULO ICPRM AND THE FIRST ITER-1
+*     COEFFICIENTS IN THE MIXED-RADIX REPRESENTATION OF AN
+*     INTEGER, THIS ROUTINE COMPUTES THE ITER-TH COEFFICIENT.
+*
+*   GLOBAL VARIABLES:
+*
+*     1.  ILOC - ADDRESS OF PREVIOUS COEFFICIENTS IN IWRK
+*     2.  IRES - RESIDUE OF NEW COEFFICIENT
+*     3.  TEST - LOGICAL - NOT CHANGED IF NEW RADIX IS ZERO
+*                          ELSE TEST IS SET .FALSE..
+*     4.  IWRK - NWRK INTEGER ARRAY - SEE DRIVER
+*
+*   COMMON VARIABLES USED:
+*
+*     1.  IAPRM - ACTUAL PRIME LOCATIONS
+*     2.  ICPRM - CURRENT PRIME
+*     3.  IPIN - PRIME INVERSES
+*     4.  ITER  - ITERATION COUNTER
+*
+********************************************************************
+*
+      INTEGER IWRK(NWRK),ILOC,IRES
+      INTEGER NTEMP,I1
+      LOGICAL TEST
+      COMMON /WPARM/ MINFO,IHPRM,IROW,ICOL,IDEP,IPIV,LST,IPRM,IPIN,
+     *  IAPRM,KODE,IRHS,JWRK,KNUM,KGCD,IMAT,KUN13,IBASE,
+     *  ITER,ICPRM,IDIAG,ITRM,IBASIC,ITRI,INULL,IRANK,IZERO,LMAX,
+     *  NPRME,MHZ,ISOLH,KUN12
+*
+      NTEMP = IRES
+      IF ( ITER .GT. 1 ) THEN
+        NTEMP = IWRK(ILOC+ITER-1)
+        DO 10 I = 1, ITER-2, 1
+          I1 = ITER - 1 - I
+          NTEMP = MOD(NTEMP*IWRK(IAPRM+I1)+IWRK(ILOC+I1),ICPRM)
+ 10     CONTINUE
+        NTEMP = MOD(IWRK(IPIN+ITER)*MOD(IRES-NTEMP,ICPRM),ICPRM)
+      ENDIF
+      IF ( NTEMP .NE. 0 ) TEST = .FALSE.
+      I1 = (ICPRM+1)/2
+      IWRK(ILOC+ITER) = NTEMP - (NTEMP/I1)*ICPRM
+      RETURN
+      END
+*
+********************************************************************
+*
+      SUBROUTINE RSDANA (IPARM,IHTBL,NSTOR,IWRK,NWRK,HWRK,NH)
+*
+*   DRIVER ROUTINE
+*
+*     THIS ROUTINE ANALYZES LARGE SPARSE INTEGER SYSTEMS OF LINEAR
+*     EQUATIONS USING RESIDUE TECHNIQUES.  IT REQUIRES AN INPUT
+*     MATRIX FILE DESCRIBED BELOW AND REMAINS IN-CORE EXECPT
+*     TO READ THE MATRIX FILE.
+*
+*     EXPLICITLY, BASED ON INPUT PARAMETERS, IT FINDS A PARTICULAR
+*     SOLUTION THAT IS A LEAST SQUARES SOLUTION, ALTHOUGH NOT THE
+*     MINIMUM NORM LEAST SQUARES SOLUTION, A BASIS FOR THE NULL
+*     SPACE AND, THE RANK AND ROW DEPENDENCIES OF THE EQUATION
+*
+*                   AX = B
+*     WHERE:
+*            A IS AN NXM INTEGER MATRIX
+*            X IS THE MXP UNKNOWN MATRIX
+*            B IS AN NXP INTEGER RIGHT HAND SIDE (RHS)
+*
+*     THIS ROUTINE ASSUMES NO PARTICULAR STRUCTURE ON MATRIX A
+*     OR THAT A IS IN FACT SPARSE; HOWEVER, IT HAS HIGH OVERHEAD
+*     FOR NONSPARSE PROBLEMS AND AS SUCH IS NOT RECOMMENDED.
+*     IT ALLOWS ARBITRARILY LARGE INTEGERS ON INPUT.  STOPPING
+*     CRITERIA ARE OPTIONAL BUT NOT GUARANTEED TO BE MET, THE
+*     PROGRAM WILL TERMINATE PREMATURELY IF THE HASHING DATA
+*     STRUCTURE BECOMES 100% FULL.
+*
+*     THE ROUTINE IS WRITTEN WITHIN THE FORTRAN-77
+*     STANDARD AND IS MEANT TO BE FULLY PORTABLE.  THE ONLY
+*     SYMBOLS USED IN THE ACTUAL CODE ARE:
+*         0 1 2 3 4 5 6 7 8 9
+*         ABCDEFGHIJKLMNOPQRSTUVWXYZ
+*         'blank' = + - * / ( ) , . $ ' :
+*
+*     THE ROUTINE WILL TRY TO WRITE TO UNIT 3 IF NO OUTPUT
+*     TERMINAL UNIT NUMBER IS SUPPLIED.
+*
+*
+********************************************************************
+*
+*     VARIABLE LISTS ARE ALL INTEGERS UNLESS OTHERWISE SPECIFIED
+*
+****************************INPUT***********************************
+*
+*
+*   GLOBAL VARIABLES:
+*
+*   1.  IPARM - 0:15 INTEGER ARRAY - MATRIX/ROUTINE PARAMETERS WHERE
+*       (0) - MAXIMUM NUMBER OF ROWS IN AUGMENTED MATRIX
+*       (1) - MAXIMUM NUMBER OF COLUMNS IN AUGMENTED MATRIX
+*       (2) - MAXIMUM NUMBER OF RIGHT HAND SIDES
+*       (3) - INTEGER INPUT FILE NUMBER
+*       (4) - HARD COPY OUTPUT FILE NUMBER
+*       (5) - INTERMEDIATE OUTPUT FILE NUMBER
+*       (6) - TERMINAL OUTPUT UNIT NUMBER
+*       (7) - INTERMEDIATE OUTPUT FLAG
+*           = 0 THEN NONE
+*           = 1 TERMINAL PROGRESS REPORT
+*           = 2 PIVOT INFO (PASS ONE)
+*           = 3 MATRIX INFO (PASS ONE)
+*           = 4 ALL INFO (CAUTION)
+*       (8) - TASK INDICATOR
+*           = 0 RANK AND ROW DEPENDENCIES ONLY
+*           = 1 RANK AND PARTICULAR SOLUTION
+*           = 2 RANK AND NULL SPACE
+*           = 3 RANK, PARTICULAR SOLUTION AND NULL SPACE
+*           = 4 INTEGER CONVERSION ONLY
+*       (9) - OUTPUT NUMBER BASE
+*           = USUALLY (BUT NOT NECESSARILY) SOME POWER OF
+*             10 SO THAT ITS SQUARE IS WITHIN COMPUTER WORD
+*       (10) - STOPPING CRITERION ON NUMBER OF PASSES
+*            = -2 MODIFIED HADAMARD BOUND
+*            = -1 ROUTINE DECIDES
+*            =  0 HADAMARD BOUND
+*            =  N - SOME POSITIVE INTEGER (USER DECIDES)
+*       (11) - LARGEST INTEGER CAPABLE OF BEING STORED
+*       (12) - MAXIMUM NUMBER OF PRIMES ALLOWED
+*       (13) - OUTPUT STYLE FOR MP INTEGERS
+*       (14) - TYPE OF RATIONAL FILE (1=SP RATIONAL, 2=MP RATIONAL)
+*              TYPE = 0 MEANS INTEGER FILE
+*       (15) - IO NUMBER FOR RATIONAL FILE
+*
+*   2.  IHTBL - 2 X NSTOR INTEGER ARRAY - HASH STORAGE AREA
+*
+*   3.  NSTOR - PHYSICAL DIMENSION OF IHTBL AND IT SHOULD BE
+*         AS LARGE AS POSSIBLE.
+*
+*   4.  IWRK  - NWRK INTEGER ARRAY - WORK SPACE
+*
+*   5.  NWRK  - PHYSICAL DIMENSION OF IWRK.  THE INTEGER
+*         FUNCTION IWORK IS PROVIDED TO CALCULATE THE REQUIRED
+*         DIMENSION OF IWRK.
+*
+*   6.  HWRK  - NH REAL ARRAY - HADAMARD BOUND WORK SPACE
+*
+*   7.  NH    - PHYSICAL DIMENSION OF HWRK WHERE
+*          NH > MAX(IPARM(0)+IPARM(2),IPARM(1))
+*
+*
+*   INPUT FILE STUCTURE - MPCON OUTPUT STRUCTURE.
+*     NOTE, THE MULTIPLE PRECISION INTEGERS IN THIS FILE ARE
+*     IN A SLIGHTLY DIFFERENT FORMAT THAN IS REQUIRED BY THE
+*     MP ARITHMETIC ROUTINES.  TO GET THAT FORMAT SIMPLY
+*     MULTIPLY (AIJ)1 BY NTRM.
+*
+*       NROW, NCOL, NRHS, NELE, JBASE
+*       I, J, NTRM                    ]
+*       (AIJ)K  , K=1,2,...,NTRM      ]   - REPEATED NELE TIMES
+*
+*       WHERE: NROW =  # OF ROWS
+*              NCOL =  # OF COLUMNS
+*              NRHS =  # OF RIGHT HAND SIDES
+*              NELE =  # OF NONZERO ELEMENTS
+*              I,J  =  ELEMENT MATRIX INDEX
+*              NTRM =  NUMBER OF TERMS RADIX(JBASE) OF AIJ
+*              (AIJ)K = AIJ ELEMENT WHERE K IS THE TERM INDEX
+*                AND (AIJ)1 REPRESENTS THE SIGN OF THE ELEMENT.
+*                THUS AIJ IS
+*
+*        AIJ = (AIJ)1 * ( (AIJ)2*(JBASE**(NTMR-2)) +
+*                         (AIJ)3*(JBASE**(NTMR-3)) +
+*                           ...
+*                         (AIJ)NTRM-1*JBASE + (AIJ)NTRM )
+*
+*
+****************************OUTPUT**********************************
+*
+*
+*     1.  IPARM IS OVERWRITTEN ON OUTPUT AS FOLLOWS:
+*
+*         IPARM:
+*
+*          (0)  -  ERROR CONDITION INDICATOR
+*               =  0  THEN NO ERROR
+*               = -1  ERROR ON INPUT
+*               = -2  STOP CRITERION NOT SATISFIED
+*          (1)  = LENGTH OF THE HASH TABLE
+*          (2)  = HASHING MULTIPLIER
+*          (3)  = USEABLE HASH TABLE SIZE
+*          (4)  = MATRIX RANK
+*          (5)  = COLUMNS OF AUGMENTED MATRIX
+*          (6)  = ROWS OF MATRIX + 1
+*          (7)  = MAXIMUM DOUBLE HASHES TRIED
+*          (8)  = DIMENSION OF THE NULL SPACE
+*          (9)  = TOTAL DOUBLE HASHES TRIED
+*          (10) = TOTAL HASH STORAGES TRIED
+*          (11) = TERMINAL UNIT NUMBER
+*          (12) = ADDRESS OF DEPENDENT ROWS IN IWRK
+*          (13) = ADDRESS OF RHS CONSISTENCY FLAG IN IWRK
+*
+*     2.  SOLUTIONS AND NULL SPACE BASIS ARE STORED IN THE HASH
+*           TABLE IN MP FORM.
+*
+*           TO ACCESS THE SOLUTIONS THE USER MUST USE THE HASHING
+*           DATA STRUCTURE.  THE INTEGER FUNCTION IRHASH RECOVERS
+*           THE DATA INDEX IN THE HASH TABLE.  AN EXAMPLE
+*           OF ITS USE IS PROVIDED BELOW, AND FOR CONVENIENCE
+*           IPARM IS OVERWRITTEN TO BE USED IN THE CALL STATEMENT
+*           TO IRHASH.
+*
+*           THE RIGHT HAND SIDE SOLUTIONS ARE ACCESSED BY
+*           THEIR ROW INDEX AND THEIR AUGMENTED MATRIX COLUMN
+*           INDEX.  THE DENOMINATOR FOR ANY RHS IS STORED
+*           IN ((# OF ROWS) + 1) "ROW" LOCATION.  FOR EXAMPLE,
+*           IF A IS A NROWxNCOL MATRIX AND HAS 1 RHS, TO ACCESS
+*           THE RESULTS FOR THAT RHS AND STORE THEM IN A 2D ARRAY
+*           CALLED IRHS, THAT HAS THE ROW INDEX AS THE FIRST
+*           DIMENSION AND TERM COUNTER IN THE SECOND DIMENSION,
+*           THE USER WOULD HAVE CODE SIMILAR TO
+*
+*       DO 20, I = 1, NCOL + 1
+*         KEY = IRHASH (I,NCOL+1,1,IPARM(1),IHTBL,NSTOR)
+*         IRHS(I,1) = IHTBL(2,KEY)
+*         DO 10, K = 2, IABS(IRHS(I,1))
+*           KEY = IRHASH (I,NCOL+1,K,IPARM(1),IHTBL,NSTOR)
+*           IRHS(I,K) = IHTBL(2,KEY)
+*   10    CONTINUE
+*   20  CONTINUE
+*
+*           THE NULL SPACE IS ACCESSED THROUGH A COLUMN NUMBER THAT
+*           RANGES OVER 1,2,...,(DIMENSION OF THE NULL SPACE) AND
+*           A ROW INDEX THAT RANGES OVER 1,2,...,(# OF COLUMNS OF A).
+*           THE NULL SPACE BASIS IS SCALED SO THAT ALL ITS ELEMENTS
+*           ARE INTEGERS.  THUS NO DENOMINATOR IS REQUIRED.
+*           IT IS ACCESSED WITH SIMILAR CALLS TO IRHASH AS ABOVE.
+*           FOR EXAMPLE, TO GET ALL THE VECTORS IN THE NULL SPACE
+*           FROM THE HASH TABLE AND STORE THEM IN A 3D ARRAY (INULL)
+*           THE USER WOULD NEED CODE SIMILAR TO
+*
+*       DO 30, J = 1, IPARM(8)
+*         DO 20, I = 1, NCOL
+*           KEY = IRHASH (J,I,1,IPARM(1),IHTBL,NSTOR)
+*           INULL(I,J,1) = IHTBL(2,KEY)
+*           DO 10, K = 2, IABS(INULL(J,I,1))
+*             KEY = IRHASH (J,I,K,IPARM(1),IHTBL,NSTOR)
+*             INULL(J,I,K) = IHTBL(2,KEY)
+*   10      CONTINUE
+*   20    CONTINUE
+*   30  CONTINUE
+*
+*           FINALLY, THE MINOR OF THE LEADING SQUARE NONSINGULAR
+*           MATRIX (I.E. THE DETERMINANT OF AN INVERTIBLE MATRIX)
+*           CAN BE RECOVERED (NCOL+1,1) POSITION AS
+*
+*        KEY = IRHASH (NCOL+1,1,1,IPARM(1),IHTBL,NSTOR)
+*        IDEN(1) = IHTBL(2,KEY)
+*        DO 10, K = 2, IABS(IDEN(1))
+*          KEY = IRHASH (NCOL+1,1,K,IPARM(1),IHTBL,NSTOR)
+*          IDEN(J,I,1) = IHTBL(2,KEY)
+*   10   CONTINUE
+*
+****************************LOCAL***********************************
+*
+*
+*   COMMON /WPARM/ LOCAL VARIABLES:
+*
+*     IAPRM  - PRIME INVERSES ADDRESS IN IWRK
+*     IBASE  - OUTPUT NUMBER BASE
+*     IBASIC - PARTICULAR SOLUTION OUTPUT FLAG
+*     ICOL   - COLUMN PIVOT VECTOR ADDRESS IN IWRK
+*     ICPRM  - CURRENT PRIME
+*     IDEP   - DEPENDENT ROW INFORMATION ADDRESS IN IWRK
+*     IDIAG  - LEADING MATRIX MINOR RESIDUE
+*     IHPRM  - HASH PARAMETER ADDRESS IN IWRK
+*     IMAT   - INTERMEDIATE OUTPUT FLAG
+*     INULL  - NULL SPACE OUTPUT FLAG
+*     IPIN   - PRIME INVERSES ADDRESS IN IWRK
+*     IPIV   - ROW/COL NONZERO ELEMENT COUNTER ADDRESS IN IWRK
+*     IPRM   - PRIMES ADDRESS IN IWRK
+*     IROW   - ROW PIVOT VECTOR ADDRESS IN IWRK
+*     ITER   - PASS COUNTER
+*     ITRI   - TRIANGULAR DECOMPOSITION FLAG
+*     ITRM   - TERMINAL UNIT NUMBER
+*     IRANK  - RESIDUE RANK FLAG
+*     IRHS   - RHS CONSISTENCY FLAG ADDRESS IN IWRK
+*     ISOLH  - SOLUTION HASH TABLE FULL FLAG
+*     IZERO  - RESIDUE FLAG
+*     JWRK   - WORK ADDRESS IN IWRK
+*     KGCD   - GREATEST COMMON DIVISOR ADDRESS IN IWRK
+*     KODE   - COMMON DENOMINATOR ADDRESS IN IWRK
+*     KNUM   - SOLUTION WORK SPACE IN IWRK
+*     KUN13  - INTERMEDIATE OUTPUT FILE NUMBER
+*     KUN12  - OUTPUT FILE NUMBER
+*     LMAX   - MAXIMUM NUMBER OF TERMS ON OUTPUT
+*     LST    - WORK SPACE ADDRESS IN IWRK
+*     NPRME  - MAX NUMBER OF PRIMES
+*     MINFO  - MATRIX INFORMATION ADDRESS IN IWRK
+*     MHZ    - ZERO POSITION OF THE SOLUTION HASH TABLE
+*
+*   IWRK WORK SPACE ALLOCATION (INTERNAL):
+*     MINFO
+*       (MINFO+1) = NUMBER OF ROWS IN MATRIX
+*       (MINFO+2) = NUMBER OF COLUMNS IN MATRIX
+*       (MINFO+3) = NUMBER OF RIGHT HAND SIDES
+*       (MINFO+4) = NUMBER OF NONZERO ELEMENTS IN MATRIX FILE
+*       (MINFO+5) = MINIMUM NUMBER OF ROWS OR COLUMNS
+*       (MINFO+6) = MAXIMUM NUMBER OF ROWS OR COLUMNS
+*       (MINFO+7) = RANK APPROXIMATION
+*       (MINFO+8) = ELIMINATION EFFICIENCY COUNTER
+*       (MINFO+9) = FILL IN TOTAL
+*     IHPRM
+*       (IHPRM+1) = LENGTH OF THE HASH TABLE
+*       (IHPRM+2) = HASHING MULTIPLIER
+*       (IHPRM+3) = ELIMINATION HASH TABLE SIZE
+*       (IHPRM+4) = SOLUTION HASH TABLE SIZE
+*       (IHPRM+5) = COLUMNS OF AUGMENTED MATRIX
+*       (IHPRM+6) = MAX. ROWS OR (COLUMNS+1)
+*       (IHPRM+7) = ELIMINATION MAX. DOUBLE HASHES TRIED
+*       (IHPRM+8) = SOLUTION MAX. DOUBLE HASHES TRIED
+*       (IHPRM+9) = TOTAL DOUBLE HASHES TRIED
+*       (IHPRM+10) = TOTAL HASH STORAGES TRIED
+*       (IHPRM+11) = TERMINAL UNIT NUMBER
+*       (IHPRM+12) = ORIGINAL VALUE OF NSTOR
+*       (IHPRM+13) = SOLUTION HASH TABLE USE
+*       (IHPRM+14) = NONZERO ELEMENTS IN RHS
+*       (IHPRM+15) = STOPPING CRITERIA (INTERNAL)
+*     IROW
+*       (IROW) - (IROW + # OF ROWS): ROW PIVOT INDEX
+*     ICOL
+*       (ICOL) - (ICOL + # OF COLS): COLUMN PIVOT INDEX
+*     IDEP
+*       (IDEP) - (IDEP + # OF ROWS): DEPENDENT ROW INDEX
+*     IPIV
+*       (IPIV) - (IPIV + # OF ROWS): FILLIN COUNTER
+*     IRHS
+*       (IRHS) - (IRHS + # OF RHS): RHS CONSISTENCY FLAG
+*     IPRM
+*       (IPRM) - (IPRM + # OF PRIMES): PRIMES STORAGE
+*     IPIN
+*       (IPIN) - (IPIN + # OF PRIMES): INV OF PRIMES
+*     IAPRM
+*       (IAPRM) - (IAPRM + # OF PRIMES): PRIMES USED
+*     KODE
+*       (KODE) - (KODE + LMAX): COMMON DENOM OF SOLUTION
+*     JWRK
+*       (JWRK) - (NWRK): TOTAL WORK SPACE
+*     LST
+*       (LST) - (LST+LMAX): GENERAL WORK SPACE
+*     KNUM
+*       (KNUM) - (KNUM+LMAX): WORK SPACE FOR NUMERATORS
+*     KGCD
+*       (KGCD) - (KGCD+LMAX): WORK SPACE FOR COMMON DIVISOR
+*     IW1-IW2-IW3
+*       (IW?) - (IW?+LMAX): MP WORK SPACE
+*
+*   DRIVER LOCAL VARIABLES:
+*
+*     FILL   - REAL - % OF ELIMINATION HASH TABLE FILL
+*     HBASE  - REAL - INPUT NUBER BASE
+*     HLOG   - REAL - LOG 10 OF HBASE
+*     IDIF   - COEF. POWER DIFF. IN PSEUDO-FLOATING MATH
+*     IER    - INPUT ERROR CONDITION
+*     IP     - 1 INTEGER ARRAY - USED COMPUTING 1 PRIME
+*     ITTOL  - TOTAL PASSES REQUIRED
+*     IWTOT  - TOTAL WORK SPACE REQUIRED IN IWRK
+*     JBASE  - NUMBER BASE OF INPUT FILE
+*     JDEN   - ROW OF DENOMINATORS ON OUTPUT
+*     KFORM  - FORMAT # OF OUTPUT IN MPOUT
+*     KOUNT  - CONVERGENCE COUNTER
+*     LENGTH - AMOUNT OF VOLATILE WORK SPACE
+*     LWRK   - VOLATILE WORK SPACE DIVISION
+*     MAXP   - PRIME BOUND
+*     NDIS   - NUMBER OF DISCARDED PRIMES WHEN RANK DECR.
+*     NPASS  - HADAMARD BOUND PASSES REQUIRED
+*     NPASS1 - MODIFIED HADAMARD BOUND PASSES REQUIRED
+*     TEST   - LOGICAL FLAG
+*     TOUT   - LOGICAL FLAG FOR OUTPUT
+*
+********************************************************************
+*
+      COMMON /WPARM/ MINFO,IHPRM,IROW,ICOL,IDEP,IPIV,LST,IPRM,IPIN,
+     *  IAPRM,KODE,IRHS,JWRK,KNUM,KGCD,IMAT,KUN13,IBASE,
+     *  ITER,ICPRM,IDIAG,ITRM,IBASIC,ITRI,INULL,IRANK,IZERO,LMAX,
+     *  NPRME,MHZ,ISOLH,KUN12
+*
+      INTEGER IPARM(0:15),IHTBL(2,0:NSTOR),IWRK(NWRK),IP(1)
+      LOGICAL TEST,TOUT
+      REAL HWRK(NH),FILL
+*
+* FILL determines percentage of elimnation hash table that will
+* be filled.  A value between 0.3 and 0.7 is recommended.  The larger
+* FILL the faster the progra will run and the more memory will be
+* required.
+*
+      PARAMETER ( FILL = 0.5 )
+*-------------------------------------------------------------------
+*   INITIALIZE WPARM COMMON BLOCK
+*-------------------------------------------------------------------
+      IAPRM  = 0
+      IBASE  = 0
+      IBASIC = 0
+      ICOL   = 0
+      ICPRM  = 0
+      IDEP   = 0
+      IDIAG  = 0
+      IHPRM  = 0
+      IMAT   = 0
+      INULL  = 0
+      IPIN   = 0
+      IPIV   = 0
+      IPRM   = 0
+      IROW   = 0
+      ITER   = 0
+      ITRI   = 0
+      ITRM   = 0
+      IRANK  = 0
+      IRHS   = 0
+      ISOLH  = 0
+      IZERO  = 0
+      JWRK   = 0
+      KGCD   = 0
+      KODE   = 0
+      KNUM   = 0
+      KUN13  = 0
+      KUN12  = 0
+      LMAX   = 0
+      LST    = 0
+      NPRME  = 0
+      MINFO  = 0
+      MHZ    = 0
+*-------------------------------------------------------------------
+*   INPUT PARAMETER CHECKS - I/O UNIT NUMBERS
+*-------------------------------------------------------------------
+      IER = 0
+      ITRM = IPARM(6)
+      TEST = .TRUE.
+      IF (ITRM .LE. 0) THEN
+        ITRM = 3
+        WRITE (ITRM,1180)
+        WRITE (ITRM,1250)
+        IER = 1
+      ENDIF
+      IF (IPARM(3).LE.0) THEN
+        TEST = .FALSE.
+      ELSE
+        INQUIRE (IPARM(3),OPENED=TEST)
+      ENDIF
+      IF ( .NOT. TEST ) THEN
+        IF ( IER .EQ. 0 ) WRITE (ITRM,1180)
+        WRITE (ITRM,1100)
+        IER = 1
+      ENDIF
+      TOUT = .FALSE.
+      IF (IPARM(4) .GT. 0 ) THEN
+        TOUT = .TRUE.
+        INQUIRE (IPARM(4),OPENED=TEST)
+        IF ( .NOT. TEST ) THEN
+           IF ( IER .EQ. 0 ) WRITE (ITRM,1180)
+           WRITE (ITRM,1110)
+           IER = 1
+        ENDIF
+      ENDIF
+*-------------------------------------------------------------------
+*   INPUT PARAMETER CHECKS - MATRIX DIMENSIONS
+*-------------------------------------------------------------------
+      IF (IPARM(0) .LE. 0) THEN
+        IF ( IER .EQ. 0 ) WRITE (ITRM,1180)
+        WRITE (ITRM,1220)
+        IER = 1
+      ENDIF
+      IF (IPARM(1) .LE. 0) THEN
+        IF ( IER .EQ. 0 ) WRITE (ITRM,1180)
+        WRITE (ITRM,1230)
+        IER = 1
+      ENDIF
+      IF (IPARM(2).LE.0 .AND. (IPARM(8).EQ.3.OR.IPARM(8).EQ.1)) THEN
+        IF ( IER .EQ. 0 ) WRITE (ITRM,1180)
+        WRITE (ITRM,1240)
+        IER = 1
+      ENDIF
+      IPP = IPARM(11) / MAX0(1,(MAX0(IPARM(0),IPARM(1)+1)*
+     *  (IPARM(1)+IPARM(2))))
+      IF ( IPARM(12) .GT. IPP ) THEN
+        IF ( IER .EQ. 0 ) WRITE (ITRM,1180)
+        WRITE (ITRM,1210) IPP
+        IER = 1
+      ENDIF
+      IF ( NSTOR .LE. 1 ) THEN
+        IF ( IER .EQ. 0 ) WRITE (ITRM,1180)
+        WRITE (ITRM,1215)
+        IER = 1
+      ENDIF
+*-------------------------------------------------------------------
+*   INPUT PARAMETER CHECKS - OUTPUT PARAMETERS
+*-------------------------------------------------------------------
+      IPP = 1
+      IF (IPARM(5).LE.0) THEN
+        TEST = .FALSE.
+      ELSE
+        INQUIRE (IPARM(5),OPENED=TEST)
+      ENDIF
+      IF ( TEST ) IPP = 0
+      IF (IPARM(7).LT.0 .OR. IPARM(7).GT.4) THEN
+        IF ( IER .EQ. 0 ) WRITE (ITRM,1180)
+        WRITE (ITRM,1120)
+        IER = 1
+      ELSEIF (IPARM(7).GT.1 .AND. IPP.EQ.1) THEN
+        IF ( IER .EQ. 0 ) WRITE (ITRM,1180)
+        WRITE (ITRM,1130)
+        IER = 1
+      ENDIF
+      IF (IPARM(8).LT.0 .OR. IPARM(8).GT.4) THEN
+        IF ( IER .EQ. 0 ) WRITE (ITRM,1180)
+        WRITE (ITRM,1140)
+        IER = 1
+      ENDIF
+      MAXP = INT(SQRT(FLOAT(IPARM(11))))
+      IF (IPARM(9).GT.MAXP) THEN
+        IF ( IER .EQ. 0 ) WRITE (ITRM,1180)
+        WRITE (ITRM,1150) MAXP
+        IER = 1
+      ENDIF
+      IF (IPARM(10) .LT. -2) THEN
+        IF ( IER .EQ. 0 ) WRITE (ITRM,1180)
+        WRITE (ITRM,1160)
+        IER = 1
+      ENDIF
+      IF (IPARM(13).LT.0 .OR. IPARM(13).GT.1) THEN
+        IF ( IER .EQ. 0 ) WRITE (ITRM,1180)
+        WRITE (ITRM,1260)
+        IER = 1
+      ENDIF
+*-------------------------------------------------------------------
+*   INPUT PARAMETER CHECKS - WORK ARRAY DIMENSIONS
+*-------------------------------------------------------------------
+      IF ( NH .LE. MAX(IPARM(0)+IPARM(2),IPARM(1)) ) THEN
+        IF ( IER .EQ. 0 ) WRITE (ITRM,1180)
+        WRITE (ITRM,1200) MAX(IPARM(0)+IPARM(2),IPARM(1))
+        IER = 1
+      ENDIF
+      IPP = IWORK(IPARM)
+      IF ( NWRK .LT. IPP ) THEN
+        IF ( IER .EQ. 0 ) WRITE (ITRM,1180)
+        WRITE (ITRM,1205) IPP
+        IER = 1
+      ENDIF
+*-------------------------------------------------------------------
+*   INPUT PARAMETER CHECKS - RETURN TO MAIN IF ERROR OCCURS
+*-------------------------------------------------------------------
+ 20   IF ( IER .EQ. 1 ) THEN
+        WRITE (ITRM,1190)
+        RETURN
+      ENDIF
+*-------------------------------------------------------------------
+*   DATA STRUCTURE INITIALIZATION
+*-------------------------------------------------------------------
+ 30   CONTINUE
+      DO 40, J = 0, NSTOR
+        IHTBL(1,J) = 0
+        IHTBL(2,J) = 0
+ 40   CONTINUE
+      DO 50, J = 1, NWRK
+        IWRK(J) = 0
+ 50   CONTINUE
+*-------------------------------------------------------------------
+*   COMPUTE PARTIONING OF THE IWRK ARRAY
+*-------------------------------------------------------------------
+      MINFO = 0
+      IHPRM = 10
+      IROW  = IHPRM + 15
+      ICOL  = IROW + IPARM(0)
+      IDEP  = ICOL + IPARM(1)
+      IPIV  = IDEP + IPARM(0)
+      IRHS  = IPIV + MAX0(IPARM(0),IPARM(1))
+      IPRM  = IRHS + IPARM(2)
+*-------------------------------------------------------------------
+*   COMPUTE PRIMES - LOAD INTO IWRK
+*-------------------------------------------------------------------
+      NPRME = IPARM(12)
+      CALL PRMS (NPRME,IWRK(IPRM+1),MAXP,IHTBL,2*NSTOR)
+*-------------------------------------------------------------------
+*   CONTINUE PARTITION THE WORK SPACE
+*-------------------------------------------------------------------
+      LMAX  = (INT(FLOAT(NPRME)*(ALOG10(FLOAT(IWRK(IPRM+1)))-
+     *  ALOG10(2.0)) / ALOG10(FLOAT(IPARM(9)))) + 10) * 2
+      IPIN  = IPRM + NPRME
+      IWRK(IPIN+1) = 0
+      IAPRM = IPIN + NPRME
+      KODE  = IAPRM + NPRME
+      KNUM  = KODE + LMAX
+      KGCD  = KNUM + LMAX
+      JWRK  = KGCD + LMAX
+      LST   = JWRK
+      LENGTH  = NWRK -  JWRK - 15
+      LWRK  = MAX0(LMAX,LENGTH/5)
+      IW1   = LST + LWRK + 10
+      IW2   = IW1 + LWRK + 1
+      IW3   = IW2 + LWRK + 1
+      IW4   = IW3 + LWRK + 1
+*-------------------------------------------------------------------
+*   LOAD THE MATRIX PARAMETERS
+*-------------------------------------------------------------------
+      REWIND (IPARM(3))
+      READ (IPARM(3),*) (IWRK(MINFO+I),I=1,4),JBASE
+      IWRK(MINFO+5) = MIN0(IWRK(MINFO+1),IWRK(MINFO+2))
+      IWRK(MINFO+6) = MAX0(IWRK(MINFO+1),IWRK(MINFO+2))
+      IWRK(MINFO+7) = 0
+      IWRK(MINFO+8) = IWRK(MINFO+4)
+      IWRK(MINFO+9) = 0
+      IWRK(MINFO+10) = IWRK(MINFO+2) + IWRK(MINFO+3)
+*-------------------------------------------------------------------
+*   INITIALIZE HASH TABLE, ROW AND COLUMN INDEXING, PIVOT VECTOR,
+*     DEPENDENT ROW VECTOR, AND RHS CONSISTENCY VECTOR
+*-------------------------------------------------------------------
+      DO 60, I = 1, IWRK(MINFO+1)
+        IWRK(IROW+I) = I
+ 60   CONTINUE
+      DO 70, I = 1, IWRK(MINFO+10)
+        IWRK(ICOL+I) = I
+ 70   CONTINUE
+      DO 80, J = 0, NSTOR
+        IHTBL(1,J) = 0
+        IHTBL(2,J) = 0
+ 80   CONTINUE
+*-------------------------------------------------------------------
+*   LOAD THE HASH PARAMETERS
+*-------------------------------------------------------------------
+      IONE = 1
+      IWRK(IHPRM+1) = NSTOR
+      CALL PRMS (IONE,IP,NSTOR,IWRK(JWRK+1),LENGTH)
+      NSTOR = IP(1)
+      IWRK(IHPRM+2) = 6323
+      IWRK(IHPRM+3) = IP(1)
+      IWRK(IHPRM+4) = IP(1)
+      IWRK(IHPRM+5) = IWRK(MINFO+2)+IWRK(MINFO+3)
+      IWRK(IHPRM+6) = MAX0 (IWRK(MINFO+1),IWRK(MINFO+2)+1)
+      IWRK(IHPRM+7) = 0
+      IWRK(IHPRM+8) = 0
+      IWRK(IHPRM+9) = 0
+      IWRK(IHPRM+10) = 0
+      IWRK(IHPRM+11) = ITRM
+*-------------------------------------------------------------------
+*   LOCAL COMMON VARIABLE INITIALIZATION
+*-------------------------------------------------------------------
+      ITER = 1
+      ICPRM = IWRK(IPRM+1)
+      IZERO = 0
+      IDIAG = 1
+      IMAT = IPARM(7)
+      IBASE = IPARM(9)
+      IF (IMAT.GT.0) KUN12 = IPARM(4)
+      KUN13 = IPARM(5)
+      ISOLH = 0
+      ITRI = 0
+      INULL = 0
+      IBASIC = 0
+      JDEN  = IWRK(MINFO+2) + 1
+      IF (IPARM(8).LT.2) ITRI = 1
+      IF (IPARM(8).EQ.1 .OR. IPARM(8).EQ.3) IBASIC = 1
+      IF (IPARM(8).EQ.2 .OR. IPARM(8).EQ.3) INULL = 1
+      II = IFIX(ALOG10(FLOAT(IPARM(9)-1))) + 1
+      KFORM = (20*IPARM(13)) + II
+*-------------------------------------------------------------------
+*   PASS # 1  -  OPERATIONS
+*     1.  READ DATA MODULO FIRST PRIME
+*     2.  REDUCE TO DIAGONAL FORM WITH PIVOTING
+*     3.  COMPUTE THE HASH TABLE SEPARATION
+*     4.  COMPUTE HADAMARD BOUNDS
+*     5.  STORE RESULTS OF PASS #1 RESULT HASH STRUCTURE
+*-------------------------------------------------------------------
+*   READ EACH ELEMENT ONE AT A TIME. CONVERT MOD ICPRM AND
+*     STORE IN HASH TABLE.  INCREMENT NONZERO COUNTER BY COLUMNS.
+*     INSURE THAT ELEMENTS IN THE MATRIX ARE NOT REFERENCED MORE
+*     THAN ONE TIME
+*-------------------------------------------------------------------
+      IMP = 0
+      CALL SECOND(TINI)
+      IWRK(IAPRM+1) = ICPRM
+      DO 100, K = 1, IWRK(MINFO+4)
+        READ (IPARM(3),*) I,J,NTRM
+        READ (IPARM(3),*) (IWRK(JWRK+II),II=1,NTRM)
+        IF (I.GT.IWRK(MINFO+1).OR.J.GT.IWRK(IHPRM+5)) THEN
+          WRITE (ITRM,1340) I,J
+          STOP
+        ENDIF
+        IWRK(IPIV+J) = IWRK(IPIV+J) + 1
+        I1 = MOD(IWRK(JWRK+2),ICPRM)
+        DO 90, II = 3, NTRM
+          I1 = MOD( I1*JBASE + IWRK(JWRK+II),ICPRM)
+ 90     CONTINUE
+        IF (NTRM .GT. 2) IMP = 1
+        KEY = ISHASH(I,J,0,IWRK(IHPRM+1),IHTBL,NSTOR)
+        IF (IHTBL(2,KEY) .NE. 0) THEN
+          IF ( IER .EQ. 0 ) WRITE (ITRM,1180)
+          WRITE (ITRM,1270) I,J
+          WRITE (ITRM,1190)
+          RETURN
+        ENDIF
+        IHTBL(2,KEY) = I1*IWRK(JWRK+1)
+ 100  CONTINUE
+*-------------------------------------------------------------------
+*   ROW ELIMINATE TO DIAGONAL FORM USING PIVOTING FROM GJPIV AND
+*     ROW REDUCTION FROM GJRRED.  PERFORM INTERMEDIATE OUTPUT IF
+*     SPECIFIED. UPDATE FILLIN INDEX
+*-------------------------------------------------------------------
+      JZRO = 1
+      IF (IPARM(7).GE.1) WRITE (ITRM,1060) IWRK(MINFO+1),IWRK(MINFO+2),
+     +    IWRK(MINFO+3),IWRK(MINFO+4)
+      IF (IPARM(7).GE.2) CALL GJWRT (0,IWRK,NWRK,IHTBL,NSTOR)
+      DO 120, K = 1, IWRK(MINFO+5)
+        KS = K
+        CALL SECOND(T)
+        IF (JZRO .NE. 0) THEN
+          CALL GJPIV (KS,JZRO,IWRK,NWRK,IHTBL,NSTOR)
+          CALL GJRRED (KS,0,IWRK,NWRK,IHTBL,NSTOR)
+          IF (IPARM(7).GE.2) CALL GJWRT (KS,IWRK,NWRK,IHTBL,NSTOR)
+          DO 110, LL = K+1, IWRK(MINFO+2)+IWRK(MINFO+3)
+            KS = KS + IWRK(IPIV+IWRK(ICOL+LL))
+ 110      CONTINUE
+          IF (KS .GT. IWRK(MINFO+8)) IWRK(MINFO+8) = KS
+        ENDIF
+ 120  CONTINUE
+      IF (IWRK(MINFO+1) .GT. IWRK(MINFO+2)) THEN
+        KK = IWRK(MINFO+6)-IWRK(IDEP+1)
+        DO 125, K = IWRK(MINFO+5)+1, KK, 1
+          IWRK(IDEP+1) = IWRK(IDEP+1) + 1
+          IWRK(IDEP+IWRK(IDEP+1)+1) = IWRK(IROW+K)
+ 125    CONTINUE
+      ENDIF
+      IWRK(MINFO+7) = IWRK(MINFO+1) - IWRK(IDEP+1)
+*-------------------------------------------------------------------
+*   COMPUTE HASH TABLE SPLIT AND RESTORE THE FIRST PASS ELEMENTS IN
+*     ELIMINATION HASH STRUCTURE
+*-------------------------------------------------------------------
+      KK = INT(FLOAT(IWRK(MINFO+8))/FILL)
+      IF ( IPARM(8) .EQ. 0 .OR. KK .GE. NSTOR ) THEN
+        IPARM(8) = 0
+        IBASIC = 0
+        INULL = 0
+        IPP = IWRK(IHPRM+3)
+        IWRK(IHPRM+12) = NSTOR
+        IWRK(IHPRM+4) = 1
+        GO TO 160
+      ENDIF
+      IWRK(IHPRM+14) = 0
+      DO 130, J = IWRK(MINFO+7)+1, IWRK(MINFO+2)+IWRK(MINFO+3)
+        IWRK(IHPRM+14) = IWRK(IHPRM+14) + IWRK(IPIV+J)
+ 130  CONTINUE
+      RFRAC = FLOAT(IWRK(MINFO+8)) / FLOAT(NSTOR)
+      SFRAC = FLOAT(IWRK(IHPRM+14)*IPARM(12)) /  FLOAT(NSTOR*2)
+      TFRAC = RFRAC + SFRAC
+      IF ( RFRAC .GT. .95 ) THEN
+        MAXP = MIN0(INT(FLOAT(IWRK(MINFO+8))/.9),IWRK(IHPRM+3))
+      ELSEIF ( TFRAC .GE. .9 ) THEN
+        MAXP = MIN0(INT(FLOAT(IWRK(MINFO+8))/FILL),IWRK(IHPRM+3))
+      ELSE
+        TFRAC = (1.-TFRAC)*(2./ 3.)
+        SFRAC = FLOAT(NSTOR)
+        MAXP = INT((TFRAC+RFRAC)*SFRAC)
+      ENDIF
+      CALL PRMS (IONE,IP,MAXP,IWRK(JWRK+1),LENGTH)
+      IWRK(IHPRM+12) = IP(1)
+      IPP = IWRK(IHPRM+3)
+      DO 150, I = 1, IWRK(MINFO+1)
+        DO 140, J = I, IWRK(MINFO+2)+IWRK(MINFO+3)
+          IWRK(IHPRM+3) = IPP
+          KEY = IRHASH(IWRK(IROW+I),IWRK(ICOL+J),0,IWRK(IHPRM+1),
+     *      IHTBL,NSTOR)
+          KK = IHTBL(2,KEY)
+          IF ( KK .NE. 0 ) THEN
+            IHTBL(2,KEY) = 0
+            IWRK(IHPRM+3) = IP(1)
+            KEY = ISHASH(IWRK(IROW+I),IWRK(ICOL+J),0,IWRK(IHPRM+1),
+     *        IHTBL,NSTOR)
+            IHTBL(2,KEY) = KK
+            IF ( I.GT.IWRK(MINFO+7) .AND. J.GT.IWRK(MINFO+2) ) THEN
+              I1 = J - IWRK(MINFO+2)
+              IWRK(IRHS+I1) = 1
+            ENDIF
+          ENDIF
+ 140    CONTINUE
+ 150  CONTINUE
+      IWRK(IHPRM+3) = IPP
+      IPP = IP(1)
+      MHZ = IP(1) + 1
+      MAXP = MAX(NSTOR-IP(1)-1,1)
+      IP(1) = 0
+      CALL PRMS (IONE,IP,MAXP,IWRK(JWRK+1),LENGTH)
+      IWRK(IHPRM+4) = IP(1)
+ 160  CONTINUE
+*-------------------------------------------------------------------
+*   COMPUTE HADAMARD BOUNDS IF NECESSARY.  READ EACH ELEMENT ONE AT
+*     A TIME. COMPUTE REGULAR HADAMARD BOUND.  KEEP ROW AND COLUMN
+*     NORMS, AND KEEP THE RIGHT HAND SIDE NORMS.
+*-------------------------------------------------------------------
+      IF ( IPARM(10).LE.0 ) THEN
+        DO 165, I = 1, NH
+          HWRK(I) = 0.
+ 165    CONTINUE
+        REWIND (IPARM(3))
+        READ (IPARM(3),*) (IWRK(JWRK+II),II=1,4),JBASE
+        HBASE = FLOAT(JBASE)
+        HLOG = ALOG10(HBASE)
+        DO 170, K = 1, IWRK(MINFO+4)
+          READ (IPARM(3),*) I,J,NTRM
+          READ (IPARM(3),*) (IWRK(JWRK+II),II=1,NTRM)
+          NTRM = (NTRM-2)*2
+          ICOEF = (IWRK(JWRK+2)+IMP)**2
+          IF ( IPARM(10) .NE. 0 ) THEN
+            KEY = ISHASH(I,J,1,IWRK(IHPRM+1),IHTBL,NSTOR)
+            IHTBL(2,KEY) = NTRM
+            KEY = ISHASH(I,J,2,IWRK(IHPRM+1),IHTBL,NSTOR)
+            IHTBL(2,KEY) = ICOEF
+          ENDIF
+*-------------------------------------------------------------------
+*   INCREMENT NORMS WITH PSEUDO-FLOATING POINT ARITHMETIC BY STORING
+*     THE COEFFICIENT AND THE POWER OF THE ROW/COLUMN NORMS IN A
+*     REAL AND INTEGER ARRAY RESPECTIVELY.
+*-------------------------------------------------------------------
+          IF (J .GT. IWRK(MINFO+2)) THEN
+            J = J + IW3 + IWRK(MINFO+1)
+            JJ = J - IW3
+            IDIF = IABS(IWRK(J) - NTRM)
+            IF (IWRK(J).LT.NTRM) THEN
+              IDIF = MAX0(-3,IWRK(J)-NTRM)
+              HWRK(JJ) = FLOAT(ICOEF) + (HWRK(JJ)*(HBASE**IDIF))
+              IWRK(J) = NTRM
+            ELSE
+              IDIF = MAX0(-3,NTRM-IWRK(J))
+              HWRK(JJ) = HWRK(JJ) + (FLOAT(ICOEF)*(HBASE**IDIF))
+            ENDIF
+          ELSE
+            J = J + IWRK(MINFO+1)
+            IDIF = IABS(IWRK(IW3+J) - NTRM)
+            IF ( IWRK(IW3+J).LT.NTRM ) THEN
+              IDIF = MAX0(-3,IWRK(IW3+J)-NTRM)
+              HWRK(J) = FLOAT(ICOEF) + (HWRK(J)*(HBASE**IDIF))
+              IWRK(IW3+J) = NTRM
+            ELSE
+              IDIF = MAX0(-3,NTRM-IWRK(IW3+J))
+              HWRK(J) = HWRK(J) + (FLOAT(ICOEF)*(HBASE**IDIF))
+            ENDIF
+            IF (IWRK(IW3+I) .LT. NTRM ) THEN
+              IDIF = MAX0(-3,IWRK(IW3+I)-NTRM)
+              HWRK(I) = FLOAT(ICOEF) + (HWRK(I)*(HBASE**IDIF))
+              IWRK(IW3+I) = NTRM
+            ELSE
+              IDIF = MAX0(-3,NTRM-IWRK(IW3+I))
+              HWRK(I) = HWRK(I) + (FLOAT(ICOEF)*(HBASE**IDIF))
+            ENDIF
+          ENDIF
+ 170    CONTINUE
+*-------------------------------------------------------------------
+*   COMPUTE BOUND OF HADAMARD.  COMPUTE THE MAX. COLUMN NORM OF
+*     THE RIGHT HAND SIDES.
+*-------------------------------------------------------------------
+        HDMRD = 1.0
+        IMAX = 0
+        DO 180, J = IWRK(MINFO+2) + 1, IWRK(MINFO+2)+IWRK(MINFO+3)
+          JJ = J + IW3 + IWRK(MINFO+1)
+          KK = JJ - IW3
+          IF (IWRK(JJ) .GT. IMAX) THEN
+            IMAX = IWRK(JJ)
+            HDMRD = HWRK(KK)
+          ELSEIF (IWRK(JJ) .EQ. IMAX) THEN
+            HDMRD = MAX(HWRK(KK),HDMRD)
+          ENDIF
+ 180    CONTINUE
+        HDMRD = MAX(HDMRD,1.)
+        BMAX = (ALOG10(2.*HDMRD) + (FLOAT(IMAX)*HLOG)) / 2.
+*-------------------------------------------------------------------
+*   BOUND THE DETERMINANT OF THE ROW NORMS IN THE MATRIX.
+*-------------------------------------------------------------------
+        HDMRD = BMAX
+        DO 190, I = 1, IWRK(MINFO+1)
+          IF ( IWRK(MINFO+2) .GE. IWRK(MINFO+1) ) THEN
+            IMAX = IWRK(IW3+I)
+            HMAX = MAX(1.,HWRK(I))
+            LL = I
+          ELSE
+            IMAX = 0
+            HMAX = 1.
+            DO 185, J = 1, IWRK(MINFO+1)
+              IF ( IWRK(IW3+J) .GT. IMAX ) THEN
+                IMAX = IWRK(IW3+J)
+                HMAX = HWRK(J)
+                LL = J
+              ELSEIF ( (IWRK(IW3+J).EQ.IMAX) .AND.
+     *            (HWRK(J).GT.HMAX)) THEN
+                HMAX = HWRK(J)
+                LL = J
+              ENDIF
+ 185        CONTINUE
+          ENDIF
+          HMAX = MAX(HMAX,1.)
+          HDMRD = HDMRD + ((ALOG10(HMAX) + (FLOAT(IMAX)*HLOG)) / 2.)
+          IWRK(IW3+LL) = 0
+          HWRK(LL) = 0.
+ 190    CONTINUE
+*-------------------------------------------------------------------
+*   COMPUTE NUMBER OF PRIMES REQUIRED TO BOUND HDMRD BY ROWS
+*-------------------------------------------------------------------
+        HMAX = 0.
+        DO 195, I = 1, NPRME
+          PRIME = ALOG10(FLOAT(IWRK(IPRM+I)))
+          HMAX = HMAX + PRIME
+          IF ( HDMRD.LE.HMAX ) THEN
+            NPASS = I
+            GO TO 200
+          ENDIF
+ 195    CONTINUE
+        NPASS = NPRME
+ 200    CONTINUE
+*-------------------------------------------------------------------
+*   BOUND THE DETERMINANT OF THE COLUMN NORMS IN THE MATRIX.
+*-------------------------------------------------------------------
+        HDMRD = BMAX
+        DO 210, J = IWRK(MINFO+1)+1, IWRK(MINFO+1)+IWRK(MINFO+2)
+          IF ( IWRK(MINFO+1) .GE. IWRK(MINFO+2) ) THEN
+            IMAX = IWRK(IW3+J)
+            HMAX = MAX(1.,HWRK(J))
+          ELSE
+            IMAX = 0
+            HMAX = 1.
+            DO 205, I=IWRK(MINFO+1)+1, IWRK(MINFO+1)+IWRK(MINFO+2)
+              IF ( IWRK(IW3+I) .GT. IMAX ) THEN
+                IMAX = IWRK(IW3+I)
+                HMAX = HWRK(I)
+                LL = I
+              ELSEIF ( (IWRK(IW3+I).EQ.IMAX) .AND.
+     *            (HWRK(I).GT.HMAX)) THEN
+                HMAX = HWRK(I)
+                LL = I
+              ENDIF
+ 205        CONTINUE
+          ENDIF
+          HMAX = MAX(HMAX,1.)
+          HDMRD = HDMRD + ((ALOG10(HMAX) + (FLOAT(IMAX)*HLOG)) / 2.)
+          IWRK(IW3+LL) = 0
+          HWRK(LL) = 0.
+ 210    CONTINUE
+*-------------------------------------------------------------------
+*   COMPUTE NUMBER OF PRIMES REQUIRED TO BOUND HDMRD BY COLUMNS
+*-------------------------------------------------------------------
+        HMAX = 0.
+        DO 215, I = 1, NPRME
+          PRIME = ALOG10(FLOAT(IWRK(IPRM+I)))
+          HMAX = HMAX + PRIME
+          IF ( HDMRD.LE.HMAX ) THEN
+            NPASS1 = I
+            GO TO 220
+          ENDIF
+ 215    CONTINUE
+        NPASS1 = NPRME
+ 220    CONTINUE
+*-------------------------------------------------------------------
+*   TAKE THE SMALLEST NUMBER OF PRIMES THAT BOUND THE NORMS
+*-------------------------------------------------------------------
+        NPASS = MIN0(NPASS,NPASS1)
+        NPASS1 = 0
+        IF ( NPASS .GE. NPRME ) NPASS2 = 1
+      ENDIF
+*-------------------------------------------------------------------
+*   COMPUTE THE MODIFIED HADAMARD BOUND ON THE RXR SQUARE SUBMATRIX
+*     THAT IS NONSINGULAR AND CHOSEN BY PIVOTING.  WORK THROUGH THE
+*     INDEPENDENT ROWS AND COLUMNS TO COMPUTE ROW NORMS OF THE
+*     NONSINGULAR SUBMATRIX.  INCREMENT HADAMARD BOUND, HDMRD.
+*-------------------------------------------------------------------
+      IF ( IPARM(10).LE.-1 .AND. IWRK(MINFO+7).EQ.IWRK(MINFO+1) ) THEN
+        NPASS1 = NPASS
+      ELSEIF ( IPARM(10) .LE. -1 ) THEN
+        HDMRD = BMAX
+        DO 240, I = 1, IWRK(MINFO+7)
+          HMAX = 1.
+          IMAX = 0
+          DO 230, J = 1, IWRK(MINFO+7)
+            KEY = IRHASH(IWRK(IROW+I),IWRK(ICOL+J),1,IWRK(IHPRM+1),
+     *        IHTBL,NSTOR)
+            NTRM = IHTBL(2,KEY)
+            KEY = IRHASH(IWRK(IROW+I),IWRK(ICOL+J),2,IWRK(IHPRM+1),
+     *        IHTBL,NSTOR)
+            HINT = FLOAT(IHTBL(2,KEY))
+            IF ( NTRM .EQ. IMAX ) THEN
+              HMAX = HMAX + HINT
+            ELSEIF ( NTRM .GT. IMAX ) THEN
+              IDIF = IMAX - NTRM
+              HMAX = HINT + (HMAX*(HBASE**IDIF))
+              IMAX = NTRM
+            ELSE
+              IDIF = NTRM - IMAX
+              HMAX = HMAX + (HINT*(HBASE**IDIF))
+            ENDIF
+ 230      CONTINUE
+          HMAX = MAX(HMAX,1.)
+          HDMRD = HDMRD + ((ALOG10(HMAX)+(FLOAT(IMAX)*HLOG)) / 2.)
+ 240    CONTINUE
+*-------------------------------------------------------------------
+*   COMPUTE NUMBER OF PRIMES REQUIRED TO BOUND MODIFIED HDMRD
+*-------------------------------------------------------------------
+        HMAX = 0.
+        DO 250, I = 1, NPRME
+          PRIME = ALOG10(FLOAT(IWRK(IPRM+I)))
+          HMAX = HMAX + PRIME
+          IF ( HDMRD.LE.HMAX ) THEN
+            NPASS1 = I
+            GO TO 260
+          ENDIF
+ 250    CONTINUE
+        NPASS1 = NPRME
+        NPASS3 = 1
+ 260    CONTINUE
+      ENDIF
+*-------------------------------------------------------------------
+*   COMPUTE INITIAL RESULTS AND ZERO THE HADAMARD PART OF HASHING
+*-------------------------------------------------------------------
+      IWRK(IHPRM+3) = IPP
+      II = IWRK(IHPRM+5)*IWRK(IHPRM+6)
+      DO 270, I= 0, NSTOR
+        IF (IHTBL(1,I).GT.II .OR. I.GT.IPP) THEN
+          IHTBL(1,I) = 0
+          IHTBL(2,I) = 0
+        ENDIF
+ 270  CONTINUE
+      CALL GJRES (IWRK,NWRK,IHTBL,NSTOR)
+*-------------------------------------------------------------------
+*   COMPUTE AND OUTPUT INITIAL RESULTS
+*-------------------------------------------------------------------
+      IF (IWRK(MINFO+7).EQ.IWRK(MINFO+5) .AND. IPARM(7).GE.1) THEN
+        WRITE (ITRM,1030)
+        IF ( IPARM(10) .LE. 0 ) WRITE (ITRM,1010) NPASS
+        IF ( NPASS2 .EQ. 1 ) WRITE (ITRM,1025)
+        IF (IWRK(MINFO+1).GT.IWRK(MINFO+2)) THEN
+          WRITE (ITRM,1045) IWRK(IDEP+1)
+          WRITE (ITRM,9080) (IWRK(IDEP+I),I=2,IWRK(IDEP+1)+1)
+        ENDIF
+        WRITE (ITRM,9090)
+      ELSEIF (IPARM(7).GE.1 .AND. IPARM(10).LE.0) THEN
+        WRITE (ITRM,1000)
+        WRITE (ITRM,1010) NPASS
+        IF ( NPASS1 .GT. 0 ) WRITE (ITRM,1020) NPASS1
+        IF ( NPASS2 .EQ. 1 ) WRITE (ITRM,1025)
+        IF ( NPASS3 .EQ. 1 ) WRITE (ITRM,1035)
+        WRITE (ITRM,1040) IWRK(IDEP+1)
+        WRITE (ITRM,9080) (IWRK(IDEP+I),I=2,IWRK(IDEP+1)+1)
+        WRITE (ITRM,9090)
+      ELSEIF (IPARM(7).GE.1) THEN
+        WRITE (ITRM,1000)
+        WRITE (ITRM,1040) IWRK(IDEP+1)
+        WRITE (ITRM,9080) (IWRK(IDEP+I),I=2,IWRK(IDEP+1)+1)
+        WRITE (ITRM,9090)
+      ENDIF
+*-------------------------------------------------------------------
+*   CALCULATE THE REQUIRED NUMBER OF PASSES
+*-------------------------------------------------------------------
+      IF ((IPARM(8).EQ.0) .AND. (IWRK(MINFO+7).EQ.IWRK(MINFO+1)) .AND.
+     *  (IWRK(MINFO+2).GE.IWRK(MINFO+1))) THEN
+        ITER = 2
+        KOUNT = 0
+        GO TO 360
+      ELSEIF (IPARM(10) .GT. 1) THEN
+        NTERM = IPARM(10)
+      ELSEIF (IPARM(10) .EQ. 1) THEN
+        ITER = 2
+        KOUNT = 0
+        GO TO 360
+      ELSEIF (IPARM(10) .EQ. 0) THEN
+        NTERM = NPASS
+      ELSEIF (IPARM(10) .EQ. -1) THEN
+        NTERM = NPASS
+      ELSEIF (IPARM(10) .EQ. -2) THEN
+        NTERM = NPASS1
+      ENDIF
+*-------------------------------------------------------------------
+*   PASS # 2,3, ...   -  OPERATIONS BEGIN WITH
+*     1.  SET PRIMES
+*     2.  INITIALIZE DATA STRUCTURES
+*     3.  READ DATA MODULO ITERTH PRIME
+*     4.  REDUCE TO IDENTITY FORM -- NO PIVOTING
+*     5.  WRITE PASS ITER RESULTS TO INTERMEDIATE FILES
+*-------------------------------------------------------------------
+      NDIS = 0
+      KOUNT = 0
+      DO 350, ITER = 2, NTERM
+ 280    CONTINUE
+        ICPRM = IWRK(IPRM+ITER+NDIS)
+        IWRK(IAPRM+ITER) = ICPRM
+        IPP = 1
+        DO 290, K = 1, ITER-1
+          IPP = MOD(IPP*IWRK(IAPRM+K),ICPRM)
+ 290    CONTINUE
+        IWRK(IPIN+ITER) = INV(IPP,ICPRM)
+        DO 300, I = 0, IWRK(IHPRM+3)
+          IHTBL(1,I) = 0
+          IHTBL(2,I) = 0
+ 300    CONTINUE
+        DO 310, I = 1, IWRK(MINFO+1)
+          IWRK(IPIV+I) = 0
+ 310    CONTINUE
+*-------------------------------------------------------------------
+*   READ EACH ELEMENT ONE AT A TIME. CONVERT MOD ICPRM AND
+*     STORE IN HASH TABLE.  INCREMENT NONZERO COUNTER BY ROWS.
+*-------------------------------------------------------------------
+        REWIND (IPARM(3))
+        READ (IPARM(3),*) (IWRK(JWRK+II),II=1,4),JBASE
+        DO 330, K = 1, IWRK(MINFO+4)
+          READ (IPARM(3),*) I,J,NTRM
+          READ (IPARM(3),*) (IWRK(JWRK+II),II=1,NTRM)
+          IWRK(IPIV+I) = IWRK(IPIV+I) + 1
+          I1 = MOD(IWRK(JWRK+2),ICPRM)
+          DO 320, L = 3, NTRM
+            I1 = MOD( I1*JBASE + IWRK(JWRK+L),ICPRM)
+ 320      CONTINUE
+          KEY = ISHASH(I,J,0,IWRK(IHPRM+1),IHTBL,NSTOR)
+          IHTBL(2,KEY) = I1*IWRK(JWRK+1)
+ 330    CONTINUE
+*-------------------------------------------------------------------
+*   ELIMINATE TO APPROPRIATE FORM - PERFORM OUTPUT IF DESIRED
+*-------------------------------------------------------------------
+        IDIAG = 1
+        IF (IPARM(7).GE.4) CALL GJWRT (0,IWRK,NWRK,IHTBL,NSTOR)
+        DO 340, K = 1, IWRK(MINFO+7)
+          KS = K
+          CALL GJRRED (KS,1,IWRK,NWRK,IHTBL,NSTOR)
+          IF (IPARM(7).GE.4) CALL GJWRT (KS,IWRK,NWRK,IHTBL,NSTOR)
+ 340    CONTINUE
+*-------------------------------------------------------------------
+*   STORE NEW RESIDUES AND PERFORM RANK CHECK -
+*     IF IRANK =  1 RANK INCREASED - DISCARD ALL PRIMES
+*     IF IRANK = -1 RANK DECREASED - DISCARD THIS PRIME
+*     IF IRANK =  0 RANK UNCHANGED - CONTINUE
+*-------------------------------------------------------------------
+        CALL GJRES (IWRK,NWRK,IHTBL,NSTOR)
+        IF ( ISOLH .EQ. 1 ) THEN
+          IF ( IPARM(7) .GE. 1 ) WRITE (ITRM,1095)
+          IBASIC = 0
+          INULL = 0
+          KOUNT = 0
+          GO TO 360
+        ENDIF
+        IF ( IRANK .EQ. 1 ) THEN
+          IF ( IPARM(7) .GE. 1 ) WRITE (ITRM,1080) ICPRM
+          NDIS = 0
+          MAXP = ICPRM-2
+          GO TO 30
+        ELSEIF ( IRANK .EQ. -1 ) THEN
+          IF ( IPARM(7) .GE. 1 ) WRITE (ITRM,1090) ICPRM
+          NDIS = NDIS + 1
+          GO TO 280
+        ENDIF
+        IF ( IPARM(7) .GE. 1 ) THEN
+          CALL SECOND(T)
+          WRITE (ITRM,1050) ITER,T-TINI
+        ENDIF
+*-------------------------------------------------------------------
+*   PERFORM CONVERGENCE CHECK: STOP IF
+*     1.  THREE SUCCESSIVE ITERATIONS DO NOT CHANGE THE RESULTS
+*     2.  THE MODIFIED HADAMARD BOUND IS SATISFIED AND THE RESULTS
+*           DO NOT CHANGE ON ONE ITERATE.
+*-------------------------------------------------------------------
+        IF ( IZERO .NE. 0 ) THEN
+          KOUNT = 0
+        ELSE
+          KOUNT = KOUNT + 1
+        ENDIF
+        IF ( IPARM(10).EQ.-1 .AND. (KOUNT.EQ.4 .OR.
+     *    (KOUNT.EQ.1 .AND. ITER.GT.NPASS1)) ) GO TO 360
+ 350  CONTINUE
+*-------------------------------------------------------------------
+*   BEGIN OUTPUT - WRITE HEADER AND MATRIX DEPENDENCIES
+*-------------------------------------------------------------------
+ 360  CONTINUE
+      ITTOL = ITER - KOUNT
+      IF ( KUN12 .GT. 0 ) THEN
+        CALL GOLIA(KUN12)
+        WRITE (KUN12,9000)
+        WRITE (KUN12,9010) IWRK(MINFO+1),IWRK(MINFO+2),IWRK(MINFO+3)
+        IF (NPASS.GT.0) WRITE (KUN12,9015) NPASS
+        IF (NPASS1.GT.0) WRITE (KUN12,9020) NPASS1
+        WRITE (KUN12,9025) ITER-1
+        WRITE (KUN12,9045) KOUNT
+        IF ( IWRK(MINFO+7) .EQ. IWRK(MINFO+1) ) THEN
+          WRITE (KUN12,9035) IWRK(MINFO+7)
+        ELSE
+          WRITE (KUN12,9030) IWRK(MINFO+7)
+          WRITE (KUN12,9080) (IWRK(IDEP+I),I=2,IWRK(IDEP+1)+1)
+        ENDIF
+        WRITE (KUN12,9040)
+        WRITE (KUN12,9080) (IWRK(IROW+I),I=1,IWRK(MINFO+7))
+        WRITE (KUN12,9050)
+        WRITE (KUN12,9080) (IWRK(ICOL+I),I=1,IWRK(MINFO+7))
+      ENDIF
+*-------------------------------------------------------------------
+*   COMPUTE AND OUTPUT THE MINOR OF THE LEADING SQUARE SYSTEM
+*-------------------------------------------------------------------
+      IF (KUN12.GT.0 .AND. IPARM(13).EQ.1) WRITE (KUN12,9060) IBASE
+      IF (KUN12.GT.0 .AND. IPARM(13).EQ.0) WRITE (KUN12,9065)
+      IF ( KUN12.GT.0 .AND. IWRK(MINFO+7).EQ.IWRK(MINFO+1) .AND.
+     *    IWRK(MINFO+2).EQ.IWRK(MINFO+1) ) THEN
+        WRITE (KUN12,9075)
+      ELSEIF ( KUN12 .GT. 0 ) THEN
+        WRITE (KUN12,9070)
+      ENDIF
+      CALL RADIXF (KNUM,ITTOL,KODE,IWRK,NWRK)
+      IF ( TOUT ) CALL MPOUT (IWRK(KODE+1),LMAX,KUN12,KFORM)
+*-------------------------------------------------------------------
+*   COMPUTE AND OUTPUT THE DETERMINANT OF THE RATIONAL MATRIX
+*     IF THE INTEGER MATRIX FILE CONTAINS THE DETERMINANT OF THE
+*     DIAGONAL SCALING MATRIX USED CONVERT IT.
+*-------------------------------------------------------------------
+      READ (IPARM(3),*,END=370) I,J,NTRM
+      IF ( (I.EQ.0) .AND. (J.EQ.0) .AND. (KUN12.GT.0) .AND.
+     *  (LWRK.GT.NTRM)) THEN
+        WRITE (KUN12,9085)
+        READ (IPARM(3),*) (IWRK(JWRK+II),II=0,NTRM-1)
+        IF (IBASE.NE.JBASE)
+     *    CALL MPBASE (IWRK(JWRK),NTRM,JBASE,IBASE,IWRK(IW2))
+        IWRK(JWRK) = IWRK(JWRK)*NTRM
+        IF (JBASE.NE.IBASE)
+     *     CALL MPBASE (IWRK(JWRK),NTRM+1,IBASE,JBASE,IWRK(IW3))
+        IF ( LWRK.LE.NTRM .OR. IPARM(10).EQ.1 ) THEN
+          CALL MPOUT (IWRK(KODE+1),LMAX,KUN12,KFORM)
+          WRITE (KUN12,9270)
+          CALL MPOUT (IWRK(JWRK),LENGTH,KUN12,KFORM)
+        ELSE
+          CALL MPCOPY (IWRK(KGCD+1),IWRK(JWRK),LMAX)
+          CALL MPCOPY (IWRK(IW4),IWRK(KGCD+1),LMAX)
+          CALL MPCOPY (IWRK(KNUM+1),IWRK(KODE+1),LMAX)
+          CALL MPGCD (IWRK(KNUM+1),IWRK(KGCD+1),LMAX,IBASE,
+     *      IWRK(IW1),IWRK(IW2),IWRK(IW3),IWRK(LST))
+          CALL MPDIV (IWRK(KODE+1),IWRK(KGCD+1),IWRK(LST+1),
+     *      IWRK(IW1),LMAX,IBASE,IWRK(IW2),IWRK(IW3))
+          CALL MPOUT (IWRK(LST+1),LMAX,KUN12,KFORM)
+          CALL MPDIV (IWRK(IW4),IWRK(KGCD+1),IWRK(LST+1),
+     *      IWRK(IW1),LMAX,IBASE,IWRK(IW2),IWRK(IW3))
+          WRITE (KUN12,9270)
+          CALL MPOUT (IWRK(LST+1),LMAX,KUN12,KFORM)
+        ENDIF
+      ENDIF
+ 370  CONTINUE
+*-------------------------------------------------------------------
+*   ZERO ELIMINATION HASH TABLE AND RESTRUCTURE FOR OUTPUT
+*-------------------------------------------------------------------
+      IWRK(IHPRM+13) = 0
+      DO 380, I = 0, IWRK(IHPRM+3)
+        IHTBL(1,I) = 0
+        IHTBL(2,I) = 0
+ 380  CONTINUE
+      DO 390, I = MHZ, MHZ+IWRK(IHPRM+4)
+        IF (IHTBL(1,I).GT.0) IWRK(IHPRM+13) = IWRK(IHPRM+13) + 1
+ 390  CONTINUE
+      IWRK(IHPRM+3) = NSTOR
+*-------------------------------------------------------------------
+*   COMPUTE AND OUTPUT PARTICULAR SOLUTIONS.  TEST EACH RHS FOR
+*     CONSISTENTCY.
+*-------------------------------------------------------------------
+      IWRK(IHPRM+11) = 0
+      IF (IBASIC .EQ. 1 ) THEN
+        IF ( TOUT ) WRITE (KUN12,9200)
+        IF ( IPARM(7) .GE. 1 ) WRITE (ITRM,1300)
+        DO 470, J = 1, IWRK(MINFO+3)
+          JSOL = IWRK(MINFO+2) + J
+          IF ( IWRK(IRHS+J) .EQ. 1 ) THEN
+            IF ( TOUT ) WRITE (KUN12,9210) J
+            IF ( IPARM(7) .GE. 1 ) WRITE (ITRM,1310) J
+            GO TO 470
+          ENDIF
+*-------------------------------------------------------------------
+*   IF JTH SOLUTION VECTOR ELEMENTS ARE NONZERO, FIND THE RESIDUE
+*     MODULO ICPRM AND COMPUTE THE NEW MIXED RADIX REPRESENTATION.
+*     UPDATE THE GCD OF THE SOLUTIONS NUMERATORS AND DENOMINATOR.
+*     RESTORE SOLUTION ELEMENTS WHILE GCD IS BEING COMPUTED.
+*-------------------------------------------------------------------
+          IF ( TOUT ) WRITE (KUN12,9220) J, JSOL
+          CALL MPCOPY(IWRK(KGCD+1),IWRK(KODE+1),LMAX)
+          DO 410, I = 1, IWRK(MINFO+2)
+            IS = I
+            CALL JRHASH (IS,JSOL,LST,ITTOL,0,JZ,IWRK,NWRK,
+     *        IHTBL,NSTOR)
+            IF ( JZ .EQ. 0 ) THEN
+              IWRK(IPIV+I) = 0
+            ELSE
+              IWRK(IPIV+I) = 1
+              CALL RADIXF (LST,ITTOL,KNUM,IWRK,NWRK)
+              DO 400, K = 1, IABS(IWRK(KNUM+1)), 1
+                KS = K
+                KEY = ISHASH(IS,JSOL,KS,IWRK(IHPRM+1),IHTBL,NSTOR)
+                IHTBL(2,KEY) = IWRK(KNUM+K)
+ 400          CONTINUE
+              CALL MPGCD (IWRK(KNUM+1),IWRK(KGCD+1),LMAX,IBASE,
+     *          IWRK(IW1),IWRK(IW2),IWRK(IW3),IWRK(LST))
+            ENDIF
+ 410      CONTINUE
+*-------------------------------------------------------------------
+*   COMPUTE AND OUTPUT THE GCD FOR JTH RHS.  STORE DENOMINATOR
+*     FOR CURRENT RIGHT HAND SIDE IN HASH TABLE.
+*-------------------------------------------------------------------
+          IF ( TOUT ) WRITE (KUN12,9270)
+          CALL MPDIV (IWRK(KODE+1),IWRK(KGCD+1),IWRK(IW1),
+     *      IWRK(IW2),LMAX,IBASE,IWRK(IW3),IWRK(IW4))
+          IF ( TOUT ) CALL MPOUT (IWRK(IW1),LMAX,KUN12,KFORM)
+          DO 420, K = 0, IABS(IWRK(IW1))-1, 1
+            KS = K+1
+            KEY = ISHASH(JDEN,JSOL,KS,IWRK(IHPRM+1),IHTBL,NSTOR)
+            IHTBL(2,KEY) = IWRK(IW1+K)
+ 420      CONTINUE
+*-------------------------------------------------------------------
+*   COMPUTE AND OUTPUT THE NUMERATORS BY DIVIDING OUT THE GCD.
+*     STORE NUMERATORS IN THE HASH TABLE.
+*-------------------------------------------------------------------
+          IF ( TOUT ) WRITE (KUN12,9260)
+          DO 460, I = 1, IWRK(MINFO+2)
+            IS = I
+            IF ( IWRK(IPIV+IS) .NE. 0 ) THEN
+              KEY = IRHASH(IS,JSOL,1,IWRK(IHPRM+1),IHTBL,NSTOR)
+              IWRK(LST+1) = IHTBL(2,KEY)
+              IHTBL(2,KEY) = 0
+              DO 440, K = 2, IABS(IWRK(LST+1)), 1
+                KS = K
+                KEY = IRHASH(IS,JSOL,KS,IWRK(IHPRM+1),IHTBL,NSTOR)
+                IWRK(LST+K) = IHTBL(2,KEY)
+                IHTBL(2,KEY) = 0
+ 440          CONTINUE
+              CALL MPDIV (IWRK(LST+1),IWRK(KGCD+1),IWRK(IW1),
+     *          IWRK(IW2),LMAX,IBASE,IWRK(IW3),IWRK(IW4))
+              IF ( TOUT ) THEN
+                WRITE (KUN12,9140) IS
+                CALL MPOUT (IWRK(IW1),LMAX,KUN12,KFORM)
+              END IF
+              DO 450, K = 0, IABS(IWRK(IW1))-1, 1
+                KS = K+1
+                KEY = ISHASH(IS,JSOL,KS,IWRK(IHPRM+1),IHTBL,NSTOR)
+                IHTBL(2,KEY) = IWRK(IW1+K)
+ 450          CONTINUE
+            ENDIF
+ 460      CONTINUE
+*-------------------------------------------------------------------
+*   CALCULATE TIME AND GO TO NEXT NUMERATOR.
+*-------------------------------------------------------------------
+          IF ( IPARM(7) .GE. 1 ) THEN
+            CALL SECOND(T)
+            WRITE (ITRM,1310) J,T-TINI
+          ENDIF
+ 470    CONTINUE
+      ENDIF
+*-------------------------------------------------------------------
+*   COMPUTE AND OUTPUT NULL SPACE
+*-------------------------------------------------------------------
+      IF ( IWRK(MINFO+7).EQ.IWRK(MINFO+2) .AND. INULL.EQ.1 ) THEN
+        IF ( TOUT ) WRITE (KUN12,9110)
+      ELSEIF ( IWRK(MINFO+7).LT.IWRK(MINFO+2) .AND. INULL.EQ.1 ) THEN
+        IF ( IPARM(7) .GE. 1 ) WRITE (ITRM,1320)
+     *    IWRK(MINFO+2)-IWRK(MINFO+7)
+        IF ( TOUT ) WRITE (KUN12,9100)
+        KK = IWRK(MINFO+2) - IWRK(MINFO+7)
+        IF ( TOUT ) WRITE (KUN12,9130) KK
+        IF ( TOUT ) WRITE (KUN12,9080)
+     *    (IWRK(ICOL+I), I = IWRK(MINFO+7)+1, IWRK(MINFO+2))
+*-------------------------------------------------------------------
+*   REDUCE ELEMENTS IN EACH VECTOR IN NULL SPACE TO LOWEST TERMS
+*-------------------------------------------------------------------
+        DO 540, J = 1, IWRK(MINFO+2)-IWRK(MINFO+7)
+          JS = J
+          JSOL = J + IWRK(MINFO+7)
+          LSOL = IWRK(ICOL+JSOL)
+          CALL MPCOPY (IWRK(KGCD+1),IWRK(KODE+1),LMAX)
+          IF ( TOUT ) WRITE (KUN12,9120) J,JSOL,IWRK(ICOL+JSOL)
+*-------------------------------------------------------------------
+*   IN JTH VECTOR, ELEMENT-WISE COMPUTE THE FIXED RADIX FORM.
+*     UPDATE THE GCD OF NULL VECTOR ELEMENTS.  RESTORE EACH ELEMENT.
+*-------------------------------------------------------------------
+          DO 500, I = 1, IWRK(MINFO+2)
+            IS = I
+            IF ( I .EQ. LSOL ) THEN
+              CALL MPCOPY (IWRK(KNUM+1),IWRK(KODE+1),LMAX)
+              IWRK(KNUM+1) = (-1)*IWRK(KNUM+1)
+            ELSE
+              CALL JRHASH (IS,JSOL,LST,ITTOL,0,IZ,IWRK,NWRK,
+     *          IHTBL,NSTOR)
+              IF ( IZ .EQ. 0 ) GO TO 500
+              CALL RADIXF (LST,ITTOL,KNUM,IWRK,NWRK)
+            ENDIF
+            DO 480, K = 1, IABS(IWRK(KNUM+1)), 1
+              KS = K
+              KEY = ISHASH(IS,JSOL,KS,IWRK(IHPRM+1),IHTBL,NSTOR)
+              IHTBL(2,KEY) = IWRK(KNUM+K)
+ 480        CONTINUE
+            CALL MPGCD  (IWRK(KNUM+1),IWRK(KGCD+1),LMAX,IBASE,
+     *          IWRK(IW1),IWRK(IW2),IWRK(IW3),IWRK(LST))
+ 500      CONTINUE
+*-------------------------------------------------------------------
+*   OUTPUT ELEMENTS OF THE JTH VECTOR AFTER DIVIDING OUT THE GCD.
+*     STORE IN HASH TABLE.
+*-------------------------------------------------------------------
+          DO 530, I = 1, IWRK(MINFO+2)
+            IS = I
+            KEY = IRHASH(IS,JSOL,1,IWRK(IHPRM+1),IHTBL,NSTOR)
+            IWRK(LST+1) = IHTBL(2,KEY)
+            IHTBL(2,KEY) = 0
+            DO 510, K = 2, IABS(IWRK(LST+1)), 1
+              KS = K
+              KEY = IRHASH(IS,JSOL,KS,IWRK(IHPRM+1),IHTBL,NSTOR)
+              IWRK(LST+K) = IHTBL(2,KEY)
+              IHTBL(2,KEY) = 0
+ 510        CONTINUE
+            IF ( IWRK(LST+1) .NE. 0 ) THEN
+              CALL MPDIV (IWRK(LST+1),IWRK(KGCD+1),IWRK(IW1),
+     *          IWRK(IW2),LMAX,IBASE,IWRK(IW3),IWRK(IW4))
+              IF ( TOUT ) WRITE (KUN12,9140) IS
+              IF ( TOUT ) CALL MPOUT (IWRK(IW1),LMAX,KUN12,KFORM)
+              DO 520, K = 0, IABS(IWRK(IW1))-1, 1
+                KS = K+1
+                KEY = ISHASH(IS,JSOL,KS,IWRK(IHPRM+1),IHTBL,NSTOR)
+                IHTBL(2,KEY) = IWRK(IW1+K)
+ 520          CONTINUE
+            ENDIF
+ 530      CONTINUE
+*-------------------------------------------------------------------
+*   CALCULATE TIME AND GO TO NEXT ELEMENT.
+*-------------------------------------------------------------------
+          IF ( IPARM(7) .GE. 1 ) THEN
+            CALL SECOND(T)
+            WRITE (ITRM,1330) J,T-TINI
+          ENDIF
+ 540    CONTINUE
+      ENDIF
+*-------------------------------------------------------------------
+*   COMPUTE AND OUTPUT HASHING STATS
+*-------------------------------------------------------------------
+      IF ( KUN12 .GT. 0 ) THEN
+        WRITE (KUN12,9300)
+        WRITE (KUN12,9330) IWRK(IHPRM+7)
+        HWRK(1) = (FLOAT(IWRK(MINFO+8))*100.) / FLOAT(IWRK(IHPRM+12))
+        WRITE (KUN12,9340) IWRK(MINFO+8),IWRK(IHPRM+12),HWRK(1)
+        ITBL = IWRK(MINFO+8)+100
+        IF ( IPARM(8) .NE. 0 ) THEN
+          HWRK(1) = FLOAT(IWRK(IHPRM+13)*100) / FLOAT(IWRK(IHPRM+4))
+          WRITE (KUN12,9345) IWRK(IHPRM+13),IWRK(IHPRM+4),HWRK(1)
+          WRITE (KUN12,9335) IWRK(IHPRM+8)
+          ITBL = ITBL+IWRK(IHPRM+13)
+        ENDIF
+        IF (IWRK(IHPRM+11) .EQ. -1) WRITE (KUN12,9355)
+        HWRK(1) = FLOAT(IWRK(IHPRM+10)+IWRK(IHPRM+9)) /
+     *    FLOAT(IWRK(IHPRM+10))
+        WRITE (KUN12,9310) HWRK(1)
+        HWRK(1) = FLOAT(IWRK(MINFO+8))/FLOAT(IWRK(MINFO+4))
+        WRITE (KUN12,9320) HWRK(1)
+        HWRK(1) = FLOAT(IWRK(MINFO+9)+IWRK(MINFO+4)) /
+     *    FLOAT(IWRK(MINFO+4))
+        WRITE (KUN12,9350) HWRK(1)
+      ENDIF
+*-------------------------------------------------------------------
+*   CLOSE DOWN - STORE THE MINOR IN THE HASH TABLE, LOAD IPARM
+*     ARRAY WITH HASHING PARAMETERS AND RETURN.
+*-------------------------------------------------------------------
+      DO 560, K = 1, IABS(IWRK(KODE+1)), 1
+         KS = K
+         KEY = ISHASH(JDEN,1,KS,IWRK(IHPRM+1),IHTBL,NSTOR)
+         IHTBL(2,KEY) = IWRK(KODE+K)
+ 560  CONTINUE
+      IF (IWRK(IHPRM+11) .EQ. -1) WRITE (ITRM,9355)
+      IPARM(0) = 0
+      IF ( ISOLH .EQ. 1 ) IPARM(0) = -2
+      DO 570, K = 1, 11
+        IPARM(K) = IWRK(IHPRM+K)
+ 570  CONTINUE
+      IPARM(4) = IWRK(MINFO+7)
+      KK = 0
+      DO 580, K = 0, IWRK(IHPRM+3)-1
+        IF ( IHTBL(2,K) .NE. 0 ) KK = KK  + 1
+ 580  CONTINUE
+      HWRK(1) = FLOAT(KK)*100. / FLOAT(IWRK(IHPRM+3))
+      IF ( TOUT ) WRITE (KUN12,9360) KK,IWRK(IHPRM+3),HWRK(1)
+      IF ( KUN12 .GT. 0 .AND. ISOLH .EQ. 0 ) THEN
+        ITBL = INT(FLOAT(ITBL+KK)/FILL)*2 + NWRK
+        WRITE (KUN12,9370) ITBL
+      ELSEIF ( KUN12 .GT. 0 ) THEN
+        ITBL = (2*IWRK(MINFO+8)) + (IWRK(MINFO+14)*NTERM) + NWRK
+        WRITE (KUN12,9380) ITBL
+      ENDIF
+      RETURN
+*-------------------------------------------------------------------
+*   FORMAT STATEMENTS FOR INTERMEDIATE OUTPUT AND ENTRY ERRORS
+*-------------------------------------------------------------------
+ 1000 FORMAT (//' pass #1 successful:')
+ 1010 FORMAT ('    computed pass bounds -  hadamard: ',I6)
+ 1020 FORMAT ('                            modified: ',I6,/)
+ 1025 FORMAT (' hadamard bound could not be satisfied')
+ 1030 FORMAT (//' pass #1 successful, matrix is full rank')
+ 1035 FORMAT (' modified hadamard bound could not be satisfied')
+ 1040 FORMAT (/' pass #1 computed the following',I5,
+     * ' dependent rows ')
+ 1045 FORMAT (/' pass #1 computed the following ',I4,
+     * ' dependent rows in ',/,'     the overdetermined system')
+ 1050 FORMAT (' completed pass number ',I5,'.  time: ',F12.4)
+ 1060 FORMAT (//' input matrix dimensions are',2I6,/
+     *          ' number of right hand sides = ',I6,/
+     *          ' number of nonzero entries is: ',I9//
+     * ' pass #1:',/)
+ 1080 FORMAT (//' rank has increased with prime =',I12/
+     * ' discarding all previous primes'//)
+ 1090 FORMAT (//' rank has decreased with prime =',I12/
+     * ' discarding this prime'//)
+ 1095 FORMAT (//' solution hash table 100% full - cannot',
+     * ' continue passes.',/
+     * ' continue to output rank and row dependencies')
+ 1100 FORMAT (/5X,'matrix file unit error - unit not opened')
+ 1110 FORMAT (/5X,'output file unit error - unit not opened')
+ 1120 FORMAT (/5X,'intermediate output parameter error - allowed'
+     *  ' range (0-4)')
+ 1130 FORMAT (/5X,'intermediate file unit error - unit not opened')
+ 1140 FORMAT (/5X,'output parameter error - allowed range (0-3)')
+ 1150 FORMAT (/5X,'base error - must be less than ',I10)
+ 1160 FORMAT (/5X,'stop criterion error - allowed range > -2')
+ 1170 FORMAT (/5X,'iwrk improperly dimensioned - must be at least ',I6)
+ 1180 FORMAT (/5X,
+     *  '********************************************************',/5X,
+     *  ' ',/5X,
+     *  '            input error(s) encountered in rsdana',
+     *  ' ',/5X)
+ 1190 FORMAT (/5X,
+     *  '********************************************************',/)
+ 1200 FORMAT (/5X,'hwrk improperly dimensioned - must be at least ',I6)
+ 1205 FORMAT (/5X,'iwrk improperly dimensioned - must be at least ',I6)
+ 1210 FORMAT (/5X,'number of primes too large - max allowed = ',I6)
+ 1215 FORMAT (/5X,'nstor too small - must be at least 2')
+ 1220 FORMAT (/5X,'matrix must have a positive number of rows')
+ 1230 FORMAT (/5X,'matrix must have a positive number of columns')
+ 1240 FORMAT (/5X,'matrix must have a positive number of rhs for',
+     *   ' a solution')
+ 1250 FORMAT (/5X,'terminal unit number error ')
+ 1260 FORMAT (/5X,'output style must equal 0 or 1')
+ 1270 FORMAT (/5X,'input file contains multiple ref. to a matrix',
+     *   ' element',2I5)
+ 1300 FORMAT (//' processing the particular solutions:',/)
+ 1310 FORMAT (' completed solution: ',I4,'.  time: ',F12.4)
+ 1320 FORMAT (//' processing the null space basis, dimension = ',I6)
+ 1330 FORMAT (' completed element: ',I4,'.  time: ',F12.4)
+ 1340 FORMAT (/5X,
+     *  '********************************************************',/5X,
+     *  ' ',/5X,
+     *  '    matrix element out of range (i,j) = ',2I6,/5X,
+     *  ' ',/5X,
+     *  '********************************************************',//)
+*-------------------------------------------------------------------
+*   FORMAT STATEMENTS FOR HARD COPY RESULTS
+*-------------------------------------------------------------------
+ 9000 FORMAT (/5X,
+     *  '********************************************************',/5X,
+     *  ' ',/5X,
+     *  '                   numerical results                    ',/5X,
+     *  ' ',/5X,
+     *  '********************************************************',//)
+ 9010 FORMAT (5X,'input matrix contains: ',I4,' rows',/5X,
+     *           '                       ',I4,' columns',/5X,
+     *           '                       ',I4,' rhs',//)
+ 9015 FORMAT (5X,'hadamard bound on passes is:  ',I4)
+ 9020 FORMAT (5X,'modified bound on passes is:  ',I4)
+ 9025 FORMAT (5X,'passes for termination:  ',I4)
+ 9030 FORMAT (5X,'matrix rank is ',I4//,5X,
+     *            'the dependent rows are'/)
+ 9035 FORMAT (5X,'matrix rank is ',I4//,5X,
+     *            'no dependent rows were found'/)
+ 9040 FORMAT (/5X,'the row space is spanned by rows'/)
+ 9045 FORMAT (5X,'unused passes:',I5,//)
+ 9050 FORMAT (/5X,'the column space is spanned by columns'/)
+ 9060 FORMAT (//5X,
+     *  '********************************************************',/5X,
+     *  ' ',/5X,
+     *  '  each of the integers below is in fixed-radix form.',/5X,
+     *  '  form left to right, the numbers are:',/5X,
+     *  '    i :=  sign * (coef(1)*base**(l-1) + coef(2)*base**l',/5X,
+     *  '     + ... + coef(l-1)*base + coef(l) )',/5X,
+     *  '  with base = ',I11,/5X,
+     *  ' ',/5X,
+     *  '********************************************************',/)
+ 9065 FORMAT (//5X,
+     *  '********************************************************',/5X,
+     *  ' ',/5X,
+     *  '  each of the integers below is in fixed-radix form.',/5X,
+     *  ' ',/5X,
+     *  '********************************************************',/)
+ 9070 FORMAT (5X,'the minor of the leading nonsingular submatrix:',/)
+ 9075 FORMAT (5X,'the determinant of the integer matrix:',/)
+ 9080 FORMAT (45(5X,10I6,/))
+ 9085 FORMAT (/5X,'the determinant of the rational matrix:',/5X,
+     * 'numerator ',/)
+ 9090 FORMAT (' ')
+ 9100 FORMAT (/5X,
+     *  '********************************************************',/5X,
+     *  ' ',/5X,
+     *  '         nonzero elements in the null space basis   ',/5X,
+     *  ' ',/5X,
+     *  '      read as (i,j) element in pivoted matrix followed ',/5X,
+     *  '          the value expressed in fixed radix form ',/5X,
+     *  ' ',/5X,
+     *  '********************************************************',/)
+ 9110 FORMAT (/5X,
+     *  '********************************************************',/5X,
+     *  ' ',/5X,
+     *  '               null space basis is empty                ',/5X,
+     *  ' ',/5X,
+     *  '********************************************************',/)
+ 9120 FORMAT (/,5X,'null space vector: ',I4,' hash column key: ',I5,/
+     *         5X,'corresponding matrix column: ',I5/)
+ 9130 FORMAT (/5X,'the null space is ',I6,' dimensional.',/
+     *         5X,'the corresponding matrix columns are:',/)
+ 9140 FORMAT (3X,'element:',I7)
+ 9200 FORMAT (/5X,
+     *  '********************************************************',/5X,
+     *  ' ',/5X,
+     *  '             solutions to the linear systems            ',/5X,
+     *  ' ',/5X,
+     *  '********************************************************',/)
+ 9210 FORMAT (//5X,'rhs #',I2,' is not in the span of the matrix',
+     *  ' column space.',/5X,'thus, no explicit solution exists.')
+ 9220 FORMAT (//5X,'solution to rhs #',I2,'; hash column key ',I3)
+ 9260 FORMAT (/,5X,'numerators ',/)
+ 9270 FORMAT (/,5X,'denominator ',/)
+ 9300 FORMAT (//,5X,
+     *  '********************************************************',/5X,
+     *  ' ',/5X,
+     *  '                  routine statistics                    ',/5X,
+     *  ' ',/5X,
+     *  '          note: optimal efficiency ratings = 1  ',/5X,
+     *  ' ',/5X,
+     *  '********************************************************',/)
+ 9310 FORMAT (/,5X,
+     *  '                      (# tot hashes) + (# double hashes)',/5X,
+     *  ' hashing efficiency = ----------------------------------',/5X,
+     *  '                              (# tot hashes)           ',//5X,
+     *  '                    = ',F12.5)
+ 9320 FORMAT (/,5X,
+     *  '                           max # of nonzero elements   ',/5X,
+     *  ' elimination efficiency = ------------------------------',/5X,
+     *  '                         initial # of nonzero elements',//5X,
+     *  '                        = ',F12.5)
+ 9330 FORMAT (/5X,' elimination maximum double hashes necessary: ',I6)
+ 9335 FORMAT (/5X,' solution maximum double hashes necessary: ',I6)
+ 9340 FORMAT (/5X,' elimination hash table use: ',I8,' of',I8,' = '
+     *  F6.2,'%')
+ 9345 FORMAT (/5X,' solution hash table use: ',I8,' of',I8,' = '
+     *  F6.2,'%')
+ 9350 FORMAT (/,5X,
+     *  '                     # initial nonzero + # of fillin elements'
+     *  ,/5X,
+     *  ' pivot efficiency  = -----------------------------------------'
+     *  ,/5X,
+     *  '                          initial # of nonzero elements',//5X,
+     *  '                        = ',F12.5)
+ 9355 FORMAT (/5X,' output hash table is full - all results are not',
+     *  'stored')
+ 9360 FORMAT (/5X,' output hash table use:  ',I8,' of',I8,' = '
+     *  F6.2,'%')
+ 9370 FORMAT (/5X,' suggested minimum for size of work space in',
+     *  ' analyz = ',I6)
+ 9380 FORMAT (/5X,' estimate of the required work space in analyz = ',
+     *  I7)
+      END

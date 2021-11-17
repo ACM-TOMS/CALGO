@@ -1,0 +1,1097 @@
+% !TeX encoding = UTF-8 Unicode
+% !TeX root = manual.tex
+% !TeX spellcheck = en_GB
+
+
+\chapter{\texttt{tjsr}-package}
+
+
+\section{\texttt{findsmp}}\label{findsmp}
+This function searches for 
+spectral maximizing and spectral minimizing products\footnote{s.min.p's are experimental}, 
+in the following s.m.p.-candidates.
+Two algorithm types available: \emph{Gripenberg type algorithms} and the \emph{Genetic algorithm}.
+
+\subsection*{Syntax}
+\begin{param}
+\item 
+\texttt{[ cand, nearlycand, info ] = findsmp( T, [algorithm], ['smaxp'|'sminp'], [options] )}
+\end{param}
+
+\subsection*{Input}
+\begin{param}
+\item[T] cell array of square matrices of the same size, mandatory\\The input matrices.
+\item[{[algorithm]}] string, \defval{\texttt{'modgrip'}}\\ 
+Algorithm to use:
+\begin{param}
+    \item['gripenberg'/'grip'] Standard Gripenberg's algorithm~\cite{Grip96}, does not miss candidates.
+    
+    \item['lowgripenberg'/'lowgrip']  Modified Gripenberg algorithm keeping small products.
+
+    \item['highgripenberg'/'highgrip'] Modified Gripenberg algorithm keeping large products.
+    
+    \item['modifiedgripenberg'/'modgrip'] Modified Gripenberg algorithm  keeping small and large products.
+    
+    \item['randomgripenberg'/'randgrip'] Modified Gripenberg algorithm randomly keeping products
+    
+    \item['bruteforce','bf'] Brute force algorithm computing every possible product.
+    This is the only algorithm which is proven to work for searching s.min.p's.
+    
+    \item['necklacebruteforce'/'nlbf'] Brute force algorithm computing every possible product which is a short necklace%
+    \footnote{A string is a \emph{short necklace} if it is not power of a shorter necklace.}.
+    
+    \item['genetic'] Genetic algorithm~\cite{BC11}. Fast algorithm to compute lower bounds of the $\JSR$.
+    \end{param}
+\end{param}
+
+\subsection{Options for Gripenberg type algorithm}
+One can use either pre-defined options corresponding to one specific algorithm, and/or set all/any options by hand.
+
+\begin{param}
+\item['vpa']                           Tries to convert input to \texttt{vpa} prior computing
+   \item['double']                        Tries to convert input to \texttt{double} prior computing
+   \item['verbose',val]                   \defval{1}, Defines the verbose level. 
+   \item['nosimplify']                    Does not simplify products \texttt{cand} and \texttt{nearlycand}
+   \item['maxtime',val]                   \defval{\texttt{inf}}, Maximal time used for computation
+   \item['maxeval',val]                   \defval{\texttt{inf}}, Maximum number of evaluations (approximate)
+   \item['bound',val]                     \defval{\texttt{[]}}, Searches until 
+    \begin{itemize}
+    \item  the bounds of the joint/lower spectral radius is in $(\texttt{val(1)}, \texttt{val(2)})$; or
+    \item  it is proven that the bounds cannot be fulfilled anymore.
+    \end{itemize}
+
+   \item['nearlycandidate',val]           \defval{0.99}, experimental, Nearlycandidates must have spectral radius larger than val*jsrbound(1),
+   \item['shortnearlycandidate',val]      \defval{1}, Removes all nearlycandidates whose ordering is longer than the val*maximal-length-of-candidates-ordering.
+                                          Note that 'genetic' algorithm does not search for nearly-candidates at the moment, thus this option has no effect for 'genetic' algorithm
+   \item['maxsmpdepth',val]               maximal length of products which is searched for. Default value depends on algorithm used. Can be
+    \begin{itemize}
+    \item arbitrary high (>100) for \texttt{modgrip}, \texttt{lowgrip}, \texttt{highgrip}, \texttt{randgrip}, 
+    \item high (<30) for \texttt{gripenberg},
+    \item small (<12) for \texttt{bruteforce} and   
+    \item small (<15) for \texttt{necklacebruteforce}.  
+    \end{itemize}
+
+\item['norm',h]           function handle, \defval{\texttt{@norm}, i.e. 2-norm}, handle to a norm function
+\item['rho',h]			  function handle, \defval{\texttt{@rho}}, handle to a spectral radius function               
+\item['delta',val]        double, \defval{depends on algorithm}, relative delta used in the Gripenberg Algorithm.
+\item['N',val]            scalar or 1x3 vector of doubles, \defval{depends on algorithm}, number of kept products in each step
+                                          \begin{itemize}
+                                          \item \texttt{N(1)}  ... number of products with smallest matrix norm kept
+                                          \item \texttt{N(2)}  ... number of products with largest matrix norm kept
+                                          \item \texttt{N(3)}  ... number of products randomly kept
+                                          \end{itemize}
+\item['minsmpdepth',val]               double, \defval{1}, Minimal length of products
+\item['nearlycanddelta',val]           double, \defval{0.99}, Maximal relative difference of spectral radius between candidates and nearly-candidates
+\item['maxnumnearlycandidate',int]     integer, \defval{10}, Maximum number of nearly candidates returned. 
+If number of nearly candidates is larger, \texttt{'nearlycanddelta'} is decreased
+
+\item['sminp' | 'smaxp']               \defval{\texttt{'smaxp'}}, Defines whether to search for s.min.p's or s.max.p's.
+Option \texttt{'sminp'} is experimental.
+\item['hardworking',val]               double, \defval{1}, sets \texttt{'maxsmpdepth'} to $\texttt{'hardworking'} \times \text{length of last-smpcandidate}$
+ each time a new candidate is found
+\item['epsilon',val]                   double, \defval{1e-10}, epsilon used for comparing spectral radii
+\end{param}
+
+Pre-defined options:
+\begin{param}
+    \item['gripenberg'/'grip'] Standard Gripenberg's algorithm~\cite{Grip96}, does not miss candidates, \texttt{delta=0.95}.
+    
+    \item['lowgripenberg'/'lowgrip']  Modified Gripenberg algorithm keeping \texttt{N} small products, \texttt{delta=1}.
+
+    \item['highgripenberg'/'highgrip'] Modified Gripenberg algorithm keeping \texttt{N} large products, \texttt{delta=1}.
+    
+    \item['modifiedgripenberg'/'modgrip'] (default) Modified Gripenberg algorithm  keeping \texttt{N/2} small and \texttt{N/2} large products, \texttt{delta=1}.
+    
+    \item['randomgripenberg'/'randgrip'] Modified Gripenberg algorithm keeping \texttt{N} random products, \texttt{delta=1}.
+    
+    \item['bruteforce','bf'] Brute force algorithm, computing every possible product.
+    This is the only algorithm which is proven to work for searching s.min.p's.
+    
+    \item['necklacebruteforce'/'nlbf'] Brute force algorithm, computing every possible product which is a short necklace%
+    \footnote{A string is a \emph{short necklace} if it is not power of a shorter necklace.}.
+\end{param}
+
+\subsection*{Output}
+\begin{param}
+\item[cand]         cell array of column vectors\\Ordering of the products with highest normalized spectral radius.
+\item[nearlycand]   cell array of column vectors\\Orderings of products with nearly highest normalized spectral radius.
+\item[info]         struct\\Additional info, depending on the used algorithm and options.  May contain the following fields:
+    \begin{param}
+    \item[info.time] double\\ Time in seconds needed for the computation.
+    \item[info.jsrbound] 1x2 vector\\Bounds for the JSR/LSR.
+    \item[info.spectralgap] double\\Relative difference between info.jsrbound and second biggest eigenvalue found (from nearly-candidates)
+    \item[info.count] integer\\
+    Approximate number of computed matrices.
+    \end{param}
+\end{param}
+
+\subsection*{Note}
+\begin{itemize}
+\item The Gripenberg type algorithms are parallelised, the genetic algorithm is not.
+\item All Gripenberg type algorithms return true lower and upper bounds for the $\JSR$/$\LSR$.
+\item There is a bug in the Genetic algorithm and the returned upper bound for the $\JSR$ is sometimes wrongly normalized.
+\item See the \texttt{help} of \texttt{findsmp} for the options for the genetic algorithm.
+\end{itemize}
+
+\subsection*{Example Usage}
+\begin{param}
+\item[{\texttt{[ c, nc, info ] = findsmp( {[1 -1; 3 -2], [1 3; -1 -1]}, 'maxsmpdepth', 15 )}}]
+\item[{\texttt{[ c, nc, info ] = findsmp( {[1 -1; 3 -2], [1 3; -1 -1]}, 'gripenberg' )}}]
+\end{param}
+
+\subsection{Basic Implementation}
+\begin{verbatim}
+function [c] = gripenberg_modified( M, N, D )
+%Tries to find smp-candidates in a fast way.
+%Ex: gripenberg_modified( {[2 1; 0 -2],[2 1; -1 -2]}, 4, 10 )
+J = length( M );  %number of matrices
+o = 1:J;          %the orderings of the products to be checked
+c = {};           %list of candidates
+r = 0;            %lower bound for JSR
+for d = 1:D                        %do D iterations
+    NR = zeros( 2, size(o,2) );    %norm and rho of candidates
+    for i = 1:size( o, 2 )         %can be parallelised using parfor!
+        P = buildProduct( M, o(:,i) );                  %construct matrices
+        NR(:,i) = [norm( P ); max( abs(eig(P)) )]; end; %compute norm and rho
+    NR = NR.^(1/d);                %normalize norm and rho
+    if r < max( NR(2,:) )          %test if new bound was found
+        c = {};                    %delete candidates
+        r = max( NR(2,:) ); end;   %update lower bound for JSR
+    c = [c num2cell( o(:,NR(2,:) >= r), 1 )]; %add candidates to c
+    idx = NR(1,:) < r;             %remove everything with norm less than JSR
+    NR(:,idx) = []; 
+    o(:,idx) = [];
+    [NR,idx] = sortrows( NR' );    %sort correspdonding to norm
+    NR = NR.'; 
+    idx = idx.';
+     nNR = size( NR, 2 ); 
+    if nNR > 2*N                   %keep highest and lowest norms
+        o = o(:,[idx(1:N) idx(nNR-N+1:nNR)]); 
+    else                           %keep everything if N is too big
+        o = o(:,idx); end;      
+
+    o = [repmat( o, [1 J] );       %make new orderings of products    
+         reshape( repmat(1:J,[size(o,2) 1]), 1, [] )];    end;
+
+function M = buildProduct( A, prod )
+% Constructs the product of matrices of A corresponding to prod.
+M = eye( size(A{1},1) );
+for t = 1:length( prod ); 
+    M = A{prod(t)}*M; end
+\end{verbatim}
+
+\section{\texttt{tgallery}}\label{tgallery}
+This function provides example-sets of matrices.
+It is useful for testing algorithms and other purposes. 
+It also makes use of Matlab's \texttt{gallery}.
+\subsection*{Syntax}
+\begin{param}
+\item \texttt{[ val ] = tgallery( what, dim, N, k, [options] )}
+\end{param}
+\subsection*{Input}
+\begin{param}
+\item[what] string, mandatory\\Controls the return value.
+\item[dim] integer, mandatory in most cases\\Dimension of matrices. In some cases 
+\item[N] integer, mandatory in most cases\\Number of matrices.
+\item[k] anything, mandatory in some cases\\Number of matrices.
+\end{param}
+The variables may have another meaning in some cases, as described below.
+\subsection*{Options}
+
+\begin{param}
+\item['bool'] flag\\Returns boolean matrices.
+\item['int'] flag\\Returns integer matrices.
+\item['norm'] flag\\Returns matrices with 2-norm 1.
+\item['pos'] flag\\Returns matrices with positive entries.
+\item['rho'] flag\\Returns matrices with spectral radius 1.
+\item['seed',val] integer or struct returned by \texttt{rng}, \defval{empty}\\Seed for random number generator. 
+If \texttt{seed} is set, Matlab's random number generator has the same state before and after execution of the function.
+\item['sparse',val] double, \defval{0}\\Returns sparse matrices
+\item['verbose',val] integer, \defval{1}\\Verbose level.
+\end{param}
+
+\subsection*{Output}
+\begin{param}
+\item[val] cell array of square matrices\\The returned matrices.
+\end{param}
+
+
+\subsection*{Note}
+Most options preserve do not preserve certain properties of the matrices, e.g.\ the entries in the matrix returned by
+\texttt{tgallery('rand\_gauss',10,1,'pos')} are not normally distributed anymore.
+
+\subsection{Possible values for \texttt{what} and their mandatory arguments}
+This section lists a subset of the possible values for \texttt{what}, followed by the mandatory parameters. For example,
+\begin{center}
+\texttt{tgallery('rand\_pm1', 2, 1, 'seed', 10)}
+\end{center}
+ returns a cell array with one element, containing the $2\times2$ matrix
+ \begin{equation*}
+\left[\begin{array}{rr}
+0& 0\\
+1& -1\\
+\end{array}\right].
+ \end{equation*}
+\subsubsection{Random matrices}
+\begin{param}
+
+\item['rand\_bool',dim,N] Random matrices with values 0, 1.
+%\footnote{\label{footnote_boolpm1}\texttt{rand\_pm1} and %\texttt{rand\_bool} are good example to test the balancing of multiple trees of the invariant polytope algorithm.}
+\item['rand\_doublestochastic',dim,N] Random double-stochastic matrices.
+\item['rand\_doublestochastic\_neg',dim,N] Random double-stochastic matrices with pos.\ and neg.\ values.
+%\item['rand\_colu\_0',dim,N] Random matrices with pos.\ entries, column-norm=1 and i.i.d.\ singular values. 
+%\item['rand\_colu\_1',dim,N] Random matrices  with non-neg.\ entries, column-norm=1.
+\item['rand\_corr\_1',dim,N] Random correlation matrices with pos.\ entries.
+\item['rand\_corr\_0',dim,N] Random correlation matrices with non-neg.\ entries.
+\item['rand',dim,N] Random matrices with equally distributed values in $[0,\ 1]$.
+%\item['rand\_equal',dim,N] Random matrices with equally distributed values in $[-1,\ 1]$.
+\item['rand\_gauss',dim,N] Random matrices with normally distributed values.
+\item['rand\_hess',dim,N] Random orthogonal upper Hessenberg matrices.
+\item['rand\_neg',dim,N] Random matrices with equally distributed values in $[-1,\ 1]$.
+\item['rand\_normal',dim,N] Random matrices with normally distributed values.
+%\item['rand\_orthog\_1'] Random orthogonal matrices with complex leading eigenvalue.
+%\item['rand\_orthog\_2'] Random orthogonal matrices with complex dual leading eigenvalue.
+\item['rand\_pm1',dim,N] Random matrices with values -1, 0, 1.%\footnoteref{footnote_boolpm1}
+\item['rand\_stochastic',dim,N] Random column-stochastic matrices.
+\item['rand\_stochastic\_neg',dim,N] Random column-stochastic matrices with positive and negative values.
+\item['rand\_unitary',dim,N] Random unitary matrices.
+\item['rand\_zero',dim,N] Random matrices with spectral radius 0.
+\item['rand\_TU',dim,len] Transition matrices of a subdivision scheme in $\RR^\texttt{dim}$ with random dilation matrix and random mask with $\texttt{len}^\texttt{dim}$ non-zero entries, restricted to the subspace $U$ as defined in~\cite{CP17}.
+\item['rand\_TV0', dim, len] Transition matrices of a subdivision scheme in $\RR^\texttt{dim}$ with random dilation matrix and random mask with $\texttt{len}^\texttt{dim}$ non-zero entries, restricted to the subspace $V_0$ as defined in~\cite{CM18}.
+
+\end{param}
+
+\subsubsection{Matrices from applications}
+\begin{param}
+\item['binary',dim,N,k] Matrices whose linear entries equals the number \texttt{k} in base 2. E.g.:  
+\begin{equation*}
+\texttt{tgallery('binary',2,2,19)}=
+\left\{ 
+\left[ \begin{array}{cc}0&0\\0&1\end{array} \right],\ 
+\left[ \begin{array}{cc}0&1\\0&1\end{array} \right]
+\right\},
+\end{equation*}
+since $19_{[10]}=00010011_{[2]}$.
+
+If there exists $\tilde{\texttt{k}}<\texttt{k}$ such that the returned set for  $\tilde{\texttt{k}}$ would be the same, the function returns the empty set.
+\item['binary2',dim,N,k] The same as \texttt{'binary'}, but if there exists $\tilde{\texttt{k}}<\texttt{k}$ such that the returned set for $\tilde{\texttt{k}}$ would have the same $\JSR$, the function may return the empty set.
+\item['cex'] Pair of 2x2 matrices which has no s.m.p.~\cite{TB00}, returned approximately with 61 digits.
+\item['code',C] (C is a cell array of row-vectors) Matrices whose $\JSR$ is related to the capacity of a code with forbidden differences \texttt{C}. See the source-code of \texttt{codecapacity} for more information. E.g.: 
+\texttt{tgallery('code',\{[1 1 0 1]\})}.
+\item['daub',dim] Matrices whose $\JSR$ is closely related to the Hölder-exponent of Daubechies' wavelets.
+\item['euler',dim] Matrices in connection with the Euler partition function~\cite{GP13}.
+\item['nondominant'] Set $\{ 
+\left[\begin{array}{c c}1 & 1\\0& 1\end{array}\right],\  
+\tfrac{4}{5}\left[\begin{array}{c c}1 & 1\\0& 1\end{array}\right]
+\}$ with non-dominant s.m.p..
+\end{param}
+
+\subsubsection{Matrices from papers}
+\begin{param}
+\item['grip\_p45'] Matrices 
+$\{
+\left[\begin{array}{c c}0 & 1\\0& 0\end{array}\right],\  
+\left[\begin{array}{c c}0 & 0\\1& 0\end{array}\right]
+\}$ 
+from~\cite[p.~45]{Grip96}.
+
+
+\item['grip\_p52'] Matrices 
+$\{
+\frac{1}{5} \left[\begin{array}{c c}3 & 0\\1& 3\end{array}\right],\  
+\frac{1}{5} \left[\begin{array}{c c}3 & -3\\0& -1\end{array}\right]
+\}$ 
+from~\cite[p.~52]{Grip96}. 
+
+
+\item['morris\_p3'] Matrices 
+$\{
+\left[\begin{array}{c c}2 & 2\\0& 0\end{array}\right],\  
+\left[\begin{array}{c c}1 & 1\\1& 1\end{array}\right]
+\}$ 
+from~\cite[p.~3]{Morris2010}.
+\item['prot2012\_p35'] Example for the Pascal rhombus~\cite[p.~35]{GP13}.
+\item['prot2012\_p40'] Example~\cite[p.~40]{GP13}.
+\item['prot2012\_p43'] Example for the Euler binary problem~\cite[p.~43]{GP13}.
+\item['prot2012\_p44'] Example for the Euler ternary problem~\cite[p.~44]{GP13}.
+\item['prot2016'] Matrices for the subdivision scheme~\cite[p.~33, p.~35, p.~50]{GP13}.
+
+\item['mejstrik\_119\'] Matrices $\mathcal{X}=
+\{
+\left[\!\begin{array}{r r}
+\dfrac{15}{92} & \dfrac{-73}{79}\\[2.ex]
+\dfrac{56}{59}  & \dfrac{89}{118}\end{array}\!\right]
+,\
+\left[\!\begin{array}{c c}
+\dfrac{-231}{241} & \dfrac{-143}{219}\\[2.ex]
+\dfrac{103}{153}  & \dfrac{-38}{65}\end{array}\!\right]
+\}
+$ with s.m.p.-length 119.
+
+%\item['mejstrik\_119\_2'] Matrices
+%\begin{align*}
+%\mathcal{X}=
+%\{
+%&\left[\begin{array}{r r}
+%\dfrac{2936824268245481}{18014398509481984} & \dfrac{-1040403609775579}{1125899906842624}\\[2.ex]
+%\dfrac{8548815905856585}{9007199254740992}  & \dfrac{6793656059295549}{9007199254740992}\end{array}\right],\\
+%&\left[\begin{array}{r r}
+%\dfrac{-8633497502531381}{9007199254740992} & \dfrac{-2940665869269935}{4503599627370496}\\[2.ex]
+%\dfrac{6063507393887449}{9007199254740992}  & \dfrac{-5266479768915639}{9007199254740992}\end{array}\right]
+%\}
+%\end{align*}
+%with s.m.p.-length 119.
+
+\item['mejstrik\_longsmp',x] Matrices $\tilde{\mathcal{C}}_x=\{ 
+\left[\begin{array}{c c}1 & 1\\0& 1\end{array}\right],\  
+\left[\begin{array}{c c}0 & 0\\x& 0\end{array}\right]
+\}$ with s.m.p.-length approximately $e\cdot x$.
+
+\end{param}
+
+\subsection*{Example Usage}
+\begin{param}
+\item[{tgallery('rand\_gauss',5,2,100,'rho')}]
+\item[{tgallery('mejstrik\_119')}]
+\end{param}
+
+
+\section{\texttt{invariantsubspace}}\label{invariantsubspace}
+Searches for invariant subspaces of matrices $M\in\texttt{M}$, 
+i.e.\ a change of basis $B$ such that all matrices $B^{-1}MB$, $M\in\texttt{M}$ have block-triangular form.
+The function uses three different algorithms: \texttt{permTriangul}, \texttt{jointTriangul} from~\cite{Jung2014} and an implementation of~\cite{CP17}.
+The returned matrices still may have invariant subspaces which can or cannot be found using this function.
+\subsection*{Syntax}
+\begin{param}
+\item \texttt{[ Mret, B ] = invariantsubspace( M, ['type'], [options] )}
+\end{param}
+
+\subsection*{Input}
+\begin{param}
+\item[M] cell array of matrices, mandatory\\The matrices.
+\item[{['type']}] string, \defval{\texttt{'auto'}}, optional
+    \begin{param}
+    \item['none']      Nothing happens,  \texttt{Mret=\{M\}}, \texttt{B=eye(dim)}.
+
+    \item['perm']      Tries to find a permutation such that all $\texttt{M\{i\}}$ are in block-diagonal form.
+    \item['basis']     Tries to find a basis such that all $\texttt{M\{i\}}$ are in block-diagonal form.
+    \item['trans']     Tries to find subspaces generated by differences of basic limit functions as occurring in subdivision theory~\cite{CP17}. The algorithm first computes numerically, then symbolically, then using \texttt{vpa}.
+    \item['auto']      (default) The algorithm tries \texttt{'perm'}, \texttt{'basis'} then \texttt{'trans'} (numerically).
+    \end{param}
+
+\end{param}
+\subsection*{Options}
+\begin{param}
+\item['verbose',int] integer, \defval{1}\\Verbose level.
+\end{param}
+\subsection*{Output}
+\begin{param}
+\item[Mret]   cell array of matrices\\
+                The blocks in the block diagonal of the matrices in basis \texttt{B}.
+\item[B]      matrix\\Basis, i.e.\ \texttt{B\^{}(-1)*M\{i\}*B} has block-diagonal form.
+\end{param}
+
+\subsection*{Example Usage}
+\begin{param}
+\item[{\texttt{[ M, B ] = invariantsubspace( \{[1 0 ; 1 2], [3 -1; -1 3]\}, 'basis', 'verbose', 2 )}}]
+\end{param}
+
+
+
+
+\section{\texttt{tjsr}}\label{tjsr}
+Computes the $\JSR$ of a set of square-matrices.
+\subsection*{Syntax}
+\begin{param}
+\item \texttt{[ JSR, info, allinfo ] = tjsr( M, [options] ) }
+\end{param}
+
+\subsection*{Input}
+\begin{param}
+\item[M] Cell array of matrices, mandatory\\The input matrices whose $\JSR$ shall be computed.
+\end{param}
+
+\subsection{Important options}
+This is a list of the most important options (which should be sufficient for the standard-user). In a later section all available options are listed.
+\begin{param}
+
+
+\item['balancingvector',val] vector, \defval{empty}\\If given, these numbers are used to balance the multiple cyclic trees. The vector must have as many entries as there are cyclic-roots (including extra-vertices). 
+
+\item['delta',val] double, \defval{1}\\Accuracy. For $\texttt{delta}<1$ the algorithm is faster, but returns only bounds for the $\JSR$.
+
+\item['invariantsubspace',string] string, \defval{\texttt{'auto'}}\\  \texttt{string} is one of the following:
+\texttt{'none'}, \texttt{'perm'}, \texttt{'basis'}, \texttt{'trans'}, \texttt{'auto'}. See the documentation of \nameref{invariantsubspace} for more information.
+
+\item['maxsmpdepth',int] integer, \defval{depends on the size and number of matrices}\\Maximal length of s.m.p.-candidates to search for.
+    
+\item['nearlycandidate',val] double, \defval{$\simeq0.9999$}\\Relative difference between s.m.p.-candidates and nearly-s.m.p.s spectral radii.
+If you are sure that a certain s.m.p.-candidate is an s.m.p., 
+but the algorithms returned intermediate bounds stuck on some level, try to play with the value of \text{nearlycandidate}.
+
+\item['nobalancing',val] \defval{0}\\Disables balancing.
+
+\item['ordering',cell] cell array of matrices of column vectors, \defval{empty}\\ Orderings of s.m.p.-candidates.    
+
+\item['plot',string] string, \defval{\texttt{'none'}}
+    \begin{param}
+    \item['norm'] Plots intermediate norms
+    \item['polytope'] Plots the constructed polytope
+    \item['L'] Plots the number of vertices left to compute (at the moment)
+    \end{param}
+
+
+\item['proof'] \defval{false}\\Proofs the invariance of the polytope after termination of the algorithm and returns bounds for the $\JSR$ w.r.t.\ that polytope. The proof uses Matlab functions and is \emph{very} slow and may fail in some cases.
+
+
+
+
+\item['verbose',val] integer, \defval{1}\\Verbose level. If $\texttt{verbose}<0$ the algorithm suppresses error-messages (not recommended!).
+\end{param}
+
+
+\subsection*{Note}
+\begin{itemize}
+\item The algorithm is parallelised and starts the default Matlab-pool if there is no pool available. If a special pool is needed (e.g. a non-local pool), it has to be started by the user beforehand.
+\item The algorithm is split up into three main-functions, responsible for the following tasks:
+\begin{itemize}
+\item \texttt{tjsr}:
+        Preprocessing the input;
+        Starting the Matlab pool;
+        Restarting the algorithm  with different parameters (if needed);
+        Postprocessing the output.
+\item \texttt{tjsr\_preworker}:
+        Finding invariant subspaces;
+        Starting \texttt{tjsr\_worker} for each subspace;
+        Finding candidates;
+        Balancing trees;
+        Setting up the cyclic-root.   
+\item \texttt{tjsr\_worker}:
+        Computing the invariant polytope.
+\end{itemize}
+\item Most of the sub-routines of the algorithm are in separate files with the prefix \texttt{tjsr\_}. We do not described these functions here, since they are subject to big changes whenever the main function \texttt{tjsr} is changed. Nevertheless, most of them have a documentation inside of their source-code.
+\end{itemize}
+
+\subsection*{Output}
+\subsubsection{Screen Output}
+\emph{\color{red} Output written in red must be read.}
+For some options or input matrices, the algorithm delivers wrong results and these messages warn in these cases.
+These messages are printed again after the termination of the algorithm.
+
+\paragraph{Output in front of the progress bar}
+\begin{itemize}[noitemsep]
+\item \texttt{Time: x/y}       Time needed for the last iteration/total time needed for building the tree.
+\item \texttt{JSR = [ x, y ]}  Interval in which the JSR lies.
+\item \texttt{norm = x}        Current minimal computed norm of the polytope.
+\item \texttt{In: x, Out: y}   Number of points which lie inside or outside the polytope, checked by estimating the Minkowski-norm.
+\item \texttt{\#test: x/y}      Number of points to test in this iteration/number of points to check in total
+\item \texttt{\#V: x/y}         Number of points in simplified polytope/number of points in polytope in total
+\item \texttt{'Test old vertex'}  Old vertices of polytope get estimated again.
+\end{itemize}
+\paragraph{Output in the progress-bar}
+\begin{itemize}[noitemsep]
+\item \texttt{i}  Vertex is proofed to be inside of the polytope, but norm is unknown
+\item \texttt{x}  Vertex is proofed to be outside of the polytope, but norm is unknown
+\item \texttt{\_}  Vertex is inside of the polytope
+\item \texttt{.}  Vertex is machine-epsilon-near to the polytope 
+\item \texttt{,}  Vertex is 1000*machine-epsilon-near to the polytope
+\item \texttt{o}  Vertex is slightly outside
+\item \texttt{O}  Vertex is far outside
+\item \texttt{m}  Negative value occurred during computation of norm, vertex is added
+\item \texttt{8}  Inf occurred during the computation of the norm, vertex is added
+\item \texttt{?}  NaN or Inf occurred during the computation of the norm, vertex is added
+\item \texttt{E}  Some error occurred during the computation of the norm, vertex is added
+\end{itemize}
+
+Verbose levels higher than 2 generate much more output, which is not described here.
+
+\subsubsection{Data Output}
+\begin{param}
+\item[JSR] double or 1x2-vector.\\Interval containing the exact value for the $\JSR$ or an interval containing the $\JSR$.
+\item[info] struct\\ Contains nearly all data which was generated during the computation. Most important fields are described here, all other fields are described below.
+    \begin{param}
+    \item[info.cyclictree.ordering]    cell array of matrices of column vectors\\
+    All orderings used for the roots of the cyclic trees.
+    
+    \item[info.cyclictree.smpflag] vector\\
+    Defines what the orderings are: $0$ : s.m.p.-candidate, $1$ : nearly-s.m.p, $2$ : extra-vertex.
+    
+    \item[info.cyclictree.V] cell array of matrices\\All generated vertices, each column is one vertex. To obtain the (invariant) polytope call\\
+    \texttt{tjsr\_getpolytope(info)}
+    
+    \item[info.info.errortext] string\\All important error-messages.
+    
+    \item[info.JSR] double or 1x2-vector\\The same as \texttt{JSR}.
+    \item[info.counter] struct\\Some self-explaining numbers.
+    \item[info.block] cell array of structs, only returned if there are invariant subspaces\\
+    If returned, each cell in \texttt{info.block} contains the \texttt{info}-struct for that block.
+    The sub-structs \texttt{info.info} and \texttt{info.counter} contains aggregated informations from \texttt{info.block\{:\}}.
+    \end{param}
+
+\item[allinfo] cell array of structs\\
+If the algorithm restarts, only the \texttt{info} struct of the very last run is returned (to save memory). All other \texttt{info}-structs are returned as the cell array \texttt{allinfo}.
+\end{param}
+
+\subsection{Example Usage}\label{tjsr_example_usage}
+The algorithm (in the optimal case) does not need to be called with any parameters, i.e. a call of the form \texttt{tjsr(A)}, where \texttt{A} is the cell array of matrices whose $\JSR$ shall be computed, is sufficient.
+Nevertheless, in some examples the algorithm does not work as expected and manual interaction is necessary.
+
+For our examples in this section we make use of the function~\nameref{tgallery} which returns example matrices. Some options used for these examples are described in detail in Section~\ref{tjsr_alloptions}.
+\begin{itemize} 
+
+\item This example shows how to specify the cyclic-roots. 
+We use for the example the set of matrices\\
+\texttt{A=tgallery('rand\_pm1',3,2,'seed',100)}, i.e.\ 
+$\texttt{A}=\{\texttt{A}_1,\texttt{A}_2\}$,
+\begin{equation*}
+\texttt{A}_1=\left[\begin{array}{rrr}
+ 1& 1& 1\\
+ 0& 1&-1\\
+ 1& -1&-1\\
+\end{array}\right],
+\quad
+\texttt{A}_2=\left[\begin{array}{rrr}
+ 0& 0& 1\\
+-1&-1& 0\\
+ 1& 1&-1\\
+\end{array}\right].
+\end{equation*}
+
+
+The set $\texttt{A}$ has an s.m.p.\ $A_1 A_2^8$, which can be computed with \texttt{tjsr(A)}.
+
+The command \texttt{tjsr(A,'ordering',\{[2]'\})} starts the algorithm with a wrong s.m.p.. The algorithm finds better s.m.p.-candidates and restarts several times. Note that automatic extra-vertices are disabled, if we specify an ordering.
+
+If we want to add extra-vertices we can do it in two ways.
+\begin{param}
+\item[{tjsr(A,'extravertex',\{[.1 0 0]'\})}]~
+\begin{itemize}
+\item This command specifies only the extra-vertex. The s.m.p.-candidates and nearly-s.m.p.s are computed automatically.
+\end{itemize}
+
+\item[{tjsr(A,'ordering',\{[1 2 2 2 2 2 2 2 2]', []'\},'smpflag',[0 2],'v0',...\newline
+\{[0.058585928823279  -0.687551547968790   0.723768303968635]', [.1 0 0]'\})}]~\\
+ This command specifies vectors of the cyclic-roots. The downside is, that one needs to give the exact eigenvalues of all s.m.p.-candidates and nearly-s.m.p.s.
+\begin{itemize}
+\item The option \texttt{'smpflag',[0 2]} specifies that we want two cyclic-roots. The first is the root corresponding to an s.m.p.-candidate (number \texttt{0}), the second root corresponds to an extra-vertex (number \texttt{2}). If we also want to specify a root for a nearly-s.m.p., we have to use the number \texttt{1}.
+
+\item The option \texttt{'v0',\{[0.05859  -0.68755   0.72377]' [.1 0 0]'\}} specifies the eigenvectors/vectors used to start the cyclic-root. They must be given as a cell array of column vectors.
+
+\item If one also wants to specify the dual-leading eigenvectors, this has to be done using the option \texttt{'v0s'}.
+
+\item The option \texttt{'ordering',\{[1 2 2 2 2 2 2 2 2]', []'\}} specifies the orderings of the cyclic-roots.
+The first is the ordering of the s.m.p.. 
+
+Note that $(i)$ \emph{orderings of extra-vertices MUST be empty},
+$(ii)$ \emph{orderings MUST be given as column vectors}, and $(iii)$ are written in reversed polish notation, i.e.\ the ordering \texttt{1 2 3} is the product $\texttt{A}_3\texttt{A}_2\texttt{A}_1$.
+
+If there is more than one ordering corresponding to a vector \texttt{v0}, it must be given as a matrix. 
+E.g.: \texttt{'ordering',\{[1 2 2 2; 1 2 2 0]'\}} means that 
+$\texttt{A}_2^3\texttt{A}_1 \texttt{v0}_1=\texttt{A}_2^2\texttt{A}_1 \texttt{v0}_1=\texttt{v0}_1$.
+\end{itemize}
+
+
+
+\end{param}
+
+\item This example presents balancing, automatic extra-vertices and approximate computation options.
+We use for the example the set of Daubechies-matrices 
+\texttt{D7=tgallery('daub',7)}. 
+
+\begin{param}
+
+\item[{tjsr(D7)}] Just starting the algorithm computes that this set has two s.m.p.s: $\texttt{D7}_1$ and $\texttt{D7}_2$. 
+
+\item[{tjsr(D7,'balancingvector',[1 1.02 .01 .01 .01 .01 .01])}] Uses the given balancing vector to balance the trees. This option is useful when one wants to prove the invariance of the invariant polytope by hand.
+
+\item[{tjsr(D7,'nobalancing')}] This command disables the balancing (and the algorithm applied to this example will not terminate). Using verbose level to 4, \texttt{tjsr(D7,'nobalancing','verbose',4)}, we see that the third line of numbers does not stop to grow. This line corresponds to the number of added vertices to the third cyclic-tree.
+
+\item[{tjsr(D7,'autoextravertex',0)}] This command disables the automatic extra-vertices. Since the polytope for these matrices is very flat, the LP-program fails to compute the Minkowski-norm and reports all vertices to be outside (This can be seen by the fact, the the computed norms are always $\infty$).
+
+\item[{tjsr(D7,'nobalancing','delta',.99999)}] This command multiplies the matrices prior computing the cyclic-tree by $0.99999$. Thus the algorithm will terminate, although we did not balance the trees. Clearly, the returned value is not exact but an interval.
+
+\item[{tjsr(D7,'epspolytope',-.1)}] This command influences when a vertex is considered to be inside of the polytope. A negative value means, that even points which are outside are considered to be inside. The algorithm automatically increases the value of \texttt{epspolytope} whenever there are no vertices left which can get children until the value is bigger than \texttt{epslinprog}.
+
+This option speeds up the computation of the invariant polytope at the beginning, but in total leads to much bigger polytopes and a slowdown of the algorithm. For approximate computation of the $\JSR$, the option \texttt{'delta'} is preferable.
+\end{param}
+
+\item This example presents invariant subspace options. We use for the example the random boolean matrices,
+\texttt{B=tgallery('rand\_bool',4,2,43)}.
+\begin{param}
+\item[tjsr(B)] finds two invariant subspaces. 
+\item[tjsr(B,'invariantsubspace','none')] disables the search for invariant subspaces. In some cases, the search for invariant subspaces may take a long time, especially when the number of matrices is big or the dimension is high.
+\end{param}
+
+\item This example presents some plotting options.
+We use for the example a random set of 10 non-negative matrices with spectral radius 1 and dimension 20,\\
+\texttt{T=tgallery('rand\_gauss',6,2,'rho','seed',100)}.
+
+
+\begin{param}
+\item[tjsr(T,'plot','norm')] Plots the computed norms of vertices and colours them according whether they have children or not.\\
+It is also possible to plot the norms using the string \texttt{'info\_norm'}, but then the plot does not look as interesting.
+
+\item[tjsr(T,'plot','L')] Plots the number of added vertices and the number of remaining vertices to compute. The graph usually has the shape of a Gaussian.
+
+\item[tjsr(T,'plot','tree')] Plots the graphs of the cyclic trees.\\
+To change the labels of the vertices, change the code in \texttt{tjsr\_plotoutput}.
+
+
+\item[tjsr(T,'plot','polytope')] Plots the polytope/cone. If the dimension is higher than 3, a random subset of directions is chosen to be plotted in each iteration.
+
+\item[tjsr(T,'plot','info\_normest')] Plots the estimated Minkowski-norms.\\
+The prefix \texttt{'info\_'} allows to plot any data contained in the \texttt{info}-struct. Fields in the sub-struct \texttt{cyclictree} can be addressed directly. All others need to be called with their full name. Thus the option \texttt{'plot','info\_normest'} is equivalent to\\
+\texttt{'plot','info\_cyclictree.normest'}
+
+\item[tjsr(T,'plot','info\_normest\_norm','fastnorm',0)] Plots the real norms against the estimated Min\-kow\-ski-norms. We have to add the option \texttt{'fastnorm',0} since otherwise the Minkowski norms of some points would not be computed.\\
+If one wants to plot more data from the \texttt{info}-struct, the variables to be plotted  have to be separated with an underscore~\texttt{\_}.
+
+\item[tjsr(T,'plot','info\_normest\_norm\_rho','fastnorm',0)] Plots the estimated norms against the real norms against the spectral radii.
+
+\item[tjsr(T,'plot','info\_normest\_L')] Plots the estimated norms and the number of processed vertices.
+If the variables are not compatible in size or format, the algorithm tries to plot them anyhow.
+
+
+
+\end{param}
+
+\end{itemize}
+
+\subsection{All options}\label{tjsr_alloptions}
+\subsubsection{Pre- and postprocessing options} These options control pre-processing and post-processing steps.
+\begin{param}
+\item['clc'] \defval{false}\\Clears the console before starting the algorithm.
+
+\item['maxnumrestart',int] integer, \defval{10}\\Maximum number of restarts.
+
+\item['nopreprocess'] \label{tjsr_options_nopreprocess}
+\defval{false}\\If this option is not set, the input matrices are preprocessed using the following steps:
+\begin{itemize}[nosep]
+\item Equal matrices are removed from the input set (all but one).
+\item All matrices in \texttt{M} are multiplied with the number modulus 1, s.t. all first non-zero entries are positive.
+\end{itemize}
+
+\item['pauseonreset',flag] boolean, \defval{false}\\Waits for a key-press after every restart.
+
+\item['proof',flag] boolean, \defval{false}\\Proofs the invariance of the polytope after termination of the algorithm and returns bounds for the $\JSR$ w.r.t.\ that polytope. 
+\begin{param}
+\item[0] Do not test the invariance.
+\item[1] Use the original matrices to test.
+\item[2] Use the normalized matrices to test, i.e. the set $\texttt{M}/\JSR$.
+\end{param}
+This option works only if there are no invariant subspaces (and under some other conditions).
+The test is done using Matlab's \texttt{linprog} and without any tricks speeding-up the computation, implying it is \emph{very slow}.
+
+
+\end{param}
+
+\subsubsection{Preworker options} These options control the search for candidates, nearly-candidates and extra-vertices, etc..
+\begin{param}
+
+\item['autoextravertex',val] double, \defval{0.1}\\Adds a vertex for all directions whose corresponding singular value is less than \texttt{autoextravertex}. 
+
+
+\item['balancingdepth',val] integer, \defval{4}\\Depth used for balancing multiple trees. If the balancing takes too long, try to decrease that value.
+
+\item['balancingvector',val] vector, \defval{empty}\\Balancing-vector. Must have as many entries as there are cyclic trees.\\
+E.g.: \texttt{'balancingvector',[1 0.8]}.
+
+\item['complexeigenvector',flag] integer, \defval{2}\\Defines how complex eigenvectors shall be treated.
+\begin{param}
+\item[0] Complex eigenvectors are kept.
+\item[1] Complex eigenvectors are removed, whenever there is at least one real eigenvector corresponding to the same product.
+\item[2] (default) Complex eigenvectors are removed, whenever there is at least one real eigenvector among all products.
+\item[3] Real vectors are computed which span the real subspace of the complex leading eigenvectors (not implemented yet).
+\item[4] Complex eigenvectors are removed.
+\end{param}
+
+\item['delta',val] double, \defval{1}\\Matrices are multiplied by \texttt{delta} after the construction of the cyclic tree. 
+A smaller value leads to faster convergence, but the algorithm cannot return the exact value of the $\JSR$ anymore.
+
+\item['extravertex',val] cell array of column vectors, \defval{empty}\\Extra-vertices can be given in two ways: Either as a cell array of vectors as argument of \texttt{'extravertex'}, or in the cell array of \texttt{'v0'} with corresponding \texttt{smpflag} set to 2. See the \nameref{tjsr_example_usage}-Section for more information.\\
+E.g.: \texttt{'extravertex',\{[0.1 0 0]', [0 0.1 0]'\}}
+
+\item['findsmp\_N',int] integer, \defval{depends on the size and number of matrices}\\Number of products kept in each step of the \texttt{findsmp} algorithm. See \nameref{findsmp} for more information.
+
+\item['invariantsubspace',string] string, \defval{\texttt{'auto'}}\\  Whether to search for invariant subspaces or not, which can take a long time. \\See \nameref{invariantsubspace} for more information.
+    \begin{param}
+    \item['none']      Nothing happens,  \texttt{Mret=\{M\}}, \texttt{B=eye(dim)}.
+
+    \item['perm']      Tries to find a permutation such that all $\texttt{M\{i\}}$ are in block-diagonal form.
+    \item['basis']     Tries to find a basis such that all $\texttt{M\{i\}}$ are in block-diagonal form.
+    \item['trans']     Tries to find subspaces generated by differences of basic limit functions as occurring in subdivision theory~\cite{CP17}. The algorithm first computes numerically, then symbolically, then using \texttt{vpa}.
+    \item['auto']      (default) The algorithm tries \texttt{'perm'}, \texttt{'basis'} then \texttt{'trans'} (numerically).
+    \end{param}   
+
+\item['JSR',val] 1x2-vector, \defval{empty}, deprecated option\\ An initial \emph{TRUE} estimate for the JSR. The value is used (amongst other things) to search for s.m.p-candidates. The option may be removed in a future release.
+
+\item['maxnumcandidate',val] integer, \defval{\texttt{numel(M)*10} (subject to be changed)}\\If there are more candidates than \texttt{maxnumcandidate}, the algorithm restarts and \texttt{maxsmpdepth} is reduced.
+
+
+\item['maxsmpdepth',int] integer, \defval{depends on the size and number of matrices}\\Maximal length of s.m.p.-candidates to search for.
+
+\item['minJSR', val] double, \defval{0}\\Minimal value of normalized spectral radius of s.m.p.-candidates to be found. This option should not be used, since it is ignored most times.
+
+\item['multiplicity',val] vector, \defval{empty}\\The multiplicity of the corresponding leading eigenvalues in \texttt{v0}. This option is nearly useless and only sometimes used to choose between algorithms $(P)$ and $(R)$.
+
+\item['nearlycandidate',val] double, \defval{$\simeq0.9999$}\\Maximal relative difference between normalized spectral radii of s.m.p.-candidates and nearly-s.m.p.s.
+
+
+\item['nobalancing'] \defval{false}\\Disables balancing. This is equivalent to
+$\texttt{'balancingvector',[1 1 1 } \cdots \texttt{ 1]}$.
+
+\item['nomultipleeigenvector'] \defval{false}\\Only takes one leading eigenvector per candidate, even if there are more.
+
+\item['ordering,val] cell array of matrices of column vectors, \defval{empty}\\The orderings of the s.m.p.-candidates, nearly-candidates and extra-vertices. Extra-vertices have empty ordering. Each cell contains all the orderings belonging to the same leading eigenvalue. If the orderings have different length, zeros must be appended.
+See the \nameref{tjsr_example_usage}-Section for more information.\\
+E.g.: \texttt{'ordering',\{[1 2; 2 0]',[1 1 2]'\}}.
+
+\item['smpflag',val] row-vector, \defval{empty}\\Defines whether the candidates are an s.m.p.\ or not. 0=candidate, 1=nearly-candidate, 2=extravertex. If \texttt{smpflag} is given, \texttt{ordering} must be given too.\\
+E.g.: \texttt{'smpflag',[0 1]}
+
+\item['v0',val] cell array of column vectors, \defval{empty}\\The corresponding eigenvectors to the candidates/the starting vectors. If \texttt{v0} is given, \texttt{ordering} must be given , \texttt{v0s} should be given.
+
+\item['v0s',val] cell array of column vectors, \defval{empty}\\The corresponding dual eigenvectors to the candidates. If \texttt{v0s} is given, \texttt{v0} must be given.
+
+\item['noclassify'] \defval{false}\\If false, all s.m.p. candidates (and their cyclic permutations) are examined whether they have equal leading eigenvectors, in which case they are grouped together and only one tree is built up for them. This may take a long time in some cases.
+
+
+
+\end{param}
+
+\subsubsection{Worker options} These options control  how the invariant polytope is built up.
+\begin{param}
+\item['algorithm',val] integer, \defval{empty}\\The norm to be used:
+\begin{param}
+\item[0 or 'P'] $\|\vardot\|_{\operatorname{co}_{-}V}$, i.e. cone-norm.
+\item[1 or 'R'] $\|\vardot\|_{\operatorname{co}_{s}V}$, i.e. symmetrized polytope-norm.
+\item[2 or 'C'] $\|\vardot\|_{\operatorname{absco}V}$, i.e. complex polytope-norm.
+\item[{[]}] (default) The algorithm is determined automatically.
+\end{param}
+
+\item['epspolytope',val] double, \defval{$\simeq 2\cdot 10^{-9}$}\\Vertices with norm bigger than $1-\texttt{epspolytope}$ are considered to be outside the polytope. Value is automatically increased during the computation if it is less then \texttt{epslinprog}, in particular \texttt{epspolytope} can be less then zero. See the \nameref{tjsr_example_usage}-Section for more information.
+
+\item['fastnorm',val] integer, \defval{1}\\Whether the norms shall be estimated prior their exact computation.
+\begin{param}
+\item[0] Do not estimate.
+\item[1] (default) Check only whether points are inside.
+\item[2] (not recommended) Check whether points are inside or outside. The behaviour of this option may be changed in a future release.
+\end{param}
+
+\item['naturalselection',int] integer, \defval{depends on the number of available threads}\\Minimum number of vertices whose norms are computed in each level. The maximum number of vertices computed in each level is roughly the product of
+\texttt{naturalselection} and the number of available workers in the Matlab pool.\\
+This option may be renamed in a future release.
+
+\item['naturalselectiontype',val] integer, \defval{+inf}\\How to select new vertices.
+\begin{param}
+\item[inf or -inf] (\defval{\texttt{+inf}}) Use three times norm-estimate and one time parent-Minkowski-norm.
+\item[1 or -1] Use norm-estimate. Fastest type, but the intermediate bounds converge slowly.
+\item[2 or -2] Use parent-Minkowski-norm.
+\item[3 or -3] (not recommended) Use spectral radii of matrix products.
+\item[100 or -100] (for debugging) Use negative spectral radii of matrix products.
+\end{param}
+If the value is positive, then 
+\begin{param}
+\item[$(i)$] all children of a vertex are selected, if at least one is selected and
+\item[$(ii)$] the polytope which is used to compute the norm is chosen such that intermediate bounds can be computed.
+\end{param}
+This means, the algorithm may be faster if \texttt{naturalselectiontype} is negative, but will most likely not report intermediate bounds for the $\JSR$.
+
+\item['simplepolytope',val] integer, \defval{$10^{-8}$}\\Vertices with norm less than $1+\texttt{simplepolytope}$ may not be used in the norm computation.\\ \texttt{simplepolytope} should be greater than \texttt{epslinprog}.
+
+\item['testoldvertex',val] integer, \defval{1}\\Whether old vertices shall be estimated again if they lie inside the polytope or not. In some cases, this option tremendously increases the performance of the algorithm.
+\begin{param}
+\item[0] Never
+\item[1] (default) Sometimes
+\item[2] Always
+\end{param}
+
+\end{param}
+
+\subsubsection{Termination options} These options control the termination of the algorithm.
+Note that most criteria are only tested at the beginning of each iteration.
+\begin{param}
+\item['maxiteration',val] double, \defval{$\infty$}\\Computation stops after iterating the algorithm \texttt{maxiteration} times. 
+
+\item['maxtime',val] double, \defval{$\infty$}\\Computation stops after \texttt{maxtime} seconds. 
+
+\item['maxstepnumber',val] double, \defval{$\infty$}\\Computation stops if more than \texttt{maxstepnumber} vertices are tested. 
+
+\item['maxtreetime',val] double, \defval{$\infty$}\\Computation stops after the construction of the tree takes more than \texttt{maxtreetime} seconds. 
+
+
+\item['maxvertexnumber',val] double, \defval{$\infty$}\\Computation stops if the polytope has more than \texttt{maxvertexnumber} vertices. 
+
+\item['testeigenplane',val] double, \defval{$-\infty$ (i.e.\ this option is disabled)}\\
+Tests whether the distance of a vertex to the supporting eigenplanes defined by \texttt{v0} and \texttt{v0s} is more then approximately $1-\texttt{testeigenplane}$. If a vertex lies outside, the candidates are not s.m.ps. 
+Positive values lead to false-positives. 
+If $\texttt{testeigenplane}=1$, the algorithm changes the value to $-10^{-10}$.
+{\color{red} This behaviour may be changed in a future release.}
+
+\item['testspectralradius',val] double, \defval{$-10^{-10}$}\\
+Tests whether the intermediately occurring spectral radii are greater than $1-\texttt{testspectralradius}$. Positive values lead to false-positives. 
+If $\texttt{testspectralradius}=1$, the algorithm changes the value to $-10^{-10}$.
+{\color{red} This behaviour may be changed in a future release.}
+
+\item['validatelowerbound',val] double, \defval{$\infty$}\\Algorithm terminates if the lower estimate of the $\JSR$ is greater than \texttt{validatelowerbound}.
+
+\item['validateupperbound',val] double, \defval{$0$}\\Algorithm terminates if upper estimate of $\JSR$ is less than \texttt{validateupperbound}. This option also changes the value of \texttt{epspolytope}. If $\texttt{validateupperbound}<0$, this option is ignored.
+
+\end{param}
+
+\subsubsection{Output options} These options control the output during the computation, and partly also the return-values.
+\begin{param}
+\item['diary'] integer\\Starts the Matlab diary and may change the default value for \texttt{save}.
+
+\item['plot',string] string, \defval{empty}\\
+\texttt{string} is one of the following: \texttt{'norm'}, \texttt{'polytope'}, \texttt{'L'} or an identifier beginning with \texttt{'info\_'}. 
+    \begin{param}
+    \item['norm'] Plots intermediate norms
+    \item['polytope'] Plots the constructed polytope
+    \item['L'] Plots the number of vertices left to compute (at the moment)
+    \item['info\_...'] A string beginning with \texttt{'info\_'} and an arbitrary number of strings, which are names of fields in the output-struct \texttt{info}, separated by underscores~\texttt{'\_'}. \\Fields in the sub-struct \texttt{info.cyclictree} do not need the prefix \texttt{'cyclictree.'}.
+    All addressed fields are plotted when possible.
+    E.g.: \texttt{'info\_norm'}, \texttt{'info\_cyclictree.norm'}, \texttt{'info\_norm\_normest\_L'}.
+    \end{param}
+    
+    \item See the \nameref{tjsr_example_usage}-Section and the source-code of \texttt{tjsr\_plotoutput} for more information.    
+    
+\item['profile'] integer\\Starts the Matlab profiler.    
+
+\item['save',val] integer, \defval{0}\\How much of the output (diary, plots, variables) shall be saved to disk.
+    \begin{param}
+    \item[0] (Default) Do not save output.
+    \item[1] Save output at termination.
+    \item[2] Save output after each iteration.
+    \item[3] Save output after each iteration in a new file.
+    \end{param}
+    
+\item['verbose',val] integer, \defval{1}\\Verbose level. If $\texttt{verbose}<0$ the algorithm suppresses error-messages {\color{red}(not recommended!)}.
+    
+\end{param}
+
+\subsubsection{Debug options} These options are merely for testing the algorithm and should not be changed by the standard-user.
+\begin{param}
+\item['balancing'] If set, this indicates that we are balancing.
+\item['memory'] If set, the algorithm tries to save memory (Not available at the moment).
+\item['alwaysout'] If set, then all points are assumed to be outside of the invariant polytope.
+\item['epsequal',val] double, \defval{$10^{-12}$}\\Epsilon used to compare floating numbers for equality.
+
+\item['epslinprog'] double, \defval{depends on the LP-solver}\\Epsilon used for the linear programming part. If the Gurobi-solver is used, this value is fixed to $10^{-9}$. If Matlab's \texttt{linprog} is used, this value must be $\geq10^{-10}$.
+
+\item['waitafterbalancing'] If set, algorithm waits for a key-press after balancing.
+\item['rholeqval',val] If set, matrix products whose spectral radius is greater than $\texttt{rholeqval}$ are discarded and it is assumed their respective vertices are inside of the polytope.
+
+\item['showquantity,val] double, \defval{25}\\Controls up to which size, sets of vectors, matrices, etc.\ are displayed.
+\end{param}
+
+
+\subsection{Output: \texttt{info}-struct}
+This struct contains nearly all the computed data by the algorithm. It consists of several sub-structs which are explained here. Only a subset of those entries are returned always. These are
+\texttt{info.JSR}, \texttt{info.info.infotext} and \texttt{info.info.errorcode}.
+
+\begin{param}
+\item[info.JSR] double or 1x2-vector\\Value or bound for the $\JSR$.
+\item[info.M\_normalized] cell array of matrices\\Preprocessed and scaled input matrices \texttt{M}. See \nameref{tjsr_options_nopreprocess} for more information.
+\item[info.M\_original] cell array of matrices\\ Preprocessed input matrices \texttt{M}.
+\item[info.arguments] cell array\\ Processed calling arguments
+\item[info.arguments\_raw] cell array\\ Original calling arguments.
+\item[info.balancing] cell array of structs\\ Information obtained during balancing. Contains a subset of the entries in \texttt{cyclictree}.
+\item[info.counter] struct\\ Information about how often things happened.
+\item[info.cyclictree] struct\\ The invariant polytope (cyclic tree).
+\item[info.info] struct\\ Various data 
+\item[info.lambda] double\\ Normalized spectral radius of the s.m.p.-candidate. Usually equals the first entry in \texttt{JSR}.
+\item[info.opt] struct\\ Used options.
+\end{param}
+
+\subsubsection{\texttt{info.counter}} This sub-struct contains mostly self-explaining data.
+\begin{param}
+\item[info.counter.iteration] integer\\How often the algorithm iterated.
+\item[info.counter.numberofvertex] integer\\Number of vertices in the polytope.
+\item[info.counter.numblock] integer\\Number of invariant blocks.
+\item[info.counter.nummatrix] integer\\Number of input matrices.
+\item[info.counter.numcandidate] integer\\Number of s.m.p.-candidates.
+\item[info.counter.numextravertex] integer\\Number of extra-vertices.
+\item[info.counter.numnearlycandidate] integer\\Number of nearly-candidates.
+\item[info.counter.numordering] integer\\Equals $\texttt{numcandidate}+\texttt{numnearlycandidate}+\texttt{numextravertex}$.
+\item[info.counter.numstepbig] integer\\Number of steps done by the linear-programming part.
+\item[info.counter.numstepsmall] integer\\Number of processed vertices by the algorithm.
+\item[info.counter.starttime] vector\\Time when the algorithm started.
+\item[info.counter.starttreetime] vector\\Time when the construction of the tree started.
+\item[info.counter.totaltime] double\\Time needed to terminate.
+\item[info.counter.treetime] double\\Time needed to build up the tree.
+\end{param}
+
+\subsubsection{\texttt{info.cyclictree}}
+This sub-struct contains the data of the cyclic tree. 
+There are three main types of data structures present.
+\begin{itemize}[noitemsep]
+\item Vectors (with as many elements as there are cyclic trees).
+Each number corresponds to one cyclic tree.
+\item Cell arrays (with as many elements as there are cyclic trees). 
+Each entry corresponds to one cyclic tree.
+\item Cell arrays (with as many elements as there are cyclic trees) of matrices.
+Each column of a matrix corresponds to a vertex of the cyclic tree.
+\end{itemize}
+In the following we use the name \emph{ordering} for candidates, nearly-candidates and extra-vertices.
+
+\begin{param}
+\item[info.cyclictree.ordering] cell array of matrices of column vectors\\The orderings of the candidates, nearly-candidates and extra-vertices. The latter have empty ordering.
+\item[info.cyclictree.smpflag] row-vector\\Defines what the orderings are: $0$ : s.m.p.-candidate, $1$ : nearly-s.m.p, $2$ : extra-vertex.
+\item[info.cyclictree.v0] cell array of column vectors\\Starting vector for each ordering.
+\item[info.cyclictree.v0s] cell array of column vectors\\Dual vector for each ordering.
+\item[info.cyclictree.balancingvector] row-vector\\Balancing factors.
+\item[info.cyclictree.multiplicity] row-vector\\Multiplicity of the orderings vectors.
+\item[info.cyclictree.orho] vector\\Normalized spectral radii of each ordering. Extra-vertices have the value~\texttt{NaN}.
+\item[info.cyclictree.oclass] cell array of matrices of column vectors\\Orderings of products which are already contained in the cyclic tree. This field may be removed in a future release.
+\item[info.cyclictree.maxlengthordering] integer\\Maximal length of the orderings for each tree.
+\item[info.cyclictree.L] cell array of row-vectors\\Number of vertices in each tree.
+\item[info.cyclictree.livingvertex] row-vector\\Number of vertices without children which are not inside the polytope.
+\item[info.cyclictree.timelvl] row-vector\\Time spent for each iteration.
+\item[info.cyclictree.normlvl] row-vector\\Computed norm in each iteration. Note that this sequence is not monotonic in general.
+\item[info.cyclictree.level] cell array of row-vectors\\Number of the iteration in which the corresponding vertex was added.
+\item[info.cyclictree.norm] cell array of row-vectors\\Computed norm of the vertices.
+\item[info.cyclictree.normest] cell array of row-vectors\\Estimated norm of the vertices.
+\item[info.cyclictree.normparent] cell array of row-vectors\\Computed norm of the parent vertices.
+\item[info.cyclictree.o] cell array of matrices of column-vectors\\Ordering of the product to obtain the respective vertex in \texttt{info.cyclictree.V}.
+\item[info.cyclictree.parent] cell array of row-vectors\\Index of parent-vertex.
+\item[info.cyclictree.rho] cell array of row-vectors\\Spectral radii of the product to the corresponding vertices.
+\item[info.cyclictree.status] cell array of row-vectors\\Indicates whether a vertex has children (1) or not (0).
+\item[info.cyclictree.V] cell array of matrices of column-vectors\\All generated vertices. To obtain the (invariant) polytope call \texttt{tjsr\_getpolytope(info)}.
+\item[info.cyclictree.Vs] cell array of matrices of column-vectors\\All generated dual vertices. Usually only those for the cyclic root are computed.
+\item[info.cyclictree.V\_intermediate] cell array of matrices of column-vectors\\Vertices of the polytope, only used internally.
+\item[info.cyclictree.ub\_intermediate] double\\Upper bound for the $\JSR$, only used internally.
+\end{param}
+
+
+\subsubsection{\texttt{info.info}} Contains mostly info and error data.
+\begin{param}
+\item[info.info.errorcode] integer\\Termination-code. Negative values mean successful termination, all other values mean bad termination.
+\begin{param}[noitemsep]
+\item[-80] Worker was not started due to user-input (not used)
+\item[-60] $\JSR$ is less than \texttt{validateupperbound}.
+\item[-50] $\JSR$ is greater than \texttt{validatelowerbound}.
+\item[-40] Exact value was found during balancing (not used).
+\item[-20] Algorithm terminated successfully and there were invariant subspaces
+\item[-10] Algorithm terminated successfully.
+\item[-5]  Algorithm terminated successfully and $\texttt{delta}<1$.
+\item[0]   Input error.
+\item[inf] Unknown error. 
+\item[nan] Strange error.
+\item[10]  No candidate was found.
+\item[20]  Candidate is no s.m.p..
+\item[30]  No balancing vector found.
+\item[60]  Candidate with higher normalized spectral radius found.
+\item[70]  \texttt{maxtime} reached.
+\item[75]  \texttt{maxtreetime} reached.
+\item[80]  \texttt{maxstepnumber} reached.
+\item[90]  \texttt{maxvertexnumber} reached.
+\item[100] \texttt{maxtreedepth} reached.
+\item[110] Some vertex lies outside the supporting eigenplanes, thus the candidate is no s.m.p.
+\item[120] \texttt{maxiteration} reached.
+\item[130] Too much candidates found.
+\item[170] An error in an invariant subspace occurred. The algorithm usually does not recover from that error and aborts. If that error happens, it is recommended to start the algorithm for each invariant subspace, which can be using with the function \nameref{invariantsubspace}.
+\item[180] $\JSR$ is likely to be zero (This algorithm cannot handle that case).
+\item[1000] Complex leading eigenvectors (The algorithm cannot handle that case at the moment).
+\end{param}
+
+\item[info.info.errorinformation] usually cell array but may have different format\\Used to pass information of errors from \texttt{tjsr\_worker} back to \texttt{tjsr}.
+\item[info.info.infotext] string\\Most of the output text (and even more).
+\item[info.info.errortext] string\\All error-messages.
+\item[info.info.dim] integer\\Dimension of the input-matrices.
+\item[info.info.algorithm] integer\\Used algorithm. $0$=cone (case $(P)$), $1$=polytope (case $(R)$), $2$ complex-polytope (case $(C)$).
+\item[info.info.matrixtype] struct\\Self explaining properties of the input matrices.
+\item[info.info.findsmp] struct\\Data returned from \texttt{findsmp}.
+\end{param}
+
+\subsubsection{\texttt{info.opt}}
+Struct where all described options are saved.
+
+\subsubsection{\texttt{info.block}}
+Only set if there are invariant subspaces. If so, each cell in \texttt{info.block} contains the \texttt{info}-struct for that block
+and \texttt{info.info} and \texttt{info.counter} contain aggregated informations from \texttt{info.block\{:\}}.
+
+\section{\texttt{tjsr\_getpolytope}}\label{tjsr_getpolytope}
+Returns the vertices of the invariant polytope.
+\subsection*{Syntax}
+\begin{param}
+\item[{[ VV ] = tjsr\_getpolytope( info )}]
+\end{param}
+\subsection*{Input}
+\begin{param}
+\item[info] info-struct as returned by \texttt{tjsr}.
+\end{param}
+\subsection*{Output}
+\begin{param}
+\item[VV] matrix of column vectors\\
+The invariant polytope.
+\end{param}
+\subsection*{Note}
+The function basically does the following:
+\begin{verbatim}
+    VV=[info.cyclictree.V{:}]; %get all vertices
+    idx=[info.cyclictree.norm{:}]>1-info.opt.epspolytope; %choose those which are outside
+    VV=VV(:,idx);
+\end{verbatim}
+
+\subsection*{Example Usage}
+\texttt{[JSR,info]=tjsr(tgallery('rand\_gauss',3,2,'seed',10))}\\
+\texttt{VV=tjsr\_getpolytope(info)}\\
+\texttt{plotm([VV -VV],'resolution',0,'MarkerSize',100)}\\
+\texttt{info.opt.plot='polytope'}\\
+\texttt{tjsr\_plotoutput(info)}
+
+\section{\texttt{preprocessmatrix}}\label{preprocessmatrix}
+\subsection*{Syntax}
+Simplifies sets of matrices, while preserving their joint spectral radii (when called with default-values).
+\begin{param}
+\item \texttt{[ M ] = preprocessmatrix( M, [options] ) }
+\end{param}
+
+\subsection*{Input}
+\begin{param}
+\item[M] cell-array of matrices\\The input matrices
+\end{param}
+
+\subsection*{Options}
+\begin{param}
+\item['inverse',bool] boolean, \defval{false}\\Takes the Moore-Penrose pseudo-inverse of all matrices.
+\item['addinverse',bool] boolean, \defval{false}\\Adds the Moore-Penrose pseudo-inverses  to the returned set.
+\item['transpose',bool] boolean, \defval{false}\\Returns the transposed matrices.
+\item['addtranspose',bool] boolean, \defval{false}\\Adds the transposed matrices to the returned set.
+\item['makepositive',bool] boolean, \defval{true}\\Multiplies each matrix with the unique number modulo 1, such that the first non-zero entry of each matrix is positive.
+\item['timestep',val] double, \defval{false}\\Returns the matrices $I\cdot(1-\texttt{timestep}) + \texttt{M\{i\}}\cdot\text{valtimestep}$ 
+where $I$ is the identity matrix. This transformation is used in connection with the computation of the stability of linear switched systems.
+\item['perturbate',val] double, \defval{0}\\Perturbates the matrices randomly by $\texttt{randn}\cdot\texttt{perturbate}$.
+\item['removezero',bool] boolean, \defval{true}\\Removes all (but one) zero matrices.
+\item['removeduplicate,bool] boolean, \defval{true}\\Removes duplicates. Uses no tolerance for comparing floating point numbers.
+\item['basechange,val] various data-type, \defval{0}\\Performs a base change.
+    \begin{param}
+    \item[0] No base change is made.
+    \item['random'] A random base change is made.
+    \item[1] The eigenvectors of \texttt{M\{1\}} are used, implying that \texttt{M\{1\}} is in Jordan-normal-form. If \texttt{M\{1\}} is badly scaled, \texttt{M\{2\}} is used, etc.
+    \item[A] (where \texttt{A} is an invertible matrix). The matrices $\texttt{A}^{-1}\texttt{M\{i\}}\texttt{A}$ are returned.
+    \end{param}
+\item['exponential',val] boolean, \defval{false}\\The matrix exponential of each matrix is taken. 
+\item['nodouble',val] boolean, \defval{false}\\Matrices are not converted to double.
+\item['verbose',int] integer, \defval{1}\\Verbose level.
+\end{param}
+
+If no options are given, the matrices are processed in the order as written above. The second to last step is \texttt{'makepositive'} again.
+If at least one option (except \texttt{verbose}) is given, only that option is used.
+
+\subsection*{Output}
+\begin{param}
+\item[M] cell array of matrices\\The processed matrices. If no matrices are removed or added, the returned array has the same size and topology as the input array. Otherwise it is a vector.
+\end{param}
+
+\subsection*{Example Usage}
+\begin{param}
+\item[{preprocessmatrix(\{[-1 2; 2 3],[-1 2; 2 3]\})}]
+\end{param}
+
+
+
+%%%%%%%%%%%%%%%%%%%
+% EOF
+%%%%%%%%%%%%%%%%%%%

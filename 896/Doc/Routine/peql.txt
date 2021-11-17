@@ -1,0 +1,338 @@
+***********************************************************************
+*                                                                     *
+*       PEQL - LIMITED-MEMORY INVERSE COLUMN-UPDATE METHOD FOR        *
+*              LARGE-SCALE SYSTEMS OF NONLINEAR EQUATIONS WITH        *
+*              SPARSE JACOBIAN MATRICES.                              *
+*                                                                     *
+***********************************************************************
+
+1. Introduction:
+----------------
+
+      The double-precision FORTRAN 77 basic subroutine PEQL is designed
+to find a close approximation to a solution of nonlinear equations
+
+      FA_1(X) = 0,  FA_2(X) = 0,  ...,  FA_N(X)=0.
+
+Here X is a vector of N variables and FA_I(X), 1 <= I <= N, are twice
+continuously differentiable functions. We assume that N is large, but
+partial functions FA_I(X), 1 <= I <= N depend on a small number of
+variables. Thus the mapping AF(X) = [FA_1(X), FA_2(X), ..., FA_N(X)]
+has a sparse Jacobian matrix, which will be denoted by AG(X) (it has N
+rows and N columns). The sparsity pattern of the Jacobian matrix is
+stored in the coordinate form if ISPAS=1 or in the standard compressed
+row format if ISPAS=2 using arrays IAG and JAG. For example, if the
+Jacobian matrix has the following pattern
+
+                AG = | * * 0 * |
+                     | * * * 0 |
+                     | * 0 0 * |
+                     | 0 * * 0 |
+
+(asterisks denote nonzero elements) then arrays IAG and JAG contain
+elements
+
+IAG(1)=1, IAG(2)=1, IAG(3)=1, IAG(4)=2,  IAG(5)=2,  IAG(6)=2,
+IAG(7)=3, IAG(8)=3, IAG(9)=4, IAG(10)=4,
+JAG(1)=1, JAG(2)=2, JAG(3)=4, JAG(4)=1,  JAG(5)=2,  JAG(6)=3,
+JAG(7)=1, JAG(8)=4, JAG(9)=2, JAG(10)=3
+
+if ISPAS=1 or
+
+IAG(1)=1, IAG(2)=4, IAG(3)=7, IAG(4)=9,  IAG(5)=11,
+JAG(1)=1, JAG(2)=2, JAG(3)=4, JAG(4)=1,  JAG(5)=2,  JAG(6)=3,
+JAG(7)=1, JAG(8)=4, JAG(9)=2, JAG(10)=3
+
+if ISPAS=2. In the first case, nonzero elements can be sorted in an
+arbitrary order (not only by rows as in the above example). Arrays
+IAG and JAG have to be declared with lengths N+MA and MA at least,
+respectively, where MA is the number of nonzero elements. In the
+second case, nonzero elements can be sorted only by rows. Components
+of IAG contain total numbers of nonzero elements in all previous
+rows increased by 1 and elements of JAG contain corresponding column
+indices (note that IAG has N+1 elements and the last element is
+equal to MA+1). Arrays IAG and JAG have to be declared with length
+N+1 and MA at least, respectively.
+      To simplify user's work, an additional easy to use subroutine
+PEQLU is added. It calls the basic general subroutine PEQL. All
+subroutines contain a description of formal parameters and extensive
+comments. Furthermore, test program TEQLU is included, which contains
+several test problems (see e.g. [2]). This test program serves as an
+example for using the subroutine PEQLU, verifies its correctness and
+demonstrates its efficiency.
+      In this short guide, we describe all subroutines which can be
+called from the user's program. A detailed description of the method is
+given in [1]. In the description of formal parameters, we introduce a
+type of the argument that specifies whether the argument must have a
+value defined on entry to the subroutine (I), whether it is a value
+which will be returned (O), or both (U), or whether it is an auxiliary
+value (A). Note that the arguments of the type I can be changed on
+output under some circumstances, especially if improper input values
+were given. Besides formal parameters, we can use a COMMON /STAT/ block
+containing statistical information. This block, used in each subroutine
+has the following form:
+
+      COMMON /STAT/ NRES,NDEC,NIN,NIT,NFV,NFG,NFH
+
+The arguments have the following meaning:
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NRES      O   Positive INTEGER variable that indicates the number of
+                restarts.
+  NDEC      O   Positive INTEGER variable that indicates the number of
+                matrix decompositions.
+  NIN       O   Positive INTEGER variable that indicates the number of
+                inner iterations (for solving linear systems).
+  NIT       O   Positive INTEGER variable that indicates the number of
+                iterations.
+  NFV       O   Positive INTEGER variable that indicates the number of
+                function evaluations.
+  NFG       O   Positive INTEGER variable that specifies the number of
+                gradient evaluations.
+  NFH       O   Positive INTEGER variable that specifies the number of
+                Hessian evaluations.
+
+
+2. Subroutine PEQLU:
+--------------------
+
+The calling sequence is
+
+      CALL PEQLU(N,MA,X,AF,IAG,JAG,IPAR,RPAR,F,GMAX,IDER,ISPAS,IPRNT,ITERM)
+
+The arguments have the following meaning.
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  N         I   Positive INTEGER variable that specifies the number of
+                variables of the partially separable function.
+  MA        I   Number of nonzero elements in the Jacobian matrix. This
+                parameter is used as input only if ISPAS=1 (it defines
+                dimensions of arrays IAG and JAG in this case).
+  X(N)      U   On input, DOUBLE PRECISION vector with the initial
+                estimate to the solution. On output, the approximation
+                to the minimum.
+  AF(N)     O   DOUBLE PRECISION vector which contains values of partial
+                functions.
+  IAG(N+1)  I   INTEGER array which contains pointers of the first
+                elements in rows of the Jacobian matrix.
+  JAG(MA)   I   INTEGER array which contains column indices of the
+                nonzero elements.
+  IPAR(7)   I   INTEGER parameters:
+                  IPAR(1)=MIT,  IPAR(2)=MFV,   IPAR(3)-NONE,
+                  IPAR(4)-NONE, IPAR(5)=MOS1,  IPAR(6)=MOS2,
+                  IPAR(7)=MF.
+                Parameters MIT, MFV, MOS1, MOS2, MF are described in
+                Section 3 together with other parameters of the
+                subroutine PEQL.
+  RPAR(9)   I   DOUBLE PRECISION parameters:
+                  RPAR(1)=XMAX,  RPAR(2)=TOLX,  RPAR(3)=TOLF,
+                  RPAR(4)=TOLB,  RPAR(5)=TOLG,  RPAR(6)-NONE,
+                  RPAR(7)-NONE,  RPAR(8)=ETA2,  RPAR(9)-NONE.
+                Parameters XMAX, TOLX, TOLF, TOLB, TOLG, ETA2 are
+                described in Section 3 together with other parameters
+                of the subroutine PEQL.
+  F         O   DOUBLE PRECISION value of the objective function at the
+                solution X.
+  GMAX      O   DOUBLE PRECISION maximum absolute value of a partial
+                derivative of the Lagrangian function.
+  IDER      I   INGEGER variable that specifies the degree of analytically
+                computed derivatives (0 OR 1).
+  ISPAS     I   INTEGER variable that specifies sparse structure of the
+                Jacobian matrix:
+                  ISPAS= 1 - the coordinate form is used,
+                  ISPAS= 2 - the standard row compresed format is used.
+  IPRNT     I   INTEGER variable that specifies PRINT:
+                  IPRNT= 0 - print is suppressed,
+                  IPRNT= 1 - basic print of final results,
+                  IPRNT=-1 - extended print of final results,
+                  IPRNT= 2 - basic print of intermediate and final
+                             results,
+                  IPRNT=-2 - extended print of intermediate and final
+                             results.
+  ITERM     O   INTEGER variable that indicates the cause of termination:
+                  ITERM= 1 - if |X - XO| was less than or equal to TOLX
+                             in two subsequent iterations,
+                  ITERM= 2 - if |F - FO| was less than or equal to TOLF
+                             in two subsequent iterations,
+                  ITERM= 3 - if F is less than or equal to TOLB,
+                  ITERM= 4 - if GMAX is less than or equal to TOLG,
+                  ITERM= 6 - if termination criterion was not satisfied,
+                             but the solution is probably acceptable,
+                  ITERM=11 - if NIT exceeded MIT,
+                  ITERM=12 - if NFV exceeded MFV,
+                  ITERM< 0 - if the method failed.
+
+      The subroutines PEQLU requires the user supplied subroutines
+FUN and DFUN that define partial functions and their gradients and have
+the form
+
+      SUBROUTINE  FUN(NF,KA,X,FA)
+      SUBROUTINE DFUN(NF,KA,X,GA)
+
+If IDER=0, the subroutine DFUN can be empty. The arguments of the user
+supplied subroutines have the following meaning.
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  N         I   Positive INTEGER variable that specifies the number of
+                variables of the objective function.
+  KA        I   INTEGER index of the partial function.
+  X(N)      I   DOUBLE PRECISION an estimate to the solution.
+  FA        O   DOUBLE PRECISION value of the KA-th partial function at
+                the point X.
+
+
+3. Subroutine PEQL:
+-------------------
+
+      This general subroutine is called from all subroutines described
+in Section 2. The calling sequence is
+
+      CALL PEQL(N,X,GA,AG,IAG,JAG,IB,IW1,IW2,IW3,IW4,XM,GM,IM,G,S,XO,
+     & GO,XS,GS,XP,GP,AF,AFO,AFD,XMAX,TOLX,TOLF,TOLB,TOLG,ETA2,GMAX,
+     & F,MIT,MFV,MOS1,MOS2,MF,IDER,IPRNT,ITERM)
+
+The arguments N, X, IAG, JAG, AF, GMAX, F, IDER, IPRNT, ITERM have the
+same meaning as in Section 2. Other arguments have the following meaning:
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  GA(N)      A   DOUBLE PRECISION gradient of the partial function.
+  AG(MA)     A   DOUBLE PRECISION nonzero elements of the Jacobian
+                 matrix.
+  IB(N)      A   INTEGER permutation vector.
+  IW1(N)     A   INTEGER auxiliary array.
+  IW2(N)     A   INTEGER auxiliary array.
+  IW3(N)     A   INTEGER auxiliary array.
+  IW4(N)     A   INTEGER auxiliary array.
+  XM(N*MF)   A   DOUBLE PRECISION array which contains vectors for
+                 inverse column-update.
+  GM(MF)     A   DOUBLE PRECISION array which contains values for
+                 inverse column-update.
+  IM(MF)     A   INTEGER array which contains indices for inverse
+                 column-update.
+  G(N)       A   DOUBLE PRECISION gradient of the objective function.
+  S(N)       A   DOUBLE PRECISION direction vector.
+  XO(N)      A   DOUBLE PRECISION array which contains increments of
+                 variables.
+  GO(N)      A   DOUBLE PRECISION array which contains increments of
+                 gradients.
+  XS(N)      A   DOUBLE PRECISION auxiliary array.
+  GS(N)      A   DOUBLE PRECISION auxiliary array.
+  XP(N)      A   DOUBLE PRECISION auxiliary array.
+  GP(N)      A   DOUBLE PRECISION auxiliary array.
+  AFO(N)     A   DOUBLE PRECISION vector which contains old values of
+                 partial functions.
+  AFD(N)     A   DOUBLE PRECISION auxiliary array.
+  XMAX       I   DOUBLE PRECISION maximum stepsize; the choice XMAX=0
+                 causes that the default value 1.0D+16 will be taken.
+  TOLX       I   DOUBLE PRECISION tolerance for the change of the
+                coordinate vector X; the choice TOLX=0 causes that the
+                default value TOLX=1.0D-16 will be taken.
+  TOLF      I   DOUBLE PRECISION tolerance for the change of function
+                values; the choice TOLF=0 causes that the default
+                value TOLF=1.0D-16 will be taken.
+  TOLB      I   DOUBLE PRECISION minimum acceptable function value;
+                the choice TOLB=0 causes that the default value
+                TOLB=1.0D-16 will be taken.
+  TOLG      I   DOUBLE PRECISION tolerance for the Lagrangian function
+                gradient; the choice TOLG=0 causes that the default
+                value TOLG=1.0D-6 will be taken.
+  ETA2      I   DOUBLE PRECISION damping parametr for an incomplete
+                LU preconditioner.
+  MIT       I   INTEGER variable that specifies the maximum number of
+                iterations; the choice MIT=0 causes that the default
+                value 1000 will be taken.
+  MFV       I   INTEGER variable that specifies the maximum number of
+                function evaluations; the choice MFV=0 causes that
+                the default value 1000 will be taken.
+  MOS1      I   INTEGER variable that specifies the smoothing strategy
+                for the CGS method:
+                  MOS1=1 - smoothing is not used.
+                  MOS1=2 - single smoothing strategy is used.
+                  MOS1=3 - double smoothing strategy is used.
+                The choice MOS1=0 causes that the default value MOS1=3
+                will be taken.
+  MOS2      I   INTEGER choice of preconditioning strategy:
+                  MOS2=1 - preconditioning is not used.
+                  MOS2=2 - preconditioning by the incomplete LU
+                           decomposition.
+                  MOS2=3 - preconditioning by the incomplete LU
+                           decomposition combined with preliminary
+                           solution of the preconditioned system.
+  MF        I   The number of limited-memory variable metric updates
+                in each iteration (they use 2*MF stored vectors).
+
+The choice of parameter XMAX can be sensitive in many cases. First,
+partial functions can be evaluated only in a relatively small region
+(if it contains exponentials) so that the maximum stepsize is necessary.
+Secondly, the problem can be very ill-conditioned far from the solution
+point so that large steps can be unsuitable. Finally, if the problem has
+more local solutions, a suitably chosen maximum stepsize can lead to
+obtaining a better local solution.
+      The subroutine PEQL requires the user supplied subroutine FUN
+which is described in Section 2.
+
+4. Verification of the subroutines:
+-----------------------------------
+
+      Subroutine PEQLU can be verified and tested using the program
+TEQLU. This program calls the subroutines TIUB18 (initiation), TAFU18
+(function evaluation) and TAGU18 (gradient evaluation) containing
+30 unconstrained test problems with at most 5000 variables [2]. The
+results obtained by the program TEQLU on a PC computer with Microsoft
+Power Station Fortran compiler have the following form.
+
+NIT=   30  NFV=   64  NFG=    0  F= 0.326079E-18  G= 0.154142E-03  ITERM=  3
+NIT=   17  NFV=   57  NFG=    0  F= 0.720058E-19  G= 0.261551E-07  ITERM=  3
+NIT=    5  NFV=   11  NFG=    0  F= 0.861220E-16  G= 0.366389E-03  ITERM=  3
+NIT=   11  NFV=   19  NFG=    0  F= 0.115060E-18  G= 0.358897E-01  ITERM=  3
+NIT=   20  NFV=   56  NFG=    0  F= 0.335602E-16  G= 0.121910E-06  ITERM=  3
+NIT=   22  NFV=   31  NFG=    0  F= 0.167377E-16  G= 0.898624E-08  ITERM=  3
+NIT=   25  NFV=   42  NFG=    0  F= 0.137004E-20  G= 0.185851E-05  ITERM=  3
+NIT=   21  NFV=   60  NFG=    0  F= 0.496243E-28  G= 0.183782E-07  ITERM=  3
+NIT=   32  NFV=   71  NFG=    0  F= 0.220876E-21  G= 0.800603E-05  ITERM=  3
+NIT=    9  NFV=   24  NFG=    0  F= 0.202316E-20  G= 0.162996E-03  ITERM=  3
+NIT=   16  NFV=   23  NFG=    0  F= 0.116022E-21  G= 0.130018E-02  ITERM=  3
+NIT=   23  NFV=   40  NFG=    0  F= 0.861690E-16  G= 0.190460E-08  ITERM=  3
+NIT=   24  NFV=   32  NFG=    0  F= 0.234892E-16  G= 0.204525E-08  ITERM=  3
+NIT=    8  NFV=   13  NFG=    0  F= 0.596974E-21  G= 0.811563E-05  ITERM=  3
+NIT=   12  NFV=   28  NFG=    0  F= 0.124901E-17  G= 0.305897      ITERM=  3
+NIT=   22  NFV=   78  NFG=    0  F= 0.984840E-20  G= 0.125407E-03  ITERM=  3
+NIT=   17  NFV=   43  NFG=    0  F= 0.130235E-20  G= 0.154659E-04  ITERM=  3
+NIT=   46  NFV=   61  NFG=    0  F= 0.224793E-17  G= 0.116353E-01  ITERM=  3
+NIT=    2  NFV=    5  NFG=    0  F= 0.704403E-18  G= 0.221630E-06  ITERM=  3
+NIT=   18  NFV=   30  NFG=    0  F= 0.158787E-16  G= 0.312477E-03  ITERM=  3
+NIT=   25  NFV=   34  NFG=    0  F= 0.233925E-16  G= 0.135133E-05  ITERM=  3
+NIT=   14  NFV=   45  NFG=    0  F= 0.189862E-17  G= 0.128826E-01  ITERM=  3
+NIT=   23  NFV=  106  NFG=    0  F= 0.194742E-18  G= 0.550497E-08  ITERM=  3
+NIT=   20  NFV=   53  NFG=    0  F= 0.737500E-17  G= 0.611156E-08  ITERM=  3
+NIT=   29  NFV=   50  NFG=    0  F= 0.208794E-17  G= 0.413643E-08  ITERM=  3
+NIT=   36  NFV=   67  NFG=    0  F= 0.132055E-17  G= 0.481013E-08  ITERM=  3
+NIT=   40  NFV=   75  NFG=    0  F= 0.659356E-17  G= 0.862034E-08  ITERM=  3
+NIT=   27  NFV=   83  NFG=    0  F= 0.461856E-18  G= 0.268680E-08  ITERM=  3
+NIT=   12  NFV=   95  NFG=    0  F= 0.206962E-16  G= 0.754042E-08  ITERM=  3
+NIT=   18  NFV=  145  NFG=    0  F= 0.740533E-16  G= 0.167985E-07  ITERM=  3
+NITER =  624    NFVAL = 1541    NSUCC =   30
+TIME= 0:00:04.13
+
+The rows corresponding to individual test problems contain the number of
+iterations NIT, the number of function evaluations NFV, the number of
+gradient evaluations NFG, the final value of the objective function F
+(sum of squares of the partial functions), the value of the criterion
+for the termination G and the cause of termination ITERM.
+
+References:
+-----------
+
+[1] Luksan L., Matonoha C., Vlcek J.: LSA: Algorithms for large-scale
+    unconstrained and box constrained optimization Technical Report V-896.
+    Prague, ICS AS CR, 2004.
+
+[2] Luksan L., Vlcek J.: Sparse and partially separable test problems
+    for unconstrained and equality constrained optimization. Research
+    Report V-767, Institute of Computer Science, Academy of Sciences
+    of the Czech Republic, Prague, Czech Republic, 1998.
+

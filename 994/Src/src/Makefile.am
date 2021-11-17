@@ -1,0 +1,2 @@
+bin_PROGRAMS = test_distance
+test_distance_SOURCES = alg_basic.c alg_common.h alg_optimized.c alg_saved.h alg_stack.c check_combinations.h count_combinations.h generations.h  test_crc.c alg_basic.h alg_gray.c alg_optimized.h alg_saved_unrolled.c alg_stack.h computing_kernels.c computing_kernels_vect.c constant_defs.h data_defs.h luf2.c read_config.c utils.c alg_common.c alg_gray.h alg_saved.c alg_saved_unrolled.h check_combinations.c computing_kernels.h computing_kernels_vect.h count_combinations.c generations.c luf2.h read_config.h utils.h

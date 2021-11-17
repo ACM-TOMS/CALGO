@@ -1,0 +1,331 @@
+      SUBROUTINE ZZOPEN ( IUNIT, FLAG, INAME, * , RECLEN )
+
+C## A R G U M E N T S:
+                      INTEGER        IUNIT, RECLEN
+                      LOGICAL        FLAG
+                      CHARACTER *(*) INAME
+C## S T A T U S:
+C               IGNORE LINES BEGINNING WITH  "C!!!!" .
+C
+C               SINGLE/DOUBLE Conversion: NEEDED (SEE CONVRT).
+C
+C               This version is in   D O U B L E   precision.
+C!!!!           This version is in   S I N G L E   precision.
+C
+C               SYSTEM  DEPENDENCE:   SYSTEM DEPENDENT ROUTINE FOR
+C                                     OPENING AND CLOSING FILES.
+C
+C             THIS VERSION IS FOR  MAC/MS
+C
+C>RCS $Header: open.gl,v 2.1 91/11/22 11:45:21 buckley Exp $
+C>RCS $Log:	open.gl,v $
+C>RCS Revision 2.1  91/11/22  11:45:21  buckley
+C>RCS Final submission to TOMS
+C>RCS
+C>RCS Revision 2.0  90/07/06  10:43:19  buckley
+C>RCS Common version for TOMS and MT
+C>RCS
+C>RCS Revision 1.9.1.2  89/07/01  11:51:41  buckley
+C>RCS Preparing Submitted Version of Mt
+C>RCS
+C>RCS Revision 1.9.1.1  89/07/01  11:36:50  buckley
+C>RCS Preparing Submitted Version of Mt
+C>RCS
+C>RCS Revision 1.9  89/06/30  13:30:16  buckley
+C>RCS Preparing Submitted Version of Mt
+C>RCS
+C>RCS Revision 1.3.1.1  89/05/20  13:46:29  buckley
+C>RCS Temp. test of Mt before submitting
+C>RCS
+C>RCS Revision 1.3  89/05/18  12:13:26  buckley
+C>RCS Final test of Mt before submitting
+C>RCS
+C>RCS Revision 1.2  89/05/15  14:35:02  buckley
+C>RCS Initial Installation of MT into RCS form.
+C>RCS
+C>RCS Revision 1.1  89/01/17  16:34:31  buckley
+C>RCS Initial revision
+C>RCS
+
+C## D E S C R I P T I O N:
+C
+C    THIS OPENS THE FILES NEEDED FOR TESTPACK AND KEEPS TRACK OF
+C    WHICH ARE OPEN AND WHICH ARE NOT.  IT ALSO SUPPLIES THE APPRO-
+C    PRIATE ARGUMENTS FOR EACH FILE.
+C
+C    IF NAME IS NOT BLANK ON ENTRY, THEN THE FILE IS OPENED
+C    WITH THE NAME GIVEN.  OTHERWISE, NO NAME IS SPECIFIED WHEN
+C    OPENING THE FILE.
+C
+C    THE OPEN IS ONLY DONE IF "FLAG" IS TRUE.
+C
+C    IF RECLEN IS NOT EQUAL TO ZERO, THEN THE FILE IS OPENED
+C    AS DIRECT ACCESS UNFORMATTED.
+C
+C    IF RECLEN IS EQUAL TO ZERO, THEN THE FILE IS OPENED
+C    FOR FORMATTED SEQUENTIAL ACCESS.
+C
+C## E N T R Y   P O I N T S: The natural entry ZZopen and ZZclse
+C## S U B R O U T I N E S:   OPEN, CLOSE, REAL    ...INTRINSIC
+C                            ZZERRM      ...FOR ERROR MESSAGES.
+
+C## P A R A M E T E R S:
+
+      INTEGER     FILENL,      NFILES
+      PARAMETER ( FILENL = 80, NFILES = 15 )
+
+
+      CHARACTER*(*) BLANK,        QUOTE,        HASH
+      PARAMETER (   BLANK  = ' ', QUOTE  = '"', HASH   = '#' )
+
+      CHARACTER*(*) PERIOD,       COMMA,        SEMICN
+      PARAMETER (   PERIOD = '.', COMMA  = ',', SEMICN = ';' )
+
+      CHARACTER*(*) COLON,        DASH,         EQUALS
+      PARAMETER (   COLON  = ':', DASH   = '-', EQUALS = '=' )
+
+      CHARACTER*(*) OBRACE,       CBRACE,       UNDERS
+      PARAMETER (   OBRACE = '{', CBRACE = '}', UNDERS = '_' )
+
+      CHARACTER*(*) PLUS,         MINUS,        EXCLAM
+      PARAMETER (   PLUS   = '+', MINUS  = '-', EXCLAM = '!' )
+
+      CHARACTER*(*) GTHAN,        LTHAN,        QUESMK
+      PARAMETER (   GTHAN  = '>', LTHAN  = '<', QUESMK = '?' )
+
+      CHARACTER*(*) SLASH,        BSLASH,       PERCNT
+      PARAMETER (   SLASH  = '/', BSLASH = '\\',PERCNT = '%' )
+
+      CHARACTER*(*) CARAT,        ATSIGN,       TILDE
+      PARAMETER (   CARAT  = '^', ATSIGN = '@', TILDE = '~' )
+
+      LOGICAL     T,          F
+      PARAMETER ( T = .TRUE., F = .FALSE. )
+
+      CHARACTER*(*) TRUE,          QT,       FALSE,           QF
+      PARAMETER (   TRUE = 'TRUE', QT = 'T', FALSE = 'FALSE', QF = 'F' )
+
+      INTEGER     ITRUE,     IFALSE
+      PARAMETER ( ITRUE = 1, IFALSE = 0 )
+
+      DOUBLE PRECISION  RTRUE,        RFALSE
+C!!!! REAL              RTRUE,        RFALSE
+      PARAMETER      (  RTRUE = 1.D0, RFALSE = 0.D0 )
+
+      INTEGER     CTOUPP,     CTOLOW,     CTOCAP
+      PARAMETER ( CTOUPP = 1, CTOLOW = 2, CTOCAP = 3 )
+
+      INTEGER     PREPRC,     DAUF,       INPTUN
+      PARAMETER ( PREPRC = 1, DAUF =   2, INPTUN = 3 )
+
+      INTEGER     TEMPUN,     STDIN,     TRMOUT
+      PARAMETER ( TEMPUN = 4, STDIN = 5, TRMOUT = 6 )
+
+      INTEGER     WRITUN,     TRACUN,     SUMMUN
+      PARAMETER ( WRITUN = 7, TRACUN = 8, SUMMUN = 9 )
+
+      INTEGER     COPYUN,     TEXUN
+      PARAMETER ( COPYUN =10, TEXUN =11 )
+
+
+      CHARACTER *(*)  SEQ                 , DIR
+      PARAMETER (     SEQ   = 'SEQUENTIAL', DIR     = 'DIRECT'        )
+      CHARACTER *(*)  UNKN                , NEW
+      PARAMETER (     UNKN  = 'UNKNOWN'   , NEW     = 'NEW'           )
+      CHARACTER *(*)  OLD                 , SCR
+      PARAMETER (     OLD   = 'OLD'       , SCR     = 'SCRATCH'       )
+      CHARACTER *(*)  DEL                 , KEEP
+      PARAMETER (     DEL   = 'DELETE'    , KEEP    = 'KEEP'          )
+      CHARACTER *(*)  FMT                 , UNFRMT
+      PARAMETER (     FMT   = 'FORMATTED' , UNFRMT  = 'UNFORMATTED'   )
+
+C## L O C A L   D E C L:
+
+      INTEGER  ERRINT, UNIT
+
+      LOGICAL  OPENFS(NFILES),  REW,  OPENIT, COPY
+
+      CHARACTER STAT*7,  ACCS*10, FRMT*11
+      CHARACTER *(FILENL) COPYNM,  NAME
+
+      DOUBLE PRECISION RD
+C!!!! REAL             RD
+
+C## S A V E:
+                             SAVE  OPENFS, COPY, COPYNM
+
+C## E Q U I V A L E N C E S: NONE ARE DEFINED.
+C## C O M M O N:             NONE IS DEFINED.
+
+C## D A T A:
+                             DATA OPENFS / NFILES * .FALSE. /
+			     DATA COPY/F/, COPYNM/BLANK/
+
+C##                                           E X E C U T I O N
+C##                                           E X E C U T I O N
+C-----                    DEFINE A STATEMENT FUNCTION.
+      RD(UNIT) = DBLE(UNIT)
+C!!!! RD(UNIT) = REAL(UNIT)
+
+      IF ( FLAG ) THEN
+         IF ( RECLEN .EQ. 0 ) THEN
+            ACCS = SEQ
+            FRMT = FMT
+         ELSE
+            ACCS = DIR
+            FRMT = UNFRMT
+         ENDIF
+	
+	 UNIT = IUNIT
+	 NAME = INAME
+  100                 CONTINUE
+
+         OPENIT = .NOT. OPENFS(UNIT)
+         REW    = .FALSE.
+
+         IF      ( UNIT .EQ. SUMMUN ) THEN
+            STAT   =  UNKN
+         ELSE IF ( UNIT .EQ. TRMOUT ) THEN
+            STAT   =  UNKN
+         ELSE IF ( UNIT .EQ. STDIN ) THEN
+            STAT   =  UNKN
+         ELSE IF ( UNIT .EQ. PREPRC) THEN
+            STAT   =  OLD
+            REW    = .TRUE.
+         ELSE IF ( UNIT .EQ. TEMPUN ) THEN
+            STAT   =  UNKN
+         ELSE IF ( UNIT .EQ. WRITUN ) THEN
+            STAT   =  UNKN
+         ELSE IF ( UNIT .EQ. TRACUN ) THEN
+            STAT   =  UNKN
+         ELSE IF ( UNIT .EQ. DAUF   ) THEN
+            STAT   =  OLD
+         ELSE IF ( UNIT .EQ. COPYUN ) THEN
+            STAT   =  UNKN
+	    COPY   =  T
+         ELSE IF ( UNIT .EQ. INPTUN ) THEN
+            STAT   =  OLD
+            REW    = .TRUE.
+         ELSE
+            CALL ZZERRM ( RD(UNIT), *91000,
+     -                    'IS REQUEST TO OPEN UNKNOWN UNIT # ' )
+         ENDIF
+C              FOR THE "CHOICE OF UNIT..."
+
+ 500     IF ( OPENIT ) THEN
+            IF ( NAME .EQ. BLANK ) THEN
+C              PRINT*,'OPENING ',UNIT,'NAME='
+               IF ( RECLEN .EQ. 0 ) THEN
+                  OPEN ( UNIT   = UNIT,
+     -                   ERR    = 1000,
+     -                   IOSTAT = ERRINT,
+     -                   STATUS = STAT,
+     -                   ACCESS = ACCS,
+     -                   FORM   = FRMT  )
+               ELSE
+                  OPEN ( UNIT   = UNIT,
+     -                   ERR    = 1000,
+     -                   IOSTAT = ERRINT,
+     -                   STATUS = STAT,
+     -                   ACCESS = ACCS,
+     -                   RECL   = RECLEN,
+     -                   FORM   = FRMT  )
+               ENDIF
+            ELSE
+C                                         NAMED FILE
+               IF ( RECLEN .EQ. 0 ) THEN
+C       	  PRINT*,'OPENING ',UNIT,'NAME=',NAME(1:20)
+                  OPEN ( UNIT   = UNIT,
+     -                   ERR    = 1000,
+     -                   IOSTAT = ERRINT,
+     -                   FILE   = NAME,
+     -                   STATUS = STAT,
+     -                   ACCESS = ACCS,
+     -                   FORM   = FRMT  )
+C       	  PRINT*,'OK'
+               ELSE
+                  OPEN ( UNIT   = UNIT,
+     -                   ERR    = 1000,
+     -                   FILE   = NAME,
+     -                   IOSTAT = ERRINT,
+     -                   STATUS = STAT,
+     -                   ACCESS = ACCS,
+     -                   RECL   = RECLEN,
+     -                   FORM   = FRMT  )
+               ENDIF
+            ENDIF
+         ENDIF
+
+C        FOR EACH UNIT FROM 1 TO NFILES WE NEED TO KEEP A RECORD OF
+C        WHETHER IT IS CURRENTLY OPEN.
+
+         OPENFS(UNIT) = .TRUE.
+         IF ( REW .AND. RECLEN .EQ. 0 ) THEN
+            REWIND UNIT
+         ENDIF
+         GOTO 1025
+
+ 1000    IF ( UNIT .EQ. DAUF ) THEN
+C                                  CREATE THE DAUF.
+            STAT  =  NEW
+            GOTO  500
+         ELSE
+            GOTO 1050
+         ENDIF
+ 1025    CONTINUE
+         IF ( COPY .AND. UNIT .EQ. STDIN ) THEN
+	    UNIT = COPYUN
+	    NAME = COPYNM
+	    GOTO 100
+	 ENDIF
+      ENDIF
+C               FOR THE  "IF FLAG..."
+      GOTO 90000
+
+ 1050 CONTINUE
+      GOTO 91000
+
+C## E N T R Y  ZZCLSE:
+                        ENTRY ZZCLSE ( IUNIT, * )
+      STAT = KEEP
+
+      IF      ( IUNIT .EQ.   SUMMUN ) THEN
+         STAT = KEEP
+      ELSE IF ( IUNIT .EQ. TRMOUT ) THEN
+      ELSE IF ( IUNIT .EQ. STDIN ) THEN
+      ELSE IF ( IUNIT .EQ. TEMPUN ) THEN
+         STAT = KEEP
+      ELSE IF ( IUNIT .EQ. WRITUN ) THEN
+      ELSE IF ( IUNIT .EQ. TRACUN ) THEN
+      ELSE IF ( IUNIT .EQ. COPYUN ) THEN
+	 STAT = KEEP
+	 COPY = F
+      ELSE IF ( IUNIT .EQ. DAUF   ) THEN
+      ELSE IF ( IUNIT .EQ. PREPRC ) THEN
+      ELSE IF ( IUNIT .EQ. INPTUN ) THEN
+      ELSE
+         CALL ZZERRM ( RD(IUNIT), *91000,
+     -        'IS IGNORING REQUEST TO CLOSE UNKNOWN UNIT #' )
+      ENDIF
+
+      IF ( OPENFS(IUNIT) ) THEN
+C        PRINT*,'CLOSING ',IUNIT
+         CLOSE ( UNIT = IUNIT, STATUS = STAT )
+         OPENFS(IUNIT) = .FALSE.
+      ENDIF
+      RETURN
+
+C## E X I T
+90000                           CONTINUE
+       CALL ZZCASE (STAT,CTOUPP)
+       IF ( IUNIT .EQ. DAUF .AND. STAT .EQ. NEW ) THEN
+          GOTO  91000
+       ELSE
+          RETURN
+       ENDIF
+
+91000  RETURN 1
+
+C## F O R M A T S:  NONE ARE DEFINED.
+C##                 E N D         OF ZZOPEN.
+                    END

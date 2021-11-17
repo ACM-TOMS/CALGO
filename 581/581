@@ -1,0 +1,2943 @@
+C     ALGORITHM 581, COLLECTED ALGORITHMS FROM ACM.
+C     ALGORITHM APPEARED IN ACM-TRANS. MATH. SOFTWARE, VOL.8, NO. 1,
+C     MAR., 1982, P. 84.
+C************************************************************************
+C                                                                       *
+C       THIS FILE CONTAINS PROGRAMS AND SUBROUTINES THAT ARE RELATED    *
+C       TO THE PAPER 'AN IMPROVED ALGORITHM FOR COMPUTING THE SINGULAR  *
+C       VALUE DECOMPOSITION' BY T.F. CHAN, WHICH WAS SUBMITTED FOR      *
+C       PUBLICATIONS IN ACM TOMS.                                       *
+C                                                                       *
+C       THEY ARE LISTED BELOW IN THE ORDER THAT THEY APPEAR IN THE      *
+C       FILE:                                                           *
+C                                                                       *
+C           1) DRIVER FOR THE ROUTINE HYBSVD TO COMPUTE THE SVD         *
+C              OF A TEST MATRIX AND ITS TRANSPOSE.                      *
+C                                                                       *
+C           2) ROUTINE HYBSVD ... HYBRID ALGORITHM ROUTINE.             *
+C                                                                       *
+C           3) ROUTINE MGNSVD ... HYBRID ALGORITHM, ASSUMES M .GE. N.   *
+C                                                                       *
+C           4) ROUTINE GRSVD  ... GOLUB-REINSCH ALGORITHM ROUTINE       *
+C                                                                       *
+C           5) BLAS ROUTINE   ... SSWAP, FOR SWAPPING VECTORS           *
+C                                                                       *
+C           6) ROUTINE SRELPR ... COMPUTES MACHINE PRECISION            *
+C                                                                       *
+C           7) ROUTINE SSVDC  ... LINPACK SVD ROUTINE                   *
+C                                                                       *
+C           8) BLAS ROUTINES  ... SAXPY, SDOT, SNRM2, SROT, SROTG,      *
+C                                 SSCAL.
+C                                                                       *
+C           9) ROUTINE SVD    ... EISPACK SVD ROUTINE                   *
+C                                                                       *
+C          10) ROUTINE MINFIT ... EISPACK MINFIT ROUTINE                *
+C                                                                       *
+C       THE ROUTINES 2) TO 6) CONSTITUTE THE PACKAGE THAT IMPLEMENTS    *
+C       THE NEW HYBRID ALGORITHM AND CAN BE USED BY THEMSELVES.         *
+C                                                                       *
+C       PLEASE ADDRESS COMMENTS AND SUGGESTIONS TO:                     *
+C                                                                       *
+C           TONY CHAN                                                   *
+C           COMPUTER SCIENCE DEPT., YALE UNIV.,                         *
+C           BOX 2158, YALE STATION,                                     *
+C           NEW HAVEN, CT 06520.                                        *
+C                                                                       *
+C************************************************************************
+C                                                                       MAN   10
+C       DRIVER FOR HYBSVD, A ROUTINE FOR COMPUTING THE SVD OF A MATRIX. MAN   20
+C       RESULTS ARE COMPARED TO THOSE PRODUCED BY SSVDC FROM LINPACK,   MAN   30
+C       SVD AND MINFIT FROM EISPACK.                                    MAN   40
+C       PREPARED FOR ACM TRANS. ON MATH. SOFTWARE.                      MAN   50
+C                                                                       MAN   60
+C       MATRIX TESTED:  A(I,J) = 1/(I+J),  1ST RHS(I) = 1               MAN   70
+C               T                          2ND RHS(I) = I               MAN   80
+C       (A AND A )                                                      MAN   90
+C                                                                       MAN  100
+C       PROGRAMMED BY                                                   MAN  110
+C           TONY CHAN                                                   MAN  120
+C           COMPUTER SCIENCE DEPT., YALE UNIV.,                         MAN  130
+C           BOX 2158, YALE STATION,                                     MAN  140
+C           NEW HAVEN, CT 06520.                                        MAN  150
+C                                                                       MAN  160
+C       LAST REVISION.. JANUARY, 1982.                                  MAN  170
+C                                                                       MAN  180
+      REAL AE(15,15), AH(10,10), AL(20,20), WORK(10), E(10)             MAN  190
+      REAL UH(11,10), VH(12,20), Z(13,20), BH(14,5), WH(10)             MAN  200
+      REAL UE(15,10), VE(15,10), BE(15,5), WE(10)                       MAN  210
+      REAL UL(18,10), VL(19,10), WL(10)                                 MAN  220
+      LOGICAL MATU, MATV                                                MAN  230
+      INTEGER NUH, NVH, NZ, NBH                                         MAN  240
+      INTEGER NUE, NVE, NBE                                             MAN  250
+      INTEGER NUL, NVL                                                  MAN  260
+      INTEGER NAE, NAH, NAL, M, N, IRHS, IERR, NOUT, JOB                MAN  270
+      DATA NAH /10/, NUH /11/, NVH /12/, NZ /13/, NBH /14/              MAN  280
+      DATA NUE /15/, NVE /15/, NBE /15/, NAE /15/                       MAN  290
+      DATA NUL /18/, NVL /19/, NAL /20/                                 MAN  300
+C                                                                       MAN  310
+C     THIS IS OUTPUT UNIT NUMBER.                                       MAN  320
+      DATA NOUT /6/                                                     MAN  330
+C                                                                       MAN  340
+C     FIRST CASE... A AND RHS B.                                        MAN  350
+C                                                                       MAN  360
+      M = 8                                                             MAN  370
+      N = 4
+      IRHS = 2
+C
+      DO 50 IU=1,2
+        DO 40 IV=1,2
+          IF (IU.EQ.2) MATU = .TRUE.
+          IF (IU.EQ.1) MATU = .FALSE.
+          IF (IV.EQ.2) MATV = .TRUE.
+          IF (IV.EQ.1) MATV = .FALSE.
+C
+C       JOB PARAMETER NEEDED BY SSVDC.
+          JOB = (IU-1)*20 + IV - 1
+C
+C       SET UP MATRIX
+C
+          DO 20 I=1,M
+            BH(I,1) = 1.0
+            BH(I,2) = FLOAT(I)
+            BE(I,1) = 1.0
+            BE(I,2) = FLOAT(I)
+            DO 10 J=1,N
+              AH(I,J) = 1./FLOAT(I+J)
+              AE(I,J) = AH(I,J)
+              AL(I,J) = AH(I,J)
+   10       CONTINUE
+   20     CONTINUE
+C
+          WRITE (NOUT,99999)
+99999     FORMAT (/4H A ./)
+          DO 30 I=1,M
+            WRITE (NOUT,99998) (AH(I,J),J=1,N)
+99998       FORMAT (5E15.7)
+   30     CONTINUE
+C
+          WRITE (NOUT,99997)
+99997     FORMAT (//45H ******************* HYBSVD *****************//)
+          CALL HYBSVD(NAH, NUH, NVH, NZ, NBH, M, N, AH, WH, MATU, UH,
+     *     MATV, VH, Z, BH, IRHS, IERR, WORK)
+          CALL PRINTS(WH, UH, VH, IERR, BH, NUH, NVH, NBH, MATU, MATV,
+     *     M, N, NOUT, IRHS)
+C
+          WRITE (NOUT,99996)
+99996     FORMAT (//45H ******************* EISPAK *****************//)
+          CALL SVD(NUE, M, N, AE, WE, MATU, UE, MATV, VE, IERR, WORK)
+          CALL MINFIT(NUE, M, N, AE, WE, IRHS, BE, IERR, WORK)
+          CALL PRINTS(WE, UE, VE, IERR, BE, NUE, NVE, NBE, MATU, MATV,
+     *     M, N, NOUT, IRHS)
+C
+          WRITE (NOUT,99995)
+99995     FORMAT (//45H ******************* SSVDC  *****************//)
+          CALL SSVDC(AL, NAL, M, N, WL, E, UL, NUL, VL, NVL, WORK, JOB,
+     *     IERR)
+          CALL PRINTS(WL, UL, VL, IERR, E, NUL, NVL, NBH, MATU, MATV,
+     *     M, N, NOUT, IRHS)
+C
+          CALL DIFF(WE, WH, WL, UE, UH, UL, VE, VH, VL, BH, BE, NUE,
+     *     NUH, NUL, NVE, NVH, NVL, NBH, NBE, M, N, NOUT, IRHS, MATU,
+     *     MATV)
+   40   CONTINUE
+   50 CONTINUE
+C                      T
+C     SECOND CASE...  A
+C
+      M = 4
+      N = 8
+      IRHS = 2
+C
+      DO 100 IU=1,2
+        DO 90 IV=1,2
+          IF (IU.EQ.2) MATU = .TRUE.
+          IF (IU.EQ.1) MATU = .FALSE.
+          IF (IV.EQ.2) MATV = .TRUE.
+          IF (IV.EQ.1) MATV = .FALSE.
+C
+C       JOB PARAMETER NEEDED BY SSVDC.
+          JOB = (IU-1)*20 + IV - 1
+C
+C       SET UP MATRIX
+C
+          DO 70 I=1,M
+            BH(I,1) = 1.
+            BH(I,2) = FLOAT(I)
+            BE(I,1) = 1.
+            BE(I,2) = FLOAT(I)
+            DO 60 J=1,N
+              AH(I,J) = 1./FLOAT(I+J)
+              AE(I,J) = AH(I,J)
+              AL(I,J) = AH(I,J)
+   60       CONTINUE
+   70     CONTINUE
+C
+          WRITE (NOUT,99999)
+          DO 80 I=1,M
+            WRITE (NOUT,99998) (AH(I,J),J=1,N)
+   80     CONTINUE
+C
+          WRITE (NOUT,99997)
+          CALL HYBSVD(NAH, NUH, NVH, NZ, NBH, M, N, AH, WH, MATU, UH,
+     *     MATV, VH, Z, BH, IRHS, IERR, WORK)
+          CALL PRINTS(WH, UH, VH, IERR, BH, NUH, NVH, NBH, MATU, MATV,
+     *     M, N, NOUT, IRHS)
+C
+          WRITE (NOUT,99996)
+          CALL SVD(NUE, M, N, AE, WE, MATU, UE, MATV, VE, IERR, WORK)
+          CALL MINFIT(NUE, M, N, AE, WE, IRHS, BE, IERR, WORK)
+          CALL PRINTS(WE, UE, VE, IERR, BE, NUE, NVE, NBE, MATU, MATV,
+     *     M, N, NOUT, IRHS)
+C
+          WRITE (NOUT,99995)
+          CALL SSVDC(AL, NAL, M, N, WL, E, UL, NUL, VL, NVL, WORK, JOB,
+     *     IERR)
+          CALL PRINTS(WL, UL, VL, IERR, E, NUL, NVL, NBH, MATU, MATV,
+     *     M, N, NOUT, IRHS)
+          CALL DIFF(WE, WH, WL, UE, UH, UL, VE, VH, VL, BH, BE, NUE,
+     *     NUH, NUL, NVE, NVH, NVL, NBH, NBE, M, N, NOUT, IRHS, MATU,
+     *     MATV)
+   90   CONTINUE
+  100 CONTINUE
+      STOP
+      END
+      SUBROUTINE PRINTS(W, U, V, IERR, B, NAU, NV, NB, MATU, MATV, M,   PRI   10
+     * N, NOUT, IRHS)
+C
+C       PRINTS OUT THE SINGULAR VALUES AND THE MATRICES U, V, B.
+C
+      INTEGER NAU, NV, IERR, M, N, NOUT, IRHS
+      REAL U(NAU,1), V(NV,1), W(1), B(NB,1)
+      LOGICAL MATU, MATV
+      MINMN = MIN0(M,N)
+C
+      WRITE (NOUT,99999) MATU, MATV
+99999 FORMAT (7H MATU =, L3, 7H MATV =, L3/)
+      WRITE (NOUT,99998) IERR
+99998 FORMAT (7H IERR =, I5/)
+C
+      WRITE (NOUT,99997)
+99997 FORMAT (17H SINGULAR VALUES./)
+      DO 10 I=1,MINMN
+        WRITE (NOUT,99995) W(I)
+   10 CONTINUE
+C
+      IF (.NOT.MATU) GO TO 30
+      WRITE (NOUT,99996)
+99996 FORMAT (/4H U ./)
+99995 FORMAT (E15.8)
+      DO 20 I=1,M
+        WRITE (NOUT,99993) (U(I,J),J=1,MINMN)
+   20 CONTINUE
+C
+   30 IF (.NOT.MATV) GO TO 50
+      WRITE (NOUT,99994)
+99994 FORMAT (/4H V ./)
+99993 FORMAT (5E15.7)
+      DO 40 I=1,N
+        WRITE (NOUT,99993) (V(I,J),J=1,MINMN)
+   40 CONTINUE
+C
+   50 IF (M.LT.N .OR. IRHS.LT.1) GO TO 70
+      WRITE (NOUT,99992)
+99992 FORMAT (/4H B ./)
+      DO 60 I=1,MINMN
+        WRITE (NOUT,99993) (B(I,J),J=1,IRHS)
+   60 CONTINUE
+C
+   70 CONTINUE
+      RETURN
+      END
+      SUBROUTINE DIFF(WE, WH, WL, UE, UH, UL, VE, VH, VL, BH, BE, NUE,  DIF   10
+     * NUH, NUL, NVE, NVH, NVL, NBH, NBE, M, N, NOUT, IRHS, MATU, MATV)
+C
+C     COMPUTES DIFFERENCE BETWEEN W, U, V AND B AS COMPUTED BY
+C     EISPACK SVD AND MINFIT, HYBSVD, AND LINPACK SSVDC.
+C
+      REAL WE(1), WH(1), WL(1)
+      REAL UE(NUE,1), UH(NUH,1), UL(NUL,1)
+      REAL VE(NVE,1), VH(NVH,1), VL(NVL,1)
+      REAL BE(NBE,1), BH(NBH,1)
+      INTEGER NOUT, IRHS, M, N
+      LOGICAL MATU, MATV
+C
+C     SORT SINGULAR VALUES AND EXCHANGE COLUMNS OF U AND V FOR EISPACK.
+C     SELECTION SORT MINIMIZES SWAPPING OF U AND V.
+C
+      IF (N.LE.1) GO TO 40
+      NM1 = N - 1
+      DO 30 I=1,NM1
+C...    FIND INDEX OF MAXIMUM SINGULAR VALUE
+        ID = I
+        IP1 = I + 1
+        DO 10 J=IP1,N
+          IF (WE(J).GT.WE(ID)) ID = J
+   10   CONTINUE
+        IF (ID.EQ.I) GO TO 30
+C...    SWAP SINGULAR VALUES AND VECTORS
+        T = WE(I)
+        WE(I) = WE(ID)
+        WE(ID) = T
+        IF (MATV) CALL SSWAP(N, VE(1,I), 1, VE(1,ID), 1)
+        IF (MATU) CALL SSWAP(M, UE(1,I), 1, UE(1,ID), 1)
+        IF (IRHS.LT.1) GO TO 30
+        DO 20 KRHS=1,IRHS
+          T = BE(I,KRHS)
+          BE(I,KRHS) = BE(ID,KRHS)
+          BE(ID,KRHS) = T
+   20   CONTINUE
+   30 CONTINUE
+C
+   40 CONTINUE
+      DWHE = 0.
+      DWHL = 0.
+      DWEL = 0.
+      DUHE = 0.
+      DUHL = 0.
+      DUEL = 0.
+      DVHE = 0.
+      DVHL = 0.
+      DVEL = 0.
+      DBHE = 0.
+      MINMN = MIN0(M,N)
+C
+      DO 50 I=1,MINMN
+        DWHE = DWHE + (WH(I)-WE(I))**2
+        DWHL = DWHL + (WH(I)-WL(I))**2
+        DWEL = DWEL + (WE(I)-WL(I))**2
+   50 CONTINUE
+      DWHE = SQRT(DWHE)
+      DWHL = SQRT(DWHL)
+      DWEL = SQRT(DWEL)
+      WRITE (NOUT,99999) DWHE, DWHL, DWEL
+99999 FORMAT (/35H  2-NORM ( HYBSVD W - EISPAK W ) = , 1PE15.7/6H  2-NO,
+     * 29HRM ( HYBSVD W - LINPAK W ) = , 1PE15.7/19H  2-NORM ( EISPAK W,
+     * 16H - LINPAK W ) = , 1PE15.7/)
+C
+C     DIFFERENCE OF ABSOLUTE VALUES BECAUSE OF POSSIBLE SIGN DIFFERENCE.
+C
+      IF (.NOT.MATU) GO TO 80
+      DO 70 J=1,MINMN
+        DO 60 I=1,M
+          DUHE = DUHE + (ABS(UH(I,J))-ABS(UE(I,J)))**2
+          DUHL = DUHL + (ABS(UH(I,J))-ABS(UL(I,J)))**2
+          DUEL = DUEL + (ABS(UE(I,J))-ABS(UL(I,J)))**2
+   60   CONTINUE
+   70 CONTINUE
+      DUHE = SQRT(DUHE)
+      DUHL = SQRT(DUHL)
+      DUEL = SQRT(DUEL)
+      WRITE (NOUT,99998) DUHE, DUHL, DUEL
+99998 FORMAT (/35H  2-NORM ( HYBSVD U - EISPAK U ) = , 1PE15.7/6H  2-NO,
+     * 29HRM ( HYBSVD U - LINPAK U ) = , 1PE15.7/19H  2-NORM ( EISPAK U,
+     * 16H - LINPAK U ) = , 1PE15.7/)
+C
+   80 IF (.NOT.MATV) GO TO 110
+      DO 100 J=1,MINMN
+        DO 90 I=1,N
+          DVHE = DVHE + (ABS(VH(I,J))-ABS(VE(I,J)))**2
+          DVHL = DVHL + (ABS(VH(I,J))-ABS(VL(I,J)))**2
+          DVEL = DVEL + (ABS(VE(I,J))-ABS(VL(I,J)))**2
+   90   CONTINUE
+  100 CONTINUE
+      DVHE = SQRT(DVHE)
+      DVHL = SQRT(DVHL)
+      DVEL = SQRT(DVEL)
+      WRITE (NOUT,99997) DVHE, DVHL, DVEL
+99997 FORMAT (/35H  2-NORM ( HYBSVD V - EISPAK V ) = , 1PE15.7/6H  2-NO,
+     * 29HRM ( HYBSVD V - LINPAK V ) = , 1PE15.7/19H  2-NORM ( EISPAK V,
+     * 16H - LINPAK V ) = , 1PE15.7/)
+C
+  110 IF (M.LT.N .OR. IRHS.LT.1) GO TO 140
+      DO 130 J=1,IRHS
+        DO 120 I=1,MINMN
+          DBHE = DBHE + (ABS(BE(I,J))-ABS(BH(I,J)))**2
+  120   CONTINUE
+  130 CONTINUE
+      DBHE = SQRT(DBHE)
+      WRITE (NOUT,99996) DBHE
+99996 FORMAT (/35H  2-NORM ( HYBSVD B - MINFIT B ) = , 1PE15.7/)
+C
+  140 CONTINUE
+      RETURN
+      END
+      SUBROUTINE HYBSVD(NA, NU, NV, NZ, NB, M, N, A, W, MATU, U, MATV,  HYB   10
+     * V, Z, B, IRHS, IERR, RV1)
+      INTEGER NA, NU, NV, NZ, M, N, IRHS, IERR, MIN0
+      REAL A(NA,1), W(1), U(NU,1), V(NV,1), Z(NZ,1), B(NB,IRHS), RV1(1)
+      LOGICAL MATU, MATV
+C
+C     THIS ROUTINE IS A MODIFICATION OF THE GOLUB-REINSCH PROCEDURE (1)
+C                                                           T
+C     FOR COMPUTING THE SINGULAR VALUE DECOMPOSITION A = UWV  OF A
+C     REAL M BY N RECTANGULAR MATRIX. U IS M BY MIN(M,N) CONTAINING
+C     THE LEFT SINGULAR VECTORS, W IS A MIN(M,N) BY MIN(M,N) DIAGONAL
+C     MATRIX CONTAINING THE SINGULAR VALUES, AND V IS N BY MIN(M,N)
+C     CONTAINING THE RIGHT SINGULAR VECTORS.
+C
+C     THE ALGORITHM IMPLEMENTED IN THIS
+C     ROUTINE HAS A HYBRID NATURE.  WHEN M IS APPROXIMATELY EQUAL TO N,
+C     THE GOLUB-REINSCH ALGORITHM IS USED, BUT WHEN EITHER OF THE RATIOS
+C     M/N OR N/M IS GREATER THAN ABOUT 2,
+C     A MODIFIED VERSION OF THE GOLUB-REINSCH
+C     ALGORITHM IS USED.  THIS MODIFIED ALGORITHM FIRST TRANSFORMS A
+C                                                                T
+C     INTO UPPER TRIANGULAR FORM BY HOUSEHOLDER TRANSFORMATIONS L
+C     AND THEN USES THE GOLUB-REINSCH ALGORITHM TO FIND THE SINGULAR
+C     VALUE DECOMPOSITION OF THE RESULTING UPPER TRIANGULAR MATRIX R.
+C     WHEN U IS NEEDED EXPLICITLY IN THE CASE M.GE.N (OR V IN THE CASE
+C     M.LT.N), AN EXTRA ARRAY Z (OF SIZE AT LEAST
+C     MIN(M,N)**2) IS NEEDED, BUT OTHERWISE Z IS NOT REFERENCED
+C     AND NO EXTRA STORAGE IS REQUIRED.  THIS HYBRID METHOD
+C     SHOULD BE MORE EFFICIENT THAN THE GOLUB-REINSCH ALGORITHM WHEN
+C     M/N OR N/M IS LARGE.  FOR DETAILS, SEE (2).
+C
+C     WHEN M .GE. N,
+C     HYBSVD CAN ALSO BE USED TO COMPUTE THE MINIMAL LENGTH LEAST
+C     SQUARES SOLUTION TO THE OVERDETERMINED LINEAR SYSTEM A*X=B.
+C     IF M .LT. N (I.E. FOR UNDERDETERMINED SYSTEMS), THE RHS B
+C     IS NOT PROCESSED.
+C
+C     NOTICE THAT THE SINGULAR VALUE DECOMPOSITION OF A MATRIX
+C     IS UNIQUE ONLY UP TO THE SIGN OF THE CORRESPONDING COLUMNS
+C     OF U AND V.
+C
+C     THIS ROUTINE HAS BEEN CHECKED BY THE PFORT VERIFIER (3) FOR
+C     ADHERENCE TO A LARGE, CAREFULLY DEFINED, PORTABLE SUBSET OF
+C     AMERICAN NATIONAL STANDARD FORTRAN CALLED PFORT.
+C
+C     REFERENCES:
+C
+C     (1) GOLUB,G.H. AND REINSCH,C. (1970) 'SINGULAR VALUE
+C         DECOMPOSITION AND LEAST SQUARES SOLUTIONS,'
+C         NUMER. MATH. 14,403-420, 1970.
+C
+C     (2) CHAN,T.F. (1982) 'AN IMPROVED ALGORITHM FOR COMPUTING
+C         THE SINGULAR VALUE DECOMPOSITION,' ACM TOMS, VOL.8,
+C         NO. 1, MARCH, 1982.
+C
+C     (3) RYDER,B.G. (1974) 'THE PFORT VERIFIER,' SOFTWARE -
+C         PRACTICE AND EXPERIENCE, VOL.4, 359-377, 1974.
+C
+C     ON INPUT:
+C
+C        NA MUST BE SET TO THE ROW DIMENSION OF THE TWO-DIMENSIONAL
+C          ARRAY PARAMETER A AS DECLARED IN THE CALLING PROGRAM
+C          DIMENSION STATEMENT.  NOTE THAT NA MUST BE AT LEAST
+C          AS LARGE AS M.
+C
+C        NU MUST BE SET TO THE ROW DIMENSION OF THE TWO-DIMENSIONAL
+C          ARRAY U AS DECLARED IN THE CALLING PROGRAM DIMENSION
+C          STATEMENT. NU MUST BE AT LEAST AS LARGE AS M.
+C
+C        NV MUST BE SET TO THE ROW DIMENSION OF THE TWO-DIMENSIONAL
+C          ARRAY PARAMETER V AS DECLARED IN THE CALLING PROGRAM
+C          DIMENSION STATEMENT. NV MUST BE AT LEAST AS LARGE AS N.
+C
+C        NZ MUST BE SET TO THE ROW DIMENSION OF THE TWO-DIMENSIONAL
+C          ARRAY PARAMETER Z AS DECLARED IN THE CALLING PROGRAM
+C          DIMENSION STATEMENT.  NOTE THAT NZ MUST BE AT LEAST
+C          AS LARGE AS MIN(M,N).
+C
+C        NB MUST BE SET TO THE ROW DIMENSION OF THE TWO-DIMENSIONAL
+C          ARRAY PARAMETER B AS DECLARED IN THE CALLING PROGRAM
+C          DIMENSION STATEMENT. NB MUST BE AT LEAST AS LARGE AS M.
+C
+C        M IS THE NUMBER OF ROWS OF A (AND U).
+C
+C        N IS THE NUMBER OF COLUMNS OF A (AND NUMBER OF ROWS OF V).
+C
+C        A CONTAINS THE RECTANGULAR INPUT MATRIX TO BE DECOMPOSED.
+C
+C        B CONTAINS THE IRHS RIGHT-HAND-SIDES OF THE OVERDETERMINED
+C         LINEAR SYSTEM A*X=B. IF IRHS .GT. 0 AND M .GE. N,
+C         THEN ON OUTPUT, THE FIRST N COMPONENTS OF THESE IRHS COLUMNS
+C                       T
+C         WILL CONTAIN U B. THUS, TO COMPUTE THE MINIMAL LENGTH LEAST
+C                                               +
+C         SQUARES SOLUTION, ONE MUST COMPUTE V*W  TIMES THE COLUMNS OF
+C                   +                        +
+C         B, WHERE W  IS A DIAGONAL MATRIX, W (I)=0 IF W(I) IS
+C         NEGLIGIBLE, OTHERWISE IS 1/W(I). IF IRHS=0 OR M.LT.N,
+C         B IS NOT REFERENCED.
+C
+C        IRHS IS THE NUMBER OF RIGHT-HAND-SIDES OF THE OVERDETERMINED
+C         SYSTEM A*X=B. IRHS SHOULD BE SET TO ZERO IF ONLY THE SINGULAR
+C         VALUE DECOMPOSITION OF A IS DESIRED.
+C
+C        MATU SHOULD BE SET TO .TRUE. IF THE U MATRIX IN THE
+C          DECOMPOSITION IS DESIRED, AND TO .FALSE. OTHERWISE.
+C
+C        MATV SHOULD BE SET TO .TRUE. IF THE V MATRIX IN THE
+C          DECOMPOSITION IS DESIRED, AND TO .FALSE. OTHERWISE.
+C
+C        WHEN HYBSVD IS USED TO COMPUTE THE MINIMAL LENGTH LEAST
+C        SQUARES SOLUTION TO AN OVERDETERMINED SYSTEM, MATU SHOULD
+C        BE SET TO .FALSE. , AND MATV SHOULD BE SET TO .TRUE.  .
+C
+C     ON OUTPUT:
+C
+C        A IS UNALTERED (UNLESS OVERWRITTEN BY U OR V).
+C
+C        W CONTAINS THE (NON-NEGATIVE) SINGULAR VALUES OF A (THE
+C          DIAGONAL ELEMENTS OF W).  THEY ARE SORTED IN DESCENDING
+C          ORDER.  IF AN ERROR EXIT IS MADE, THE SINGULAR VALUES
+C          SHOULD BE CORRECT AND SORTED FOR INDICES IERR+1,...,MIN(M,N).
+C
+C        U CONTAINS THE MATRIX U (ORTHOGONAL COLUMN VECTORS) OF THE
+C          DECOMPOSITION IF MATU HAS BEEN SET TO .TRUE.  IF MATU IS
+C          FALSE, THEN U IS EITHER USED AS A TEMPORARY STORAGE (IF
+C          M .GE. N) OR NOT REFERENCED (IF M .LT. N).
+C          U MAY COINCIDE WITH A IN THE CALLING SEQUENCE.
+C          IF AN ERROR EXIT IS MADE, THE COLUMNS OF U CORRESPONDING
+C          TO INDICES OF CORRECT SINGULAR VALUES SHOULD BE CORRECT.
+C
+C        V CONTAINS THE MATRIX V (ORTHOGONAL) OF THE DECOMPOSITION IF
+C          MATV HAS BEEN SET TO .TRUE.  IF MATV IS
+C          FALSE, THEN V IS EITHER USED AS A TEMPORARY STORAGE (IF
+C          M .LT. N) OR NOT REFERENCED (IF M .GE. N).
+C          IF M .GE. N, V MAY ALSO COINCIDE WITH A.  IF AN ERROR
+C          EXIT IS MADE, THE COLUMNS OF V CORRESPONDING TO INDICES OF
+C          CORRECT SINGULAR VALUES SHOULD BE CORRECT.
+C
+C        Z CONTAINS THE MATRIX X IN THE SINGULAR VALUE DECOMPOSITION
+C                  T
+C          OF R=XSY,  IF THE MODIFIED ALGORITHM IS USED. IF THE
+C          GOLUB-REINSCH PROCEDURE IS USED, THEN IT IS NOT REFERENCED.
+C          IF MATU HAS BEEN SET TO .FALSE. IN THE CASE M.GE.N (OR
+C          MATV SET TO .FALSE. IN THE CASE M.LT.N), THEN Z IS NOT
+C          REFERENCED AND NO EXTRA STORAGE IS REQUIRED.
+C
+C        IERR IS SET TO
+C          ZERO       FOR NORMAL RETURN,
+C          K          IF THE K-TH SINGULAR VALUE HAS NOT BEEN
+C                     DETERMINED AFTER 30 ITERATIONS.
+C          -1         IF IRHS .LT. 0 .
+C          -2         IF M .LT. 1 .OR. N .LT. 1
+C          -3         IF NA .LT. M .OR. NU .LT. M .OR. NB .LT. M.
+C          -4         IF NV .LT. N .
+C          -5         IF NZ .LT. MIN(M,N).
+C
+C        RV1 IS A TEMPORARY STORAGE ARRAY OF LENGTH AT LEAST MIN(M,N).
+C
+C     PROGRAMMED BY : TONY CHAN
+C                     BOX 2158, YALE STATION,
+C                     COMPUTER SCIENCE DEPT, YALE UNIV.,
+C                     NEW HAVEN, CT 06520.
+C     LAST MODIFIED : JANUARY, 1982.
+C
+C     HYBSVD USES THE FOLLOWING FUNCTIONS AND SUBROUTINES.
+C       INTERNAL  GRSVD, MGNSVD, SRELPR
+C       FORTRAN   MIN0,ABS,SQRT,FLOAT,SIGN,AMAX1
+C       BLAS      SSWAP
+C
+C     -----------------------------------------------------------------
+C     ERROR CHECK.
+C
+      IERR = 0
+      IF (IRHS.GE.0) GO TO 10
+      IERR = -1
+      RETURN
+   10 IF (M.GE.1 .AND. N.GE.1) GO TO 20
+      IERR = -2
+      RETURN
+   20 IF (NA.GE.M .AND. NU.GE.M .AND. NB.GE.M) GO TO 30
+      IERR = -3
+      RETURN
+   30 IF (NV.GE.N) GO TO 40
+      IERR = -4
+      RETURN
+   40 IF (NZ.GE.MIN0(M,N)) GO TO 50
+      IERR = -5
+      RETURN
+   50 CONTINUE
+C
+C     FIRST COPIES A INTO EITHER U OR V ACCORDING TO WHETHER
+C     M .GE. N OR M .LT. N, AND THEN CALLS SUBROUTINE MGNSVD
+C     WHICH ASSUMES THAT NUMBER OF ROWS .GE. NUMBER OF COLUMNS.
+C
+      IF (M.LT.N) GO TO 80
+C
+C       M .GE. N  CASE.
+C
+      DO 70 I=1,M
+        DO 60 J=1,N
+          U(I,J) = A(I,J)
+   60   CONTINUE
+   70 CONTINUE
+C
+      CALL MGNSVD(NU, NV, NZ, NB, M, N, W, MATU, U, MATV, V, Z, B,
+     * IRHS, IERR, RV1)
+      RETURN
+C
+   80 CONTINUE
+C                              T
+C       M .LT. N CASE. COPIES A  INTO V.
+C
+      DO 100 I=1,M
+        DO 90 J=1,N
+          V(J,I) = A(I,J)
+   90   CONTINUE
+  100 CONTINUE
+      CALL MGNSVD(NV, NU, NZ, NB, N, M, W, MATV, V, MATU, U, Z, B, 0,
+     * IERR, RV1)
+      RETURN
+      END
+C                                                                       MGN   10
+      SUBROUTINE MGNSVD(NU, NV, NZ, NB, M, N, W, MATU, U, MATV, V, Z,   MGN   20
+     * B, IRHS, IERR, RV1)
+C
+C     THE DESCRIPTION OF SUBROUTINE MGNSVD IS ALMOST IDENTICAL
+C     TO THAT FOR SUBROUTINE HYBSVD ABOVE, WITH THE EXCEPTION
+C     THAT MGNSVD ASSUMES M .GE. N.
+C     IT ALSO ASSUMES THAT A COPY OF THE MATRIX A IS IN THE ARRAY U.
+C
+      INTEGER NU, NV, NZ, M, N, IRHS, IERR, IP1, I, J, K, IM1, IBACK
+      REAL W(1), U(NU,1), V(NV,1), Z(NZ,1), B(NB,IRHS), RV1(1)
+      REAL XOVRPT, C, R, G, SCALE, SIGN, ABS, SQRT, F, S, H
+      REAL FLOAT
+      LOGICAL MATU, MATV
+C
+C     SET VALUE FOR C. THE VALUE FOR C DEPENDS ON THE RELATIVE
+C     EFFICIENCY OF FLOATING POINT MULTIPLICATIONS, FLOATING POINT
+C     ADDITIONS AND TWO-DIMENSIONAL ARRAY INDEXINGS ON THE
+C     COMPUTER WHERE THIS SUBROUTINE IS TO BE RUN.  C SHOULD
+C     USUALLY BE BETWEEN 2 AND 4.  FOR DETAILS ON CHOOSING C, SEE
+C     (2).  THE ALGORITHM IS NOT SENSITIVE TO THE VALUE OF C
+C     ACTUALLY USED AS LONG AS C IS BETWEEN 2 AND 4.
+C
+      C = 4.0
+C
+C     DETERMINE CROSS-OVER POINT
+C
+      IF (MATU .AND. MATV) XOVRPT = (C+7./3.)/C
+      IF (MATU .AND. .NOT.MATV) XOVRPT = (C+7./3.)/C
+      IF (.NOT.MATU .AND. MATV) XOVRPT = 5./3.
+      IF (.NOT.MATU .AND. .NOT.MATV) XOVRPT = 5./3.
+C
+C     DETERMINE WHETHER TO USE GOLUB-REINSCH OR THE MODIFIED
+C     ALGORITHM.
+C
+      R = FLOAT(M)/FLOAT(N)
+      IF (R.GE.XOVRPT) GO TO 10
+C
+C     USE GOLUB-REINSCH PROCEDURE
+C
+      CALL GRSVD(NU, NV, NB, M, N, W, MATU, U, MATV, V, B, IRHS, IERR,
+     * RV1)
+      GO TO 330
+C
+C     USE MODIFIED ALGORITHM
+C
+   10 CONTINUE
+C
+C     TRIANGULARIZE U BY HOUSEHOLDER TRANSFORMATIONS, USING
+C     W AND RV1 AS TEMPORARY STORAGE.
+C
+      DO 110 I=1,N
+        G = 0.0
+        S = 0.0
+        SCALE = 0.0
+C
+C         PERFORM SCALING OF COLUMNS TO AVOID UNNECSSARY OVERFLOW
+C         OR UNDERFLOW
+C
+        DO 20 K=I,M
+          SCALE = SCALE + ABS(U(K,I))
+   20   CONTINUE
+        IF (SCALE.EQ.0.0) GO TO 110
+        DO 30 K=I,M
+          U(K,I) = U(K,I)/SCALE
+          S = S + U(K,I)**2
+   30   CONTINUE
+C
+C         THE VECTOR E OF THE HOUSEHOLDER TRANSFORMATION I + EE'/H
+C         WILL BE STORED IN COLUMN I OF U. THE TRANSFORMED ELEMENT
+C         U(I,I) WILL BE STORED IN W(I) AND THE SCALAR H IN
+C         RV1(I).
+C
+        F = U(I,I)
+        G = -SIGN(SQRT(S),F)
+        H = F*G - S
+        U(I,I) = F - G
+        RV1(I) = H
+        W(I) = SCALE*G
+C
+        IF (I.EQ.N) GO TO 70
+C
+C         APPLY TRANSFORMATIONS TO REMAINING COLUMNS OF A
+C
+        IP1 = I + 1
+        DO 60 J=IP1,N
+          S = 0.0
+          DO 40 K=I,M
+            S = S + U(K,I)*U(K,J)
+   40     CONTINUE
+          F = S/H
+          DO 50 K=I,M
+            U(K,J) = U(K,J) + F*U(K,I)
+   50     CONTINUE
+   60   CONTINUE
+C
+C         APPLY TRANSFORMATIONS TO COLUMNS OF B IF IRHS .GT. 0
+C
+   70   IF (IRHS.EQ.0) GO TO 110
+        DO 100 J=1,IRHS
+          S = 0.0
+          DO 80 K=I,M
+            S = S + U(K,I)*B(K,J)
+   80     CONTINUE
+          F = S/H
+          DO 90 K=I,M
+            B(K,J) = B(K,J) + F*U(K,I)
+   90     CONTINUE
+  100   CONTINUE
+  110 CONTINUE
+C
+C     COPY R INTO Z IF MATU = .TRUE.
+C
+      IF (.NOT.MATU) GO TO 290
+      DO 130 I=1,N
+        DO 120 J=I,N
+          Z(J,I) = 0.0
+          Z(I,J) = U(I,J)
+  120   CONTINUE
+        Z(I,I) = W(I)
+  130 CONTINUE
+C
+C     ACCUMULATE HOUSEHOLDER TRANSFORMATIONS IN U
+C
+      DO 240 IBACK=1,N
+        I = N - IBACK + 1
+        IP1 = I + 1
+        G = W(I)
+        H = RV1(I)
+        IF (I.EQ.N) GO TO 150
+C
+        DO 140 J=IP1,N
+          U(I,J) = 0.0
+  140   CONTINUE
+C
+  150   IF (H.EQ.0.0) GO TO 210
+        IF (I.EQ.N) GO TO 190
+C
+        DO 180 J=IP1,N
+          S = 0.0
+          DO 160 K=IP1,M
+            S = S + U(K,I)*U(K,J)
+  160     CONTINUE
+          F = S/H
+          DO 170 K=I,M
+            U(K,J) = U(K,J) + F*U(K,I)
+  170     CONTINUE
+  180   CONTINUE
+C
+  190   S = U(I,I)/H
+        DO 200 J=I,M
+          U(J,I) = U(J,I)*S
+  200   CONTINUE
+        GO TO 230
+C
+  210   DO 220 J=I,M
+          U(J,I) = 0.0
+  220   CONTINUE
+  230   U(I,I) = U(I,I) + 1.0
+  240 CONTINUE
+C
+C     COMPUTE SVD OF R (WHICH IS STORED IN Z)
+C
+      CALL GRSVD(NZ, NV, NB, N, N, W, MATU, Z, MATV, V, B, IRHS, IERR,
+     * RV1)
+C
+C                                      T
+C     FORM L*X TO OBTAIN U (WHERE R=XWY ). X IS RETURNED IN Z
+C     BY GRSVD. THE MATRIX MULTIPLY IS DONE ONE ROW AT A TIME,
+C     USING RV1 AS SCRATCH SPACE.
+C
+      DO 280 I=1,M
+        DO 260 J=1,N
+          S = 0.0
+          DO 250 K=1,N
+            S = S + U(I,K)*Z(K,J)
+  250     CONTINUE
+          RV1(J) = S
+  260   CONTINUE
+        DO 270 J=1,N
+          U(I,J) = RV1(J)
+  270   CONTINUE
+  280 CONTINUE
+      GO TO 330
+C
+C     FORM R IN U BY ZEROING THE LOWER TRIANGULAR PART OF R IN U
+C
+  290 IF (N.EQ.1) GO TO 320
+      DO 310 I=2,N
+        IM1 = I - 1
+        DO 300 J=1,IM1
+          U(I,J) = 0.0
+  300   CONTINUE
+        U(I,I) = W(I)
+  310 CONTINUE
+  320 U(1,1) = W(1)
+C
+      CALL GRSVD(NU, NV, NB, N, N, W, MATU, U, MATV, V, B, IRHS, IERR,
+     * RV1)
+  330 CONTINUE
+      IERRP1 = IERR + 1
+      IF (IERR.LT.0 .OR. N.LE.1 .OR. IERRP1.EQ.N) RETURN
+C
+C     SORT SINGULAR VALUES AND EXCHANGE COLUMNS OF U AND V ACCORDINGLY.
+C     SELECTION SORT MINIMIZES SWAPPING OF U AND V.
+C
+      NM1 = N - 1
+      DO 360 I=IERRP1,NM1
+C...    FIND INDEX OF MAXIMUM SINGULAR VALUE
+        ID = I
+        IP1 = I + 1
+        DO 340 J=IP1,N
+          IF (W(J).GT.W(ID)) ID = J
+  340   CONTINUE
+        IF (ID.EQ.I) GO TO 360
+C...    SWAP SINGULAR VALUES AND VECTORS
+        T = W(I)
+        W(I) = W(ID)
+        W(ID) = T
+        IF (MATV) CALL SSWAP(N, V(1,I), 1, V(1,ID), 1)
+        IF (MATU) CALL SSWAP(M, U(1,I), 1, U(1,ID), 1)
+        IF (IRHS.LT.1) GO TO 360
+        DO 350 KRHS=1,IRHS
+          T = B(I,KRHS)
+          B(I,KRHS) = B(ID,KRHS)
+          B(ID,KRHS) = T
+  350   CONTINUE
+  360 CONTINUE
+      RETURN
+C     ************** LAST CARD OF HYBSVD *****************
+      END
+      SUBROUTINE GRSVD(NU, NV, NB, M, N, W, MATU, U, MATV, V, B, IRHS,  GRS   10
+     * IERR, RV1)
+C
+      INTEGER I, J, K, L, M, N, II, I1, KK, K1, LL, L1, MN, NU, NV, NB,
+     * ITS, IERR, IRHS
+      REAL W(1), U(NU,1), V(NV,1), B(NB,IRHS), RV1(1)
+      REAL C, F, G, H, S, X, Y, Z, EPS, SCALE, SRELPR, DUMMY
+      REAL SQRT, AMAX1, ABS, SIGN
+      LOGICAL MATU, MATV
+C
+C     THIS SUBROUTINE IS A TRANSLATION OF THE ALGOL PROCEDURE SVD,
+C     NUM. MATH. 14, 403-420(1970) BY GOLUB AND REINSCH.
+C     HANDBOOK FOR AUTO. COMP., VOL II-LINEAR ALGEBRA, 134-151(1971).
+C
+C     THIS SUBROUTINE DETERMINES THE SINGULAR VALUE DECOMPOSITION
+C          T
+C     A=USV  OF A REAL M BY N RECTANGULAR MATRIX.  HOUSEHOLDER
+C     BIDIAGONALIZATION AND A VARIANT OF THE QR ALGORITHM ARE USED.
+C     GRSVD ASSUMES THAT A COPY OF THE MATRIX A IS IN THE ARRAY U. IT
+C     ALSO ASSUMES M .GE. N.  IF M .LT. N, THEN COMPUTE THE SINGULAR
+C                             T       T    T             T
+C     VALUE DECOMPOSITION OF A .  IF A =UWV  , THEN A=VWU  .
+C
+C     GRSVD CAN ALSO BE USED TO COMPUTE THE MINIMAL LENGTH LEAST SQUARES
+C     SOLUTION TO THE OVERDETERMINED LINEAR SYSTEM A*X=B.
+C
+C     ON INPUT-
+C
+C        NU MUST BE SET TO THE ROW DIMENSION OF TWO-DIMENSIONAL
+C          ARRAY PARAMETERS U AS DECLARED IN THE CALLING PROGRAM
+C          DIMENSION STATEMENT.  NOTE THAT NU MUST BE AT LEAST
+C          AS LARGE AS M,
+C
+C        NV MUST BE SET TO THE ROW DIMENSION OF THE TWO-DIMENSIONAL
+C          ARRAY PARAMETER V AS DECLARED IN THE CALLING PROGRAM
+C          DIMENSION STATEMENT.  NV MUST BE AT LEAST AS LARGE AS N,
+C
+C        NB MUST BE SET TO THE ROW DIMENSION OF TWO-DIMENSIONAL
+C          ARRAY PARAMETERS B AS DECLARED IN THE CALLING PROGRAM
+C          DIMENSION STATEMENT.  NOTE THAT NB MUST BE AT LEAST
+C          AS LARGE AS M,
+C
+C        M IS THE NUMBER OF ROWS OF A (AND U),
+C
+C        N IS THE NUMBER OF COLUMNS OF A (AND U) AND THE ORDER OF V,
+C
+C        A CONTAINS THE RECTANGULAR INPUT MATRIX TO BE DECOMPOSED,
+C
+C        B CONTAINS THE IRHS RIGHT-HAND-SIDES OF THE OVERDETERMINED
+C          LINEAR SYSTEM A*X=B.  IF IRHS .GT. 0,  THEN ON OUTPUT,
+C          THE FIRST N COMPONENTS OF THESE IRHS COLUMNS OF B
+C                        T
+C          WILL CONTAIN U B.  THUS, TO COMPUTE THE MINIMAL LENGTH LEAST
+C                                                +
+C          SQUARES SOLUTION, ONE MUST COMPUTE V*W  TIMES THE COLUMNS OF
+C                    +                        +
+C          B, WHERE W  IS A DIAGONAL MATRIX, W (I)=0 IF W(I) IS
+C          NEGLIGIBLE, OTHERWISE IS 1/W(I).  IF IRHS=0, B MAY COINCIDE
+C          WITH A OR U AND WILL NOT BE REFERENCED,
+C
+C        IRHS IS THE NUMBER OF RIGHT-HAND-SIDES OF THE OVERDETERMINED
+C          SYSTEM A*X=B.  IRHS SHOULD BE SET TO ZERO IF ONLY THE SINGULA
+C          VALUE DECOMPOSITION OF A IS DESIRED,
+C
+C        MATU SHOULD BE SET TO .TRUE. IF THE U MATRIX IN THE
+C          DECOMPOSITION IS DESIRED, AND TO .FALSE. OTHERWISE,
+C
+C        MATV SHOULD BE SET TO .TRUE. IF THE V MATRIX IN THE
+C          DECOMPOSITION IS DESIRED, AND TO .FALSE. OTHERWISE.
+C
+C     ON OUTPUT-
+C
+C        W CONTAINS THE N (NON-NEGATIVE) SINGULAR VALUES OF A (THE
+C          DIAGONAL ELEMENTS OF S).  THEY ARE UNORDERED.  IF AN
+C          ERROR EXIT IS MADE, THE SINGULAR VALUES SHOULD BE CORRECT
+C          FOR INDICES IERR+1,IERR+2,...,N,
+C
+C        U CONTAINS THE MATRIX U (ORTHOGONAL COLUMN VECTORS) OF THE
+C          DECOMPOSITION IF MATU HAS BEEN SET TO .TRUE.  OTHERWISE
+C          U IS USED AS A TEMPORARY ARRAY.
+C          IF AN ERROR EXIT IS MADE, THE COLUMNS OF U CORRESPONDING
+C          TO INDICES OF CORRECT SINGULAR VALUES SHOULD BE CORRECT,
+C
+C        V CONTAINS THE MATRIX V (ORTHOGONAL) OF THE DECOMPOSITION IF
+C          MATV HAS BEEN SET TO .TRUE.  OTHERWISE V IS NOT REFERENCED.
+C          IF AN ERROR EXIT IS MADE, THE COLUMNS OF V CORRESPONDING TO
+C          INDICES OF CORRECT SINGULAR VALUES SHOULD BE CORRECT,
+C
+C        IERR IS SET TO
+C          ZERO       FOR NORMAL RETURN,
+C          K          IF THE K-TH SINGULAR VALUE HAS NOT BEEN
+C                     DETERMINED AFTER 30 ITERATIONS,
+C          -1         IF IRHS .LT. 0 ,
+C          -2         IF M .LT. N ,
+C          -3         IF NU .LT. M .OR. NB .LT. M,
+C          -4         IF NV .LT. N .
+C
+C        RV1 IS A TEMPORARY STORAGE ARRAY.
+C
+C        THIS SUBROUTINE HAS BEEN CHECKED BY THE PFORT VERIFIER
+C        (RYDER, B.G. 'THE PFORT VERIFIER', SOFTWARE - PRACTICE AND
+C        EXPERIENCE, VOL.4, 359-377, 1974) FOR ADHERENCE TO A LARGE,
+C        CAREFULLY DEFINED, PORTABLE SUBSET OF AMERICAN NATIONAL STANDAR
+C        FORTRAN CALLED PFORT.
+C
+C        ORIGINAL VERSION OF THIS CODE IS SUBROUTINE SVD IN RELEASE 2 OF
+C        EISPACK.
+C
+C        MODIFIED BY TONY F. CHAN,
+C                    COMP. SCI. DEPT, YALE UNIV.,
+C                    BOX 2158, YALE STATION,
+C                    CT 06520
+C        LAST MODIFIED : JANUARY, 1982.
+C
+C     ------------------------------------------------------------------
+C
+C     ********** SRELPR IS A MACHINE-DEPENDENT FUNCTION SPECIFYING
+C                THE RELATIVE PRECISION OF FLOATING POINT ARITHMETIC.
+C
+C                **********
+C
+      IERR = 0
+      IF (IRHS.GE.0) GO TO 10
+      IERR = -1
+      RETURN
+   10 IF (M.GE.N) GO TO 20
+      IERR = -2
+      RETURN
+   20 IF (NU.GE.M .AND. NB.GE.M) GO TO 30
+      IERR = -3
+      RETURN
+   30 IF (NV.GE.N) GO TO 40
+      IERR = -4
+      RETURN
+   40 CONTINUE
+C
+C     ********** HOUSEHOLDER REDUCTION TO BIDIAGONAL FORM **********
+      G = 0.0
+      SCALE = 0.0
+      X = 0.0
+C
+      DO 260 I=1,N
+        L = I + 1
+        RV1(I) = SCALE*G
+        G = 0.0
+        S = 0.0
+        SCALE = 0.0
+C
+C     COMPUTE LEFT TRANSFORMATIONS THAT ZERO THE SUBDIAGONAL ELEMENTS
+C     OF THE I-TH COLUMN.
+C
+        DO 50 K=I,M
+          SCALE = SCALE + ABS(U(K,I))
+   50   CONTINUE
+C
+        IF (SCALE.EQ.0.0) GO TO 160
+C
+        DO 60 K=I,M
+          U(K,I) = U(K,I)/SCALE
+          S = S + U(K,I)**2
+   60   CONTINUE
+C
+        F = U(I,I)
+        G = -SIGN(SQRT(S),F)
+        H = F*G - S
+        U(I,I) = F - G
+        IF (I.EQ.N) GO TO 100
+C
+C     APPLY LEFT TRANSFORMATIONS TO REMAINING COLUMNS OF A.
+C
+        DO 90 J=L,N
+          S = 0.0
+C
+          DO 70 K=I,M
+            S = S + U(K,I)*U(K,J)
+   70     CONTINUE
+C
+          F = S/H
+C
+          DO 80 K=I,M
+            U(K,J) = U(K,J) + F*U(K,I)
+   80     CONTINUE
+   90   CONTINUE
+C
+C      APPLY LEFT TRANSFORMATIONS TO THE COLUMNS OF B IF IRHS .GT. 0
+C
+  100   IF (IRHS.EQ.0) GO TO 140
+        DO 130 J=1,IRHS
+          S = 0.0
+          DO 110 K=I,M
+            S = S + U(K,I)*B(K,J)
+  110     CONTINUE
+          F = S/H
+          DO 120 K=I,M
+            B(K,J) = B(K,J) + F*U(K,I)
+  120     CONTINUE
+  130   CONTINUE
+C
+C     COMPUTE RIGHT TRANSFORMATIONS.
+C
+  140   DO 150 K=I,M
+          U(K,I) = SCALE*U(K,I)
+  150   CONTINUE
+C
+  160   W(I) = SCALE*G
+        G = 0.0
+        S = 0.0
+        SCALE = 0.0
+        IF (I.GT.M .OR. I.EQ.N) GO TO 250
+C
+        DO 170 K=L,N
+          SCALE = SCALE + ABS(U(I,K))
+  170   CONTINUE
+C
+        IF (SCALE.EQ.0.0) GO TO 250
+C
+        DO 180 K=L,N
+          U(I,K) = U(I,K)/SCALE
+          S = S + U(I,K)**2
+  180   CONTINUE
+C
+        F = U(I,L)
+        G = -SIGN(SQRT(S),F)
+        H = F*G - S
+        U(I,L) = F - G
+C
+        DO 190 K=L,N
+          RV1(K) = U(I,K)/H
+  190   CONTINUE
+C
+        IF (I.EQ.M) GO TO 230
+C
+        DO 220 J=L,M
+          S = 0.0
+C
+          DO 200 K=L,N
+            S = S + U(J,K)*U(I,K)
+  200     CONTINUE
+C
+          DO 210 K=L,N
+            U(J,K) = U(J,K) + S*RV1(K)
+  210     CONTINUE
+  220   CONTINUE
+C
+  230   DO 240 K=L,N
+          U(I,K) = SCALE*U(I,K)
+  240   CONTINUE
+C
+  250   X = AMAX1(X,ABS(W(I))+ABS(RV1(I)))
+  260 CONTINUE
+C     ********** ACCUMULATION OF RIGHT-HAND TRANSFORMATIONS **********
+      IF (.NOT.MATV) GO TO 350
+C     ********** FOR I=N STEP -1 UNTIL 1 DO -- **********
+      DO 340 II=1,N
+        I = N + 1 - II
+        IF (I.EQ.N) GO TO 330
+        IF (G.EQ.0.0) GO TO 310
+C
+        DO 270 J=L,N
+C     ********** DOUBLE DIVISION AVOIDS POSSIBLE UNDERFLOW **********
+          V(J,I) = (U(I,J)/U(I,L))/G
+  270   CONTINUE
+C
+        DO 300 J=L,N
+          S = 0.0
+C
+          DO 280 K=L,N
+            S = S + U(I,K)*V(K,J)
+  280     CONTINUE
+C
+          DO 290 K=L,N
+            V(K,J) = V(K,J) + S*V(K,I)
+  290     CONTINUE
+  300   CONTINUE
+C
+  310   DO 320 J=L,N
+          V(I,J) = 0.0
+          V(J,I) = 0.0
+  320   CONTINUE
+C
+  330   V(I,I) = 1.0
+        G = RV1(I)
+        L = I
+  340 CONTINUE
+C     ********** ACCUMULATION OF LEFT-HAND TRANSFORMATIONS **********
+  350 IF (.NOT.MATU) GO TO 470
+C     **********FOR I=MIN(M,N) STEP -1 UNTIL 1 DO -- **********
+      MN = N
+      IF (M.LT.N) MN = M
+C
+      DO 460 II=1,MN
+        I = MN + 1 - II
+        L = I + 1
+        G = W(I)
+        IF (I.EQ.N) GO TO 370
+C
+        DO 360 J=L,N
+          U(I,J) = 0.0
+  360   CONTINUE
+C
+  370   IF (G.EQ.0.0) GO TO 430
+        IF (I.EQ.MN) GO TO 410
+C
+        DO 400 J=L,N
+          S = 0.0
+C
+          DO 380 K=L,M
+            S = S + U(K,I)*U(K,J)
+  380     CONTINUE
+C     ********** DOUBLE DIVISION AVOIDS POSSIBLE UNDERFLOW **********
+          F = (S/U(I,I))/G
+C
+          DO 390 K=I,M
+            U(K,J) = U(K,J) + F*U(K,I)
+  390     CONTINUE
+  400   CONTINUE
+C
+  410   DO 420 J=I,M
+          U(J,I) = U(J,I)/G
+  420   CONTINUE
+C
+        GO TO 450
+C
+  430   DO 440 J=I,M
+          U(J,I) = 0.0
+  440   CONTINUE
+C
+  450   U(I,I) = U(I,I) + 1.0
+  460 CONTINUE
+C     ********** DIAGONALIZATION OF THE BIDIAGONAL FORM **********
+  470 EPS = SRELPR(DUMMY)*X
+C     ********** FOR K=N STEP -1 UNTIL 1 DO -- **********
+      DO 650 KK=1,N
+        K1 = N - KK
+        K = K1 + 1
+        ITS = 0
+C     ********** TEST FOR SPLITTING.
+C                FOR L=K STEP -1 UNTIL 1 DO -- **********
+  480   DO 490 LL=1,K
+          L1 = K - LL
+          L = L1 + 1
+          IF (ABS(RV1(L)).LE.EPS) GO TO 550
+C     ********** RV1(1) IS ALWAYS ZERO, SO THERE IS NO EXIT
+C                THROUGH THE BOTTOM OF THE LOOP **********
+          IF (ABS(W(L1)).LE.EPS) GO TO 500
+  490   CONTINUE
+C     ********** CANCELLATION OF RV1(L) IF L GREATER THAN 1 **********
+  500   C = 0.0
+        S = 1.0
+C
+        DO 540 I=L,K
+          F = S*RV1(I)
+          RV1(I) = C*RV1(I)
+          IF (ABS(F).LE.EPS) GO TO 550
+          G = W(I)
+          H = SQRT(F*F+G*G)
+          W(I) = H
+          C = G/H
+          S = -F/H
+C
+C     APPLY LEFT TRANSFORMATIONS TO B IF IRHS .GT. 0
+C
+          IF (IRHS.EQ.0) GO TO 520
+          DO 510 J=1,IRHS
+            Y = B(L1,J)
+            Z = B(I,J)
+            B(L1,J) = Y*C + Z*S
+            B(I,J) = -Y*S + Z*C
+  510     CONTINUE
+  520     CONTINUE
+C
+          IF (.NOT.MATU) GO TO 540
+C
+          DO 530 J=1,M
+            Y = U(J,L1)
+            Z = U(J,I)
+            U(J,L1) = Y*C + Z*S
+            U(J,I) = -Y*S + Z*C
+  530     CONTINUE
+C
+  540   CONTINUE
+C     ********** TEST FOR CONVERGENCE **********
+  550   Z = W(K)
+        IF (L.EQ.K) GO TO 630
+C     ********** SHIFT FROM BOTTOM 2 BY 2 MINOR **********
+        IF (ITS.EQ.30) GO TO 660
+        ITS = ITS + 1
+        X = W(L)
+        Y = W(K1)
+        G = RV1(K1)
+        H = RV1(K)
+        F = ((Y-Z)*(Y+Z)+(G-H)*(G+H))/(2.0*H*Y)
+        G = SQRT(F*F+1.0)
+        F = ((X-Z)*(X+Z)+H*(Y/(F+SIGN(G,F))-H))/X
+C     ********** NEXT QR TRANSFORMATION **********
+        C = 1.0
+        S = 1.0
+C
+        DO 620 I1=L,K1
+          I = I1 + 1
+          G = RV1(I)
+          Y = W(I)
+          H = S*G
+          G = C*G
+          Z = SQRT(F*F+H*H)
+          RV1(I1) = Z
+          C = F/Z
+          S = H/Z
+          F = X*C + G*S
+          G = -X*S + G*C
+          H = Y*S
+          Y = Y*C
+          IF (.NOT.MATV) GO TO 570
+C
+          DO 560 J=1,N
+            X = V(J,I1)
+            Z = V(J,I)
+            V(J,I1) = X*C + Z*S
+            V(J,I) = -X*S + Z*C
+  560     CONTINUE
+C
+  570     Z = SQRT(F*F+H*H)
+          W(I1) = Z
+C     ********** ROTATION CAN BE ARBITRARY IF Z IS ZERO **********
+          IF (Z.EQ.0.0) GO TO 580
+          C = F/Z
+          S = H/Z
+  580     F = C*G + S*Y
+          X = -S*G + C*Y
+C
+C     APPLY LEFT TRANSFORMATIONS TO B IF IRHS .GT. 0
+C
+          IF (IRHS.EQ.0) GO TO 600
+          DO 590 J=1,IRHS
+            Y = B(I1,J)
+            Z = B(I,J)
+            B(I1,J) = Y*C + Z*S
+            B(I,J) = -Y*S + Z*C
+  590     CONTINUE
+  600     CONTINUE
+C
+          IF (.NOT.MATU) GO TO 620
+C
+          DO 610 J=1,M
+            Y = U(J,I1)
+            Z = U(J,I)
+            U(J,I1) = Y*C + Z*S
+            U(J,I) = -Y*S + Z*C
+  610     CONTINUE
+C
+  620   CONTINUE
+C
+        RV1(L) = 0.0
+        RV1(K) = F
+        W(K) = X
+        GO TO 480
+C     ********** CONVERGENCE **********
+  630   IF (Z.GE.0.0) GO TO 650
+C     ********** W(K) IS MADE NON-NEGATIVE **********
+        W(K) = -Z
+        IF (.NOT.MATV) GO TO 650
+C
+        DO 640 J=1,N
+          V(J,K) = -V(J,K)
+  640   CONTINUE
+C
+  650 CONTINUE
+C
+      GO TO 670
+C     ********** SET ERROR -- NO CONVERGENCE TO A
+C                SINGULAR VALUE AFTER 30 ITERATIONS **********
+  660 IERR = K
+  670 RETURN
+C     ********** LAST CARD OF GRSVD **********
+      END
+      SUBROUTINE SSWAP(N, SX, INCX, SY, INCY)                           SSW   10
+C
+C     INTERCHANGES TWO VECTORS.
+C     USES UNROLLED LOOPS FOR INCREMENTS EQUAL TO 1.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SX(1), SY(1), STEMP
+      INTEGER I, INCX, INCY, IX, IY, M, MP1, N
+C
+      IF (N.LE.0) RETURN
+      IF (INCX.EQ.1 .AND. INCY.EQ.1) GO TO 20
+C
+C       CODE FOR UNEQUAL INCREMENTS OR EQUAL INCREMENTS NOT EQUAL
+C         TO 1
+C
+      IX = 1
+      IY = 1
+      IF (INCX.LT.0) IX = (-N+1)*INCX + 1
+      IF (INCY.LT.0) IY = (-N+1)*INCY + 1
+      DO 10 I=1,N
+        STEMP = SX(IX)
+        SX(IX) = SY(IY)
+        SY(IY) = STEMP
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      RETURN
+C
+C       CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+C
+C       CLEAN-UP LOOP
+C
+   20 M = MOD(N,3)
+      IF (M.EQ.0) GO TO 40
+      DO 30 I=1,M
+        STEMP = SX(I)
+        SX(I) = SY(I)
+        SY(I) = STEMP
+   30 CONTINUE
+      IF (N.LT.3) RETURN
+   40 MP1 = M + 1
+      DO 50 I=MP1,N,3
+        STEMP = SX(I)
+        SX(I) = SY(I)
+        SY(I) = STEMP
+        STEMP = SX(I+1)
+        SX(I+1) = SY(I+1)
+        SY(I+1) = STEMP
+        STEMP = SX(I+2)
+        SX(I+2) = SY(I+2)
+        SY(I+2) = STEMP
+   50 CONTINUE
+      RETURN
+      END
+      REAL FUNCTION SRELPR(DUMMY)                                       SRE   10
+      REAL DUMMY
+C
+C     SRELPR COMPUTES THE RELATIVE PRECISION OF THE FLOATING POINT
+C     ARITHMETIC OF THE MACHINE.
+C
+C     IF TROUBLE WITH AUTOMATIC COMPUTATION OF THESE QUANTITIES,
+C     THEY CAN BE SET BY DIRECT ASSIGNMENT STATEMENTS.
+C     ASSUME THE COMPUTER HAS
+C
+C        B = BASE OF ARITHMETIC
+C        T = NUMBER OF BASE  B  DIGITS
+C
+C     THEN
+C
+C        SRELPR = B**(1-T)
+C
+      REAL S
+C
+      SRELPR = 1.0
+   10 SRELPR = SRELPR/2.0
+      S = 1.0 + SRELPR
+      IF (S.GT.1.0) GO TO 10
+      SRELPR = 2.0*SRELPR
+      RETURN
+      END
+      SUBROUTINE SSVDC(X, LDX, N, P, S, E, U, LDU, V, LDV, WORK, JOB,   SSV   10
+     * INFO)
+      INTEGER LDX, N, P, LDU, LDV, JOB, INFO
+      REAL X(LDX,1), S(1), E(1), U(LDU,1), V(LDV,1), WORK(1)
+C
+C
+C     SSVDC IS A SUBROUTINE TO REDUCE A REAL NXP MATRIX X BY
+C     ORTHOGONAL TRANSFORMATIONS U AND V TO DIAGONAL FORM.  THE
+C     DIAGONAL ELEMENTS S(I) ARE THE SINGULAR VALUES OF X.  THE
+C     COLUMNS OF U ARE THE CORRESPONDING LEFT SINGULAR VECTORS,
+C     AND THE COLUMNS OF V THE RIGHT SINGULAR VECTORS.
+C
+C     ON ENTRY
+C
+C         X         REAL(LDX,P), WHERE LDX.GE.N.
+C                   X CONTAINS THE MATRIX WHOSE SINGULAR VALUE
+C                   DECOMPOSITION IS TO BE COMPUTED.  X IS
+C                   DESTROYED BY SSVDC.
+C
+C         LDX       INTEGER.
+C                   LDX IS THE LEADING DIMENSION OF THE ARRAY X.
+C
+C         N         INTEGER.
+C                   N IS THE NUMBER OF COLUMNS OF THE MATRIX X.
+C
+C         P         INTEGER.
+C                   P IS THE NUMBER OF ROWS OF THE MATRIX X.
+C
+C         LDU       INTEGER.
+C                   LDU IS THE LEADING DIMENSION OF THE ARRAY U.
+C                   (SEE BELOW).
+C
+C         LDV       INTEGER.
+C                   LDV IS THE LEADING DIMENSION OF THE ARRAY V.
+C                   (SEE BELOW).
+C
+C         WORK      REAL(N).
+C                   WORK IS A SCRATCH ARRAY.
+C
+C         JOB       INTEGER.
+C                   JOB CONTROLS THE COMPUTATION OF THE SINGULAR
+C                   VECTORS.  IT HAS THE DECIMAL EXPANSION AB
+C                   WITH THE FOLLOWING MEANING
+C
+C                        A.EQ.0    DO NOT COMPUTE THE LEFT SINGULAR
+C                                  VECTORS.
+C                        A.EQ.1    RETURN THE N LEFT SINGULAR VECTORS
+C                                  IN U.
+C                        A.GE.2    RETURN THE FIRST MIN(N,P) SINGULAR
+C                                  VECTORS IN U.
+C                        B.EQ.0    DO NOT COMPUTE THE RIGHT SINGULAR
+C                                  VECTORS.
+C                        B.EQ.1    RETURN THE RIGHT SINGULAR VECTORS
+C                                  IN V.
+C
+C     ON RETURN
+C
+C         S         REAL(MM), WHERE MM=MIN(N+1,P).
+C                   THE FIRST MIN(N,P) ENTRIES OF S CONTAIN THE
+C                   SINGULAR VALUES OF X ARRANGED IN DESCENDING
+C                   ORDER OF MAGNITUDE.
+C
+C         E         REAL(P).
+C                   E ORDINARILY CONTAINS ZEROS.  HOWEVER SEE THE
+C                   DISCUSSION OF INFO FOR EXCEPTIONS.
+C
+C         U         REAL(LDU,K), WHERE LDU.GE.N.  IF JOBA.EQ.1 THEN
+C                                   K.EQ.N, IF JOBA.GE.2 THEN
+C                                   K.EQ.MIN(N,P).
+C                   U CONTAINS THE MATRIX OF RIGHT SINGULAR VECTORS.
+C                   U IS NOT REFERENCED IF JOBA.EQ.0.  IF N.LE.P
+C                   OR IF JOBA.EQ.2, THEN U MAY BE IDENTIFIED WITH X
+C                   IN THE SUBROUTINE CALL.
+C
+C         V         REAL(LDV,P), WHERE LDV.GE.P.
+C                   V CONTAINS THE MATRIX OF RIGHT SINGULAR VECTORS.
+C                   V IS NOT REFERENCED IF JOB.EQ.0.  IF P.LE.N,
+C                   THEN V MAY BE IDENTIFIED WITH X IN THE
+C                   SUBROUTINE CALL.
+C
+C         INFO      INTEGER.
+C                   THE SINGULAR VALUES (AND THEIR CORRESPONDING
+C                   SINGULAR VECTORS) S(INFO+1),S(INFO+2),...,S(M)
+C                   ARE CORRECT (HERE M=MIN(N,P)).  THUS IF
+C                   INFO.EQ.0, ALL THE SINGULAR VALUES AND THEIR
+C                   VECTORS ARE CORRECT.  IN ANY EVENT, THE MATRIX
+C                   B = TRANS(U)*X*V IS THE BIDIAGONAL MATRIX
+C                   WITH THE ELEMENTS OF S ON ITS DIAGONAL AND THE
+C                   ELEMENTS OF E ON ITS SUPER-DIAGONAL (TRANS(U)
+C                   IS THE TRANSPOSE OF U).  THUS THE SINGULAR
+C                   VALUES OF X AND B ARE THE SAME.
+C
+C     LINPACK. THIS VERSION DATED 03/19/79 .
+C     G.W. STEWART, UNIVERSITY OF MARYLAND, ARGONNE NATIONAL LAB.
+C
+C     ***** USES THE FOLLOWING FUNCTIONS AND SUBPROGRAMS.
+C
+C     EXTERNAL SROT
+C     BLAS SAXPY,SDOT,SSCAL,SSWAP,SNRM2,SROTG
+C     FORTRAN ABS,AMAX1,MAX0,MIN0,MOD,SQRT
+C
+C     INTERNAL VARIABLES
+C
+      INTEGER I, ITER, J, JOBU, K, KASE, KK, L, LL, LLS, LM1, LP1, LS,
+     * LU, M, MAXIT, MM, MM1, MP1, NCT, NCTP1, NCU, NRT, NRTP1
+      REAL SDOT, T, R
+      REAL B, C, CS, EL, EMM1, F, G, SNRM2, SCALE, SHIFT, SL, SM, SN,
+     * SMM1, T1, TEST, ZTEST
+      LOGICAL WANTU, WANTV
+C
+C
+C     SET THE MAXIMUM NUMBER OF ITERATIONS.
+C
+      MAXIT = 30
+C
+C     DETERMINE WHAT IS TO BE COMPUTED.
+C
+      WANTU = .FALSE.
+      WANTV = .FALSE.
+      JOBU = MOD(JOB,100)/10
+      NCU = N
+      IF (JOBU.GT.1) NCU = MIN0(N,P)
+      IF (JOBU.NE.0) WANTU = .TRUE.
+      IF (MOD(JOB,10).NE.0) WANTV = .TRUE.
+C
+C     REDUCE X TO BIDIAGONAL FORM, STORING THE DIAGONAL ELEMENTS
+C     IN S AND THE SUPER-DIAGONAL ELEMENTS IN E.
+C
+      INFO = 0
+      NCT = MIN0(N-1,P)
+      NRT = MAX0(0,MIN0(P-2,N))
+      LU = MAX0(NCT,NRT)
+      IF (LU.LT.1) GO TO 170
+      DO 160 L=1,LU
+        LP1 = L + 1
+        IF (L.GT.NCT) GO TO 20
+C
+C           COMPUTE THE TRANSFORMATION FOR THE L-TH COLUMN AND
+C           PLACE THE L-TH DIAGONAL IN S(L).
+C
+        S(L) = SNRM2(N-L+1,X(L,L),1)
+        IF (S(L).EQ.0.0E0) GO TO 10
+        IF (X(L,L).NE.0.0E0) S(L) = SIGN(S(L),X(L,L))
+        CALL SSCAL(N-L+1, 1.0E0/S(L), X(L,L), 1)
+        X(L,L) = 1.0E0 + X(L,L)
+   10   CONTINUE
+        S(L) = -S(L)
+   20   CONTINUE
+        IF (P.LT.LP1) GO TO 50
+        DO 40 J=LP1,P
+          IF (L.GT.NCT) GO TO 30
+          IF (S(L).EQ.0.0E0) GO TO 30
+C
+C              APPLY THE TRANSFORMATION.
+C
+          T = -SDOT(N-L+1,X(L,L),1,X(L,J),1)/X(L,L)
+          CALL SAXPY(N-L+1, T, X(L,L), 1, X(L,J), 1)
+   30     CONTINUE
+C
+C           PLACE THE L-TH ROW OF X INTO  E FOR THE
+C           SUBSEQUENT CALCULATION OF THE ROW TRANSFORMATION.
+C
+          E(J) = X(L,J)
+   40   CONTINUE
+   50   CONTINUE
+        IF (.NOT.WANTU .OR. L.GT.NCT) GO TO 70
+C
+C           PLACE THE TRANSFORMATION IN U FOR SUBSEQUENT BACK
+C           MULTIPLICATION.
+C
+        DO 60 I=L,N
+          U(I,L) = X(I,L)
+   60   CONTINUE
+   70   CONTINUE
+        IF (L.GT.NRT) GO TO 150
+C
+C           COMPUTE THE L-TH ROW TRANSFORMATION AND PLACE THE
+C           L-TH SUPER-DIAGONAL IN E(L).
+C
+        E(L) = SNRM2(P-L,E(LP1),1)
+        IF (E(L).EQ.0.0E0) GO TO 80
+        IF (E(LP1).NE.0.0E0) E(L) = SIGN(E(L),E(LP1))
+        CALL SSCAL(P-L, 1.0E0/E(L), E(LP1), 1)
+        E(LP1) = 1.0E0 + E(LP1)
+   80   CONTINUE
+        E(L) = -E(L)
+        IF (LP1.GT.N .OR. E(L).EQ.0.0E0) GO TO 120
+C
+C              APPLY THE TRANSFORMATION.
+C
+        DO 90 I=LP1,N
+          WORK(I) = 0.0E0
+   90   CONTINUE
+        DO 100 J=LP1,P
+          CALL SAXPY(N-L, E(J), X(LP1,J), 1, WORK(LP1), 1)
+  100   CONTINUE
+        DO 110 J=LP1,P
+          CALL SAXPY(N-L, -E(J)/E(LP1), WORK(LP1), 1, X(LP1,J), 1)
+  110   CONTINUE
+  120   CONTINUE
+        IF (.NOT.WANTV) GO TO 140
+C
+C              PLACE THE TRANSFORMATION IN V FOR SUBSEQUENT
+C              BACK MULTIPLICATION.
+C
+        DO 130 I=LP1,P
+          V(I,L) = E(I)
+  130   CONTINUE
+  140   CONTINUE
+  150   CONTINUE
+  160 CONTINUE
+  170 CONTINUE
+C
+C     SET UP THE FINAL BIDIAGONAL MATRIX OR ORDER M.
+C
+      M = MIN0(P,N+1)
+      NCTP1 = NCT + 1
+      NRTP1 = NRT + 1
+      IF (NCT.LT.P) S(NCTP1) = X(NCTP1,NCTP1)
+      IF (N.LT.M) S(M) = 0.0E0
+      IF (NRTP1.LT.M) E(NRTP1) = X(NRTP1,M)
+      E(M) = 0.0E0
+C
+C     IF REQUIRED, GENERATE U.
+C
+      IF (.NOT.WANTU) GO TO 300
+      IF (NCU.LT.NCTP1) GO TO 200
+      DO 190 J=NCTP1,NCU
+        DO 180 I=1,N
+          U(I,J) = 0.0E0
+  180   CONTINUE
+        U(J,J) = 1.0E0
+  190 CONTINUE
+  200 CONTINUE
+      IF (NCT.LT.1) GO TO 290
+      DO 280 LL=1,NCT
+        L = NCT - LL + 1
+        IF (S(L).EQ.0.0E0) GO TO 250
+        LP1 = L + 1
+        IF (NCU.LT.LP1) GO TO 220
+        DO 210 J=LP1,NCU
+          T = -SDOT(N-L+1,U(L,L),1,U(L,J),1)/U(L,L)
+          CALL SAXPY(N-L+1, T, U(L,L), 1, U(L,J), 1)
+  210   CONTINUE
+  220   CONTINUE
+        CALL SSCAL(N-L+1, -1.0E0, U(L,L), 1)
+        U(L,L) = 1.0E0 + U(L,L)
+        LM1 = L - 1
+        IF (LM1.LT.1) GO TO 240
+        DO 230 I=1,LM1
+          U(I,L) = 0.0E0
+  230   CONTINUE
+  240   CONTINUE
+        GO TO 270
+  250   CONTINUE
+        DO 260 I=1,N
+          U(I,L) = 0.0E0
+  260   CONTINUE
+        U(L,L) = 1.0E0
+  270   CONTINUE
+  280 CONTINUE
+  290 CONTINUE
+  300 CONTINUE
+C
+C     IF IT IS REQUIRED, GENERATE V.
+C
+      IF (.NOT.WANTV) GO TO 350
+      DO 340 LL=1,P
+        L = P - LL + 1
+        LP1 = L + 1
+        IF (L.GT.NRT) GO TO 320
+        IF (E(L).EQ.0.0E0) GO TO 320
+        DO 310 J=LP1,P
+          T = -SDOT(P-L,V(LP1,L),1,V(LP1,J),1)/V(LP1,L)
+          CALL SAXPY(P-L, T, V(LP1,L), 1, V(LP1,J), 1)
+  310   CONTINUE
+  320   CONTINUE
+        DO 330 I=1,P
+          V(I,L) = 0.0E0
+  330   CONTINUE
+        V(L,L) = 1.0E0
+  340 CONTINUE
+  350 CONTINUE
+C
+C     MAIN ITERATION LOOP FOR THE SINGULAR VALUES.
+C
+      MM = M
+      ITER = 0
+  360 CONTINUE
+C
+C        QUIT IF ALL THE SINGULAR VALUES HAVE BEEN FOUND.
+C
+C     ...EXIT
+      IF (M.EQ.0) GO TO 620
+C
+C        IF TOO MANY ITERATIONS HAVE BEEN PERFORMED, SET
+C        FLAG AND RETURN.
+C
+      IF (ITER.LT.MAXIT) GO TO 370
+      INFO = M
+C     ......EXIT
+      GO TO 620
+  370 CONTINUE
+C
+C        THIS SECTION OF THE PROGRAM INSPECTS FOR
+C        NEGLIGIBLE ELEMENTS IN THE S AND E ARRAYS.  ON
+C        COMPLETION THE VARIABLES KASE AND L ARE SET AS FOLLOWS.
+C
+C           KASE = 1     IF S(M) AND E(L-1) ARE NEGLIGIBLE AND L.LT.M
+C           KASE = 2     IF S(L) IS NEGLIGIBLE AND L.LT.M
+C           KASE = 3     IF E(L-1) IS NEGLIGIBLE, L.LT.M, AND
+C                        S(L), ..., S(M) ARE NOT NEGLIGIBLE (QR STEP).
+C           KASE = 4     IF E(M-1) IS NEGLIGIBLE (CONVERGENCE).
+C
+      DO 390 LL=1,M
+        L = M - LL
+C        ...EXIT
+        IF (L.EQ.0) GO TO 400
+        TEST = ABS(S(L)) + ABS(S(L+1))
+        ZTEST = TEST + ABS(E(L))
+        IF (ZTEST.NE.TEST) GO TO 380
+        E(L) = 0.0E0
+C        ......EXIT
+        GO TO 400
+  380   CONTINUE
+  390 CONTINUE
+  400 CONTINUE
+      IF (L.NE.M-1) GO TO 410
+      KASE = 4
+      GO TO 480
+  410 CONTINUE
+      LP1 = L + 1
+      MP1 = M + 1
+      DO 430 LLS=LP1,MP1
+        LS = M - LLS + LP1
+C           ...EXIT
+        IF (LS.EQ.L) GO TO 440
+        TEST = 0.0E0
+        IF (LS.NE.M) TEST = TEST + ABS(E(LS))
+        IF (LS.NE.L+1) TEST = TEST + ABS(E(LS-1))
+        ZTEST = TEST + ABS(S(LS))
+        IF (ZTEST.NE.TEST) GO TO 420
+        S(LS) = 0.0E0
+C           ......EXIT
+        GO TO 440
+  420   CONTINUE
+  430 CONTINUE
+  440 CONTINUE
+      IF (LS.NE.L) GO TO 450
+      KASE = 3
+      GO TO 470
+  450 CONTINUE
+      IF (LS.NE.M) GO TO 460
+      KASE = 1
+      GO TO 470
+  460 CONTINUE
+      KASE = 2
+      L = LS
+  470 CONTINUE
+  480 CONTINUE
+      L = L + 1
+C
+C        PERFORM THE TASK INDICATED BY KASE.
+C
+      GO TO (490, 520, 540, 570), KASE
+C
+C        DEFLATE NEGLIGIBLE S(M).
+C
+  490 CONTINUE
+      MM1 = M - 1
+      F = E(M-1)
+      E(M-1) = 0.0E0
+      DO 510 KK=L,MM1
+        K = MM1 - KK + L
+        T1 = S(K)
+        CALL SROTG(T1, F, CS, SN)
+        S(K) = T1
+        IF (K.EQ.L) GO TO 500
+        F = -SN*E(K-1)
+        E(K-1) = CS*E(K-1)
+  500   CONTINUE
+        IF (WANTV) CALL SROT(P, V(1,K), 1, V(1,M), 1, CS, SN)
+  510 CONTINUE
+      GO TO 610
+C
+C        SPLIT AT NEGLIGIBLE S(L).
+C
+  520 CONTINUE
+      F = E(L-1)
+      E(L-1) = 0.0E0
+      DO 530 K=L,M
+        T1 = S(K)
+        CALL SROTG(T1, F, CS, SN)
+        S(K) = T1
+        F = -SN*E(K)
+        E(K) = CS*E(K)
+        IF (WANTU) CALL SROT(N, U(1,K), 1, U(1,L-1), 1, CS, SN)
+  530 CONTINUE
+      GO TO 610
+C
+C        PERFORM ONE QR STEP.
+C
+  540 CONTINUE
+C
+C           CALCULATE THE SHIFT.
+C
+      SCALE = AMAX1(ABS(S(M)),ABS(S(M-1)),ABS(E(M-1)),ABS(S(L)),ABS(E(L)
+     * ))
+      SM = S(M)/SCALE
+      SMM1 = S(M-1)/SCALE
+      EMM1 = E(M-1)/SCALE
+      SL = S(L)/SCALE
+      EL = E(L)/SCALE
+      B = ((SMM1+SM)*(SMM1-SM)+EMM1**2)/2.0E0
+      C = (SM*EMM1)**2
+      SHIFT = 0.0E0
+      IF (B.EQ.0.0E0 .AND. C.EQ.0.0E0) GO TO 550
+      SHIFT = SQRT(B**2+C)
+      IF (B.LT.0.0E0) SHIFT = -SHIFT
+      SHIFT = C/(B+SHIFT)
+  550 CONTINUE
+      F = (SL+SM)*(SL-SM) - SHIFT
+      G = SL*EL
+C
+C           CHASE ZEROS.
+C
+      MM1 = M - 1
+      DO 560 K=L,MM1
+        CALL SROTG(F, G, CS, SN)
+        IF (K.NE.L) E(K-1) = F
+        F = CS*S(K) + SN*E(K)
+        E(K) = CS*E(K) - SN*S(K)
+        G = SN*S(K+1)
+        S(K+1) = CS*S(K+1)
+        IF (WANTV) CALL SROT(P, V(1,K), 1, V(1,K+1), 1, CS, SN)
+        CALL SROTG(F, G, CS, SN)
+        S(K) = F
+        F = CS*E(K) + SN*S(K+1)
+        S(K+1) = -SN*E(K) + CS*S(K+1)
+        G = SN*E(K+1)
+        E(K+1) = CS*E(K+1)
+        IF (WANTU .AND. K.LT.N) CALL SROT(N, U(1,K), 1, U(1,K+1), 1,
+     *   CS, SN)
+  560 CONTINUE
+      E(M-1) = F
+      ITER = ITER + 1
+      GO TO 610
+C
+C        CONVERGENCE.
+C
+  570 CONTINUE
+C
+C           MAKE THE SINGULAR VALUE  POSITIVE.
+C
+      IF (S(L).GE.0.0E0) GO TO 580
+      S(L) = -S(L)
+      IF (WANTV) CALL SSCAL(P, -1.0E0, V(1,L), 1)
+  580 CONTINUE
+C
+C           ORDER THE SINGULAR VALUE.
+C
+  590 IF (L.EQ.MM) GO TO 600
+C           ...EXIT
+      IF (S(L).GE.S(L+1)) GO TO 600
+      T = S(L)
+      S(L) = S(L+1)
+      S(L+1) = T
+      IF (WANTV .AND. L.LT.P) CALL SSWAP(P, V(1,L), 1, V(1,L+1), 1)
+      IF (WANTU .AND. L.LT.N) CALL SSWAP(N, U(1,L), 1, U(1,L+1), 1)
+      L = L + 1
+      GO TO 590
+  600 CONTINUE
+      ITER = 0
+      M = M - 1
+  610 CONTINUE
+      GO TO 360
+  620 CONTINUE
+      RETURN
+      END
+      REAL FUNCTION SASUM(N, SX, INCX)                                  SAS   10
+C
+C     TAKES THE SUM OF THE ABSOLUTE VALUES.
+C     USES UNROLLED LOOPS FOR INCREMENT EQUAL TO ONE.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SX(1), STEMP
+      INTEGER I, INCX, M, MP1, N, NINCX
+C
+      SASUM = 0.0E0
+      STEMP = 0.0E0
+      IF (N.LE.0) RETURN
+      IF (INCX.EQ.1) GO TO 20
+C
+C        CODE FOR INCREMENT NOT EQUAL TO 1
+C
+      NINCX = N*INCX
+      DO 10 I=1,NINCX,INCX
+        STEMP = STEMP + ABS(SX(I))
+   10 CONTINUE
+      SASUM = STEMP
+      RETURN
+C
+C        CODE FOR INCREMENT EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,6)
+      IF (M.EQ.0) GO TO 40
+      DO 30 I=1,M
+        STEMP = STEMP + ABS(SX(I))
+   30 CONTINUE
+      IF (N.LT.6) GO TO 60
+   40 MP1 = M + 1
+      DO 50 I=MP1,N,6
+        STEMP = STEMP + ABS(SX(I)) + ABS(SX(I+1)) + ABS(SX(I+2)) +
+     *   ABS(SX(I+3)) + ABS(SX(I+4)) + ABS(SX(I+5))
+   50 CONTINUE
+   60 SASUM = STEMP
+      RETURN
+      END
+      SUBROUTINE SAXPY(N, SA, SX, INCX, SY, INCY)                       SAX   10
+C
+C     CONSTANT TIMES A VECTOR PLUS A VECTOR.
+C     USES UNROLLED LOOP FOR INCREMENTS EQUAL TO ONE.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SX(1), SY(1), SA
+      INTEGER I, INCX, INCY, IX, IY, M, MP1, N
+C
+      IF (N.LE.0) RETURN
+      IF (SA.EQ.0.0) RETURN
+      IF (INCX.EQ.1 .AND. INCY.EQ.1) GO TO 20
+C
+C        CODE FOR UNEQUAL INCREMENTS OR EQUAL INCREMENTS
+C          NOT EQUAL TO 1
+C
+      IX = 1
+      IY = 1
+      IF (INCX.LT.0) IX = (-N+1)*INCX + 1
+      IF (INCY.LT.0) IY = (-N+1)*INCY + 1
+      DO 10 I=1,N
+        SY(IY) = SY(IY) + SA*SX(IX)
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      RETURN
+C
+C        CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,4)
+      IF (M.EQ.0) GO TO 40
+      DO 30 I=1,M
+        SY(I) = SY(I) + SA*SX(I)
+   30 CONTINUE
+      IF (N.LT.4) RETURN
+   40 MP1 = M + 1
+      DO 50 I=MP1,N,4
+        SY(I) = SY(I) + SA*SX(I)
+        SY(I+1) = SY(I+1) + SA*SX(I+1)
+        SY(I+2) = SY(I+2) + SA*SX(I+2)
+        SY(I+3) = SY(I+3) + SA*SX(I+3)
+   50 CONTINUE
+      RETURN
+      END
+      REAL FUNCTION SDOT(N, SX, INCX, SY, INCY)                         SDO   10
+C
+C     FORMS THE DOT PRODUCT OF TWO VECTORS.
+C     USES UNROLLED LOOPS FOR INCREMENTS EQUAL TO ONE.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SX(1), SY(1), STEMP
+      INTEGER I, INCX, INCY, IX, IY, M, MP1, N
+C
+      STEMP = 0.0E0
+      SDOT = 0.0E0
+      IF (N.LE.0) RETURN
+      IF (INCX.EQ.1 .AND. INCY.EQ.1) GO TO 20
+C
+C        CODE FOR UNEQUAL INCREMENTS OR EQUAL INCREMENTS
+C          NOT EQUAL TO 1
+C
+      IX = 1
+      IY = 1
+      IF (INCX.LT.0) IX = (-N+1)*INCX + 1
+      IF (INCY.LT.0) IY = (-N+1)*INCY + 1
+      DO 10 I=1,N
+        STEMP = STEMP + SX(IX)*SY(IY)
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      SDOT = STEMP
+      RETURN
+C
+C        CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,5)
+      IF (M.EQ.0) GO TO 40
+      DO 30 I=1,M
+        STEMP = STEMP + SX(I)*SY(I)
+   30 CONTINUE
+      IF (N.LT.5) GO TO 60
+   40 MP1 = M + 1
+      DO 50 I=MP1,N,5
+        STEMP = STEMP + SX(I)*SY(I) + SX(I+1)*SY(I+1) + SX(I+2)*SY(I+2)
+     *   + SX(I+3)*SY(I+3) + SX(I+4)*SY(I+4)
+   50 CONTINUE
+   60 SDOT = STEMP
+      RETURN
+      END
+      REAL FUNCTION SNRM2(N, SX, INCX)                                  SNR   10
+      INTEGER NEXT
+      REAL SX(1), CUTLO, CUTHI, HITEST, SUM, XMAX, ZERO, ONE
+      DATA ZERO, ONE /0.0E0,1.0E0/
+C
+C     EUCLIDEAN NORM OF THE N-VECTOR STORED IN SX() WITH STORAGE
+C     INCREMENT INCX .
+C     IF    N .LE. 0 RETURN WITH RESULT = 0.
+C     IF N .GE. 1 THEN INCX MUST BE .GE. 1
+C
+C           C.L.LAWSON, 1978 JAN 08
+C
+C     FOUR PHASE METHOD     USING TWO BUILT-IN CONSTANTS THAT ARE
+C     HOPEFULLY APPLICABLE TO ALL MACHINES.
+C         CUTLO = MAXIMUM OF  SQRT(U/EPS)  OVER ALL KNOWN MACHINES.
+C         CUTHI = MINIMUM OF  SQRT(V)      OVER ALL KNOWN MACHINES.
+C     WHERE
+C         EPS = SMALLEST NO. SUCH THAT EPS + 1. .GT. 1.
+C         U   = SMALLEST POSITIVE NO.   (UNDERFLOW LIMIT)
+C         V   = LARGEST  NO.            (OVERFLOW  LIMIT)
+C
+C     BRIEF OUTLINE OF ALGORITHM..
+C
+C     PHASE 1    SCANS ZERO COMPONENTS.
+C     MOVE TO PHASE 2 WHEN A COMPONENT IS NONZERO AND .LE. CUTLO
+C     MOVE TO PHASE 3 WHEN A COMPONENT IS .GT. CUTLO
+C     MOVE TO PHASE 4 WHEN A COMPONENT IS .GE. CUTHI/M
+C     WHERE M = N FOR X() REAL AND M = 2*N FOR COMPLEX.
+C
+C     VALUES FOR CUTLO AND CUTHI..
+C     FROM THE ENVIRONMENTAL PARAMETERS LISTED IN THE IMSL CONVERTER
+C     DOCUMENT THE LIMITING VALUES ARE AS FOLLOWS..
+C     CUTLO, S.P.   U/EPS = 2**(-102) FOR  HONEYWELL.  CLOSE SECONDS ARE
+C                   UNIVAC AND DEC AT 2**(-103)
+C                   THUS CUTLO = 2**(-51) = 4.44089E-16
+C     CUTHI, S.P.   V = 2**127 FOR UNIVAC, HONEYWELL, AND DEC.
+C                   THUS CUTHI = 2**(63.5) = 1.30438E19
+C     CUTLO, D.P.   U/EPS = 2**(-67) FOR HONEYWELL AND DEC.
+C                   THUS CUTLO = 2**(-33.5) = 8.23181D-11
+C     CUTHI, D.P.   SAME AS S.P.  CUTHI = 1.30438D19
+C     DATA CUTLO, CUTHI / 8.232D-11,  1.304D19 /
+C     DATA CUTLO, CUTHI / 4.441E-16,  1.304E19 /
+      DATA CUTLO, CUTHI /4.441E-16,1.304E19/
+C
+      IF (N.GT.0) GO TO 10
+      SNRM2 = ZERO
+      GO TO 140
+C
+   10 ASSIGN 30 TO NEXT
+      SUM = ZERO
+      NN = N*INCX
+C                                                 BEGIN MAIN LOOP
+      I = 1
+   20 GO TO NEXT, (30, 40, 70, 80)
+   30 IF (ABS(SX(I)).GT.CUTLO) GO TO 110
+      ASSIGN 40 TO NEXT
+      XMAX = ZERO
+C
+C                        PHASE 1.  SUM IS ZERO
+C
+   40 IF (SX(I).EQ.ZERO) GO TO 130
+      IF (ABS(SX(I)).GT.CUTLO) GO TO 110
+C
+C                                PREPARE FOR PHASE 2.
+      ASSIGN 70 TO NEXT
+      GO TO 60
+C
+C                                PREPARE FOR PHASE 4.
+C
+   50 I = J
+      ASSIGN 80 TO NEXT
+      SUM = (SUM/SX(I))/SX(I)
+   60 XMAX = ABS(SX(I))
+      GO TO 90
+C
+C                   PHASE 2.  SUM IS SMALL.
+C                             SCALE TO AVOID DESTRUCTIVE UNDERFLOW.
+C
+   70 IF (ABS(SX(I)).GT.CUTLO) GO TO 100
+C
+C                     COMMON CODE FOR PHASES 2 AND 4.
+C                     IN PHASE 4 SUM IS LARGE.  SCALE TO AVOID OVERFLOW.
+C
+   80 IF (ABS(SX(I)).LE.XMAX) GO TO 90
+      SUM = ONE + SUM*(XMAX/SX(I))**2
+      XMAX = ABS(SX(I))
+      GO TO 130
+C
+   90 SUM = SUM + (SX(I)/XMAX)**2
+      GO TO 130
+C
+C
+C                  PREPARE FOR PHASE 3.
+C
+  100 SUM = (SUM*XMAX)*XMAX
+C
+C
+C     FOR REAL OR D.P. SET HITEST = CUTHI/N
+C     FOR COMPLEX      SET HITEST = CUTHI/(2*N)
+C
+  110 HITEST = CUTHI/FLOAT(N)
+C
+C                   PHASE 3.  SUM IS MID-RANGE.  NO SCALING.
+C
+      DO 120 J=I,NN,INCX
+        IF (ABS(SX(J)).GE.HITEST) GO TO 50
+        SUM = SUM + SX(J)**2
+  120 CONTINUE
+      SNRM2 = SQRT(SUM)
+      GO TO 140
+C
+  130 CONTINUE
+      I = I + INCX
+      IF (I.LE.NN) GO TO 20
+C
+C              END OF MAIN LOOP.
+C
+C              COMPUTE SQUARE ROOT AND ADJUST FOR SCALING.
+C
+      SNRM2 = XMAX*SQRT(SUM)
+  140 CONTINUE
+      RETURN
+      END
+      SUBROUTINE SROT(N, SX, INCX, SY, INCY, C, S)                      SRO   10
+C
+C     APPLIES A PLANE ROTATION.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SX(1), SY(1), STEMP, C, S
+      INTEGER I, INCX, INCY, IX, IY, N
+C
+      IF (N.LE.0) RETURN
+      IF (INCX.EQ.1 .AND. INCY.EQ.1) GO TO 20
+C
+C       CODE FOR UNEQUAL INCREMENTS OR EQUAL INCREMENTS NOT EQUAL
+C         TO 1
+C
+      IX = 1
+      IY = 1
+      IF (INCX.LT.0) IX = (-N+1)*INCX + 1
+      IF (INCY.LT.0) IY = (-N+1)*INCY + 1
+      DO 10 I=1,N
+        STEMP = C*SX(IX) + S*SY(IY)
+        SY(IY) = C*SY(IY) - S*SX(IX)
+        SX(IX) = STEMP
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      RETURN
+C
+C       CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+   20 DO 30 I=1,N
+        STEMP = C*SX(I) + S*SY(I)
+        SY(I) = C*SY(I) - S*SX(I)
+        SX(I) = STEMP
+   30 CONTINUE
+      RETURN
+      END
+      SUBROUTINE SROTG(SA, SB, C, S)                                    SRO   10
+C
+C     CONSTRUCT GIVENS PLANE ROTATION.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SA, SB, C, S, ROE, SCALE, R, Z
+C
+      ROE = SB
+      IF (ABS(SA).GT.ABS(SB)) ROE = SA
+      SCALE = ABS(SA) + ABS(SB)
+      IF (SCALE.NE.0.0) GO TO 10
+      C = 1.0
+      S = 0.0
+      R = 0.0
+      GO TO 20
+   10 R = SCALE*SQRT((SA/SCALE)**2+(SB/SCALE)**2)
+      R = SIGN(1.0,ROE)*R
+      C = SA/R
+      S = SB/R
+   20 Z = 1.0
+      IF (ABS(SA).GT.ABS(SB)) Z = S
+      IF (ABS(SB).GE.ABS(SA) .AND. C.NE.0.0) Z = 1.0/C
+      SA = R
+      SB = Z
+      RETURN
+      END
+      SUBROUTINE SSCAL(N, SA, SX, INCX)                                 SSC   10
+C
+C     SCALES A VECTOR BY A CONSTANT.
+C     USES UNROLLED LOOPS FOR INCREMENT EQUAL TO 1.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SA, SX(1)
+      INTEGER I, INCX, M, MP1, N, NINCX
+C
+      IF (N.LE.0) RETURN
+      IF (INCX.EQ.1) GO TO 20
+C
+C        CODE FOR INCREMENT NOT EQUAL TO 1
+C
+      NINCX = N*INCX
+      DO 10 I=1,NINCX,INCX
+        SX(I) = SA*SX(I)
+   10 CONTINUE
+      RETURN
+C
+C        CODE FOR INCREMENT EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,5)
+      IF (M.EQ.0) GO TO 40
+      DO 30 I=1,M
+        SX(I) = SA*SX(I)
+   30 CONTINUE
+      IF (N.LT.5) RETURN
+   40 MP1 = M + 1
+      DO 50 I=MP1,N,5
+        SX(I) = SA*SX(I)
+        SX(I+1) = SA*SX(I+1)
+        SX(I+2) = SA*SX(I+2)
+        SX(I+3) = SA*SX(I+3)
+        SX(I+4) = SA*SX(I+4)
+   50 CONTINUE
+      RETURN
+      END
+      SUBROUTINE SVD(NM, M, N, A, W, MATU, U, MATV, V, IERR, RV1)       SVD   10
+C
+      INTEGER I, J, K, L, M, N, II, I1, KK, K1, LL, L1, MN, NM, ITS,
+     * IERR
+      REAL A(NM,N), W(N), U(NM,N), V(NM,N), RV1(N)
+      REAL C, F, G, H, S, X, Y, Z, EPS, SCALE, MACHEP
+      REAL SQRT, AMAX1, ABS, SIGN
+      LOGICAL MATU, MATV
+C
+C     THIS SUBROUTINE IS A TRANSLATION OF THE ALGOL PROCEDURE SVD,
+C     NUM. MATH. 14, 403-420(1970) BY GOLUB AND REINSCH.
+C     HANDBOOK FOR AUTO. COMP., VOL II-LINEAR ALGEBRA, 134-151(1971).
+C
+C     THIS SUBROUTINE DETERMINES THE SINGULAR VALUE DECOMPOSITION
+C          T
+C     A=USV  OF A REAL M BY N RECTANGULAR MATRIX.  HOUSEHOLDER
+C     BIDIAGONALIZATION AND A VARIANT OF THE QR ALGORITHM ARE USED.
+C
+C     ON INPUT-
+C
+C        NM MUST BE SET TO THE ROW DIMENSION OF TWO-DIMENSIONAL
+C          ARRAY PARAMETERS AS DECLARED IN THE CALLING PROGRAM
+C          DIMENSION STATEMENT.  NOTE THAT NM MUST BE AT LEAST
+C          AS LARGE AS THE MAXIMUM OF M AND N,
+C
+C        M IS THE NUMBER OF ROWS OF A (AND U),
+C
+C        N IS THE NUMBER OF COLUMNS OF A (AND U) AND THE ORDER OF V,
+C
+C        A CONTAINS THE RECTANGULAR INPUT MATRIX TO BE DECOMPOSED,
+C
+C        MATU SHOULD BE SET TO .TRUE. IF THE U MATRIX IN THE
+C          DECOMPOSITION IS DESIRED, AND TO .FALSE. OTHERWISE,
+C
+C        MATV SHOULD BE SET TO .TRUE. IF THE V MATRIX IN THE
+C          DECOMPOSITION IS DESIRED, AND TO .FALSE. OTHERWISE.
+C
+C     ON OUTPUT-
+C
+C        A IS UNALTERED (UNLESS OVERWRITTEN BY U OR V),
+C
+C        W CONTAINS THE N (NON-NEGATIVE) SINGULAR VALUES OF A (THE
+C          DIAGONAL ELEMENTS OF S).  THEY ARE UNORDERED.  IF AN
+C          ERROR EXIT IS MADE, THE SINGULAR VALUES SHOULD BE CORRECT
+C          FOR INDICES IERR+1,IERR+2,...,N,
+C
+C        U CONTAINS THE MATRIX U (ORTHOGONAL COLUMN VECTORS) OF THE
+C          DECOMPOSITION IF MATU HAS BEEN SET TO .TRUE.  OTHERWISE
+C          U IS USED AS A TEMPORARY ARRAY.  U MAY COINCIDE WITH A.
+C          IF AN ERROR EXIT IS MADE, THE COLUMNS OF U CORRESPONDING
+C          TO INDICES OF CORRECT SINGULAR VALUES SHOULD BE CORRECT,
+C
+C        V CONTAINS THE MATRIX V (ORTHOGONAL) OF THE DECOMPOSITION IF
+C          MATV HAS BEEN SET TO .TRUE.  OTHERWISE V IS NOT REFERENCED.
+C          V MAY ALSO COINCIDE WITH A IF U IS NOT NEEDED.  IF AN ERROR
+C          EXIT IS MADE, THE COLUMNS OF V CORRESPONDING TO INDICES OF
+C          CORRECT SINGULAR VALUES SHOULD BE CORRECT,
+C
+C        IERR IS SET TO
+C          ZERO       FOR NORMAL RETURN,
+C          K          IF THE K-TH SINGULAR VALUE HAS NOT BEEN
+C                     DETERMINED AFTER 30 ITERATIONS,
+C
+C        RV1 IS A TEMPORARY STORAGE ARRAY.
+C
+C     QUESTIONS AND COMMENTS SHOULD BE DIRECTED TO B. S. GARBOW,
+C     APPLIED MATHEMATICS DIVISION, ARGONNE NATIONAL LABORATORY
+C
+C     ------------------------------------------------------------------
+C
+C     ********** MACHEP IS A MACHINE DEPENDENT PARAMETER SPECIFYING
+C                THE RELATIVE PRECISION OF FLOATING POINT ARITHMETIC.
+C
+C                **********
+      MACHEP = 2.**(-26)
+C
+      IERR = 0
+C
+      DO 20 I=1,M
+C
+        DO 10 J=1,N
+          U(I,J) = A(I,J)
+   10   CONTINUE
+   20 CONTINUE
+C     ********** HOUSEHOLDER REDUCTION TO BIDIAGONAL FORM **********
+      G = 0.0
+      SCALE = 0.0
+      X = 0.0
+C
+      DO 200 I=1,N
+        L = I + 1
+        RV1(I) = SCALE*G
+        G = 0.0
+        S = 0.0
+        SCALE = 0.0
+        IF (I.GT.M) GO TO 100
+C
+        DO 30 K=I,M
+          SCALE = SCALE + ABS(U(K,I))
+   30   CONTINUE
+C
+        IF (SCALE.EQ.0.0) GO TO 100
+C
+        DO 40 K=I,M
+          U(K,I) = U(K,I)/SCALE
+          S = S + U(K,I)**2
+   40   CONTINUE
+C
+        F = U(I,I)
+        G = -SIGN(SQRT(S),F)
+        H = F*G - S
+        U(I,I) = F - G
+        IF (I.EQ.N) GO TO 80
+C
+        DO 70 J=L,N
+          S = 0.0
+C
+          DO 50 K=I,M
+            S = S + U(K,I)*U(K,J)
+   50     CONTINUE
+C
+          F = S/H
+C
+          DO 60 K=I,M
+            U(K,J) = U(K,J) + F*U(K,I)
+   60     CONTINUE
+   70   CONTINUE
+C
+   80   DO 90 K=I,M
+          U(K,I) = SCALE*U(K,I)
+   90   CONTINUE
+C
+  100   W(I) = SCALE*G
+        G = 0.0
+        S = 0.0
+        SCALE = 0.0
+        IF (I.GT.M .OR. I.EQ.N) GO TO 190
+C
+        DO 110 K=L,N
+          SCALE = SCALE + ABS(U(I,K))
+  110   CONTINUE
+C
+        IF (SCALE.EQ.0.0) GO TO 190
+C
+        DO 120 K=L,N
+          U(I,K) = U(I,K)/SCALE
+          S = S + U(I,K)**2
+  120   CONTINUE
+C
+        F = U(I,L)
+        G = -SIGN(SQRT(S),F)
+        H = F*G - S
+        U(I,L) = F - G
+C
+        DO 130 K=L,N
+          RV1(K) = U(I,K)/H
+  130   CONTINUE
+C
+        IF (I.EQ.M) GO TO 170
+C
+        DO 160 J=L,M
+          S = 0.0
+C
+          DO 140 K=L,N
+            S = S + U(J,K)*U(I,K)
+  140     CONTINUE
+C
+          DO 150 K=L,N
+            U(J,K) = U(J,K) + S*RV1(K)
+  150     CONTINUE
+  160   CONTINUE
+C
+  170   DO 180 K=L,N
+          U(I,K) = SCALE*U(I,K)
+  180   CONTINUE
+C
+  190   X = AMAX1(X,ABS(W(I))+ABS(RV1(I)))
+  200 CONTINUE
+C     ********** ACCUMULATION OF RIGHT-HAND TRANSFORMATIONS **********
+      IF (.NOT.MATV) GO TO 290
+C     ********** FOR I=N STEP -1 UNTIL 1 DO -- **********
+      DO 280 II=1,N
+        I = N + 1 - II
+        IF (I.EQ.N) GO TO 270
+        IF (G.EQ.0.0) GO TO 250
+C
+        DO 210 J=L,N
+C     ********** DOUBLE DIVISION AVOIDS POSSIBLE UNDERFLOW **********
+          V(J,I) = (U(I,J)/U(I,L))/G
+  210   CONTINUE
+C
+        DO 240 J=L,N
+          S = 0.0
+C
+          DO 220 K=L,N
+            S = S + U(I,K)*V(K,J)
+  220     CONTINUE
+C
+          DO 230 K=L,N
+            V(K,J) = V(K,J) + S*V(K,I)
+  230     CONTINUE
+  240   CONTINUE
+C
+  250   DO 260 J=L,N
+          V(I,J) = 0.0
+          V(J,I) = 0.0
+  260   CONTINUE
+C
+  270   V(I,I) = 1.0
+        G = RV1(I)
+        L = I
+  280 CONTINUE
+C     ********** ACCUMULATION OF LEFT-HAND TRANSFORMATIONS **********
+  290 IF (.NOT.MATU) GO TO 410
+C     **********FOR I=MIN(M,N) STEP -1 UNTIL 1 DO -- **********
+      MN = N
+      IF (M.LT.N) MN = M
+C
+      DO 400 II=1,MN
+        I = MN + 1 - II
+        L = I + 1
+        G = W(I)
+        IF (I.EQ.N) GO TO 310
+C
+        DO 300 J=L,N
+          U(I,J) = 0.0
+  300   CONTINUE
+C
+  310   IF (G.EQ.0.0) GO TO 370
+        IF (I.EQ.MN) GO TO 350
+C
+        DO 340 J=L,N
+          S = 0.0
+C
+          DO 320 K=L,M
+            S = S + U(K,I)*U(K,J)
+  320     CONTINUE
+C     ********** DOUBLE DIVISION AVOIDS POSSIBLE UNDERFLOW **********
+          F = (S/U(I,I))/G
+C
+          DO 330 K=I,M
+            U(K,J) = U(K,J) + F*U(K,I)
+  330     CONTINUE
+  340   CONTINUE
+C
+  350   DO 360 J=I,M
+          U(J,I) = U(J,I)/G
+  360   CONTINUE
+C
+        GO TO 390
+C
+  370   DO 380 J=I,M
+          U(J,I) = 0.0
+  380   CONTINUE
+C
+  390   U(I,I) = U(I,I) + 1.0
+  400 CONTINUE
+C     ********** DIAGONALIZATION OF THE BIDIAGONAL FORM **********
+  410 EPS = MACHEP*X
+C     ********** FOR K=N STEP -1 UNTIL 1 DO -- **********
+      DO 550 KK=1,N
+        K1 = N - KK
+        K = K1 + 1
+        ITS = 0
+C     ********** TEST FOR SPLITTING.
+C                FOR L=K STEP -1 UNTIL 1 DO -- **********
+  420   DO 430 LL=1,K
+          L1 = K - LL
+          L = L1 + 1
+          IF (ABS(RV1(L)).LE.EPS) GO TO 470
+C     ********** RV1(1) IS ALWAYS ZERO, SO THERE IS NO EXIT
+C                THROUGH THE BOTTOM OF THE LOOP **********
+          IF (ABS(W(L1)).LE.EPS) GO TO 440
+  430   CONTINUE
+C     ********** CANCELLATION OF RV1(L) IF L GREATER THAN 1 **********
+  440   C = 0.0
+        S = 1.0
+C
+        DO 460 I=L,K
+          F = S*RV1(I)
+          RV1(I) = C*RV1(I)
+          IF (ABS(F).LE.EPS) GO TO 470
+          G = W(I)
+          H = SQRT(F*F+G*G)
+          W(I) = H
+          C = G/H
+          S = -F/H
+          IF (.NOT.MATU) GO TO 460
+C
+          DO 450 J=1,M
+            Y = U(J,L1)
+            Z = U(J,I)
+            U(J,L1) = Y*C + Z*S
+            U(J,I) = -Y*S + Z*C
+  450     CONTINUE
+C
+  460   CONTINUE
+C     ********** TEST FOR CONVERGENCE **********
+  470   Z = W(K)
+        IF (L.EQ.K) GO TO 530
+C     ********** SHIFT FROM BOTTOM 2 BY 2 MINOR **********
+        IF (ITS.EQ.30) GO TO 560
+        ITS = ITS + 1
+        X = W(L)
+        Y = W(K1)
+        G = RV1(K1)
+        H = RV1(K)
+        F = ((Y-Z)*(Y+Z)+(G-H)*(G+H))/(2.0*H*Y)
+        G = SQRT(F*F+1.0)
+        F = ((X-Z)*(X+Z)+H*(Y/(F+SIGN(G,F))-H))/X
+C     ********** NEXT QR TRANSFORMATION **********
+        C = 1.0
+        S = 1.0
+C
+        DO 520 I1=L,K1
+          I = I1 + 1
+          G = RV1(I)
+          Y = W(I)
+          H = S*G
+          G = C*G
+          Z = SQRT(F*F+H*H)
+          RV1(I1) = Z
+          C = F/Z
+          S = H/Z
+          F = X*C + G*S
+          G = -X*S + G*C
+          H = Y*S
+          Y = Y*C
+          IF (.NOT.MATV) GO TO 490
+C
+          DO 480 J=1,N
+            X = V(J,I1)
+            Z = V(J,I)
+            V(J,I1) = X*C + Z*S
+            V(J,I) = -X*S + Z*C
+  480     CONTINUE
+C
+  490     Z = SQRT(F*F+H*H)
+          W(I1) = Z
+C     ********** ROTATION CAN BE ARBITRARY IF Z IS ZERO **********
+          IF (Z.EQ.0.0) GO TO 500
+          C = F/Z
+          S = H/Z
+  500     F = C*G + S*Y
+          X = -S*G + C*Y
+          IF (.NOT.MATU) GO TO 520
+C
+          DO 510 J=1,M
+            Y = U(J,I1)
+            Z = U(J,I)
+            U(J,I1) = Y*C + Z*S
+            U(J,I) = -Y*S + Z*C
+  510     CONTINUE
+C
+  520   CONTINUE
+C
+        RV1(L) = 0.0
+        RV1(K) = F
+        W(K) = X
+        GO TO 420
+C     ********** CONVERGENCE **********
+  530   IF (Z.GE.0.0) GO TO 550
+C     ********** W(K) IS MADE NON-NEGATIVE **********
+        W(K) = -Z
+        IF (.NOT.MATV) GO TO 550
+C
+        DO 540 J=1,N
+          V(J,K) = -V(J,K)
+  540   CONTINUE
+C
+  550 CONTINUE
+C
+      GO TO 570
+C     ********** SET ERROR -- NO CONVERGENCE TO A
+C                SINGULAR VALUE AFTER 30 ITERATIONS **********
+  560 IERR = K
+  570 RETURN
+C     ********** LAST CARD OF SVD **********
+      END
+C                                                                       MIN   10
+C     ------------------------------------------------------------------MIN   20
+C                                                                       MIN   30
+      SUBROUTINE MINFIT(NM, M, N, A, W, IP, B, IERR, RV1)               MIN   40
+C
+      INTEGER I, J, K, L, M, N, II, IP, I1, KK, K1, LL, L1, M1, NM,
+     * ITS, IERR
+      REAL A(NM,N), W(N), B(NM,IP), RV1(N)
+      REAL C, F, G, H, S, X, Y, Z, EPS, SCALE, MACHEP
+      REAL SQRT, AMAX1, ABS, SIGN
+C
+C     THIS SUBROUTINE IS A TRANSLATION OF THE ALGOL PROCEDURE MINFIT,
+C     NUM. MATH. 14, 403-420(1970) BY GOLUB AND REINSCH.
+C     HANDBOOK FOR AUTO. COMP., VOL II-LINEAR ALGEBRA, 134-151(1971).
+C
+C     THIS SUBROUTINE DETERMINES, TOWARDS THE SOLUTION OF THE LINEAR
+C                                                        T
+C     SYSTEM AX=B, THE SINGULAR VALUE DECOMPOSITION A=USV  OF A REAL
+C                                         T
+C     M BY N RECTANGULAR MATRIX, FORMING U B RATHER THAN U.  HOUSEHOLDER
+C     BIDIAGONALIZATION AND A VARIANT OF THE QR ALGORITHM ARE USED.
+C
+C     ON INPUT-
+C
+C        NM MUST BE SET TO THE ROW DIMENSION OF TWO-DIMENSIONAL
+C          ARRAY PARAMETERS AS DECLARED IN THE CALLING PROGRAM
+C          DIMENSION STATEMENT.  NOTE THAT NM MUST BE AT LEAST
+C          AS LARGE AS THE MAXIMUM OF M AND N,
+C
+C        M IS THE NUMBER OF ROWS OF A AND B,
+C
+C        N IS THE NUMBER OF COLUMNS OF A AND THE ORDER OF V,
+C
+C        A CONTAINS THE RECTANGULAR COEFFICIENT MATRIX OF THE SYSTEM,
+C
+C        IP IS THE NUMBER OF COLUMNS OF B.  IP CAN BE ZERO,
+C
+C        B CONTAINS THE CONSTANT COLUMN MATRIX OF THE SYSTEM
+C          IF IP IS NOT ZERO.  OTHERWISE B IS NOT REFERENCED.
+C
+C     ON OUTPUT-
+C
+C        A HAS BEEN OVERWRITTEN BY THE MATRIX V (ORTHOGONAL) OF THE
+C          DECOMPOSITION IN ITS FIRST N ROWS AND COLUMNS.  IF AN
+C          ERROR EXIT IS MADE, THE COLUMNS OF V CORRESPONDING TO
+C          INDICES OF CORRECT SINGULAR VALUES SHOULD BE CORRECT,
+C
+C        W CONTAINS THE N (NON-NEGATIVE) SINGULAR VALUES OF A (THE
+C          DIAGONAL ELEMENTS OF S).  THEY ARE UNORDERED.  IF AN
+C          ERROR EXIT IS MADE, THE SINGULAR VALUES SHOULD BE CORRECT
+C          FOR INDICES IERR+1,IERR+2,...,N,
+C
+C                                   T
+C        B HAS BEEN OVERWRITTEN BY U B.  IF AN ERROR EXIT IS MADE,
+C                       T
+C          THE ROWS OF U B CORRESPONDING TO INDICES OF CORRECT
+C          SINGULAR VALUES SHOULD BE CORRECT,
+C
+C        IERR IS SET TO
+C          ZERO       FOR NORMAL RETURN,
+C          K          IF THE K-TH SINGULAR VALUE HAS NOT BEEN
+C                     DETERMINED AFTER 30 ITERATIONS,
+C
+C        RV1 IS A TEMPORARY STORAGE ARRAY.
+C
+C     QUESTIONS AND COMMENTS SHOULD BE DIRECTED TO B. S. GARBOW,
+C     APPLIED MATHEMATICS DIVISION, ARGONNE NATIONAL LABORATORY
+C
+C     ------------------------------------------------------------------
+C
+C     ********** MACHEP IS A MACHINE DEPENDENT PARAMETER SPECIFYING
+C                THE RELATIVE PRECISION OF FLOATING POINT ARITHMETIC.
+C
+C                **********
+      MACHEP = 2.**(-26)
+C
+      IERR = 0
+C     ********** HOUSEHOLDER REDUCTION TO BIDIAGONAL FORM **********
+      G = 0.0
+      SCALE = 0.0
+      X = 0.0
+C
+      DO 220 I=1,N
+        L = I + 1
+        RV1(I) = SCALE*G
+        G = 0.0
+        S = 0.0
+        SCALE = 0.0
+        IF (I.GT.M) GO TO 120
+C
+        DO 10 K=I,M
+          SCALE = SCALE + ABS(A(K,I))
+   10   CONTINUE
+C
+        IF (SCALE.EQ.0.0) GO TO 120
+C
+        DO 20 K=I,M
+          A(K,I) = A(K,I)/SCALE
+          S = S + A(K,I)**2
+   20   CONTINUE
+C
+        F = A(I,I)
+        G = -SIGN(SQRT(S),F)
+        H = F*G - S
+        A(I,I) = F - G
+        IF (I.EQ.N) GO TO 60
+C
+        DO 50 J=L,N
+          S = 0.0
+C
+          DO 30 K=I,M
+            S = S + A(K,I)*A(K,J)
+   30     CONTINUE
+C
+          F = S/H
+C
+          DO 40 K=I,M
+            A(K,J) = A(K,J) + F*A(K,I)
+   40     CONTINUE
+   50   CONTINUE
+C
+   60   IF (IP.EQ.0) GO TO 100
+C
+        DO 90 J=1,IP
+          S = 0.0
+C
+          DO 70 K=I,M
+            S = S + A(K,I)*B(K,J)
+   70     CONTINUE
+C
+          F = S/H
+C
+          DO 80 K=I,M
+            B(K,J) = B(K,J) + F*A(K,I)
+   80     CONTINUE
+   90   CONTINUE
+C
+  100   DO 110 K=I,M
+          A(K,I) = SCALE*A(K,I)
+  110   CONTINUE
+C
+  120   W(I) = SCALE*G
+        G = 0.0
+        S = 0.0
+        SCALE = 0.0
+        IF (I.GT.M .OR. I.EQ.N) GO TO 210
+C
+        DO 130 K=L,N
+          SCALE = SCALE + ABS(A(I,K))
+  130   CONTINUE
+C
+        IF (SCALE.EQ.0.0) GO TO 210
+C
+        DO 140 K=L,N
+          A(I,K) = A(I,K)/SCALE
+          S = S + A(I,K)**2
+  140   CONTINUE
+C
+        F = A(I,L)
+        G = -SIGN(SQRT(S),F)
+        H = F*G - S
+        A(I,L) = F - G
+C
+        DO 150 K=L,N
+          RV1(K) = A(I,K)/H
+  150   CONTINUE
+C
+        IF (I.EQ.M) GO TO 190
+C
+        DO 180 J=L,M
+          S = 0.0
+C
+          DO 160 K=L,N
+            S = S + A(J,K)*A(I,K)
+  160     CONTINUE
+C
+          DO 170 K=L,N
+            A(J,K) = A(J,K) + S*RV1(K)
+  170     CONTINUE
+  180   CONTINUE
+C
+  190   DO 200 K=L,N
+          A(I,K) = SCALE*A(I,K)
+  200   CONTINUE
+C
+  210   X = AMAX1(X,ABS(W(I))+ABS(RV1(I)))
+  220 CONTINUE
+C     ********** ACCUMULATION OF RIGHT-HAND TRANSFORMATIONS.
+C                FOR I=N STEP -1 UNTIL 1 DO -- **********
+      DO 300 II=1,N
+        I = N + 1 - II
+        IF (I.EQ.N) GO TO 290
+        IF (G.EQ.0.0) GO TO 270
+C
+        DO 230 J=L,N
+C     ********** DOUBLE DIVISION AVOIDS POSSIBLE UNDERFLOW **********
+          A(J,I) = (A(I,J)/A(I,L))/G
+  230   CONTINUE
+C
+        DO 260 J=L,N
+          S = 0.0
+C
+          DO 240 K=L,N
+            S = S + A(I,K)*A(K,J)
+  240     CONTINUE
+C
+          DO 250 K=L,N
+            A(K,J) = A(K,J) + S*A(K,I)
+  250     CONTINUE
+  260   CONTINUE
+C
+  270   DO 280 J=L,N
+          A(I,J) = 0.0
+          A(J,I) = 0.0
+  280   CONTINUE
+C
+  290   A(I,I) = 1.0
+        G = RV1(I)
+        L = I
+  300 CONTINUE
+C
+      IF (M.GE.N .OR. IP.EQ.0) GO TO 330
+      M1 = M + 1
+C
+      DO 320 I=M1,N
+C
+        DO 310 J=1,IP
+          B(I,J) = 0.0
+  310   CONTINUE
+  320 CONTINUE
+C     ********** DIAGONALIZATION OF THE BIDIAGONAL FORM **********
+  330 EPS = MACHEP*X
+C     ********** FOR K=N STEP -1 UNTIL 1 DO -- **********
+      DO 460 KK=1,N
+        K1 = N - KK
+        K = K1 + 1
+        ITS = 0
+C     ********** TEST FOR SPLITTING.
+C                FOR L=K STEP -1 UNTIL 1 DO -- **********
+  340   DO 350 LL=1,K
+          L1 = K - LL
+          L = L1 + 1
+          IF (ABS(RV1(L)).LE.EPS) GO TO 390
+C     ********** RV1(1) IS ALWAYS ZERO, SO THERE IS NO EXIT
+C                THROUGH THE BOTTOM OF THE LOOP **********
+          IF (ABS(W(L1)).LE.EPS) GO TO 360
+  350   CONTINUE
+C     ********** CANCELLATION OF RV1(L) IF L GREATER THAN 1 **********
+  360   C = 0.0
+        S = 1.0
+C
+        DO 380 I=L,K
+          F = S*RV1(I)
+          RV1(I) = C*RV1(I)
+          IF (ABS(F).LE.EPS) GO TO 390
+          G = W(I)
+          H = SQRT(F*F+G*G)
+          W(I) = H
+          C = G/H
+          S = -F/H
+          IF (IP.EQ.0) GO TO 380
+C
+          DO 370 J=1,IP
+            Y = B(L1,J)
+            Z = B(I,J)
+            B(L1,J) = Y*C + Z*S
+            B(I,J) = -Y*S + Z*C
+  370     CONTINUE
+C
+  380   CONTINUE
+C     ********** TEST FOR CONVERGENCE **********
+  390   Z = W(K)
+        IF (L.EQ.K) GO TO 440
+C     ********** SHIFT FROM BOTTOM 2 BY 2 MINOR **********
+        IF (ITS.EQ.30) GO TO 470
+        ITS = ITS + 1
+        X = W(L)
+        Y = W(K1)
+        G = RV1(K1)
+        H = RV1(K)
+        F = ((Y-Z)*(Y+Z)+(G-H)*(G+H))/(2.0*H*Y)
+        G = SQRT(F*F+1.0)
+        F = ((X-Z)*(X+Z)+H*(Y/(F+SIGN(G,F))-H))/X
+C     ********** NEXT QR TRANSFORMATION **********
+        C = 1.0
+        S = 1.0
+C
+        DO 430 I1=L,K1
+          I = I1 + 1
+          G = RV1(I)
+          Y = W(I)
+          H = S*G
+          G = C*G
+          Z = SQRT(F*F+H*H)
+          RV1(I1) = Z
+          C = F/Z
+          S = H/Z
+          F = X*C + G*S
+          G = -X*S + G*C
+          H = Y*S
+          Y = Y*C
+C
+          DO 400 J=1,N
+            X = A(J,I1)
+            Z = A(J,I)
+            A(J,I1) = X*C + Z*S
+            A(J,I) = -X*S + Z*C
+  400     CONTINUE
+C
+          Z = SQRT(F*F+H*H)
+          W(I1) = Z
+C     ********** ROTATION CAN BE ARBITRARY IF Z IS ZERO **********
+          IF (Z.EQ.0.0) GO TO 410
+          C = F/Z
+          S = H/Z
+  410     F = C*G + S*Y
+          X = -S*G + C*Y
+          IF (IP.EQ.0) GO TO 430
+C
+          DO 420 J=1,IP
+            Y = B(I1,J)
+            Z = B(I,J)
+            B(I1,J) = Y*C + Z*S
+            B(I,J) = -Y*S + Z*C
+  420     CONTINUE
+C
+  430   CONTINUE
+C
+        RV1(L) = 0.0
+        RV1(K) = F
+        W(K) = X
+        GO TO 340
+C     ********** CONVERGENCE **********
+  440   IF (Z.GE.0.0) GO TO 460
+C     ********** W(K) IS MADE NON-NEGATIVE **********
+        W(K) = -Z
+C
+        DO 450 J=1,N
+          A(J,K) = -A(J,K)
+  450   CONTINUE
+C
+  460 CONTINUE
+C
+      GO TO 480
+C     ********** SET ERROR -- NO CONVERGENCE TO A
+C                SINGULAR VALUE AFTER 30 ITERATIONS **********
+  470 IERR = K
+  480 RETURN
+C     ********** LAST CARD OF MINFIT **********
+      END

@@ -1,0 +1,6 @@
+DMD 
+********** 
+
+.. automodule:: dmd
+   :members:
+

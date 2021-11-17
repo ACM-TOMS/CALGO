@@ -1,0 +1,123 @@
+      DOUBLE PRECISION FUNCTION BIVNOR ( AH, AK, R )
+C  BIVNOR IS A CONTROLLED PRECISION
+C  FORTRAN FUNCTION TO CALCULATE THE
+C  BIVARIATE NORMAL UPPER RIGHT AREA, VIZ.,
+C  THE PROBABILITY FOR TWO NORMAL
+C  VARIATES X AND Y WHOSE CORRELATION
+C  IS R, THAT X .GT. AH AND Y .GT. AK.
+      INTEGER IDIG, I, IS
+      DOUBLE PRECISION TWOPI, B, AH, AK, R, GH, GK, RR, GAUSS,
+     &  DERF, H2, A2, H4, EX, W2, AP, S2, SP, S1, SN, SQR,
+     &  CON, WH, WK, GW, SGN, T, G2, CONEX,
+     &  CN
+      GAUSS ( T ) = ( 1.0D0 + DERF ( T / SQRT ( 2.0D0 ) ) ) / 2.0D0
+C  GAUSS IS A UNIVARIATE LOWER NORMAL
+C  TAIL AREA CALCULATED HERE FROM THE
+C  CENTRAL ERROR FUNCTION DERF.
+C  IT MAY BE REPLACED BY THE ALGORITHM IN
+C  HILL,I.D. AND JOYCE,S.A. ALGORITHM 304,
+C  NORMAL CURVE INTEGRAL(515), COMM.A.C.M.(10)
+C  (JUNE,1967),P.374.
+C  SOURCE: OWERN, D.B. ANN.MATH.STAT.
+C  VOL. 27(1956), P.1075.
+C  TWOPI = 2. * PI
+      TWOPI = 6.283185307179587D0
+      B = 0.0D0
+      IDIG = 15
+C  THE PARAMETER 'IDIG' GIVES THE
+C  NUMBER OF SIGNIFICANT DIGITS
+C  TO THE RIGHT OF THE DECIMAL POINT
+C  DESIRED IN THE ANSWER, IF 
+C  IT IS WITHIN THE COMPUTER'S
+C  CAPACITY OF COURSE.
+      GH = GAUSS ( -AH ) / 2.0D0
+      GK = GAUSS ( -AK ) / 2.0D0
+      IF ( R ) 10, 30, 10
+10    RR = 1.0D0 - R * R
+      IF ( RR ) 20, 40, 100
+20    WRITE ( *, 99999 ) R
+C  ERROR EXIT FOR ABS(R) .GT. 1.0D=
+99999 FORMAT (' BIVNOR R IS', D26.16 )
+      STOP
+30    B = 4.0D0 * GH * GK
+      GO TO 350
+40    IF ( R ) 50, 70, 70
+50    IF ( AH + AK ) 60, 350, 350
+60    B = 2.0D0 * ( GH + GK ) - 1.0D0
+      GO TO 350
+70    IF ( AH - AK ) 80, 90, 90
+80    B = 2.0D0 * GK
+      GO TO 350
+90    B = 2.0D0 * GH
+      GO TO 350
+100   SQR = SQRT ( RR )
+      IF ( IDIG - 15 ) 120, 110, 120
+110   CON = TWOPI * 1.D-15 / 2.0D0
+      GO TO 140
+120   CON = TWOPI / 2.0D0
+      DO 130 I = 1, IDIG
+        CON = CON / 10.0D0
+130   CONTINUE
+140   IF ( AH ) 170, 150, 170
+150   IF ( AK ) 190, 160, 190
+160   B = ATAN ( R / SQR ) / TWOPI * 0.25D0
+      GO TO 350
+170   B = GH
+      IF ( AH * AK ) 180, 200, 190
+180   B = B - 0.5D0
+190   B = B + GK
+      IF ( AH ) 200, 340, 200
+200   WH = -AH
+      WK = ( AK / AH - R ) / SQR
+      GW = 2.0D0 * GH
+      IS = -1
+210   SGN = -1.0D0
+      T = 0.0D0
+      IF ( WK ) 220, 320, 220
+220   IF ( ABS ( WK ) - 1.0D0 ) 270, 230, 240
+230   T = WK * GW * ( 1.0D0 - GW ) / 2.0D0
+      GO TO 310
+240   SGN = -SGN
+      WH = WH * WK
+      G2 = GAUSS ( WH )
+      WK = 1.0D0 / WK
+      IF ( WK ) 250, 260, 260
+250   B = B + 0.5D0
+260   B = B - ( GW + G2 ) / 2.0D0 + GW * G2
+270   H2 = WH * WH
+      A2 = WK * WK
+      H4 = H2 / 2.0D0
+      EX = EXP ( - H4 )
+      W2 = H4 * EX
+      AP = 1.0D0
+      S2 = AP - EX
+      SP = AP
+      S1 = 0.0D0
+      SN = S1
+      CONEX = ABS ( CON / WK )
+      GO TO 290
+280   SN = SP
+      SP = SP + 1.0D0
+      S2 = S2 - W2
+      W2 = W2 * H4 / SP
+      AP = - AP * A2
+290   CN = AP * S2 / ( SN + SP )
+      S1 = S1 + CN
+      IF ( ABS ( CN ) - CONEX ) 300, 300, 280
+300   T = ( ATAN ( WK ) - WK * S1 ) / TWOPI
+310   B = B + SGN * T
+320   IF ( IS ) 330, 350, 350
+330   IF ( AK ) 340, 350, 340
+340   WH = -AK
+      WK = ( AH / AK - R ) / SQR
+      GW = 2.0D0 * GK
+      IS = 1
+      GO TO 210
+350   IF ( B ) 360, 370, 370
+360   B = 0.0D0
+370   IF ( B - 1.0D0 ) 390, 390, 380
+380   B = 1.0D0
+390   BIVNOR = B
+      RETURN
+      END
+

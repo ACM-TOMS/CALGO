@@ -1,0 +1,2251 @@
+C                                                                       MAN   10
+C  **** THIS PROGRAM RUNS ADAPT WITH DATA READ IN FROM CARDS            MAN   20
+C       IT IS DESIGNED TO TEST ADAPT WITH THE 20 FUNCTIONS IN F(X).     MAN   30
+C       IT READS DATA FOR EVERYTHING EXCEPT EDIST(=ATYPE) AND PRINTS    MAN   40
+C       A HEADING WITH THE FUNCTIONS NAME. IT CALLS AND TIMES ADAPT,    MAN   50
+C       THEN INDEPENDENTLY CHECKS THE ERROR IN ADAPT AND PLOTS THE      MAN   60
+C       FUNCTION AND ERROR CURVE.                                       MAN   70
+C                                                                       MAN   80
+C NOTES -- USER MUST SUPPLY SYSTEM ROUTINES SECOND AND GRAPH            MAN   90
+C          INTEGRATION USES ERRINT FROM ADAPT.                          MAN  100
+C          PRESENT DIMENSIONS (ON ZKNOTS + ZCOEFS) PREVENT USING        MAN  110
+C             ERRINT TO CHECK ACCURACY FOR MORE THAN 100 KNOTS OR       MAN  120
+C             POLYNOMIAL DEGREE 6.                                      MAN  130
+C          QPOLY USED BY ERRINT IS A SINGLE ARGUMENT VERSION OF PPOLY.  MAN  140
+C          SEE COMMENTS IN ADAPT ABOUT DIMENSION CONSTRAINTS AND        MAN  150
+C             PORTABILITY.                                              MAN  160
+C          IF ADAPT AND THIS DRIVER ARE CHANGED TO DOUBLE PRECISION     MAN  170
+C             ONE PROBABLY WANTS TO LEAVE TIME,TSTART,TSTOP,XVALU,      MAN  180
+C             GRAF1,GRAF2 AS SINGLE PRECISION                           MAN  190
+C             THEY ARE SEPARATELY DECLARED HERE.                        MAN  200
+C                                                                       MAN  210
+C                                                                       MAN  220
+      REAL A, ACCUR, B, BLEFT, BRIGHT, CHARF, DDTEMP, DSCTOL, ERROR,    MAN  230
+     * ERRORI, FACTOR, FINTRP, FLEFT, FRIGHT, NORM, XBREAK, XDD,        MAN  240
+     * XINTRP, XLEFT, XRIGHT                                            MAN  250
+      DIMENSION XBREAK(20), DBREAK(20), BLEFT(20), BRIGHT(20)           MAN  260
+      DIMENSION XLEFT(50), XRIGHT(50), FACTOR(12), FMESGE(6)            MAN  270
+      DIMENSION DDTEMP(12,12), FINTRP(10), FLEFT(6), FRIGHT(6),         MAN  280
+     * XDD(12), XINTRP(10)                                              MAN  290
+      INTEGER BOTH, BREAK, DBREAK, DEGREE, EDIST, FMESGE, RIGHT,        MAN  300
+     * RIGHTX, SMOOTH                                                   MAN  310
+      LOGICAL DISCRD, FATAL, FINISH                                     MAN  320
+      DIMENSION XKNOTS(140), COEFS(140,12)                              MAN  330
+      REAL COEFS, ECHECK, F, XKNOTS                                     MAN  340
+      REAL TIME, TSTART                                                 MAN  350
+      DIMENSION NAMES(25,10)                                            MAN  360
+      EXTERNAL F                                                        MAN  370
+      COMMON /INPUTZ/ A, B, ACCUR, NORM, CHARF, XBREAK, BLEFT, BRIGHT,  MAN  380
+     * DBREAK, DEGREE, SMOOTH, LEVEL, EDIST, NBREAK, KNTDIM, NPARDM     MAN  390
+      COMMON /RESULZ/ ERROR, KNOTS                                      MAN  400
+      COMMON /KONTRL/ DSCTOL, ERRORI, XLEFT, XRIGHT, BREAK, BOTH,       MAN  410
+     * FACTOR, FMESGE, IBREAK, INTERP, LEFT, MAXAUX, MAXKNT, MAXPAR,    MAN  420
+     * MAXSTK, NPAR, NSTACK, RIGHT, DISCRD, FATAL, FINISH               MAN  430
+      COMMON /COMDIF/ DDTEMP, FINTRP, FLEFT, FRIGHT, XDD, XINTRP,       MAN  440
+     * LEFTX, NINTRP, RIGHTX                                            MAN  450
+      COMMON /SAVEIT/ IKNOT                                             MAN  460
+C                                                                       MAN  470
+      COMMON /FDATA/ JFUNK, KOUNT, MAXK                                 MAN  480
+      COMMON /INFO/ ECHECK, KFUNK, TIME, TSTART                         MAN  490
+      DATA NAMES(1,1), NAMES(1,2), NAMES(1,3), NAMES(1,4), NAMES(1,5),  MAN  500
+     * NAMES(1,6), NAMES(1,7), NAMES(1,8), NAMES(1,9), NAMES(1,10) /    MAN  510
+     * 4HSIMP,4HLE A,4HLGEB,4HRAIC,4H SIN,4HGULA,4HRITY,4H AT ,4H0.0 ,  MAN  520
+     * 4H    /                                                          MAN  530
+      DATA NAMES(2,1), NAMES(2,2), NAMES(2,3), NAMES(2,4), NAMES(2,5),  MAN  540
+     * NAMES(2,6), NAMES(2,7), NAMES(2,8), NAMES(2,9), NAMES(2,10) /    MAN  550
+     * 4HINTE,4HRIOR,4H SIN,4HGULA,4HRITY,4H AT ,4HX = ,4H.307,4H7070,  MAN  560
+     * 4H7707/                                                          MAN  570
+      DATA NAMES(3,1), NAMES(3,2), NAMES(3,3), NAMES(3,4), NAMES(3,5),  MAN  580
+     * NAMES(3,6), NAMES(3,7), NAMES(3,8), NAMES(3,9), NAMES(3,10) /    MAN  590
+     * 4HBROK,4HEN L,4HINE ,4H- BR,4HEAKS,4H AT ,4H1,2,,4H3.5 ,4HAND ,  MAN  600
+     * 4H4   /                                                          MAN  610
+      DATA NAMES(4,1), NAMES(4,2), NAMES(4,3), NAMES(4,4), NAMES(4,5),  MAN  620
+     * NAMES(4,6), NAMES(4,7), NAMES(4,8), NAMES(4,9), NAMES(4,10) /    MAN  630
+     * 4HHUMP,4H AT ,4H2.5 ,4HRECI,4HPROC,4HAL O,4HF QU,4HARTI,4HC   ,  MAN  640
+     * 4H    /                                                          MAN  650
+      DATA NAMES(5,1), NAMES(5,2), NAMES(5,3), NAMES(5,4), NAMES(5,5),  MAN  660
+     * NAMES(5,6), NAMES(5,7), NAMES(5,8), NAMES(5,9), NAMES(5,10) /    MAN  670
+     * 4HSIMP,4HLE C,4HUBIC,4H = (,4H4X-2,4H)**3,4H - (,4H4X-2,4H)   ,  MAN  680
+     * 4H    /                                                          MAN  690
+      DATA NAMES(6,1), NAMES(6,2), NAMES(6,3), NAMES(6,4), NAMES(6,5),  MAN  700
+     * NAMES(6,6), NAMES(6,7), NAMES(6,8), NAMES(6,9), NAMES(6,10) /    MAN  710
+     * 4HVARI,4HABLE,4H OSC,4HILLA,4HTION,4H FRO,4HM SI,4HN(X*,4H*2-1,  MAN  720
+     * 4H)   /                                                          MAN  730
+      DATA NAMES(7,1), NAMES(7,2), NAMES(7,3), NAMES(7,4), NAMES(7,5),  MAN  740
+     * NAMES(7,6), NAMES(7,7), NAMES(7,8), NAMES(7,9), NAMES(7,10) /    MAN  750
+     * 4HEXPO,4HNENT,4HIAL ,4H    ,4H    ,4H    ,4H    ,4H    ,4H    ,  MAN  760
+     * 4H    /                                                          MAN  770
+      DATA NAMES(8,1), NAMES(8,2), NAMES(8,3), NAMES(8,4), NAMES(8,5),  MAN  780
+     * NAMES(8,6), NAMES(8,7), NAMES(8,8), NAMES(8,9), NAMES(8,10) /    MAN  790
+     * 4HFIFT,4HH DE,4HGREE,4H POL,4HY PL,4HUS F,4HINE ,4HSAW ,4HTOOT,  MAN  800
+     * 4HH   /                                                          MAN  810
+      DATA NAMES(9,1), NAMES(9,2), NAMES(9,3), NAMES(9,4), NAMES(9,5),  MAN  820
+     * NAMES(9,6), NAMES(9,7), NAMES(9,8), NAMES(9,9), NAMES(9,10) /    MAN  830
+     * 4HSEVE,4HNTH ,4HDEGR,4HEE P,4HOLYN,4HOMIA,4HL   ,4H    ,4H    ,  MAN  840
+     * 4H    /                                                          MAN  850
+      DATA NAMES(10,1), NAMES(10,2), NAMES(10,3), NAMES(10,4),          MAN  860
+     * NAMES(10,5), NAMES(10,6), NAMES(10,7), NAMES(10,8), NAMES(10,9), MAN  870
+     * NAMES(10,10) /4HWILD,4H VAR,4HIATI,4HON B,4HETWE,4HEN .,4H47 A,  MAN  880
+     * 4HND .,4H48  ,4H    /                                            MAN  890
+      DATA NAMES(11,1), NAMES(11,2), NAMES(11,3), NAMES(11,4),          MAN  900
+     * NAMES(11,5), NAMES(11,6), NAMES(11,7), NAMES(11,8), NAMES(11,9), MAN  910
+     * NAMES(11,10) /4HLOTS,4H OF ,4HOSCI,4HLLAT,4HION ,4H - F,4HIRST,  MAN  920
+     * 4H EXA,4HMPLE,4H    /                                            MAN  930
+      DATA NAMES(12,1), NAMES(12,2), NAMES(12,3), NAMES(12,4),          MAN  940
+     * NAMES(12,5), NAMES(12,6), NAMES(12,7), NAMES(12,8), NAMES(12,9), MAN  950
+     * NAMES(12,10) /4HLOTS,4H OF ,4HOSCI,4HLLAT,4HION ,4H - S,4HECON,  MAN  960
+     * 4HD EX,4HAMPL,4HE   /                                            MAN  970
+      DATA NAMES(13,1), NAMES(13,2), NAMES(13,3), NAMES(13,4),          MAN  980
+     * NAMES(13,5), NAMES(13,6), NAMES(13,7), NAMES(13,8), NAMES(13,9), MAN  990
+     * NAMES(13,10) /4HSING,4HULAR,4HITIE,4HS AT,4H BOT,4HH EN,4HD PO,  MAN 1000
+     * 4HINTS,4H    ,4H    /                                            MAN 1010
+      DATA NAMES(14,1), NAMES(14,2), NAMES(14,3), NAMES(14,4),          MAN 1020
+     * NAMES(14,5), NAMES(14,6), NAMES(14,7), NAMES(14,8), NAMES(14,9), MAN 1030
+     * NAMES(14,10) /4HRAND,4HOM N,4HUMBE,4HRS A,4HDDED,4H TO ,4HSIN(,  MAN 1040
+     * 4HX)  ,4H    ,4H    /                                            MAN 1050
+      DATA NAMES(15,1), NAMES(15,2), NAMES(15,3), NAMES(15,4),          MAN 1060
+     * NAMES(15,5), NAMES(15,6), NAMES(15,7), NAMES(15,8), NAMES(15,9), MAN 1070
+     * NAMES(15,10) /4HLARG,4HE FU,4HNCTI,4HON -,4H ADJ,4HUSTA,4HBLE ,  MAN 1080
+     * 4HSIZE,4H    ,4H    /                                            MAN 1090
+      DATA NAMES(16,1), NAMES(16,2), NAMES(16,3), NAMES(16,4),          MAN 1100
+     * NAMES(16,5), NAMES(16,6), NAMES(16,7), NAMES(16,8), NAMES(16,9), MAN 1110
+     * NAMES(16,10) /4HSHIF,4HTED ,4HORIG,4HIN -,4H ADJ,4HUSTA,4HBLE ,  MAN 1120
+     * 4HSHIF,4HT   ,4H    /                                            MAN 1130
+      DATA NAMES(17,1), NAMES(17,2), NAMES(17,3), NAMES(17,4),          MAN 1140
+     * NAMES(17,5), NAMES(17,6), NAMES(17,7), NAMES(17,8), NAMES(17,9), MAN 1150
+     * NAMES(17,10) /4HNUME,4HRICA,4HL DI,4HFFER,4HENTI,4HATIO,4HN OF,  MAN 1160
+     * 4H F(X,4H)   ,4H    /                                            MAN 1170
+      DATA NAMES(18,1), NAMES(18,2), NAMES(18,3), NAMES(18,4),          MAN 1180
+     * NAMES(18,5), NAMES(18,6), NAMES(18,7), NAMES(18,8), NAMES(18,9), MAN 1190
+     * NAMES(18,10) /4HCOMP,4HLICA,4HTED ,4HFUNC,4HTION,4H WIT,4HH 7 ,  MAN 1200
+     * 4HPIEC,4HES  ,4H    /                                            MAN 1210
+      DATA NAMES(19,1), NAMES(19,2), NAMES(19,3), NAMES(19,4),          MAN 1220
+     * NAMES(19,5), NAMES(19,6), NAMES(19,7), NAMES(19,8), NAMES(19,9), MAN 1230
+     * NAMES(19,10) /4HJUMP,4H DIS,4HCONT,4HINUI,4HTY A,4HT VA,4HRIAB,  MAN 1240
+     * 4HLE P,4HOINT,4H    /                                            MAN 1250
+      DATA NAMES(20,1), NAMES(20,2), NAMES(20,3), NAMES(20,4),          MAN 1260
+     * NAMES(20,5), NAMES(20,6), NAMES(20,7), NAMES(20,8), NAMES(20,9), MAN 1270
+     * NAMES(20,10) /4HINFI,4HNITE,4H SIN,4HGULA,4HRITY,4H AT ,4HP10A,  MAN 1280
+     * 4H    ,4H    ,4H    /                                            MAN 1290
+C                                                                       MAN 1300
+   10 READ (5,99999) JFUNK, SMOOTH, DEGREE, LEVEL, NORM, A, B, ACCUR,   MAN 1310
+     * CHARF, NBREAK                                                    MAN 1320
+      IF (JFUNK.EQ.0) STOP                                              MAN 1330
+      IF (CHARF.EQ.0.) CHARF = (B-A)*1.001                              MAN 1340
+      IF (NBREAK.EQ.0) GO TO 20                                         MAN 1350
+      READ (5,99998) (DBREAK(K),XBREAK(K),BLEFT(K),BRIGHT(K),K=1,NBREAK)MAN 1360
+   20 CONTINUE                                                          MAN 1370
+      MAXK = 3200                                                       MAN 1380
+      EDIST = 0                                                         MAN 1390
+      WRITE (6,99997) JFUNK, (NAMES(JFUNK,K),K=1,10)                    MAN 1400
+      KOUNT = 0                                                         MAN 1410
+C                                                                       MAN 1420
+C     *****  CALL ON CLOCK TO INITIALIZE  TSTART  IN SECONDS  *****     MAN 1430
+C                                                                       MAN 1440
+      TSTART = 0.0                                                      MAN 1450
+      CALL ADAPT(F, XKNOTS, COEFS, 140, 12)                             MAN 1460
+      CALL SUMRY2(XKNOTS, COEFS, 140, 12)                               MAN 1470
+      GO TO 10                                                          MAN 1480
+99999 FORMAT (4I3, F4.3, 2F10.3, E12.4, F10.3, 2I3)                     MAN 1490
+99998 FORMAT (2(I5, 3F11.5))                                            MAN 1500
+99997 FORMAT (//5(3H+++), 18HADAPT FOR FUNCTION, I3, 3H = , 10A4, 4X,   MAN 1510
+     * 5(3H+++))                                                        MAN 1520
+      END                                                               MAN 1530
+      BLOCK DATA                                                        BLK   10
+C         SET PARAMETERS FOR FUNCTIONS IN F                             BLK   20
+      REAL PAR2, PAR3A, PAR3B, PAR4, PAR4A, P5A, P5B, P6A, P6B, P7,     BLK   30
+     * P8A, P8B, P8C, P8D, P8E, P8F, P8G, P8H, P9, P10A, P10B, P10C     BLK   40
+      COMMON /FPARS/ PAR2, PAR3A, PAR3B, PAR4, PAR4A, P5A, P5B, P6A,    BLK   50
+     * P6B, P7, P8A, P8B, P8C, P8D, P8E, P8F, P8G, P8H, P9, P10A, P10B, BLK   60
+     * P10C                                                             BLK   70
+      DATA PAR2, PAR3A, PAR3B, PAR4, PAR4A, P5A, P5B                    BLK   80
+     * /.02,.4,.6,.001,6.,8000.,2037./                                  BLK   90
+      DATA P6A, P6B, P7, P8A, P8B, P8C, P8D, P8E /4000.,3998.,.0001,-2.,BLK  100
+     * 1.5,7.,5.,9.6/                                                   BLK  110
+      DATA P8F, P8G, P8H, P9, P10A, P10B, P10C /.6,14.,16.,1.0,.25,.5,  BLK  120
+     * .6667/                                                           BLK  130
+      END                                                               BLK  140
+      REAL FUNCTION F(X, FDERV)                                         F     10
+C
+C **  AN ARRAY OF TWENTY TEST FUNCTIONS WITH 2 TO 5 DERIVATIVES.
+C     THE DERIVATIVE VALUES ARE PLACED IN FDERV - DIMENSIONED AT 5
+C     THE FUNCTIONS OF THE SECOND GROUP ARE PARAMETERIZED IN VARIOUS
+C     WAYS.  THE PARAMETERS ARE SET IN BLOCK DATA AND AVAILABLE
+C     THROUGH THE COMMON BLOCK / FPARS /
+C         REQUIRED INPUT INFORMATION IN COMMON BLOCK / FDATA /
+C            JFUNK  = INDEX OF THE FUNCTION SELECTED
+C            KOUNT  = NUMBER OF F-EVALUATIONS
+C            MAXK   = MAXIMUN ALLOWED VALUE OF KOUNT
+C         REQUIRED CONTROL INFORMATION IN COMMON BLOCK / KONTROL /
+C            FINISH = SWITCH THAT STOPS ADAPT
+C
+      REAL A, ACCUR, B, BLEFT, BRIGHT, CHARF, DDTEMP, DSCTOL, ERROR,
+     * ERRORI, FACTOR, FINTRP, FLEFT, FRIGHT, NORM, XBREAK, XDD,
+     * XINTRP, XLEFT, XRIGHT
+      DIMENSION XBREAK(20), DBREAK(20), BLEFT(20), BRIGHT(20)
+      DIMENSION XLEFT(50), XRIGHT(50), FACTOR(12), FMESGE(6)
+      DIMENSION DDTEMP(12,12), FINTRP(10), FLEFT(6), FRIGHT(6),
+     * XDD(12), XINTRP(10)
+      INTEGER BOTH, BREAK, DBREAK, DEGREE, EDIST, FMESGE, RIGHT,
+     * RIGHTX, SMOOTH
+      LOGICAL DISCRD, FATAL, FINISH
+      REAL C, CP, CS, C1, DDR, DDT1, DDT2, DDT3, DDT4, DDT5, DDT6,
+     * DDT7, DDXEP, DL, DR, DS, DT1, DT2, DT3, DT4, DT5, DT6, DT7,
+     * DXEP, D2L, D2R, D2S, D3L, D3R, D3S, EPS, EX, FDERV, FD1, FD2,
+     * FK, FL, FLL, FR, FRR, F27, PAR2, PAR3A, PAR3B, PAR4, PAR4A,
+     * P10A, P10B, P10C, P5A, P5B, P6A, P6B, P7, P8A, P8B, P8C, P8D,
+     * P8E, P8F, P8G, P8H, P9, R, RAND, R0, R4, S, SA, SAX, SAXX, SP,
+     * S2, T, T1, T2, T3, T4, T5, T6, T7, X, XC, XE, XEP, XG, XL, XR,
+     * X1, X2, X3, X8, Y, YY, YY3, Y2, Y3, BUFFER, SQRTBF, V, SING3,
+     * VV, F26
+      DIMENSION FDERV(5)
+      COMMON /INPUTZ/ A, B, ACCUR, NORM, CHARF, XBREAK, BLEFT, BRIGHT,
+     * DBREAK, DEGREE, SMOOTH, LEVEL, EDIST, NBREAK, KNTDIM, NPARDM
+      COMMON /RESULZ/ ERROR, KNOTS
+      COMMON /KONTRL/ DSCTOL, ERRORI, XLEFT, XRIGHT, BREAK, BOTH,
+     * FACTOR, FMESGE, IBREAK, INTERP, LEFT, MAXAUX, MAXKNT, MAXPAR,
+     * MAXSTK, NPAR, NSTACK, RIGHT, DISCRD, FATAL, FINISH
+      COMMON /COMDIF/ DDTEMP, FINTRP, FLEFT, FRIGHT, XDD, XINTRP,
+     * LEFTX, NINTRP, RIGHTX
+C
+      COMMON /FDATA/ JFUNK, KOUNT, MAXK
+      COMMON /FPARS/ PAR2, PAR3A, PAR3B, PAR4, PAR4A, P5A, P5B, P6A,
+     * P6B, P7, P8A, P8B, P8C, P8D, P8E, P8F, P8G, P8H, P9, P10A, P10B,
+     * P10C
+C
+      DATA SING3 /.30770707707077/
+      DATA BUFFER /1.E-12/
+      DATA SQRTBF /1.E-7/
+C        DEFINITION OF FUNCTION AT 2700
+      F26(VV) = ALOG(2.+VV*VV/(1.+VV))
+      F27(V) = SIN(V**2-3.1*EXP(V/(1.+V**2)))*(F26(V)+V)
+C
+C         FACILITY TO TERMINATE ADAPT TESTING BECAUSE OF EXCESSIVE
+C         NUMBER OF FUNCTION EVALUATIONS.
+      KOUNT = KOUNT + 1
+      IF (KOUNT.NE.MAXK) GO TO 10
+      WRITE (6,99999) FMESGE, MAXK
+      IF (.NOT.FINISH) FATAL = .TRUE.
+      FINISH = .TRUE.
+   10 CONTINUE
+C
+C         PROTECT ARGUMENT X, INITIALIZE DERVS 3,4,5 = 0
+      Y = X
+      FDERV(3) = 0.0
+      FDERV(4) = 0.0
+      FDERV(5) = 0.0
+C
+C         SELECT FUNCTION NUMBER JFUNK
+      GO TO (20, 40, 80, 140, 150, 160, 170, 180, 200, 210, 260, 270,
+     * 280, 290, 300, 310, 320, 330, 360, 380), JFUNK
+C
+C        SIMPLE ALBEGRAIC SINGULARITY AT X= 0.0
+   20 F = ABS(Y)**.4
+      IF (ABS(Y).LE.BUFFER) Y = BUFFER
+      FDERV(1) = .4*ABS(Y)**(-.6)*SIGN(1.,Y)
+      DO 30 K=2,5
+        FK = K
+        FDERV(K) = (1.4-FK)*FDERV(K-1)/Y
+   30 CONTINUE
+      RETURN
+C
+C         INTERIOR SINGULARITY AT .307707077070770707707077...
+C         DIFFERENT EXPONENTS (.481,.63) ON EACH SIDE
+   40 T = Y - SING3
+      IF (T.LT.0.0) GO TO 60
+      F = T**.61
+      IF (T.LE.BUFFER) T = BUFFER
+      FDERV(1) = .61*F/T
+      DO 50 K=2,5
+        FDERV(K) = (1.61-FLOAT(K))*FDERV(K-1)/T
+   50 CONTINUE
+      RETURN
+   60 F = (-T)**.481
+      FDERV(1) = .481*F/T
+      DO 70 K=2,5
+        FK = K
+        FDERV(K) = (1.481-FK)*FDERV(K-1)/T
+   70 CONTINUE
+      RETURN
+C
+C             BROKEN LINE - BREAKS AT 1,2,3.5,4
+   80 CONTINUE
+      FDERV(2) = 0.0
+      IF (Y.LE.1.) GO TO 90
+      IF (Y.GE.5.) GO TO 130
+      IY = Y + 1.
+      GO TO (90, 100, 110, 120, 130), IY
+   90 F = 6.*Y + 1.
+      FDERV(1) = 6.
+      RETURN
+  100 F = 7. - (Y-1.)*.5
+      FDERV(1) = -.5
+      RETURN
+  110 F = 6.5 - 1.5*(Y-2.)
+      FDERV(1) = -1.5
+      RETURN
+  120 IF (Y.LT.3.5) GO TO 110
+      F = 4.25 - 2.5*(Y-3.5)
+      FDERV(1) = -2.5
+      RETURN
+  130 F = 3. - 3.*(Y-4.)
+      FDERV(1) = -3.0
+      RETURN
+C
+C         HUMP AT 2.5 - ONLY 1ST + 2ND DERIVATIVES GIVEN
+  140 YY = Y - 2.5
+      F = 1./(1.+YY**4)
+      YY3 = -4.*YY**3
+      FDERV(1) = YY3*F**2
+      FDERV(2) = (2.*YY3**2)*F**3 - 12.*YY**2*F**2
+      RETURN
+C
+C           SIMPLE CUBIC
+  150 YY = 4.*Y - 2.
+      F = YY**3 - YY
+      FDERV(1) = 12.*YY**2 - 4.
+      FDERV(2) = 96.*YY
+      FDERV(3) = 382.
+      RETURN
+C
+C           VARIABLE OSCILLATION - ONLY CORRECT DERIVATIVES ARE 1,2,3
+  160 YY = Y**2 - 1.
+      F = SIN(YY)
+      CS = COS(YY)
+      FDERV(1) = 2.*Y*CS
+      FDERV(2) = 2.*CS - 4.*(YY+1.)*F
+      FDERV(3) = CS*(YY+1.)**3 - 12.*Y*F
+      RETURN
+C
+C           EXPONENTIAL
+  170 F = EXP(Y)
+      FDERV(1) = F
+      FDERV(2) = F
+      FDERV(3) = F
+      FDERV(4) = F
+      FDERV(5) = F
+      RETURN
+C
+C         FIFTH DEGREE POLYNOMIAL PLUS HIGH FREQUENCY SAWTOOTH
+C                   ONLY 2 DERIVATIVES GIVEN
+  180 F = Y**2*(Y**3-2.) + 6.37
+      FD1 = 5.*Y**4 - 4.*Y
+      FD2 = 20.*Y**3 - 4.
+C         EPS IS FRACTIONAL PART OF 1000*Y
+      L = 1000.*Y
+      EPS = Y - .001*FLOAT(L)
+      L = L - 2*(L/2)
+      IF (L.EQ.1) GO TO 190
+C             INCREASING PART OF THE SAWTOOTH
+      F = F + 500.*EPS**2
+      FDERV(1) = FD1 + 1000.*EPS
+      FDERV(2) = FD2 + 1000.
+      RETURN
+C             DECREASING PART OF THE SAWTOOTH
+  190 CONTINUE
+      F = F + 500.*(1.E-6-EPS**2)
+      FDERV(1) = FD1 + 1. - 1000.*EPS
+      FDERV(2) = FD2 - 1000.
+      RETURN
+C
+C           SEVENTH DEGREE POLYNOMIAL
+  200 F = Y**7 - 2.*Y**6 + 3.1*Y**4 - 6.2*Y
+      FDERV(1) = 7.*Y**6 - 12.*Y**5 + 12.4*Y**3 - 6.2
+      FDERV(2) = 42.*Y**5 - 60.*Y**4 + 37.2*Y**2
+      FDERV(3) = 210.*Y**4 - 240.*Y**3 + 74.4*Y
+      FDERV(4) = 840.*Y**3 - 720.*Y**2 + 74.4
+      FDERV(5) = 2520.*Y**2 - 1440.*Y
+      RETURN
+C
+C         WILD VARIATION BETWEEN .47 AND .48 - ONLY 3 DERIVATIVES HERE
+C         THERE ARE JUMPS AND INFINITIES IN THE SLOPE.
+  210 FDERV(2) = 0.
+      IF (ABS(Y-.35).GT..13) GO TO 230
+      IF (ABS(Y-.45).GT..03) GO TO 240
+      IF (ABS(Y-.475).GT..005) GO TO 250
+C                SMALL PART - PROB NOT EXACTLY CONTINOUS
+      Y2 = -(Y**2-.95*Y+.2256)
+      Y3 = ABS(Y2)**.3
+      F = 547.5*Y - 259.39 + 26.7*Y3
+      IF (Y2.LE.BUFFER) GO TO 220
+      FDERV(1) = 547.5 + 8.01*Y3/Y2*(2.*Y-.95)
+      FDERV(2) = (-11.214*(2.*Y-.95)**2/Y2+16.02)*Y3/Y2
+      FDERV(3) = ((19.0638*(2.*Y-.95)/Y2-44.856)*(2.*Y-.95)-11.214)*Y3/
+     * Y2**2
+      RETURN
+C             SET DERIVATIVES = 0 AT BREAKS
+  220 FDERV(1) = 0.0
+      FDERV(2) = 0.0
+      FDERV(3) = 0.0
+      RETURN
+C                 MAIN LINEAR PIECE
+  230 F = 6.*Y + .55
+      FDERV(1) = 6.
+      RETURN
+C                 NEXT LINEAR PART
+  240 F = 25.2*Y - 3.674
+      FDERV(1) = 25.2
+      RETURN
+C                 SMALL LINEAR PART
+  250 F = -179.05*Y + 82.111
+      FDERV(1) = -179.05
+      RETURN
+C
+C          LOTS OF OSCILLATIONS - FIRST EXAMPLE - ONLY 2 DERIVATIVES
+  260 CONTINUE
+      X1 = .5*Y**2 + Y
+      X2 = .1*Y**3 - 1.
+      S = SIN(X1)
+      C1 = COS(X1)
+      C = COS(X2)
+      S2 = SIN(X2)
+      R0 = 1./(1.+Y**6)
+      R4 = 1./(1.+(Y-4.)**6)
+      SP = C1*(Y+1.)
+      CP = -S2*(.3*Y**2)
+      F = (S+C)*(R0+R4)
+      FDERV(1) = -6.*(S+C)*(R0**2*Y**5+R4**2*(Y-4.)**5) +
+     * (R0+R4)*(SP+CP)
+      FDERV(2) = (S+C)*(-30.*(Y**4*R0**2+(Y-4.)**4*R4**2)+72.*(Y**10*R0*
+     * *3+(Y-4.)**10*R4**3)) - 12.*(R0**2*Y**5+(Y-4.)**5*R4**2)*(SP+CP)
+     * + (R0+R4)*(C1-(Y+1.)**2*S-.09*Y**4*C-.6*Y*S2)
+      RETURN
+C
+C          LOTS OF OSCILLATIONS - SECOND EXAMPLE - ONLY 3 DERIVATIVES
+  270 CONTINUE
+      EX = EXP(Y)
+      R = 1./(Y+PAR2)
+      S = SIN(R)
+      C = COS(R)
+      DS = -C*R**2
+      D2S = -S*R**4 + 2.*C*R**3
+      D3S = C*R**6 + 6.*S*R**5 - 6.*C*R**4
+      F = EX*S
+      FDERV(1) = EX*(S+DS)
+      FDERV(2) = EX*(S+2.*DS+D2S)
+      FDERV(3) = EX*(S+3.*DS+3.*D2S+D3S)
+      RETURN
+C
+C         END POINT SINGURITIES OF PAR3A,PAR3B - ONLY 3 DERIVATIVES
+  280 CONTINUE
+      IF (Y.LE.BUFFER) Y = BUFFER
+      IF (Y.GE.1.-BUFFER) Y = 1. - BUFFER
+      FL = Y**PAR3A
+      FR = (1.-Y)**PAR3B
+      DL = PAR3A*FL/Y
+      DR = -PAR3B*FR/(1.-Y)
+      D2L = (PAR3A-1.)*DL/Y
+      D2R = -(PAR3B-1.)*DR/(1.-Y)
+      D3L = (PAR3A-2.)*D2L/Y
+      D3R = -(PAR3B-2.)*D2R/(1.-Y)
+      F = FL*FR
+      FDERV(1) = FL*DR + DL*FR
+      FDERV(2) = FL*D2R + 2.*DL*DR + D2L*FR
+      FDERV(3) = FL*D3R + 3.*DL*D2R + 3.*D2L*DR + D3L*FR
+      RETURN
+C
+C         RANDOM NUMBERS ADDED TO SIN(X) - ONLY TWO DERIVATIVES
+  290 CONTINUE
+      S = SIN(Y)
+      C = COS(Y)
+C                   QUICKIE PSEUDO-RANDOM NUMBER GENERATOR USED HERE
+      RAND = AMOD(4829.*S+C,7.23)/7.23
+      F = S + PAR4*(RAND-.5)
+      RAND = AMOD(2993.*F+S,3.19)/3.19
+      FDERV(1) = C + PAR4*(RAND-.5)
+      RAND = AMOD(4901.*RAND+C,8.13)/8.13
+      FDERV(2) = -S + PAR4*(RAND-.5)
+      RAND = AMOD(6987.*RAND+F*C,4.27)/4.27
+      FDERV(3) = -C + PAR4*(RAND-.5)
+      RETURN
+C
+C         LARGE FUNCTION
+  300 CONTINUE
+      EX = EXP(Y)*P5A
+      X8 = Y**8*P5B
+      F = EX + X8
+      FDERV(1) = EX + 8.*X8/Y
+      FDERV(2) = EX + 56.*X8/Y**2
+      FDERV(3) = EX + 336.*X8/Y**3
+      FDERV(4) = EX + 1680.*Y**4*P5B
+      FDERV(5) = EX + 6720.*Y**3*P5B
+      RETURN
+C
+C          SHIFTED FUNCTION   - ONLY 2 DERIVATIVES
+  310 CONTINUE
+      EX = EXP(Y-P6A)
+      X3 = (Y-P6B)**3
+      S = SIN(Y)
+      C = COS(Y)
+      R = 1./(1.+.5*S)
+      F = EX + X3*R
+      DR = -.5*C*R**2
+      D2R = .5*S*R**2 + .5*C**2*R**3
+      FDERV(1) = EX + 3.*(Y-P6B)**2*R + X3*DR
+      FDERV(2) = EX + 6.*(Y-P6B)*R + 6.*(Y-P6B)**2*DR + X3*D2R
+      RETURN
+C
+C         NUMERICAL DIFFERENTIATON OF ARITHMETIC STATEMENT FUNCTION
+C             ONLY  FIRST, 2ND AND THIRD DERIVATIVES
+  320 CONTINUE
+      F = F27(Y)
+      FR = F27(Y+P7)
+      FL = F27(Y-P7)
+      FRR = F27(Y+2.*P7)
+      FLL = F27(Y-2.*P7)
+      FDERV(1) = (FR-FL)/P7*.5
+      FDERV(2) = (FR-2.*F+FL)/P7**2
+      FDERV(3) = (-FLL+2.*FL-2.*FR+FRR)/P7**3*.5
+      RETURN
+C
+C         RATHER COMPLEX FUNCTION - SUM OF 7 DIFFERENT THINGS
+C             ONLY TWO DERIVATIVES
+C             INFINITE SLOPE AT P8B AND CUSP AT P8E POSSIBLE
+  330 CONTINUE
+C                   TERM 1
+      SA = SQRT(ABS(Y-P8A))
+      T1 = EXP(-SA)
+      IF (SA.LE.SQRTBF) SA = SQRTBF
+      DT1 = -T1*SIGN(1.,Y-P8A)*.5/SA
+      DDT1 = T1*(1.+1./SA)*.25/(SA*SA)
+C                   TERM 2
+      SA = 4.*EXP(-ABS(Y-P8B))
+      SAX = Y*SA
+      SAXX = Y*SAX
+      T2 = 2. - SAXX
+      DT2 = -2.*SAX + SAXX*SIGN(1.,Y-P8B)
+      DDT2 = -2.*SA + 4.*SAX*SIGN(1.,Y-P8B) - SAXX
+C                   TERM 3
+      XC = Y - P8C
+      T3 = 1./(1.+150.*XC**6)
+      DT3 = -900.*XC**5*T3**2
+      DDT3 = 1620000.*XC**10*T3**3 - 4500.*XC**4*T3**2
+C                   TERM 4
+      T4 = 6./(1.+P8D*XC**4)
+      DT4 = -2./3.*P8D*XC**3*T4**2
+      DDT4 = 8./9.*P8D**2*XC**6*T4**3 - 2.*P8D*XC**2*T4**2
+C
+C                   TERM 5
+      XE = Y - P8E
+      XEP = ABS(XE)**P8F
+      R = 10./(1.+4.*XE**4)
+      T5 = R*XEP
+      DR = -1.6*XE**3*R**2
+      DDR = 5.12*XE**6*R**3 - 4.8*XE**2*R**2
+      DXEP = 0.0
+      DDXEP = 0.0
+      IF (ABS(XE).LE.1.E-12) GO TO 340
+      DXEP = P8F*XEP/XE
+      DDXEP = (P8F-1.)*DXEP/XE
+  340 DT5 = DR*XEP + R*DXEP
+      DDT5 = DDR*XEP + 2.*DR*DXEP + R*DDXEP
+C
+C                   TERM 6
+      XG = ABS(Y-P8G)**2.5
+      T6 = -2.*EXP(-XG)
+      DT6 = -2.5*T6*SIGN(1.,Y-P8G)*XG**.6
+      DDT6 = T6*6.25*(XG**1.2-XG**.2*.6)
+C
+C                   TERM 7
+      S = SIN(4.*Y)
+      C = COS(4.*Y)
+      R = 1./(.5+ABS(Y-P8H)*5.)
+      EX = EXP(Y+1.-P8H)
+C             ACTUALLY USING EXP(AMAX1(X-15,0)) - SPLIT CALCULATION
+      T7 = S*R
+      DT7 = 4.*C*R - S*R**2*SIGN(1.,Y-P8H)*5.
+      DDT7 = -16.*S*R - 40.*C*R**2*SIGN(1.,Y-P8H) + 50.*S*R**3
+      IF (Y.LT.P8H-1.) GO TO 350
+C                        INCLUDE EX TERM
+      DDT7 = EX*(DDT7+2.*DT7+T7)
+      DT7 = EX*(DT7+T7)
+      T7 = EX*T7
+  350 CONTINUE
+C
+      F = T1 + T2 + T3 + T4 + T5 + T6 + T7
+      FDERV(1) = DT1 + DT2 + DT3 + DT4 + DT5 + DT6 + DT7
+      FDERV(2) = DDT1 + DDT2 + DDT3 + DDT4 + DDT5 + DDT6 + DDT7
+      RETURN
+C
+C         JUMP DISCONTINUITY (EXCEPT FOR P9 = 0.) - ONLY 2 DERIVATIVES
+  360 CONTINUE
+      IF (Y.GE.P9) GO TO 370
+C                     EXPONENTIAL
+      F = EXP(Y)
+      FDERV(1) = F
+      FDERV(2) = F
+      FDERV(3) = F
+      RETURN
+  370 CONTINUE
+C                     RATIONAL
+      F = 1./(1.+Y**2)
+      FDERV(1) = -2.*Y*F**2
+      FDERV(2) = 2.*F**2*(4.*Y*F-1.)
+      RETURN
+C
+C                    INFINITE SINGULARITY
+  380 CONTINUE
+      IF (Y.GT.P10A+BUFFER) GO TO 390
+      IF (Y.GT.P10A-BUFFER) GO TO 400
+C              LEFT SIDE OF SINGULARITY
+      XL = P10A - Y
+      F = XL**P10B
+      FDERV(1) = -P10B*F/XL
+      FDERV(2) = -(P10B-1.)*FDERV(1)/XL
+      FDERV(3) = -(P10B-2.)*FDERV(2)/XL
+      RETURN
+  390 CONTINUE
+C              RIGHT SIDE OF SINGULARITY
+      XR = Y - P10A
+      F = XR**P10C
+      FDERV(1) = P10C*F/XR
+      FDERV(2) = (P10C-1.)*FDERV(1)/XR
+      FDERV(3) = (P10C-2.)*FDERV(2)/XR
+      RETURN
+  400 CONTINUE
+C              AT THE SINGULARITY
+      F = 100./(BUFFER**AMAX1(P10B,P10C))
+      FDERV(1) = 0.0
+      FDERV(2) = F**3
+      RETURN
+99999 FORMAT (//2X, 6A4, 14HEXCEEDED LIMIT, I5, 14H ON F(X) EVALS)
+      END
+      REAL FUNCTION QPOLY(T)                                            QPO   10
+C
+C **  THIS IS FUNCTION EXACTLY LIKE PPOLY EXCEPT IT HAS JUST 1 ARGUMENT
+C         SO IT CAN BE USED WITH ERRINT BY SUMRY2.
+C
+      REAL A, ACCUR, B, BLEFT, BRIGHT, CHARF, DDTEMP, DSCTOL, ERROR,
+     * ERRORI, FACTOR, FINTRP, FLEFT, FRIGHT, NORM, XBREAK, XDD,
+     * XINTRP, XLEFT, XRIGHT
+      DIMENSION XBREAK(20), DBREAK(20), BLEFT(20), BRIGHT(20)
+      DIMENSION XLEFT(50), XRIGHT(50), FACTOR(12), FMESGE(6)
+      DIMENSION DDTEMP(12,12), FINTRP(10), FLEFT(6), FRIGHT(6),
+     * XDD(12), XINTRP(10)
+      INTEGER BOTH, BREAK, DBREAK, DEGREE, EDIST, FMESGE, RIGHT,
+     * RIGHTX, SMOOTH
+      LOGICAL DISCRD, FATAL, FINISH
+      REAL T, X, ZCOEF, ZKNOTS
+      DIMENSION ZKNOTS(100), ZCOEF(100,7)
+      COMMON /INPUTZ/ A, B, ACCUR, NORM, CHARF, XBREAK, BLEFT, BRIGHT,
+     * DBREAK, DEGREE, SMOOTH, LEVEL, EDIST, NBREAK, KNTDIM, NPARDM
+      COMMON /RESULZ/ ERROR, KNOTS
+      COMMON /KONTRL/ DSCTOL, ERRORI, XLEFT, XRIGHT, BREAK, BOTH,
+     * FACTOR, FMESGE, IBREAK, INTERP, LEFT, MAXAUX, MAXKNT, MAXPAR,
+     * MAXSTK, NPAR, NSTACK, RIGHT, DISCRD, FATAL, FINISH
+      COMMON /COMDIF/ DDTEMP, FINTRP, FLEFT, FRIGHT, XDD, XINTRP,
+     * LEFTX, NINTRP, RIGHTX
+C
+      COMMON /PARAMS/ ZKNOTS, ZCOEF
+      COMMON /SAVEIT/ IKNOT
+   10 IF (T.LT.ZKNOTS(IKNOT+1)) GO TO 20
+      IKNOT = IKNOT + 1
+      IF (IKNOT.LT.KNOTS) GO TO 10
+      IKNOT = KNOTS - 1
+      GO TO 30
+   20 IF (T.GE.ZKNOTS(IKNOT)) GO TO 30
+      IKNOT = IKNOT - 1
+      IF (IKNOT.LT.1) GO TO 20
+      IKNOT = 1
+   30 X = T - ZKNOTS(IKNOT)
+      QPOLY = ZCOEF(IKNOT,NPAR)
+      DO 40 K=1,DEGREE
+        KK = NPAR - K
+        QPOLY = ZCOEF(IKNOT,KK) + X*QPOLY
+   40 CONTINUE
+      RETURN
+      END
+      SUBROUTINE SUMRY2(XKNOTS, COEFS, KDIMEN, NDIMEN)                  SUM   10
+C
+C        =============================================================
+C
+C **  THIS PROGRAM SUMMARIZES THE PERFORMANCE OF ADAPT
+C     IT COMPUTES EXECUTION TIME, INDEPENDENTLY CHECKS THE ACCURACY ,
+C         PLOTS F(X) PLUS THE ERROR FOR 100 POINTS.
+C     IT USES THE SYSTEM DEPENDENT ROUTINES SECOND AND GRAPH
+C         AND THE SUBPROGRAM ERRINT FROM ADAPT.
+C
+      REAL A, ACCUR, B, BLEFT, BRIGHT, CHARF, DDTEMP, DSCTOL, ERROR,
+     * ERRORI, FACTOR, FINTRP, FLEFT, FRIGHT, NORM, XBREAK, XDD,
+     * XINTRP, XLEFT, XRIGHT
+      DIMENSION XBREAK(20), DBREAK(20), BLEFT(20), BRIGHT(20)
+      DIMENSION XLEFT(50), XRIGHT(50), FACTOR(12), FMESGE(6)
+      DIMENSION DDTEMP(12,12), FINTRP(10), FLEFT(6), FRIGHT(6),
+     * XDD(12), XINTRP(10)
+      INTEGER BOTH, BREAK, DBREAK, DEGREE, EDIST, FMESGE, RIGHT,
+     * RIGHTX, SMOOTH
+      LOGICAL DISCRD, FATAL, FINISH
+      REAL XKNOTS(KDIMEN), COEFS(KDIMEN,NDIMEN)
+      REAL ABSC(4), DX, DXG, ECHECK, ERRINT, ERRP, P, PPOLY, QPOLY,
+     * WGTS(4), XL, XR, ZCOEF, ZKNOTS, F
+      REAL XVALU(100), GRAF1(100), GRAF2(100), TIME, TSTART, TSTOP,
+     * ZKNOTS(100), ZCOEF(100,7), DUMMY(6)
+      EXTERNAL F, QPOLY
+      COMMON /INPUTZ/ A, B, ACCUR, NORM, CHARF, XBREAK, BLEFT, BRIGHT,
+     * DBREAK, DEGREE, SMOOTH, LEVEL, EDIST, NBREAK, KNTDIM, NPARDM
+      COMMON /RESULZ/ ERROR, KNOTS
+      COMMON /KONTRL/ DSCTOL, ERRORI, XLEFT, XRIGHT, BREAK, BOTH,
+     * FACTOR, FMESGE, IBREAK, INTERP, LEFT, MAXAUX, MAXKNT, MAXPAR,
+     * MAXSTK, NPAR, NSTACK, RIGHT, DISCRD, FATAL, FINISH
+      COMMON /COMDIF/ DDTEMP, FINTRP, FLEFT, FRIGHT, XDD, XINTRP,
+     * LEFTX, NINTRP, RIGHTX
+C
+      COMMON /PARAMS/ ZKNOTS, ZCOEF
+      COMMON /FDATA/ JFUNK, KOUNT, MAXK
+      COMMON /INFO/ ECHECK, KFUNK, TIME, TSTART
+      DATA ABSC(1) /-.86113631159405/
+      DATA ABSC(2) /-.33998104358486/
+      DATA ABSC(3) /.33998104358486/
+      DATA ABSC(4) /.86113631159405/
+      DATA WGTS(1) /.34785484513745/
+      DATA WGTS(2) /.65214515486255/
+      DATA WGTS(3) /.65214515486255/
+      DATA WGTS(4) /.34785484513745/
+C
+      IF (LEVEL.LE.1) RETURN
+C
+C                  LEVEL 2 OUTPUT
+C
+C     ***** CALL CLOCK FOR VALUE OF  TSTOP  IN SECONDS *****
+C
+      TSTOP = 0.0
+      TIME = TSTOP - TSTART
+      KFUNK = KOUNT
+C
+C            VERIFY ERROR BY INDEPENDENT CHECK
+      ECHECK = 0.
+      IF (KNOTS.GT.100 .OR. NPAR.GT.7) GO TO 40
+C             SKIP THIS CHECK
+C
+C      PUT PARAMETERS IN THE COMMON BLOCK PARAMS FOR QPOLY TO USE
+      KNOTS1 = KNOTS - 1
+      DO 20 J=1,KNOTS1
+        ZKNOTS(J) = XKNOTS(J)
+        DO 10 K=1,NPAR
+          ZCOEF(J,K) = COEFS(J,K)
+   10   CONTINUE
+   20 CONTINUE
+C
+C         BREAK (A,B) INTO HALF AGAIN AS MANY PARTS AS KNOTS
+      IPART = (3*KNOTS)/2 + 1
+      DX = (B-A)/FLOAT(IPART)
+      XL = A
+      XR = A + DX
+      ECHECK = 0.0
+C             COMPUTE ERROR ESTIMATE OVER PART
+      P = ABS(NORM)
+      DO 30 K=1,IPART
+        ERRP = ERRINT(F,QPOLY,XL,XR,ABSC,WGTS)
+        XL = XR
+        XR = XR + DX
+C             UPDATE ERROR
+        IF (NORM.EQ.3.) ECHECK = AMAX1(ERRP,ECHECK)
+        IF (NORM.NE.3.) ECHECK = (ECHECK**P+ERRP)**(1./P)
+   30 CONTINUE
+   40 WRITE (6,99999) KFUNK, ACCUR, ERROR, ECHECK
+      WRITE (6,99998) TIME
+C
+C            GRAPHICAL OUTPUT
+      RETURN
+C         ***** IF GRAPH ROUTINE IS AVAILABLE REMOVE THE ABOVE RETURN
+C               AND CALL GRAPH ROUTINE BELOW
+      WRITE (6,99997)
+      DXG = (B-A)/99.
+      DO 50 K=1,100
+        XVALU(K) = A + FLOAT(K-1)*DXG
+C                  DUMMY IS A DUMMY ARRAY BELOW
+        GRAF1(K) = F(XVALU(K),DUMMY)
+        GRAF2(K) = GRAF1(K) - PPOLY(XVALU(K),XKNOTS,COEFS,KDIMEN,NDIMEN)
+   50 CONTINUE
+C     ***** INSERT GRAPH CALL HERE FOR 100 POINTS OF (XVALU,GRAF1,GRAF2)
+      RETURN
+99999 FORMAT (/10X, 10HADAPT USED, I5, 28H FUNCTION VALUES FOR ERRORS
+     * /10X, 11HSPECIFIED =, E15.5, 21H ESTIMATED BY ADAPT =, E15.5,
+     * 21H INDEPENDENT CHECK = , E15.5)
+99998 FORMAT (20X, 11HTIME USED =, F8.5, 9H SECONDS )
+99997 FORMAT (41H1       PLOT OF F(X) AND THE ERROR CURVE )
+      END
+      SUBROUTINE ADAPT(F, XKNOTS, COEFS, KDIMEN, NDIMEN)                ADA   10
+C
+C     THIS ALGORITHM COMPUTES A PIECEWISE POLYNOMIAL APPROXIMATION
+C  OF SPECIFIED SMOOTHNESS, ACCURACY AND DEGREE.  THE INPUT TO THE
+C  COMPUTATION IS
+C
+C   F      - FUNCTION BEING APPROXIMATED. IT MUST PROVIDE VALUES OF
+C            DERIVATIVES UP TO THE ORDER OF SMOOTHNESS SPECIFIED FOR
+C            THE APPROXIMATION.  THE CALLING SEQUENCE IS F(X,FDERV) AND
+C            FDERV CONTAINS THE DERIVATIVES( SEE CONSTRAINT BELOW)
+C   A,B    - THE ENDPOINTS OF THE INTERVAL OF APPROXIMATION
+C   ACCUR  - THE ACCURACY REQUIRED FOR THE APPROXIMATION
+C   SMOOTH - THE SMOOTHNESS REQUIRED FOR THE APPROXIMATION
+C              = 0  MEANS CONTINUOUS
+C              = 1  MEANS CONTINUOUS SLOPE
+C              = 2  MEANS CONTINUOUS SECOND DERIVATIVE, ETC.
+C   DEGREE - THE DEGREE OF THE POLYNOMIAL PIECES.
+C            MUST HAVE DEGREE GT 2*SMOOTH
+C
+C     *****  ***** SECONDARY INPUT - ITEMS WITH DEFAULT VALUES POSSIBLE
+C   CHARF  - CHARACTERISTIC LENGTH OF THE FUNCTION F(X). PIECES ARE NOT
+C            LONGER THAN THIS LENGTH.
+C                   DEFAULT=(B-A) IF DEGREE GT 1, ELSE (B-A)/3
+C   NORM   - NORM TO MEASURE THE APPROXIMATION ERROR
+C              = 1  L1 APPROXIMATION (LEAST DEVIATIONS)
+C              = 2  L2 APPROXIMATION (LEAST SQUARES)
+C              = 3  TCHEBYCHEFF (MINIMAX) APPROXIMATION
+C              =-P  (NEGATIVE VALUE) GENERAL LP APPROXIMATION
+C                   DEFAULT= 2
+C   NBREAK - NUMBER OF SPECIAL BREAK POINTS IN THE APPROXIMATION.
+C            ASSOCIATED INPUT VARIABLES ARE
+C              XBREAK(J)  - LOCATION OF BREAK POINTS
+C              DBREAK(J)  - DERIVATIVE BROKEN AT XBREAK
+C              BLEFT (J)  - VALUE FROM LEFT FOR DBREAK DERIVATIVE
+C              BRIGHT(J)  -   -    -   RIGHT -    -        -
+C                   DEFAULT = 0
+C   LEVEL  - LEVEL OF OUTPUT FROM ADAPT
+C              = -1 NO OUTPUT AT ALL EXCEPT FOR FATAL INPUT ERRORS
+C              =  0  ERROR CONDITIONS NOTED, FINAL SUMMARY
+C              =  1  PRINT THE APPROXIMATION OUT
+C              =  2  DETAILS OF THE COMPUTATION
+C              =  3 DEBUG OUTPUT,  = 4 LOTS OF DEBUG OUTPUT
+C                    DEFAULT = 0
+C   EDIST  - SWITCH TO CHANGE FROM PROPORTIONAL ERROR DISTRIBUTION
+C            TO FIXED DISTRIBUTION. THIS IS PRIMARILY OF USE IN
+C            APPROXIMATION OF FUNCTIONS WITH SINGULARITIES. ONE SHOULD
+C            USE NORM = 1. OR SO IN SUCH CASES
+C              = 0  PROPORTIONAL DISTRIBUTION
+C              = 1  APPROXIMATE FIXED ERROR DISTRIBUTION
+C                   ATTEMPTS TO ACHIEVE SPECIFIED ACCURACY VALUE ACCUR
+C              = 2  TRUE FIXED ERROR DISTRIBUTION
+C
+C     THE OUTPUT OF THE COMPUTATION CONSISTS OF 3 PARTS, EACH RETURNED
+C     TO THE USER IN A DIFFERENT WAY. THEY ARE
+C
+C   XKNOTS,COEFS - ARRAYS DEFINING THE PIECEWISE POLYNOMIAL RESULT.
+C   COEFS    XKNOTS(K)  = KNOTS OF THE APPROXIMATION ( K = 1 TO KNOTS)
+C                         THE LAST ONE IS RIGHT END POINT OF INTERVAL
+C            COEFS(K,N) = COEFFICIENT OF (X - XKNOT(K))**(N-1) IN THE
+C                         INTERVAL XKNOT(K) TO XKNOT(K+1)
+C                           K = 1 TO KNOTS-1  AND  N = 1 TO DEGREE+1
+C            THESE ARRAYS ARE PASSED AS ARGUMENTS SO AS TO USE VARIABLE
+C            DIMENSIONS.
+C               KDIMEN - DIMENSION USED FOR  XKNOTS IN CALLING PROGRAM
+C               NDIMEN - COEFS IS DECLARED  COEFS(KDIMEN,NDIMEN) IN THE
+C                        CALLING PROGRAM.
+C               ***** NOTE ***** SEVERAL SMALL ARRAYS HERE HAVE FIXED
+C                        DIMENSIONS THAT LIMIT DEGREE AND THUS NDIMEN
+C                        SHOULD NOT EXCEED THIS LIMIT (CURRENTLY = 12)
+C
+C   PPOLY  - THE PIECEWISE POLYNOMIAL APPROXIMATING FUNCTION.
+C            THIS FUNCTION SUBPROGRAM IS AVAILABLE TO THE USER AT THE
+C            COMPLETION OF ADAPT.
+C
+C   RESULZ - A LABELED COMMON BLOCK WITH  ERROR,KNOTS  IN IT
+C              KNOTS - NUMBER OF KNOTS OF PPOLY
+C              ERROR - ACCURACY OF PPOLY AS ESTIMATED BY ADAPT
+C
+C  ********** DIMENSION CONSTRAINTS **********
+C     MAXKNT - MAX NUMBER OF KNOTS TAKEN FROM USER VIA KDIMEN
+C              ARRAYS WITH THIS DIMENSION
+C                   COEFS   XKNOTS
+C     MAXPAR - MAX NUMBER OF PARAMETERS PER INTERVAL ( = 12 CURRENTLY )
+C                   USER PROVIDED NDIMEN MUST HAVE NDIMEN LE MAXPAR
+C                   MUST HAVE  DEGREE + 1 LE MAXPAR
+C              ARRAYS WITH THIS DIMENSION (OR RELATED VALUES )
+C                D       DDTEMP  FDERVL  FDERVR  FDUMB   FACTOR
+C                FINTRP  FLEFT   FRIGHT  POWERS  XTEMP   XINTRP  XDD
+C              ***** NOTE ***** MAXPAR ALSO AFFECTS ARGUMENT FDERV
+C              OF FUNCTION F.  FDERVL, FDERVR ARE ALSO INVOLVED.
+C              SHOULD DECLARE FDERV OF SIZE 6 IN F TO BE SAFE.
+C     MAXAUX - MAXIMUM NUMBBER OF AUXILIARY INPUT( = 20 NOW ). ARRAYS
+C                 XBREAK  DBREAK  BLEFT   BRIGHT
+C     MAXSTK - MAX SIZE OF ACTIVE INTERVAL STACK
+C              MIN INTERVAL LENGTH IS 2**(-MAXSTK)*(B-A). ARRAYS
+C                 XLEFT   XRIGHT
+C
+C  **********  PORTABILITY CONSIDERATIONS  **********
+C
+C     THIS PROGRAM IS IN ANSI STANDARD FORTRAN.  IN ADDITION, IT MEETS
+C     ALL THE REQUIREMENTS OF THE BELL LABS PORTABLE FORTRAN -PFORT-
+C     EXCEPT ONE.  HOLLERITH CHARACTERS ARE PACKED 4/WORD RATHER THAN
+C     1/WORD AS SPECIFIED BY PFORT.
+C     NEVERTHELESS, THIS PROGRAM IS AFFECTED IN SEVERAL WAYS BY A
+C     CHANGE IN MACHINE WORD LENGTH AND CHANGING TO DOUBLE PRECISION.
+C     ***** THIS VERSION IS FOR THE MACHINE WITH THE LONGEST SINGLE
+C           PRECISION WORD (CDC).  THE LENGTH OF SOME CONSTANTS IN
+C           THE SUBPROGRAM COMPUT EXCEEDS THE CAPACITY OF SOME FORTRAN
+C           COMPILERS AND CAN PREVENT COMPILATION.
+C  INPUT-OUTPUT -- IS OF THREE TYPES.
+C         FATAL ERROR MESSAGES - OCCUR IN SETUP,TAKE,PUT AND TERMIN
+C                                THEY CANNOT BE SWITCHED OFF
+C         USER AND DEBUGGING OUTPUT - CAN BE SWITCHED OFF
+C     THESE INVOLVE MANY FORMATS LIKE  E15.8, F12.8, E22.13, ETC.
+C     SOME FORTRAN COMPILERS REQUIRE D-FORMAT FOR DOUBLE PRECISION.
+C     SOME DO NOT HANDLE E22.13 ON MACHINES OF SHORTER WORD LENGTH.
+C
+C     SUMARY PRINTS COEFFICIENTS 5 PER LINE, 6 PER LINE IS BETTER
+C     FOR SHORTER WORD LENGTHS.  DOUBLE PRECISION ON MANY MACHINES
+C     LIMITS ONE TO 4 PER LINE.
+C
+C  CONSTANTS -- THE GAUSS WEIGHTS AND ABSCISSA IN COMPUTE ARE GIVEN
+C               TO 15 DIGITS IN THE COMMENTS
+C
+C  DOUBLE PRECISION CONVERSION -- REQUIRES FOUR STEPS
+C     1. ALL REAL VARIABLES ARE DECLARED DOUBLE PRECISION. THIS IS
+C        DONE BY CHANGING REAL TO DOUBLE PRECISION AS ALL REALS ARE
+C        EXPLICITLY DECLARED AND ROOM IS LEFT FOR THIS CHANGE.  REAL
+C        VARIABLES APPEAR BEFORE INTEGERS IN ALL COMMON BLOCKS.
+C
+C     2. ADD D TO CONSTANTS( E.G. 1.0 = 1.0D0 ). ADJUST LENGTH OF
+C        GAUSS WEIGHTS IN COMPUTE.
+C
+C     3. CHANGE ABS,AMAX1,FLOAT  AT MANY PLACES
+C
+C     4. ADJUST THE INTERVAL STACK SIZE = DIMENSIONS OF XLEFT, XRIGHT
+C        AND VALUE OF MAXSTK.  ADJUST THE VALUE BUFFER IN PUT TO BE
+C        ABOUT .1E-K FOR A MACHINE WITH K+2 DECIMAL DIGITS.
+C
+      REAL A, ACCUR, B, BLEFT, BRIGHT, CHARF, DDTEMP, DSCTOL, ERROR,
+     * ERRORI, FACTOR, FINTRP, FLEFT, FRIGHT, NORM, XBREAK, XDD,
+     * XINTRP, XLEFT, XRIGHT
+      DIMENSION XBREAK(20), DBREAK(20), BLEFT(20), BRIGHT(20)
+      DIMENSION XLEFT(50), XRIGHT(50), FACTOR(12), FMESGE(6)
+      DIMENSION DDTEMP(12,12), FINTRP(10), FLEFT(6), FRIGHT(6),
+     * XDD(12), XINTRP(10)
+      INTEGER BOTH, BREAK, DBREAK, DEGREE, EDIST, FMESGE, RIGHT,
+     * RIGHTX, SMOOTH
+      LOGICAL DISCRD, FATAL, FINISH
+      REAL XKNOTS(KDIMEN), COEFS(KDIMEN,NDIMEN)
+      EXTERNAL F
+      REAL F
+C
+      COMMON /INPUTZ/ A, B, ACCUR, NORM, CHARF, XBREAK, BLEFT, BRIGHT,
+     * DBREAK, DEGREE, SMOOTH, LEVEL, EDIST, NBREAK, KNTDIM, NPARDM
+C                      KNTDIM - KDIMEN, NAME CHANGED TO PUT IN COMMON
+C                      NPARDM - NDIMEN, NAME CHANGED TO PUT IN COMMON
+      COMMON /RESULZ/ ERROR, KNOTS
+C                      KNOTS = FINAL NO. OF KNOTS, INCLUDES B AS ONE.
+C                      ERROR = ESTIMATE OF ERROR ACTUALLY ACHIEVED.
+      COMMON /KONTRL/ DSCTOL, ERRORI, XLEFT, XRIGHT, BREAK, BOTH,
+     * FACTOR, FMESGE, IBREAK, INTERP, LEFT, MAXAUX, MAXKNT, MAXPAR,
+     * MAXSTK, NPAR, NSTACK, RIGHT, DISCRD, FATAL, FINISH
+C             KONTRL CONTAINS GENERALLY USEFUL VARIABLES
+C                      FATAL  - SWITCH FOR DETECTION OF FATAL ERROR
+C                               INCLUDING EXCESSIVE INTERVAL SUBDIVISION
+C                               WHICH DOES NOT TERMINATE THE COMPUTATION
+C                      FINISH - SWITCH TO TERMINATE ALGORITHM
+C                      MAXS   - SEE COMMENTS EARLIER
+C                      NSTACK - COUNTER FOR INTERVAL STACK, CONSISTS OF
+C                               (XLEFT(J),XRIGHT(J))  J = 1 TO NSTACK
+C                      ERRORI - ERROR ESTIMATE FOR TOP INTERVAL
+C                      DSCTOL - TOLERANCE TO CHECK DISCARDING INTERVALS
+C                      DISCRD - SWITCH TO SIGNAL DISCARD OF TOP INTERVAL
+C                      FACTOR - ARRAY OF FACTORIALS
+C                      NPAR   - NUMBER OF PAREMETERS = DEGREE + 1
+C                      FMESGE - STRING =  **** FATAL ERROR *****
+C                      INTERP - NUMBER OF INTERIOR INTERPOLATION POINTS
+C                               IN THE NORMAL INTERVAL
+C                      IBREAK - COUNTER ON BREAK POINTS
+C                      BREAK  - SWITCH FOR BREAK POINT IN TOP INTERVAL
+C                               0     = NO BREAK PRESENT
+C                               LEFT  = BREAK AT XLEFT(NSTACK)
+C                               RIGHT = BREAK AT XRIGHT(NSTACK)
+C                               BOTH  = BREAK AT BOTH ENDS
+      COMMON /COMDIF/ DDTEMP, FINTRP, FLEFT, FRIGHT, XDD, XINTRP,
+     * LEFTX, NINTRP, RIGHTX
+C             COMDIF CONTAINS VARIABLES USED ONLY BY COMPUT AND FRIENDS.
+C                      NINTRP - NUMBER OF INTERIOR INTERPOLATION POINTS
+C                               FOR THE CURRENT INTERVAL
+C                      XINTRP - INTERIOR INTERPOLATION POINTS
+C                      FINTRP - F VALUES AT XINTRP POINTS
+C                      LEFTX  - MULTIPLICITY OF INTERPOLATION AT XLEFT
+C                               = NO. OF DERIVATIVES MATCHED AT XLEFT
+C                      FLEFT  - VALUES OF F AND ITS DERIVATIVES AT XLEFT
+C                      RIGHTX - MULTIPLICITY OF INTERPOLATION AT XRIGHT
+C                      FRIGHT - VALUES OF F AND DERIVATIVES AT XRIGHT
+C                      DDTEMP - THE ARRAY OF DIVIDED DIFFERENCES
+C                      XDD    - THE X VALUES FOR DDTEMP WITH PROPER
+C                               MULTIPLICITIES OF XLEFT AND XRIGHT
+      COMMON /SAVEIT/ IKNOT
+C
+C------------------------ MAIN CONTROL PROGRAM -------------------------
+C
+C   ***** NOTE - ARGUMENTS BELOW ARE FOR READABILITY ONLY    *****
+C   *****        EXCEPT FOR F AND XKNOTS,COEFS,KDIMEN,NDIMEN *****
+C
+C                   CHECK INPUT, INITIAL COMPUTATIONS, PRINT PROBLEM
+C
+      CALL SETUP(XKNOTS, COEFS, KDIMEN, NDIMEN)
+C
+C         CHECK FOR FATAL ERROR IN PROBLEM SPECIFICATION
+      IF (FATAL) RETURN
+C
+C                   LOOP OVER PROCESSING OF INTERVALS
+   10 CALL TAKE(INTERV)
+C
+      CALL COMPUT(F, APPROX, INTERV)
+C
+C                   CHECK FOR DISCARDING INTERVALS
+      CALL CHECK(FUNCT, CHARCT)
+C
+C            PUT NEW INTERVALS ON STACK OR DISCARD, UPDATE STATUS
+      CALL PUT(INTERV, XKNOTS, COEFS, KDIMEN, NDIMEN)
+C
+      CALL TERMIN(TEST, AND, PRINT, XKNOTS, KDIMEN)
+C
+      IF (.NOT.FINISH) GO TO 10
+C
+      CALL SUMARY(XKNOTS, COEFS, KDIMEN, NDIMEN)
+      RETURN
+      END
+      SUBROUTINE CHECK(FUNCT, CHAR)                                     CHE   10
+C
+C        ===============================================================
+C
+C **  THIS PROGRAM CHECKS FOR DISCARDING INTERVAL, APPLIES VARIOUS
+C     TESTS ABOUT DISCARDING INVOLVING EDIST AND CHARF.
+C
+      REAL A, ACCUR, B, BLEFT, BRIGHT, CHARF, DDTEMP, DSCTOL, ERROR,
+     * ERRORI, FACTOR, FINTRP, FLEFT, FRIGHT, NORM, XBREAK, XDD,
+     * XINTRP, XLEFT, XRIGHT
+      DIMENSION XBREAK(20), DBREAK(20), BLEFT(20), BRIGHT(20)
+      DIMENSION XLEFT(50), XRIGHT(50), FACTOR(12), FMESGE(6)
+      DIMENSION DDTEMP(12,12), FINTRP(10), FLEFT(6), FRIGHT(6),
+     * XDD(12), XINTRP(10)
+      INTEGER BOTH, BREAK, DBREAK, DEGREE, EDIST, FMESGE, RIGHT,
+     * RIGHTX, SMOOTH
+      LOGICAL DISCRD, FATAL, FINISH
+      REAL DTEST, DX
+      COMMON /INPUTZ/ A, B, ACCUR, NORM, CHARF, XBREAK, BLEFT, BRIGHT,
+     * DBREAK, DEGREE, SMOOTH, LEVEL, EDIST, NBREAK, KNTDIM, NPARDM
+      COMMON /RESULZ/ ERROR, KNOTS
+      COMMON /KONTRL/ DSCTOL, ERRORI, XLEFT, XRIGHT, BREAK, BOTH,
+     * FACTOR, FMESGE, IBREAK, INTERP, LEFT, MAXAUX, MAXKNT, MAXPAR,
+     * MAXSTK, NPAR, NSTACK, RIGHT, DISCRD, FATAL, FINISH
+      COMMON /COMDIF/ DDTEMP, FINTRP, FLEFT, FRIGHT, XDD, XINTRP,
+     * LEFTX, NINTRP, RIGHTX
+C
+C
+      DISCRD = .FALSE.
+      DX = XRIGHT(NSTACK) - XLEFT(NSTACK)
+C
+C         COMPUTE DTEST FOR IMPLEMENTING VARIOUS TYPES OF ADAPTIVE APPRX
+      IF (EDIST.EQ.0) DTEST = DX*DSCTOL
+C         FOR THE APPROXIMATE FIXED ERROR DISTRIBUTION TYPE WE ESTIMATE
+C         THE FINAL NUMBER OF KNOTS BY( LIMITING IT A LITTLE )
+C             (NSTACK+KNOTS+2)((B-A)/(XRIGHT-A))
+      IF (EDIST.EQ.1) DTEST = DSCTOL/(FLOAT(NSTACK+KNOTS+2)*AMIN1((B-A)/
+     * (XRIGHT(NSTACK)-A),5.))
+      IF (EDIST.EQ.2 .OR. NORM.EQ.3.) DTEST = DSCTOL
+C
+C             CHECK FOR DISCARD OF INTERVAL
+      IF (ERRORI.LE.DTEST) DISCRD = .TRUE.
+C
+C         CHECK CHARACTERISTIC LENGTH OF FUNCTION
+      IF (DX.GE.CHARF) DISCRD = .FALSE.
+      RETURN
+      END
+      SUBROUTINE COMPUT(F, APPROX, INTERV)                              COM   10
+C
+C        ===============================================================
+C
+C **  THIS PROGRAM COMPUTES THE PIECEWISE POLYNOMIAL APPROXIMATION ON
+C     THE CURRENT INTERVAL. IT ALSO ESTIMATES THE ERROR
+C
+      REAL A, ACCUR, B, BLEFT, BRIGHT, CHARF, DDTEMP, DSCTOL, ERROR,
+     * ERRORI, FACTOR, FINTRP, FLEFT, FRIGHT, NORM, XBREAK, XDD,
+     * XINTRP, XLEFT, XRIGHT
+      DIMENSION XBREAK(20), DBREAK(20), BLEFT(20), BRIGHT(20)
+      DIMENSION XLEFT(50), XRIGHT(50), FACTOR(12), FMESGE(6)
+      DIMENSION DDTEMP(12,12), FINTRP(10), FLEFT(6), FRIGHT(6),
+     * XDD(12), XINTRP(10)
+      INTEGER BOTH, BREAK, DBREAK, DEGREE, EDIST, FMESGE, RIGHT,
+     * RIGHTX, SMOOTH
+      LOGICAL DISCRD, FATAL, FINISH
+      REAL ABSC, DX, ERRINT, F, FDERVL, FDERVR, FDUMB, POLYDD, WGTS
+      DIMENSION ABSC(4), WGTS(4), FDERVL(5), FDERVR(5), FDUMB(5)
+      EXTERNAL F, POLYDD
+      COMMON /INPUTZ/ A, B, ACCUR, NORM, CHARF, XBREAK, BLEFT, BRIGHT,
+     * DBREAK, DEGREE, SMOOTH, LEVEL, EDIST, NBREAK, KNTDIM, NPARDM
+      COMMON /RESULZ/ ERROR, KNOTS
+      COMMON /KONTRL/ DSCTOL, ERRORI, XLEFT, XRIGHT, BREAK, BOTH,
+     * FACTOR, FMESGE, IBREAK, INTERP, LEFT, MAXAUX, MAXKNT, MAXPAR,
+     * MAXSTK, NPAR, NSTACK, RIGHT, DISCRD, FATAL, FINISH
+      COMMON /COMDIF/ DDTEMP, FINTRP, FLEFT, FRIGHT, XDD, XINTRP,
+     * LEFTX, NINTRP, RIGHTX
+C
+      EQUIVALENCE (FLEFT(2),FDERVL(1)), (FRIGHT(2),FDERVR(1))
+C     FIFTEEN DIGIT VALUES FOR THESE GAUSS INTEGRATION CONSTANTS ARE
+C  .861136311594053 .339981043584856 .347854845137454 .652145154862546
+      DATA ABSC(1) /-.86113631159405/
+      DATA ABSC(2) /-.33998104358486/
+      DATA ABSC(3) /.33998104358486/
+      DATA ABSC(4) /.86113631159405/
+      DATA WGTS(1) /.34785484513745/
+      DATA WGTS(2) /.65214515486255/
+      DATA WGTS(3) /.65214515486255/
+      DATA WGTS(4) /.34785484513745/
+C
+C             COMPUTE INTERPOLATION INFORMATION
+      NINTRP = DEGREE - 2*SMOOTH - 1
+C
+C          INCREASE NUMBER OF INTERPOLATION POINTS IF BREAK POINTS ARE
+C          SPECIFIED WITH FEWER DERIVATIVES THAN SMOOTH
+      IF (BREAK.EQ.LEFT .OR. BREAK.EQ.RIGHT) NINTRP = NINTRP + SMOOTH -
+     * DBREAK(IBREAK)
+      IF (BREAK.EQ.BOTH) NINTRP = NINTRP + 2*SMOOTH - DBREAK(IBREAK) -
+     * DBREAK(IBREAK+1)
+      IF (NINTRP.EQ.0) GO TO 20
+C             GENERATE EQUAL SPACED INTERPOLATION POINTS
+      DX = (XRIGHT(NSTACK)-XLEFT(NSTACK))/FLOAT(NINTRP+1)
+      DO 10 J=1,NINTRP
+        XINTRP(J) = XLEFT(NSTACK) + FLOAT(J)*DX
+   10 CONTINUE
+C
+C             GET LEFT AND RIGHT F-VALUES, PUT F-VALUE IN FIRST ELEMENT
+C             OF ARRAYS FLEFT AND FRIGHT.  GET DERIVATIVES BACK AS
+C             OTHER ELEMENTS VIA THE SUBARRAYS FDERVL AND FDERVR.
+   20 FLEFT(1) = F(XLEFT(NSTACK),FDERVL)
+      FRIGHT(1) = F(XRIGHT(NSTACK),FDERVR)
+      LEFTX = SMOOTH + 1
+      RIGHTX = LEFTX
+C            GET F-VALUES AT OTHER INTERPOLATION POINTS, IF ANY
+      IF (NINTRP.EQ.0) GO TO 40
+      DO 30 J=1,NINTRP
+        FINTRP(J) = F(XINTRP(J),FDUMB)
+   30 CONTINUE
+C
+C          CHECK FOR BREAK POINTS, MODIFY VALUES IF NECESSARY
+   40 CONTINUE
+      IF (BREAK.NE.LEFT) GO TO 50
+      LEFTX = DBREAK(IBREAK) + 1
+      FLEFT(LEFTX) = BRIGHT(IBREAK)
+   50 IF (BREAK.NE.RIGHT) GO TO 60
+      RIGHTX = DBREAK(IBREAK) + 1
+      FRIGHT(RIGHTX) = BLEFT(IBREAK)
+   60 IF (BREAK.NE.BOTH) GO TO 70
+      LEFTX = DBREAK(IBREAK) + 1
+      RIGHTX = DBREAK(IBREAK+1) + 1
+      FLEFT(LEFTX) = BRIGHT(IBREAK)
+      FRIGHT(RIGHTX) = BLEFT(IBREAK+1)
+   70 CONTINUE
+C
+C           COMPUTE DIVIDED DIFFERENCES, NEWTON FORM OF POLYNOMIAL
+      CALL NEWTON(LEFTX, RIGHTX, NINTRP)
+C
+C         COMPUTE NORM OF ERROR OF THIS APPROMIMATION USING FOUR PTS
+C         ADD 50 PERCENT FUDGE FACTOR
+      ERRORI = ERRINT(F,POLYDD,XLEFT(NSTACK),XRIGHT(NSTACK),ABSC,WGTS)
+      ERRORI = 1.5*ERRORI
+      RETURN
+      END
+      REAL FUNCTION ERRINT(F, FIT, AAA, BBB, POINTS, WEIGHT)            ERR   10
+C
+C        ===============================================================
+C
+C **  THIS FUNCTION DOES A FOUR POINT INTEGRATION RULE FOR THE
+C     ABSOLUTE VALUE OF THE DIFFERENCE OF TWO FUNCTIONS( F AND FIT )
+C                   ABS( F(X) - FIT(X) )**NORM
+C     THE INTEGRATION USES THE POINTS AND WEIGHTS GIVEN AND SCALED
+C     FROM (-1,1) TO (AAA,BBB)
+C
+      REAL A, ACCUR, B, BLEFT, BRIGHT, CHARF, DDTEMP, DSCTOL, ERROR,
+     * ERRORI, FACTOR, FINTRP, FLEFT, FRIGHT, NORM, XBREAK, XDD,
+     * XINTRP, XLEFT, XRIGHT
+      DIMENSION XBREAK(20), DBREAK(20), BLEFT(20), BRIGHT(20)
+      DIMENSION XLEFT(50), XRIGHT(50), FACTOR(12), FMESGE(6)
+      DIMENSION DDTEMP(12,12), FINTRP(10), FLEFT(6), FRIGHT(6),
+     * XDD(12), XINTRP(10)
+      INTEGER BOTH, BREAK, DBREAK, DEGREE, EDIST, FMESGE, RIGHT,
+     * RIGHTX, SMOOTH
+      LOGICAL DISCRD, FATAL, FINISH
+      REAL AAA, ABMID, BA, BBB, F, FDUMB, FIT, P, PJ, POINTS, WEIGHT
+      REAL ER, F1, F2
+      DIMENSION FDUMB(5), POINTS(4), WEIGHT(4)
+      COMMON /INPUTZ/ A, B, ACCUR, NORM, CHARF, XBREAK, BLEFT, BRIGHT,
+     * DBREAK, DEGREE, SMOOTH, LEVEL, EDIST, NBREAK, KNTDIM, NPARDM
+      COMMON /RESULZ/ ERROR, KNOTS
+      COMMON /KONTRL/ DSCTOL, ERRORI, XLEFT, XRIGHT, BREAK, BOTH,
+     * FACTOR, FMESGE, IBREAK, INTERP, LEFT, MAXAUX, MAXKNT, MAXPAR,
+     * MAXSTK, NPAR, NSTACK, RIGHT, DISCRD, FATAL, FINISH
+      COMMON /COMDIF/ DDTEMP, FINTRP, FLEFT, FRIGHT, XDD, XINTRP,
+     * LEFTX, NINTRP, RIGHTX
+C
+C         COMPUTE MIDPOINT = ABMID AND HALF LENGTH = BA OF INTERVAL
+      ABMID = (AAA+BBB)/2.
+      BA = (BBB-AAA)/2.
+      PJ = ABMID + BA*POINTS(1)
+C
+C         TEST FOR TCHEBYCHEFF (MINIMAX) NORM WHICH USES SPECIAL CODE
+      IF (NORM.EQ.3.) GO TO 20
+C
+C         HAVE GENERAL LP NORM OR LEAST SQUARES OR LEAST DEVIATIONS
+      P = ABS(NORM)
+C              INITIALIZE THE QUADRATURE RULE
+      ERRINT = ABS(F(PJ,FDUMB)-FIT(PJ))**P*WEIGHT(1)
+C              LOOP THROUGH REMAINING POINTS
+      DO 10 J=2,4
+        PJ = ABMID + BA*POINTS(J)
+C             DEBUG DEBUG DEBUG START OF THE COMPUTATION
+        F1 = F(PJ,FDUMB)
+        F2 = FIT(PJ)
+        ER = ABS(F1-F2)**P
+        IF (LEVEL.GE.4 .AND. (KNOTS.EQ.1 .OR. FINISH)) WRITE (6,99999)
+     *   PJ, F1, F2, ER
+        ERRINT = ERRINT + ABS(F(PJ,FDUMB)-FIT(PJ))**P*WEIGHT(J)
+   10 CONTINUE
+      ERRINT = ERRINT*BA
+      GO TO 40
+C
+C         TCHEBYCHEFF NORM
+   20 CONTINUE
+C             FIND MAX ERROR ON POINTS
+C               INITIALIZE
+      ERRINT = ABS(F(PJ,FDUMB)-FIT(PJ))
+C              LOOP THROUGH THE REMAINING POINTS
+      DO 30 J=2,4
+        PJ = ABMID + BA*POINTS(J)
+        ERRINT = AMAX1(ERRINT,ABS(F(PJ,FDUMB)-FIT(PJ)))
+   30 CONTINUE
+   40 CONTINUE
+C             DEBUG  DEBUG  DEBUG  DEBUG
+      IF (LEVEL.GE.3) WRITE (6,99998) ERRINT, AAA, BBB
+      RETURN
+99999 FORMAT (5(3H --), 31HDEBUG ERROR CURVE,PJ,F1,F2,ER =, 4F15.8)
+99998 FORMAT (15X, 9HERRINT = , F20.15, 4H ON , 2F15.8)
+      END
+      SUBROUTINE NEWTON(NL, NR, NI)                                     NEW   10
+C
+C        ===============================================================
+C
+C **  THIS PROGRAM COMPUTES THE DIVIDED DIFFERENCES ARRAY AS FOLLOWS
+C         NL COALESCED POINTS ON LEFT   - DERIV VALUES IN FLEFT
+C         NR COALESCED POINTS ON RIGHT  -   -      -    - FRIGHT
+C         NI DISTINCT  POINTS INBETWEEN - FNCTN    -    - FINTRP
+C
+C     THE POINTS ARE ORDERED XL = XLEFT (NSTACK)
+C                            XR = XRIGHT(NSTACK)
+C                            XINTRP ARRAY
+C
+C         LAYOUT OF THE DDTEMP DIVIDED DIFFERENCE ARRAY
+C
+C     NL=6    LLLLLL****II
+C     NR=4    LLLLL****II     L = FIRST TRIANGLE
+C     NI=2    LLLL****II
+C             LLL****II       R = SECOND TRIANGLE
+C             LL****II
+C             L****II         * = FILL BETWEEN TRIANGLES
+C             RRRRII
+C             RRRII           I = COMPLETION FOR INTERPOLATION POINTS
+C             RRII
+C             RII       IDIF = HORIZONTAL COORD. = DIFFERENCE ORDER
+C             II        IPT  = VERTICAL COORD. ASSOCIATED WITH POINTS
+C             I
+C
+C
+      REAL A, ACCUR, B, BLEFT, BRIGHT, CHARF, DDTEMP, DSCTOL, ERROR,
+     * ERRORI, FACTOR, FINTRP, FLEFT, FRIGHT, NORM, XBREAK, XDD,
+     * XINTRP, XLEFT, XRIGHT
+      DIMENSION XBREAK(20), DBREAK(20), BLEFT(20), BRIGHT(20)
+      DIMENSION XLEFT(50), XRIGHT(50), FACTOR(12), FMESGE(6)
+      DIMENSION DDTEMP(12,12), FINTRP(10), FLEFT(6), FRIGHT(6),
+     * XDD(12), XINTRP(10)
+      INTEGER BOTH, BREAK, DBREAK, DEGREE, EDIST, FMESGE, RIGHT,
+     * RIGHTX, SMOOTH
+      LOGICAL DISCRD, FATAL, FINISH
+      REAL DIFFF, DIFFX
+      COMMON /INPUTZ/ A, B, ACCUR, NORM, CHARF, XBREAK, BLEFT, BRIGHT,
+     * DBREAK, DEGREE, SMOOTH, LEVEL, EDIST, NBREAK, KNTDIM, NPARDM
+      COMMON /RESULZ/ ERROR, KNOTS
+      COMMON /KONTRL/ DSCTOL, ERRORI, XLEFT, XRIGHT, BREAK, BOTH,
+     * FACTOR, FMESGE, IBREAK, INTERP, LEFT, MAXAUX, MAXKNT, MAXPAR,
+     * MAXSTK, NPAR, NSTACK, RIGHT, DISCRD, FATAL, FINISH
+      COMMON /COMDIF/ DDTEMP, FINTRP, FLEFT, FRIGHT, XDD, XINTRP,
+     * LEFTX, NINTRP, RIGHTX
+C
+C                 MAIN CALCULATION OF DIVIDED DIFFERENCES
+C         DEFINE A FEW SHORT CONSTANTS
+      NL1 = NL - 1
+      NL2 = NL + 1
+      NR1 = NR - 1
+      NR2 = NR + 1
+      NRL = NR + NL
+C
+C         PUT X-VALUES IN A SINGLE ARRAY WITH NDDX = NL+NR+NI POINTS
+      DO 10 NDDX=1,NL
+        XDD(NDDX) = XLEFT(NSTACK)
+   10 CONTINUE
+      NDDX = NL
+      DO 20 K=1,NR
+        NDDX = NDDX + 1
+        XDD(NDDX) = XRIGHT(NSTACK)
+   20 CONTINUE
+C            CHECK IF THERE ARE ANY INTERPOLATION POINTS TO ADD TO XDD
+      IF (NI.EQ.0) GO TO 40
+      DO 30 K=1,NI
+        NDDX = NDDX + 1
+        XDD(NDDX) = XINTRP(K)
+   30 CONTINUE
+C
+C           FILL BORDER OF FIRST TRIANGLE - SIZE NL.
+   40 CONTINUE
+C         TOP BORDER
+      DO 50 IDIF=1,NL
+        DDTEMP(IDIF,1) = FLEFT(IDIF)/FACTOR(IDIF)
+   50 CONTINUE
+      IF (NL1.EQ.0) GO TO 70
+C                   BOTTOM BORDER
+      DO 60 IDIF=1,NL1
+        IPT = NL2 - IDIF
+        DDTEMP(IDIF,IPT) = DDTEMP(IDIF,1)
+   60 CONTINUE
+C
+C          FILL BORDER OF SECOND TRIANGLE - SIZE NR
+   70 CONTINUE
+C         TOP BORDER
+      DO 80 IDIF=1,NR
+        DDTEMP(IDIF,NL2) = FRIGHT(IDIF)/FACTOR(IDIF)
+   80 CONTINUE
+      IF (NRL.EQ.NL2) GO TO 100
+C                   BOTTOM BORDER
+      DO 90 IDIF=1,NR1
+        IPT = NRL + 1 - IDIF
+        DDTEMP(IDIF,IPT) = DDTEMP(IDIF,NL2)
+   90 CONTINUE
+C
+C           FILL PARALLOGRAM BETWEEN THE TWO TRIANGLES JUST FILLED
+C          FILL ENTRIES PARALLEL TO BOTTOM OF FIRST TRIANGLE
+  100 CONTINUE
+C
+C         LOOP STEPPING ALONG TOP SIDE OF SECOND TRIANGLE
+      DO 120 J=2,NR2
+        IDIF = J
+C             LOOP STEPPING PARALLEL TO BOTTOM SIDE OF FIRST TRIANGLE
+        DO 110 K=2,NL2
+          IPT = NL + 2 - K
+          DIFFF = DDTEMP(IDIF-1,IPT+1) - DDTEMP(IDIF-1,IPT)
+          IPT2 = IPT - 1 + IDIF
+          DIFFX = XDD(IPT2) - XDD(IPT)
+          DDTEMP(IDIF,IPT) = DIFFF/DIFFX
+          IDIF = IDIF + 1
+  110   CONTINUE
+  120 CONTINUE
+C             DEBUG  DEBUG  DEBUG  DEBUG
+      IF (LEVEL.GE.4 .AND. KNOTS.LE.1) WRITE (6,99999) NR2, NL2, IDIF,
+     * IPT, DIFFF, DIFFX
+C
+C         FILL IN BOTTOM DIAGONALS FOR INTERPOLATION POINTS, IF ANY
+      IF (NI.EQ.0) GO TO 150
+C         LOOP THROUGH THE INTERPOLATATION POINTS
+      DO 140 J=1,NI
+        IDIF = 2
+        NRLJ = NRL + J
+        DDTEMP(1,NRLJ) = FINTRP(J)
+C         LOOP THROUGH THE DIFFERENCES (IDIF INDEX)
+        NRLJ1 = NRLJ - 1
+        DO 130 K=1,NRLJ1
+          IPT = NRLJ - K
+          DIFFF = DDTEMP(IDIF-1,IPT+1) - DDTEMP(IDIF-1,IPT)
+          DIFFX = XDD(NRLJ) - XDD(IPT)
+          DDTEMP(IDIF,IPT) = DIFFF/DIFFX
+          IDIF = IDIF + 1
+  130   CONTINUE
+  140 CONTINUE
+  150 CONTINUE
+      RETURN
+99999 FORMAT (9X, 30HNR2,NL2,IDIF,IPT,DIFFF,DIFFX =, 4I3, 2F12.6)
+      END
+      REAL FUNCTION POLYDD(X)                                           POL   10
+C
+C        ===============================================================
+C
+C **  THIS FUNCTION EVALUATES THE CURRENT POLYNOMIAL PIECE REPRESENTED
+C     BY THE DIVIDED DIFFERENCES DDTEMP ON THE POINT SET XDD.
+C
+      REAL A, ACCUR, B, BLEFT, BRIGHT, CHARF, DDTEMP, DSCTOL, ERROR,
+     * ERRORI, FACTOR, FINTRP, FLEFT, FRIGHT, NORM, XBREAK, XDD,
+     * XINTRP, XLEFT, XRIGHT
+      DIMENSION XBREAK(20), DBREAK(20), BLEFT(20), BRIGHT(20)
+      DIMENSION XLEFT(50), XRIGHT(50), FACTOR(12), FMESGE(6)
+      DIMENSION DDTEMP(12,12), FINTRP(10), FLEFT(6), FRIGHT(6),
+     * XDD(12), XINTRP(10)
+      INTEGER BOTH, BREAK, DBREAK, DEGREE, EDIST, FMESGE, RIGHT,
+     * RIGHTX, SMOOTH
+      LOGICAL DISCRD, FATAL, FINISH
+      REAL X
+      COMMON /INPUTZ/ A, B, ACCUR, NORM, CHARF, XBREAK, BLEFT, BRIGHT,
+     * DBREAK, DEGREE, SMOOTH, LEVEL, EDIST, NBREAK, KNTDIM, NPARDM
+      COMMON /RESULZ/ ERROR, KNOTS
+      COMMON /KONTRL/ DSCTOL, ERRORI, XLEFT, XRIGHT, BREAK, BOTH,
+     * FACTOR, FMESGE, IBREAK, INTERP, LEFT, MAXAUX, MAXKNT, MAXPAR,
+     * MAXSTK, NPAR, NSTACK, RIGHT, DISCRD, FATAL, FINISH
+      COMMON /COMDIF/ DDTEMP, FINTRP, FLEFT, FRIGHT, XDD, XINTRP,
+     * LEFTX, NINTRP, RIGHTX
+C
+C
+      POLYDD = DDTEMP(DEGREE+1,1)
+      DO 10 K=1,DEGREE
+        J = DEGREE + 1 - K
+        POLYDD = DDTEMP(J,1) + (X-XDD(J))*POLYDD
+   10 CONTINUE
+      RETURN
+      END
+      SUBROUTINE PPFIT4(F, XLFT, XRGT, EPSLN, NPIECE, ERREST, XKNOTS,   PPF   10
+     * COEFS, KDIMEN, NDIMEN, NDEG, NSMTH, EMEAS, LPRNT, FOSCIL, ATYPE,
+     * KBREAK, BRAKPT, KDERVB, VALLFT, VALRGT)
+C
+C        ===============================================================
+C
+C **  THIS SET OF FOUR CONTROL PROGRAMS SET VARYING NUMBERS OF DEFAULT
+C     VALUES FOR ARGUMENTS.  IT USES ENTRY STATEMENTS WHICH ARE DONE
+C     DIFFERENTLY BY VARIOUS FORTRANS.  FOR THIS REASON ENTRY STATEMENTS
+C     ARE ONLY INDICATED BY COMMENT CARDS.  WRITING FOUR SEPARATE ROU-
+C     TINES APPROXIMATELY TRIPLES THE LENGTH OF THE TOTAL CODE.
+C
+C     THE FOLLOWING TABULATES THE INTERNAL AND EXTERNAL NAMES OF THE
+C     ARGUMENTS ALONG WITH THEIR DEFAULT VALUES FOR THE VARIOUS PPFIT.
+C     NOTE THAT THIS ALLOWS THE ARGUMENTS TO BE PUT INTO A COMMON BLOCK
+C     AND AVOIDS LONG ARGUMENT LISTS WITHIN ADAPT ITSELF.
+C
+C
+C    INTERNAL   EXTERNAL     DEFAULT VALUE    SET BY PPFIT NUMBER
+C     F          F              NONE
+C     A,B        A,B            NONE
+C     ACCUR      EPSLN          NONE
+C     KNOTS      NPIECE         OUTPUT
+C     ERROR      ERREST         OUTPUT
+C     XKNOTS     XKNOTS         OUTPUT
+C     COEFS      COEFS          OUTPUT
+C     KDIMEN     KDIMEN         NONE
+C     NDIMEN     NDIMEN         NONE
+C     DEGREE     NDEG           3                1
+C     SMOOTH     NSMTH          0                1
+C     NORM       EMEAS          3                1 2
+C     LEVEL      LPRNT          1                1 2
+C     CHARF      FOSCIL         VARIABLE         1 2
+C     EDIST      ATYPE          1                1 2 3
+C     NBREAK     KBREAK         0                1 2 3
+C     XBREAK     BRAKPT         -
+C     DBREAK     KDERVB         -
+C     BLEFT      VALLFT         -
+C     BRIGHT     VALRGT         -
+C
+      REAL A, ACCUR, B, BLEFT, BRIGHT, CHARF, DDTEMP, DSCTOL, ERROR,
+     * ERRORI, FACTOR, FINTRP, FLEFT, FRIGHT, NORM, XBREAK, XDD,
+     * XINTRP, XLEFT, XRIGHT
+      DIMENSION XBREAK(20), DBREAK(20), BLEFT(20), BRIGHT(20)
+      DIMENSION XLEFT(50), XRIGHT(50), FACTOR(12), FMESGE(6)
+      DIMENSION DDTEMP(12,12), FINTRP(10), FLEFT(6), FRIGHT(6),
+     * XDD(12), XINTRP(10)
+      INTEGER BOTH, BREAK, DBREAK, DEGREE, EDIST, FMESGE, RIGHT,
+     * RIGHTX, SMOOTH
+      LOGICAL DISCRD, FATAL, FINISH
+      REAL XKNOTS(KDIMEN), COEFS(KDIMEN,NDIMEN)
+      REAL BRAKPT, EMEAS, EPSLN, ERREST, FOSCIL, F, VALLFT, VALRGT,
+     * XLFT, XRGT
+      DIMENSION BRAKPT(20), KDERVB(20), VALLFT(20), VALRGT(20)
+      INTEGER ATYPE
+      EXTERNAL F
+      COMMON /INPUTZ/ A, B, ACCUR, NORM, CHARF, XBREAK, BLEFT, BRIGHT,
+     * DBREAK, DEGREE, SMOOTH, LEVEL, EDIST, NBREAK, KNTDIM, NPARDM
+      COMMON /RESULZ/ ERROR, KNOTS
+      COMMON /KONTRL/ DSCTOL, ERRORI, XLEFT, XRIGHT, BREAK, BOTH,
+     * FACTOR, FMESGE, IBREAK, INTERP, LEFT, MAXAUX, MAXKNT, MAXPAR,
+     * MAXSTK, NPAR, NSTACK, RIGHT, DISCRD, FATAL, FINISH
+      COMMON /COMDIF/ DDTEMP, FINTRP, FLEFT, FRIGHT, XDD, XINTRP,
+     * LEFTX, NINTRP, RIGHTX
+      COMMON /SAVEIT/ IKNOT
+C
+C
+C             SKIP ALL DEFAULT SETTING FOR PPFIT4
+      GO TO 10
+C
+C                 SET DEFAULTS FOR PPFIT1
+C
+C         ****** SINCE ENTRY IS NON-STANDARD  ******
+C         ****** THE NATURAL WAY TO IMPLEMENT ******
+C         ****** THE OTHER PPFITS IS ONLY     ******
+C         ****** INDICATED IN THE COMMENTS    ******
+C
+C     ENTRY PPFIT1
+C     ENTRY PPFIT1(F,XLFT,XRGT,EPSLN,NPIECE,ERREST,XKNOTS,COEFS,
+C    A             KDIMEN,NDIMEN)
+      NDEG = 3
+      NSMTH = 0
+C
+C                 SET DEFAULTS FOR PPFIT2
+C     ENTRY PPFIT2
+C     ENTRY PPFIT2(F,XLFT,XRGT,EPSLN,NPIECE,ERREST,XKNOTS,COEFS,
+C    A             KDIMEN,NDIMEN,NDEG,NSMTH)
+      EMEAS = 3.0
+      LPRNT = 1
+      FOSCIL = B - A
+      IF (NDEG.EQ.2) FOSCIL = .5*FOSCIL
+      IF (NDEG.LE.1) FOSCIL = (B-A)/3.
+C
+C                 SET DEFAULTS FOR PPFIT3
+C     ENTRY PPFIT3
+C     ENTRY PPFIT3(F,XLFT,XRGT,EPSLN,NPIECE,ERREST,XKNOTS,COEFS,
+C    A             KDIMEN,NDIMEN,NDEG,NSMTH,EMEAS,LPRNT,FOSCIL)
+      ATYPE = 1
+      KSING = 0
+      KBREAK = 0
+C
+C         PUT INPUT INTO COMMON INPUTZ BY CHANGING TO INTERNAL NAMES
+   10 A = XLFT
+      B = XRGT
+      ACCUR = EPSLN
+      DEGREE = NDEG
+      SMOOTH = NSMTH
+      NORM = EMEAS
+      LEVEL = LPRNT
+      CHARF = FOSCIL
+      EDIST = ATYPE
+      NBREAK = KBREAK
+      IF (NBREAK.LE.0 .OR. NBREAK.GE.21) GO TO 30
+      DO 20 K=1,NBREAK
+        XBREAK(K) = BRAKPT(K)
+        DBREAK(K) = KDERVB(K)
+        BLEFT(K) = VALLFT(K)
+        BRIGHT(K) = VALRGT(K)
+   20 CONTINUE
+   30 CONTINUE
+C
+      CALL ADAPT(F, XKNOTS, COEFS, KDIMEN, NDIMEN)
+      NPIECE = KNOTS
+      ERREST = ERROR
+      RETURN
+      END
+      REAL FUNCTION PPOLY(T, XKNOTS, COEFS, KDIMEN, NDIMEN)             PPO   10
+C
+C        ===============================================================
+C
+C **  THIS FUNCTION EVALUATES THE PIECEWISE POLYNOMIAL APPROXIMATION
+C     COMPUTED IN ADAPT
+C
+      REAL A, ACCUR, B, BLEFT, BRIGHT, CHARF, DDTEMP, DSCTOL, ERROR,
+     * ERRORI, FACTOR, FINTRP, FLEFT, FRIGHT, NORM, XBREAK, XDD,
+     * XINTRP, XLEFT, XRIGHT
+      DIMENSION XBREAK(20), DBREAK(20), BLEFT(20), BRIGHT(20)
+      DIMENSION XLEFT(50), XRIGHT(50), FACTOR(12), FMESGE(6)
+      DIMENSION DDTEMP(12,12), FINTRP(10), FLEFT(6), FRIGHT(6),
+     * XDD(12), XINTRP(10)
+      INTEGER BOTH, BREAK, DBREAK, DEGREE, EDIST, FMESGE, RIGHT,
+     * RIGHTX, SMOOTH
+      LOGICAL DISCRD, FATAL, FINISH
+      REAL XKNOTS(KDIMEN), COEFS(KDIMEN,NDIMEN)
+      REAL T, X
+      COMMON /INPUTZ/ A, B, ACCUR, NORM, CHARF, XBREAK, BLEFT, BRIGHT,
+     * DBREAK, DEGREE, SMOOTH, LEVEL, EDIST, NBREAK, KNTDIM, NPARDM
+      COMMON /RESULZ/ ERROR, KNOTS
+      COMMON /KONTRL/ DSCTOL, ERRORI, XLEFT, XRIGHT, BREAK, BOTH,
+     * FACTOR, FMESGE, IBREAK, INTERP, LEFT, MAXAUX, MAXKNT, MAXPAR,
+     * MAXSTK, NPAR, NSTACK, RIGHT, DISCRD, FATAL, FINISH
+      COMMON /COMDIF/ DDTEMP, FINTRP, FLEFT, FRIGHT, XDD, XINTRP,
+     * LEFTX, NINTRP, RIGHTX
+C
+      COMMON /SAVEIT/ IKNOT
+C           START SEARCH FOR RIGHT INTERVAL FROM POINT OF LAST
+C           EVALUATION OF PPOLY
+C
+C           FORWARD SEARCHING LOOP
+   10 IF (T.LT.XKNOTS(IKNOT+1)) GO TO 20
+      IKNOT = IKNOT + 1
+      IF (IKNOT.LT.KNOTS) GO TO 10
+      IKNOT = KNOTS - 1
+C
+C                REACHED RIGHT END OF INTERVAL
+      GO TO 30
+C
+C           BACKWARD SEARCHING LOOP
+   20 IF (T.GE.XKNOTS(IKNOT)) GO TO 30
+      IKNOT = IKNOT - 1
+      IF (IKNOT.GT.1) GO TO 20
+      IKNOT = 1
+C
+C                REACHED LEFT END OF INTERVAL
+C
+C                EVALUATE FROM POWERS BASED AT XKNOT(IKNOT)
+C                USE NESTED MULTIPLICATION
+   30 X = T - XKNOTS(IKNOT)
+      PPOLY = COEFS(IKNOT,NPAR)
+      DO 40 K=1,DEGREE
+        KK = NPAR - K
+        PPOLY = COEFS(IKNOT,KK) + X*PPOLY
+   40 CONTINUE
+      RETURN
+      END
+      SUBROUTINE PTRANS(D, POWERS)                                      PTR   10
+C
+C        ===============================================================
+C
+C **  THIS PROGRAM CONVERTS POLYNOMIAL REPRESENTATION FROM DIVIDED
+C     DIFFERENCE TO POWER FORM.  THERE ARE COALESCED POINTS ON EACH
+C     END OF THE INTERVAL (XL,XR) = (XLEFT(NSTACK),XRIGHT(NSTACK)).
+C     THE NUMBER COALESCED AT EACH END IS LEFTX AND RIGHTX.
+C     AND THERE ARE NINTRP OTHER PTS XINTRP(K)  INBETWEEN THEM.
+C     SEE SUBROUTINE NEWTON FOR MORE DETAILS
+C
+      REAL A, ACCUR, B, BLEFT, BRIGHT, CHARF, DDTEMP, DSCTOL, ERROR,
+     * ERRORI, FACTOR, FINTRP, FLEFT, FRIGHT, NORM, XBREAK, XDD,
+     * XINTRP, XLEFT, XRIGHT
+      DIMENSION XBREAK(20), DBREAK(20), BLEFT(20), BRIGHT(20)
+      DIMENSION XLEFT(50), XRIGHT(50), FACTOR(12), FMESGE(6)
+      DIMENSION DDTEMP(12,12), FINTRP(10), FLEFT(6), FRIGHT(6),
+     * XDD(12), XINTRP(10)
+      INTEGER BOTH, BREAK, DBREAK, DEGREE, EDIST, FMESGE, RIGHT,
+     * RIGHTX, SMOOTH
+      LOGICAL DISCRD, FATAL, FINISH
+      REAL D, POWERS, SHIFT, XL, XR, XTEMP
+      DIMENSION D(12,12), POWERS(12), XTEMP(12)
+      COMMON /INPUTZ/ A, B, ACCUR, NORM, CHARF, XBREAK, BLEFT, BRIGHT,
+     * DBREAK, DEGREE, SMOOTH, LEVEL, EDIST, NBREAK, KNTDIM, NPARDM
+      COMMON /RESULZ/ ERROR, KNOTS
+      COMMON /KONTRL/ DSCTOL, ERRORI, XLEFT, XRIGHT, BREAK, BOTH,
+     * FACTOR, FMESGE, IBREAK, INTERP, LEFT, MAXAUX, MAXKNT, MAXPAR,
+     * MAXSTK, NPAR, NSTACK, RIGHT, DISCRD, FATAL, FINISH
+      COMMON /COMDIF/ DDTEMP, FINTRP, FLEFT, FRIGHT, XDD, XINTRP,
+     * LEFTX, NINTRP, RIGHTX
+C
+C         SET SOME SHORT LOCAL VARIABLE NAMES
+      XL = XLEFT(NSTACK)
+      XR = XRIGHT(NSTACK)
+      NL = LEFTX
+      NL1 = NL + 1
+      NR = RIGHTX
+      NI = NINTRP
+      NRL = NR + NL
+      NRI = NR + NI
+      NRI1 = NRI - 1
+      NRLI = NRL + NI
+C
+C         STARTING REPRESENTATION IS (ASSUMING XL = 0 )
+C
+C    D(1) +D(2)X +D(3)X**2 + --- +D(NL)X**(NL-1)
+C   +(X**NL)*( D(NL+1)(+D(NL+2)(X-XR)**2 + --- +D(NL+NR)*(X-XR)**(NR-1)
+C        *((X-XR)**NR)*(D(NL+NR+1) + D(NL+NR+2)*(X-XINTRP(1))
+C                      +D(NL+NR+3)*(X-XINTRP(1))(X-XINTRP(2)) + ---))
+C
+C         STRATEGY IS TO FIRST CONVERT THE PART FROM THE INTERP. PTS.
+C         TO POLY IN (X-XR).  THIS POLY THEN HAS ORIGIN SHIFTED TO XL.
+C
+C     THE CONVERSION OF THE INTERP PART IS DONE EXPLICITLY FOR DEGREE
+C     TWO OR LESS AND DONE BY SYNTHETIC DIVISION FOR HIGHER DEGREES
+C
+C   D1 + D2(X-X1) +D3(X**2-(X1+X2)X +X1*X2)
+C
+C     THE RESULTING COEFFICIENTS ARE PUT IN THE ARRAY POWERS
+C
+C             DEBUG  DEBUG  DEBUG  DEBUG
+      IF (LEVEL.EQ.4) WRITE (6,99999) (D(K,1),K=1,NPAR)
+      IF (NI.EQ.0) GO TO 100
+C             BUILD UP THE POLYNOMIAL FOR THE INTERPOLATION POINTS
+C
+C         USE SPECIAL FORMULAS FOR NI LESS THAN 3
+      IF (NI.EQ.1) GO TO 10
+      IF (NI.EQ.2) GO TO 20
+      GO TO 30
+   10 POWERS(1) = D(NRL+1,1)
+      GO TO 80
+   20 POWERS(1) = D(NRL+1,1) + (XR-XINTRP(1))*D(NRL+2,1)
+      POWERS(2) = D(NRL+2,1)
+      GO TO 80
+C
+C         CONVERSION BY REPEATED SYNTHETIC DIVISION
+   30 NI1 = NI - 1
+C         INITIALIZE THE POWERS AND XTEMP ARRAYS
+      DO 40 K=1,NI
+        XTEMP(K) = XINTRP(K)
+        NRLK = NRL + K
+        POWERS(K) = D(NRLK,1)
+   40 CONTINUE
+C
+C         DO THE REPEATED SYNTHETIC DIVISION TO REPLACE THE XTEMP
+C         = XINTRP POINTS OF THE NEWTON EXPANSION BY THE XR POINTS
+      DO 70 K=1,NI1
+C              POWERS(NI) IS FIXED AND SET ABOVE
+        DO 50 II=1,NI1
+          I = NI - II
+          POWERS(I) = POWERS(I) + (XR-XTEMP(I))*POWERS(I+1)
+   50   CONTINUE
+C              SHIFT THE NEWTON EXPANSION PTS. UP, PUT IN ONE MORE XR
+        DO 60 II=1,NI1
+          I = NI - II
+          XTEMP(I+1) = XTEMP(I)
+   60   CONTINUE
+        XTEMP(1) = XR
+   70 CONTINUE
+      IF (LEVEL.EQ.4) WRITE (6,99998) (POWERS(K),K=1,NI)
+   80 CONTINUE
+C             SHIFT THE COEFFICIENTS TO THE TOP OF THE POWERS ARRAY
+      DO 90 K=1,NI
+        L = NI + 1 - K
+        LTOP = L + NRL
+        POWERS(LTOP) = POWERS(L)
+   90 CONTINUE
+C
+C             HAVE THE INTERPOLATION PT. COEFS. IN THE ARRAY POWERS
+  100 CONTINUE
+C             PUT THE REMAINING DIVIDED DIFFS INTO THE POWERS ARRAY
+      DO 110 J=1,NRL
+        POWERS(J) = D(J,1)
+  110 CONTINUE
+C
+C             DEBUG  DEBUG  DEBUG  DEBUG
+      IF (LEVEL.EQ.4) WRITE (6,99997) (POWERS(K),K=NL1,NPAR)
+C         TRANSFORM THE ORIGIN OF THE POLYNOMIAL FROM XR TO XL
+C         WE USE REPEATED SYNTHETIC DIVISION
+      IF (NRI.EQ.1) GO TO 140
+      SHIFT = XR - XL
+      KHI = NRI1
+C             LOOP THROUGH THE COEFFICIENTS
+      DO 130 J=2,NRI
+C                   SYNTHETIC DIVISION LOOP
+        DO 120 K=1,KHI
+          KOEF = NRLI - K
+          POWERS(KOEF) = POWERS(KOEF) - SHIFT*POWERS(KOEF+1)
+  120   CONTINUE
+        KHI = KHI - 1
+  130 CONTINUE
+  140 CONTINUE
+C     THE COEFFICIENTS ARE NOW OF THE POWER FORM WITH ORIGIN XL
+C             DEBUG  DEBUG  DEBUG  DEBUG
+      IF (LEVEL.EQ.4) WRITE (6,99996) (POWERS(K),K=1,NPAR)
+      RETURN
+99999 FORMAT (15X, 26HDEBUG PTRANS, ORIG INPUT =/(5X, 8E15.5))
+99998 FORMAT (10X, 17HINTERP PART COEFS/(5X, 8E15.5))
+99997 FORMAT (10X, 25HRIGHT + INTERP PART COEFS/(5X, 8E15.5))
+99996 FORMAT (10X, 18HFINAL COEFFICIENTS/(5X, 8E15.5))
+      END
+      SUBROUTINE PUT(INTERV, XKNOTS, COEFS, KDIMEN, NDIMEN)             PUT   10
+C
+C        ===============================================================
+C **  THIS PROGRAM PUTS INTERVALS ON THE STACK OR DISCARDS THEM.
+C     WHEN AN INTERVAL IS DISCARDED A NEW KNOT IS FOUND. THEN THIS
+C     PROGRAM UPDATES THE ERROR ESTIMATE, THE XKNOT ARRAY, TRANSFORMS
+C     THE POLYNOMIAL TO THE POWER FORM AND PUT THE COEFFICIENTS INTO
+C     THE ARRAY COEFS.  IT ALSO CHECKS FOR PASSING BREAK POINTS
+C
+      REAL A, ACCUR, B, BLEFT, BRIGHT, CHARF, DDTEMP, DSCTOL, ERROR,
+     * ERRORI, FACTOR, FINTRP, FLEFT, FRIGHT, NORM, XBREAK, XDD,
+     * XINTRP, XLEFT, XRIGHT
+      DIMENSION XBREAK(20), DBREAK(20), BLEFT(20), BRIGHT(20)
+      DIMENSION XLEFT(50), XRIGHT(50), FACTOR(12), FMESGE(6)
+      DIMENSION DDTEMP(12,12), FINTRP(10), FLEFT(6), FRIGHT(6),
+     * XDD(12), XINTRP(10)
+      INTEGER BOTH, BREAK, DBREAK, DEGREE, EDIST, FMESGE, RIGHT,
+     * RIGHTX, SMOOTH
+      LOGICAL DISCRD, FATAL, FINISH
+      REAL XKNOTS(KDIMEN), COEFS(KDIMEN,NDIMEN)
+      REAL BUFFER, DX, POWERS, P, RATIO
+      DIMENSION POWERS(12)
+      COMMON /INPUTZ/ A, B, ACCUR, NORM, CHARF, XBREAK, BLEFT, BRIGHT,
+     * DBREAK, DEGREE, SMOOTH, LEVEL, EDIST, NBREAK, KNTDIM, NPARDM
+      COMMON /RESULZ/ ERROR, KNOTS
+      COMMON /KONTRL/ DSCTOL, ERRORI, XLEFT, XRIGHT, BREAK, BOTH,
+     * FACTOR, FMESGE, IBREAK, INTERP, LEFT, MAXAUX, MAXKNT, MAXPAR,
+     * MAXSTK, NPAR, NSTACK, RIGHT, DISCRD, FATAL, FINISH
+      COMMON /COMDIF/ DDTEMP, FINTRP, FLEFT, FRIGHT, XDD, XINTRP,
+     * LEFTX, NINTRP, RIGHTX
+C
+      DATA BUFFER /1.E-12/
+C            CHECK FOR DISCARDING THE INTERVAL
+      IF (DISCRD) GO TO 30
+C         SUBDIVIDE INTERVAL AND PLACE ON STACK
+      IF (NSTACK.LT.MAXSTK) GO TO 10
+C             FATAL ERROR, EXCEEDED ACTIVE STACK SIZE
+      FATAL = .TRUE.
+      IF (LEVEL.GE.0) WRITE (6,99999) FMESGE, MAXSTK, XLEFT(NSTACK),
+     * XRIGHT(NSTACK)
+      DISCRD = .TRUE.
+      GO TO 30
+C
+   10 DX = (XRIGHT(NSTACK)-XLEFT(NSTACK))*.5
+C              CHECK FOR SMALL INTERVALS
+      RATIO = DX/(ABS(A)+ABS(B))
+      IF (RATIO.GT.BUFFER) GO TO 20
+      DISCRD = .TRUE.
+      FATAL = .TRUE.
+      IF (LEVEL.GE.0) WRITE (6,99998) XLEFT(NSTACK), XRIGHT(NSTACK)
+      GO TO 30
+   20 CONTINUE
+      NSTACK = NSTACK + 1
+      XLEFT(NSTACK) = XLEFT(NSTACK-1)
+      XLEFT(NSTACK-1) = XRIGHT(NSTACK-1) - DX
+      XRIGHT(NSTACK) = XLEFT(NSTACK-1)
+C             DEBUG  DEBUG  DEBUG  DEBUG
+      IF (LEVEL.GE.3) WRITE (6,99997) NSTACK, XLEFT(NSTACK),
+     * XRIGHT(NSTACK)
+      RETURN
+C
+C            DISCARD INTERVAL, UPDATE GLOBAL ERROR, XKNOTS AND COEFS
+   30 CONTINUE
+C
+      P = ABS(NORM)
+      IF (NORM.EQ.3.) ERROR = AMAX1(ERROR,ERRORI)
+      IF (NORM.NE.3.) ERROR = (ERROR**P+ERRORI)**(1./P)
+C
+C              CHECK FOR PASSING BREAK POINTS
+      IF (BREAK.EQ.LEFT .OR. BREAK.EQ.BOTH) IBREAK = IBREAK + 1
+C             DEBUG  DEBUG  DEBUG  DEBUG
+      IF (LEVEL.GE.3) WRITE (6,99996) NSTACK
+C
+C             TRANSFORM REPRESENTATION OF POLYNOMIAL FROM DIVIDED
+C             DIFFERENCES TO POWERS OF X WITH ORIGIN AT XKNOTS (KNOTS)
+      CALL PTRANS(DDTEMP, POWERS)
+C
+C             PUT COEFS INTO THE MAIN ARRAY
+      DO 40 K=1,NPAR
+        COEFS(KNOTS,K) = POWERS(K)
+   40 CONTINUE
+C            PUT THE NEW KNOTS IN XKNOTS
+      KNOTS = KNOTS + 1
+      XKNOTS(KNOTS) = XRIGHT(NSTACK)
+      NSTACK = NSTACK - 1
+      RETURN
+99999 FORMAT (//2X, 6A4, 36HINTERVAL DIVIDED TOO MUCH, EXCEEDED ,
+     * 6HLIMIT , I3, 22H ON INTERVAL STACK AT /20X, 2E18.8/2X, 6HINTERV,
+     * 38HAL DISCARDED AND COMPUTATION CONTINUED)
+99998 FORMAT (25X, 23HGOT SHORT INTERVAL ****, 2E22.13, 12H **** DISCAR,
+     * 4HD IT)
+99997 FORMAT (15X, 13HPUT INTERVAL , I3, 10H ON STACK , 2F12.8)
+99996 FORMAT (15X, 16HDISCARD INTERVAL, I5)
+      END
+      SUBROUTINE SETUP(XKNOTS, COEFS, KDIMEN, NDIMEN)                   SET   10
+C
+C        ===============================================================
+C
+C **  THIS PROGRAM CHECKS THE INPUT DATA AND INITIALIZES THE COMPUTATION
+C
+      REAL A, ACCUR, B, BLEFT, BRIGHT, CHARF, DDTEMP, DSCTOL, ERROR,
+     * ERRORI, FACTOR, FINTRP, FLEFT, FRIGHT, NORM, XBREAK, XDD,
+     * XINTRP, XLEFT, XRIGHT
+      DIMENSION XBREAK(20), DBREAK(20), BLEFT(20), BRIGHT(20)
+      DIMENSION XLEFT(50), XRIGHT(50), FACTOR(12), FMESGE(6)
+      DIMENSION DDTEMP(12,12), FINTRP(10), FLEFT(6), FRIGHT(6),
+     * XDD(12), XINTRP(10)
+      INTEGER BOTH, BREAK, DBREAK, DEGREE, EDIST, FMESGE, RIGHT,
+     * RIGHTX, SMOOTH
+      LOGICAL DISCRD, FATAL, FINISH
+      REAL XKNOTS(KDIMEN), COEFS(KDIMEN,NDIMEN)
+      INTEGER HMSGE(6), NMSGE(4,4)
+      COMMON /INPUTZ/ A, B, ACCUR, NORM, CHARF, XBREAK, BLEFT, BRIGHT,
+     * DBREAK, DEGREE, SMOOTH, LEVEL, EDIST, NBREAK, KNTDIM, NPARDM
+      COMMON /RESULZ/ ERROR, KNOTS
+      COMMON /KONTRL/ DSCTOL, ERRORI, XLEFT, XRIGHT, BREAK, BOTH,
+     * FACTOR, FMESGE, IBREAK, INTERP, LEFT, MAXAUX, MAXKNT, MAXPAR,
+     * MAXSTK, NPAR, NSTACK, RIGHT, DISCRD, FATAL, FINISH
+      COMMON /COMDIF/ DDTEMP, FINTRP, FLEFT, FRIGHT, XDD, XINTRP,
+     * LEFTX, NINTRP, RIGHTX
+C
+C              IKNOT IS A COUNTER USED IN THE OUTPUT APPROX. PPOLY
+      COMMON /SAVEIT/ IKNOT
+      DATA HMSGE(1), HMSGE(2), HMSGE(3), HMSGE(4), HMSGE(5), HMSGE(6) /
+     * 4H ***,4H* FA,4HTAL ,4HERRO,4HR **,4H**  /
+      DATA NMSGE(1,1), NMSGE(1,2), NMSGE(1,3), NMSGE(1,4) /4HLEAS,
+     * 4HT DE,4HVIAT,4HIONS/
+      DATA NMSGE(2,1), NMSGE(2,2), NMSGE(2,3), NMSGE(2,4) /4HLEAS,
+     * 4HT SQ,4HUARE,4HS   /
+      DATA NMSGE(3,1), NMSGE(3,2), NMSGE(3,3), NMSGE(3,4) /4HMINI,
+     * 4HMAX ,4HNORM,4H    /
+      DATA NMSGE(4,1), NMSGE(4,2), NMSGE(4,3), NMSGE(4,4) /4HGENE,
+     * 4HRAL ,4HL-P ,4HNORM/
+      DATA KLEFT, KRIGHT, KBOTH /4HLEFT,4HRITE,4HBOTH/
+C
+C         PUT DATA STATEMENT ITEMS INTO COMMON VARIABLES
+C         VARIOUS COMPILERS ALLOW MORE EFFICIENT WAYS
+C
+      LEFT = KLEFT
+      RIGHT = KRIGHT
+      BOTH = KBOTH
+      DO 10 K=1,6
+        FMESGE(K) = HMSGE(K)
+   10 CONTINUE
+C -------- SET CURRENT VALUES OF LIMITS ON DIMENSIONS ------------------
+      KNTDIM = KDIMEN
+      NPARDM = NDIMEN
+      MAXKNT = KNTDIM
+      MAXSTK = 50
+      MAXPAR = MIN0(12,NPARDM)
+      MAXAUX = 20
+C -------- CHECK INPUT DATA --------------------------------------------
+      FATAL = .FALSE.
+      IF ((LEVEL+1)*LEVEL*(LEVEL-1)*(LEVEL-2).EQ.0) GO TO 20
+C         FIXED ERROR ON PRINT CONTROL LEVEL
+      WRITE (6,99999) LEVEL
+C         FOR DEBUGGING DO NOT CHANGE OUTPUT LEVEL
+C         FOR PRODUCTION VERSION SET LEVEL = 0
+   20 IF (A.LT.B) GO TO 30
+C         FATAL ERROR IN INTERVAL (A,B)
+      FATAL = .TRUE.
+      WRITE (6,99998) FMESGE, A, B
+   30 IF (ACCUR.GT.0.0) GO TO 40
+C         FATAL ERROR, NEGATIVE ACCURACY
+      FATAL = .TRUE.
+      WRITE (6,99997) FMESGE, ACCUR
+   40 IF (DEGREE.LT.MAXPAR) GO TO 50
+C         FATAL ERROR, DEGREE EXCEEDS MAXIMUM ALLOWED VALUE
+      IF (LEVEL.GE.0) WRITE (6,99996) FMESGE, DEGREE
+      FATAL = .TRUE.
+   50 IF (2*SMOOTH.LT.DEGREE) GO TO 60
+C         FATAL ERROR, SMOOTH AND DEGREE INCOMPATIBLE
+      FATAL = .TRUE.
+      WRITE (6,99995) FMESGE, SMOOTH, DEGREE
+   60 IF (CHARF.GT.(B-A)/FLOAT(MAXKNT)) GO TO 70
+C         FATAL ERROR, CHARF IS TOO SMALL
+      FATAL = .TRUE.
+      WRITE (6,99994) FMESGE, CHARF
+   70 IF ((NORM-1.)*(NORM-2.)*(NORM-3.).EQ.0.0 .OR. NORM.LT.0.0) GO TO
+     * 80
+C         FATAL ERROR, UNDEFINED NORM REQUESTED
+      IF (LEVEL.GE.0) WRITE (6,99993) FMESGE, NORM
+      FATAL = .TRUE.
+   80 IF (NBREAK.GE.0 .AND. NBREAK.LE.MAXAUX) GO TO 90
+C         FATAL ERROR IN NUMBER OF BREAK POINTS
+      FATAL = .TRUE.
+      WRITE (6,99992) FMESGE, NBREAK
+C
+   90 IF (NBREAK.EQ.0) GO TO 150
+C         CHECK THE BREAK POINT DATA, MONOTONICITY AND DEGREE
+      J = 1
+      IF (XBREAK(1).LT.A .OR. XBREAK(NBREAK).GT.B) GO TO 110
+      IF (NBREAK.EQ.1) GO TO 120
+      DO 100 J=2,NBREAK
+        IF (XBREAK(J-1).GE.XBREAK(J)) GO TO 110
+  100 CONTINUE
+      GO TO 120
+  110 FATAL = .TRUE.
+C         BREAK POINTS ARE NOT MONOTONIC
+      WRITE (6,99991) FMESGE, XBREAK(J)
+  120 LIMSM = (DEGREE-1)/2
+      DO 130 J=1,NBREAK
+        IF (DBREAK(J).LT.0 .OR. DBREAK(J).GT.LIMSM) GO TO 140
+  130 CONTINUE
+      GO TO 150
+C         BAD VALUE IN DERIVATIVE BREAKS
+  140 FATAL = .TRUE.
+      WRITE (6,99990) FMESGE, DBREAK(J)
+C
+  150 IF (EDIST*(EDIST-1)*(EDIST-2).EQ.0) GO TO 160
+C         FATAL ERROR, ILLEGAL ERROR DISTRIBUTION REQUESTED
+      IF (LEVEL.GE.0) WRITE (6,99989) FMESGE, EDIST
+      FATAL = .TRUE.
+  160 CONTINUE
+C
+C -------- INITIALIZATION OF VARIABLES ---------------------------------
+C
+C             ACTIVE INTERVAL STACK
+      NSTACK = 1
+      XLEFT(1) = A
+      XRIGHT(1) = B
+C             TERMINATION AND ERROR VALUES
+      FINISH = .FALSE.
+      ERROR = 0.
+      DSCTOL = ACCUR**ABS(NORM)
+      IF (EDIST.EQ.0) DSCTOL = DSCTOL/(B-A)
+      IF (NORM.EQ.3.) DSCTOL = ACCUR
+C             MISCELLANEOUS VARIABLES AND POINTERS
+      IBREAK = 1
+      KNOTS = 1
+      IKNOT = 1
+      INTERP = DEGREE + 2 - 2*SMOOTH
+      XKNOTS(1) = A
+      NPAR = DEGREE + 1
+C
+C             COMPUTE ARRAY OF NPAR FACTORIALS, FACTOR(K)= K-1 FACTORIAL
+      FACTOR(1) = 1.
+      FACTOR(2) = 1.
+      DO 170 K=3,NPAR
+        FACTOR(K) = FLOAT(K-1)*FACTOR(K-1)
+  170 CONTINUE
+C
+C -------- PRINT OUT OF PROBLEM TO BE SOLVED ---------------------------
+      IF (LEVEL.LE.0) GO TO 180
+      NMES = NORM
+      IF (NORM.LT.0.0) NMES = 4
+      WRITE (6,99988) A, B, DEGREE, SMOOTH, ACCUR, (NMSGE(NMES,J),J=1,4)
+      WRITE (6,99987) CHARF, NORM
+      IF (EDIST.EQ.0) WRITE (6,99986)
+      IF (EDIST.EQ.1) WRITE (6,99985)
+      IF (EDIST.EQ.2) WRITE (6,99984)
+      IF (EDIST.EQ.-1) WRITE (6,99983)
+      IF (NBREAK.EQ.0) GO TO 180
+      WRITE (6,99982) NBREAK
+      WRITE (6,99981) (XBREAK(J),DBREAK(J),BLEFT(J),BRIGHT(J),J=1,
+     * NBREAK)
+  180 CONTINUE
+      RETURN
+99999 FORMAT (//2X, 29HILLEGAL OUTPUT LEVEL CONTROL , I2, 9H SET TO 0)
+99998 FORMAT (//2X, 6A4, 20H INCORRECT INTERVAL , 2E15.5)
+99997 FORMAT (//2X, 6A4, 28H ILLEGAL ACCURACY REQUESTED , E15.5)
+99996 FORMAT (//2X, 6A4, 6HDEGREE, I3, 29H EXCEEDS MAXIMUM ALLOWED VALU,
+     * 1HE)
+99995 FORMAT (//2X, 6A4, 35H INCOMPATIBLE DEGREE AND SMOOTHNESS, 2I5)
+99994 FORMAT (//2X, 6A4, 40H CHARACTERISTIC OSCILLATION LENGTH OF F ,
+     * E15.5, 14H IS TOO SMALL )
+99993 FORMAT (//2X, 6A4, 20H ERROR MEASURE NORM , E15.5, 11H NOT ALLOWE,
+     * 1HD)
+99992 FORMAT (//2X, 6A4, 11H IN NUMBER , I4, 17H OF BREAK POINTS )
+99991 FORMAT (//2X, 6A4, 30H BREAK POINTS NOT IN ORDER AT , E15.5)
+99990 FORMAT (//2X, 6A4, 20H ILLEGAL DERIVATIVE , I3, 10H AT BREAK )
+99989 FORMAT (//2X, 6A4, 32HILLEGAL ERROR DISTRIBUTION TYPE , I3)
+99988 FORMAT (//2X, 45H++++++ PIECEWISE POLYNOMIAL APPROXIMATION ON ,
+     * 9HINTERVAL , 2E15.4, 11H OF DEGREE , I2, 6H WITH , I2, 7H CONTIN,
+     * 17HUOUS DERIVATIVES /10X, 23H ACCURACY REQUESTED IS , E15.4,
+     * 13H MEASURED BY , 4A4)
+99987 FORMAT (10X, 43HOTHER INPUT/DEFAULT VARIABLES ARE FOSCIL = ,
+     * E15.4, 10H, EMEAS = , E15.4)
+99986 FORMAT (15X, 9(2H--), 33H PROPORTIONAL ERROR DISTRIBUTION )
+99985 FORMAT (15X, 9(2H--), 36HAPPROXIMATE FIXED ERROR DISTRIBUTION)
+99984 FORMAT (15X, 9(2H--), 25H FIXED ERROR DISTRIBUTION)
+99983 FORMAT (15X, 9(2H--), 28HMODIFIED PROPORTIONAL ERROR , 8HDISTRIBU,
+     * 4HTION)
+99982 FORMAT (I12, 36H BREAK POINTS SPECIFIED WITH DATA = , 9H LOCATION,
+     * 32H, DERIVATIVE, LEFT+RIGHT VALUES )
+99981 FORMAT (5X, 2(E20.5, I4, E16.5, E15.5))
+      END
+      SUBROUTINE SUMARY(XKNOTS, COEFS, KDIMEN, NDIMEN)                  SUM   10
+C
+C        ===============================================================
+C
+C **  THIS PROGRAM PRINTS OUT A SUMMARY OF RESULTS OF ADAPT
+C
+      REAL A, ACCUR, B, BLEFT, BRIGHT, CHARF, DDTEMP, DSCTOL, ERROR,
+     * ERRORI, FACTOR, FINTRP, FLEFT, FRIGHT, NORM, XBREAK, XDD,
+     * XINTRP, XLEFT, XRIGHT
+      DIMENSION XBREAK(20), DBREAK(20), BLEFT(20), BRIGHT(20)
+      DIMENSION XLEFT(50), XRIGHT(50), FACTOR(12), FMESGE(6)
+      DIMENSION DDTEMP(12,12), FINTRP(10), FLEFT(6), FRIGHT(6),
+     * XDD(12), XINTRP(10)
+      INTEGER BOTH, BREAK, DBREAK, DEGREE, EDIST, FMESGE, RIGHT,
+     * RIGHTX, SMOOTH
+      LOGICAL DISCRD, FATAL, FINISH
+      REAL XKNOTS(KDIMEN), COEFS(KDIMEN,NDIMEN)
+      COMMON /INPUTZ/ A, B, ACCUR, NORM, CHARF, XBREAK, BLEFT, BRIGHT,
+     * DBREAK, DEGREE, SMOOTH, LEVEL, EDIST, NBREAK, KNTDIM, NPARDM
+      COMMON /RESULZ/ ERROR, KNOTS
+      COMMON /KONTRL/ DSCTOL, ERRORI, XLEFT, XRIGHT, BREAK, BOTH,
+     * FACTOR, FMESGE, IBREAK, INTERP, LEFT, MAXAUX, MAXKNT, MAXPAR,
+     * MAXSTK, NPAR, NSTACK, RIGHT, DISCRD, FATAL, FINISH
+      COMMON /COMDIF/ DDTEMP, FINTRP, FLEFT, FRIGHT, XDD, XINTRP,
+     * LEFTX, NINTRP, RIGHTX
+C
+      IF (LEVEL.EQ.-1) RETURN
+C                   LEVEL 0 OUTPUT
+      WRITE (6,99999) DEGREE, SMOOTH, KNOTS, ERROR
+      IF (LEVEL.EQ.0) RETURN
+C
+C                   LEVEL 1 OUTPUT - KNOTS AND COEFFICIENTS
+      KNOTS1 = KNOTS - 1
+      IF (KNOTS.GT.15) GO TO 20
+C
+C               FORMAT FOR SMALL NO. OF KNOTS
+      WRITE (6,99998)
+      DO 10 K=1,KNOTS1
+        WRITE (6,99997) K, XKNOTS(K), COEFS(K,1)
+        WRITE (6,99996) (COEFS(K,J),J=2,NPAR)
+   10 CONTINUE
+      GO TO 40
+C
+C               FORMAT FOR LOTS OF KNOTS
+   20 CONTINUE
+      WRITE (6,99995)
+      DO 30 K=1,KNOTS1
+        WRITE (6,99994) K, XKNOTS(K), (COEFS(K,J),J=1,NPAR)
+   30 CONTINUE
+   40 RETURN
+99999 FORMAT (///48H --- ADAPTIVE PIECEWISE POLYNOMIAL APPROXIMATION,
+     * 11H OF DEGREE , I2, 6H WITH , I2, 12H CONTINUOUS , 10HDERIVATIVE,
+     * 8HS NEEDED, I4, 17H KNOTS FOR ERROR , E10.4)
+99998 FORMAT (8X, 13HKNOT LOCATION, 13X, 21HX-POWER COEFFICIENTS ,
+     * 27HRELATIVE TO KNOT LOCATIONS )
+99997 FORMAT (I10, 2E20.12)
+99996 FORMAT (30X, E20.12)
+99995 FORMAT (3X, 39HK   K-TH INTERIOR KNOT     POWERS OF X , 7HRELATIV,
+     * 20HE TO KNOT LOCATIONS )
+99994 FORMAT (I5, E25.12, 4E22.12/(E30.12, 4E22.12))
+      END
+      SUBROUTINE TAKE(INTERV)                                           TAK   10
+C
+C        ===============================================================
+C
+C **  THIS PROGRAM TAKES AN ACTIVE INTERVAL OFF THE TOP OF THE STACK
+C     IT ALSO DOES MOST OF THE WORK OF LOCATING AND HANDLING
+C     BREAK POINTS
+C
+      REAL A, ACCUR, B, BLEFT, BRIGHT, CHARF, DDTEMP, DSCTOL, ERROR,
+     * ERRORI, FACTOR, FINTRP, FLEFT, FRIGHT, NORM, XBREAK, XDD,
+     * XINTRP, XLEFT, XRIGHT
+      DIMENSION XBREAK(20), DBREAK(20), BLEFT(20), BRIGHT(20)
+      DIMENSION XLEFT(50), XRIGHT(50), FACTOR(12), FMESGE(6)
+      DIMENSION DDTEMP(12,12), FINTRP(10), FLEFT(6), FRIGHT(6),
+     * XDD(12), XINTRP(10)
+      INTEGER BOTH, BREAK, DBREAK, DEGREE, EDIST, FMESGE, RIGHT,
+     * RIGHTX, SMOOTH
+      LOGICAL DISCRD, FATAL, FINISH
+      REAL DX, RATIO, BUFFER
+      COMMON /INPUTZ/ A, B, ACCUR, NORM, CHARF, XBREAK, BLEFT, BRIGHT,
+     * DBREAK, DEGREE, SMOOTH, LEVEL, EDIST, NBREAK, KNTDIM, NPARDM
+      COMMON /RESULZ/ ERROR, KNOTS
+      COMMON /KONTRL/ DSCTOL, ERRORI, XLEFT, XRIGHT, BREAK, BOTH,
+     * FACTOR, FMESGE, IBREAK, INTERP, LEFT, MAXAUX, MAXKNT, MAXPAR,
+     * MAXSTK, NPAR, NSTACK, RIGHT, DISCRD, FATAL, FINISH
+      COMMON /COMDIF/ DDTEMP, FINTRP, FLEFT, FRIGHT, XDD, XINTRP,
+     * LEFTX, NINTRP, RIGHTX
+C
+      DATA BUFFER /1.E-12/
+C
+C         CHECK FOR BREAK POINT
+      BREAK = 0
+      IF (NBREAK.EQ.0 .OR. IBREAK.GT.NBREAK) GO TO 20
+      IF (XBREAK(IBREAK).GT.XRIGHT(NSTACK)) GO TO 20
+C
+C               SET CONTROL VARIABLE BREAK, CHECK FOR LOCATION
+      IF (XBREAK(IBREAK).GT.XLEFT(NSTACK)) GO TO 10
+      BREAK = LEFT
+      IF (IBREAK.EQ.NBREAK) GO TO 20
+C             CHECK FOR SECOND BREAK POINT IN THIS INTERVAL
+      IF (XBREAK(IBREAK+1).GE.XRIGHT(NSTACK)) GO TO 20
+C                 NEXT BREAK IS INSIDE INTERVAL, SPLIT TOP INTERVAL
+      BREAK = BOTH
+C                  CHECK EXCEEDING STACK LIMIT. IF SO, STOP
+      IF (NSTACK.EQ.MAXSTK) GO TO 30
+C                     DONT SPLIT VERY SMALL INTERVALS, STOP INSTEAD
+      DX = XBREAK(IBREAK+1) - XLEFT(NSTACK)
+      RATIO = DX/(ABS(A)+ABS(B))
+      IF (RATIO.LE.BUFFER) GO TO 40
+      NSTACK = NSTACK + 1
+      XLEFT(NSTACK) = XLEFT(NSTACK-1)
+      XRIGHT(NSTACK) = XBREAK(IBREAK+1)
+      XLEFT(NSTACK-1) = XRIGHT(NSTACK)
+      IF (LEVEL.GE.2) WRITE (6,99999) NSTACK, XLEFT(NSTACK),
+     * XRIGHT(NSTACK)
+      GO TO 20
+C
+   10 BREAK = RIGHT
+C                 CHECK TO SEE IF BREAK IS ALREADY AT RIGHT END POINT
+      IF (XBREAK(IBREAK).GE.XRIGHT(NSTACK)) GO TO 20
+C                 THE BREAK IS INSIDE INTERVAL, SPLIT TOP INTERVAL
+C                  CHECK EXCEEDING STACK LIMIT. IF SO, STOP
+      IF (NSTACK.EQ.MAXSTK) GO TO 30
+C                     DONT SPLIT VERY SMALL INTERVALS, STOP INSTEAD
+      DX = XBREAK(IBREAK) - XLEFT(NSTACK)
+      RATIO = DX/(ABS(A)+ABS(B))
+      IF (RATIO.LE.BUFFER) GO TO 40
+      NSTACK = NSTACK + 1
+      XLEFT(NSTACK) = XLEFT(NSTACK-1)
+      XRIGHT(NSTACK) = XBREAK(IBREAK)
+      XLEFT(NSTACK-1) = XRIGHT(NSTACK)
+      IF (LEVEL.GE.2) WRITE (6,99998) NSTACK, XLEFT(NSTACK),
+     * XRIGHT(NSTACK)
+   20 CONTINUE
+C             DEBUG  DEBUG  DEBUG
+      IF (LEVEL.GE.3) WRITE (6,99997) XLEFT(NSTACK), XRIGHT(NSTACK),
+     * BREAK
+      RETURN
+C
+C        UNABLE TO PROCEED BECAUSE THE STACK LIMIT IS REACHED WITH
+C        MULTIPLE BREAKPOINTS INSIDE THE SMALLEST ONE.
+   30 FATAL = .TRUE.
+      FINISH = .TRUE.
+      IF (LEVEL.GE.0) WRITE (6,99996) FMESGE, MAXSTK, XLEFT(NSTACK),
+     * XRIGHT(NSTACK), XBREAK(IBREAK)
+      RETURN
+C
+C         SPLITTING INTERVALS TO ACCOMODATE BREAK POINTS HAS LED TO
+C         AN EXCESSIVELY SMALL INTERVAL
+   40 FATAL = .TRUE.
+      FINISH = .TRUE.
+      IF (LEVEL.GE.0) WRITE (6,99995) FMESGE, XLEFT(NSTACK),
+     * XBREAK(IBREAK), XRIGHT(NSTACK)
+      RETURN
+99999 FORMAT (10X, 28H++++ SPLIT TOP INTERVAL, GET, I3, 2E18.8,
+     * 17H FOR BREAK = BOTH)
+99998 FORMAT (10X, 28H++++ SPLIT TOP INTERVAL, GET, I3, 2E18.8,
+     * 19H FOR BREAK = RIGHT )
+99997 FORMAT (15X, 14HTAKE INTERVAL , 2F12.8, 11H    BREAK =, A4)
+99996 FORMAT (//2X, 6A4, 42H INTERVAL DIVIDED TOO MUCH, EXCEEDED LIMIT,
+     * I3, 21H ON INTERVAL STACK AT/20X, 2E18.8/2X, 12HBREAK POINT ,
+     * E18.8, 48H PRESENT REQUIRES SPLITTING INTERVAL, STOP ADAPT)
+99995 FORMAT (//2X, 6A4, 43HBREAK POINT ADJUSTMENT HAS LED TO A FATALLY,
+     * 1H , 40HSMALL INTERVAL, THE POINTS INVOLVED ARE /20X, 3E18.8)
+      END
+      SUBROUTINE TERMIN(TEST, AND, PRINT, XKNOTS, KDIMEN)               TER   10
+C
+C        ===============================================================
+C
+C **  THIS PROGRAM TESTS FOR TERMINATION AND GIVES INTERMEDIATE OUTPUT
+C
+      REAL A, ACCUR, B, BLEFT, BRIGHT, CHARF, DDTEMP, DSCTOL, ERROR,
+     * ERRORI, FACTOR, FINTRP, FLEFT, FRIGHT, NORM, XBREAK, XDD,
+     * XINTRP, XLEFT, XRIGHT
+      DIMENSION XBREAK(20), DBREAK(20), BLEFT(20), BRIGHT(20)
+      DIMENSION XLEFT(50), XRIGHT(50), FACTOR(12), FMESGE(6)
+      DIMENSION DDTEMP(12,12), FINTRP(10), FLEFT(6), FRIGHT(6),
+     * XDD(12), XINTRP(10)
+      INTEGER BOTH, BREAK, DBREAK, DEGREE, EDIST, FMESGE, RIGHT,
+     * RIGHTX, SMOOTH
+      LOGICAL DISCRD, FATAL, FINISH
+      REAL XKNOTS(KDIMEN)
+      COMMON /INPUTZ/ A, B, ACCUR, NORM, CHARF, XBREAK, BLEFT, BRIGHT,
+     * DBREAK, DEGREE, SMOOTH, LEVEL, EDIST, NBREAK, KNTDIM, NPARDM
+      COMMON /RESULZ/ ERROR, KNOTS
+      COMMON /KONTRL/ DSCTOL, ERRORI, XLEFT, XRIGHT, BREAK, BOTH,
+     * FACTOR, FMESGE, IBREAK, INTERP, LEFT, MAXAUX, MAXKNT, MAXPAR,
+     * MAXSTK, NPAR, NSTACK, RIGHT, DISCRD, FATAL, FINISH
+      COMMON /COMDIF/ DDTEMP, FINTRP, FLEFT, FRIGHT, XDD, XINTRP,
+     * LEFTX, NINTRP, RIGHTX
+C
+C         INTERMEDIATE OUTPUT - ACCORDING TO LEVELS
+C         NO INTERMEDIATE OUTPUT FOR LEVELS -1,0,1
+      IF (LEVEL.LE.1) GO TO 40
+C
+C             LEVEL 2 OUTPUT - ONLY FOR DISCARDED INTERVAL
+      IF (.NOT.DISCRD) GO TO 10
+      WRITE (6,99999) KNOTS, XKNOTS(KNOTS), ERRORI, ERROR
+      IF (BREAK.EQ.LEFT) WRITE (6,99998)
+      IF (BREAK.EQ.RIGHT) WRITE (6,99997)
+      IF (BREAK.EQ.BOTH) WRITE (6,99996)
+C
+      GO TO 20
+C             DEBUG OUTPUT  -  LEVEL 3
+   10 IF (LEVEL.EQ.2) GO TO 40
+C
+C                  INTERVAL SUMMARY
+      WRITE (6,99995) NSTACK, XLEFT(NSTACK), XRIGHT(NSTACK), ERRORI
+      IF (BREAK.NE.0) WRITE (6,99994) IBREAK, XBREAK(IBREAK)
+C
+C             DEBUG POLYNOMIAL OPERATIONS  -  LEVEL 4
+   20 CONTINUE
+      IF (LEVEL.LE.3) GO TO 40
+      WRITE (6,99993) LEFTX, RIGHTX, NINTRP
+      DO 30 K=1,NPAR
+        KNPAR = NPAR + 1 - K
+        WRITE (6,99992) K, (DDTEMP(I,K),I=1,KNPAR)
+   30 CONTINUE
+   40 CONTINUE
+C             TEST FOR NORMAL TERMINATION
+      IF (NSTACK.EQ.0) GO TO 50
+C
+C             TEST FOR ABNORMAL TERMINATION
+      IF (KNOTS.LT.MAXKNT) RETURN
+C
+C            HAVE EXCEEDED LIMIT ON KNOTS
+      WRITE (6,99991) FMESGE, MAXKNT, XKNOTS(KNOTS), ERROR
+      FATAL = .TRUE.
+C
+C         TERMINATE COMPUTATION
+   50 FINISH = .TRUE.
+      RETURN
+99999 FORMAT (2X, 9H**** KNOT, I4, 4H AT , E16.5, 17H, WITH LOCAL AND ,
+     * 16HGLOBAL ERRORS = , 2E15.4)
+99998 FORMAT (20X, 32HBREAK POINT ON LEFT OF INTERVAL )
+99997 FORMAT (20X, 33HBREAK POINT ON RIGHT OF INTERVAL )
+99996 FORMAT (20X, 37HBREAK POINT AT BOTH ENDS OF INTERVAL )
+99995 FORMAT (10X, 19H++++ STACK ELEMENT , I3, 3H = , E20.5, E15.5,
+     * 19H, WITH LOCAL ERROR , E15.4, 17H PLACED ON STACK )
+99994 FORMAT (15X, 14HBBBREAK POINT , I3, 3H = , E15.4, 9H INVOLVED)
+99993 FORMAT (5X, 44H---- DIVIDED DIFFERENCE INFO ---- NL,NR,NI =, 3I3)
+99992 FORMAT (5X, 12HDIV DIFF ROW, I3, 9F12.5/93X, 3F12.5)
+99991 FORMAT (//2X, 6A4, 14HEXCEEDED LIMIT, I3, 14H ON NUMBER OF ,
+     * 9HKNOTS AT , E18.8, 13H WITH ERROR =, E14.4)
+      END

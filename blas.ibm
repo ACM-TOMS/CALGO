@@ -1,0 +1,2095 @@
+         MACRO
+&ADDR    INCFX &R1,&R2,&R3,&R4,&SHIFT,&BRANCH
+.*       ADJUST BASE ADDRESS OF ARRAYS IF INCREMENTS ARE NEGATIVE
+&ADDR    L     &R2,0(&R2)
+         SLA   &R2,&SHIFT
+         BP    &BRANCH
+         LR    &R4,&R2
+         MR    &R4-1,&R3
+         SR    &R1,&R4
+         MEND
+./  ADD  NAME=INCBR
+         MACRO
+&ADDR    INCBR &R1,&R2,&R3,&R4,&R5,&LABEL
+.*       STANDARD INCREMENTING AND TESTING FOR LOOP END
+&ADDR    AR    &R1,&R2
+         AR    &R3,&R4
+         BCT   &R5,&LABEL
+         MEND
+./  ADD  NAME=NCHK
+         MACRO
+&ADDR    NCHK  &R1,&R2,&LABEL
+.*       TEST FOR N .GT. 0.  QUIT WHEN N .LE. 0
+&ADDR    L     &R1,0(&R2)
+         LTR   &R2,&R1
+         BNP   &LABEL
+         BCTR  &R1,0
+         MEND
+./  ADD  NAME=EQUATE
+         MACRO
+         EQUATE
+.*       DEFINE SYMBOLIC NAMES OF REGS., ETC.
+R0       EQU   0
+R1       EQU   1
+R2       EQU   2
+R3       EQU   3
+R4       EQU   4
+R5       EQU   5
+R6       EQU   6
+R7       EQU   7
+R8       EQU   8
+R9       EQU   9
+R10      EQU   10
+R11      EQU   11
+R12      EQU   12
+R13      EQU   13
+R14      EQU   14
+R15      EQU   15
+F0       EQU   0
+F2       EQU   2
+F4       EQU   4
+F6       EQU   6
+RSTAR4   EQU   2
+RSTAR8   EQU   3
+CSTAR8   EQU   3
+CSTAR16  EQU   4
+         MEND
+./    ADD  NAME=PROLOG
+         MACRO
+&NAME    PROLOG &MAXREG,&EPID=YES,&TRACE=YES
+.*       VARIOUS INDIVIDUALS HAVE CONTRIBUTED TO THE 360 ASM.
+.*       EFFORT.  THESE INCLUDE
+.*       R.J.HANSON, TIM HARRINGTON, JOHN WISNIEWSKI, AND KAREN HASKELL
+.*       SPECIAL THANKS TO PROF. DAVE BENSON FOR HELP WITH IBM/360 ASM.
+.*       PROPERTIES.
+         GBLB  &CALLQ
+         GBLC  &REGNUM
+         LCLA  &K
+.*
+.*       THIS NEXT CARD STOPS MACRO EXPANSION ON THE PRINT.
+         PRINT NOGEN
+&NAME    CSECT
+         EQUATE
+         AIF   ('&TRACE' NE 'YES').L1
+HSA      EQU   4 .             HIGHER SAVEAREA
+LSA      EQU   8 .             LOWER SAVEAREA
+.L1      ANOP
+&CALLQ   SETB  ('&TRACE' EQ 'YES')
+&REGNUM  SETC  '&MAXREG'
+         AIF   ('&EPID' NE 'YES' AND '&TRACE' NE 'YES').L30
+         USING &NAME,15 .      TEMPORARY BASE REGISTER
+         B     PRO&SYSNDX
+         AIF   ('&EPID' NE 'YES').L10
+&K       SETA  K'&NAME
+         DC    AL1(&K) .       LENGTH OF EPID
+         DC    CL&K'&NAME' .   ENTRY POINT INDICATOR
+.L10     AIF   ('&TRACE' NE 'YES').L15
+SAVE&SYSNDX DS 18F .           SAVEAREA
+.L15     ANOP
+PRO&SYSNDX  DS  0H
+         DROP 15
+.L20     AIF   ('&TRACE' NE 'YES').L30
+         STM   14,&MAXREG+1,12(13)
+         USING &NAME,15
+         LA    14,SAVE&SYSNDX . MY SAVEAREA
+         ST    14,LSA(13) .    SAVEAREA
+         ST    13,HSA(14) .    POINTERS
+         LR    13,14
+         LR    &MAXREG+1,15
+         DROP  15
+         USING &NAME,&MAXREG+1 . PROGRAM BASE REGISTER
+         MEXIT
+.L30     STM   14,&MAXREG,12(13)
+         USING &NAME,15 .      PROGRAM BASE REGISTER
+         MEND
+./  ADD  NAME=EPILOG
+         MACRO
+&LBL     EPILOG &RESULT
+         GBLB  &CALLQ
+         GBLC  &REGNUM
+         AIF   (&CALLQ).L10
+         AIF   (T'&RESULT EQ 'O').L5
+&LBL     LM    14,15,12(13) .  RESULT IN R0.
+         LM    1,&REGNUM,24(13)
+         AGO   .L50
+.L5      ANOP
+&LBL     LM    14,&REGNUM,12(13) .      RESULTS IN F0.
+         AGO   .L50
+.L10     AIF   (T'&RESULT EQ 'O').L15
+&LBL     L     13,HSA(13) .    RESTORE CALLER'S SAVEAREA.
+         LM    14,15,12(13) .  RESULT IN R0.
+         LM    1,&REGNUM+1,24(13)
+         AGO   .L50
+.L15     ANOP
+&LBL     L     13,HSA(13) .    RESTORE CALLERS'S SAVEAREA.
+         LM    14,&REGNUM+1,12(13) .
+         AGO   .L50
+.L50     BR    14 .            RETURN TO CALLING PROGRAM.
+         MEND
+./  ADD NAME=FIXH
+         MACRO
+&LABEL   FIXH
+&LABEL   LE    F6,SFLAG .              GET SFLAG
+         LTER  F6,F6 .                 TEST SFLAG
+         BM    FXHC&SYSNDX .           IF SFLAG<0 RETURN
+         BZ    FXHB&SYSNDX .           IF SFLAG=0 BRANCH TO B1
+         LE    F6,=E'1.0' .            SFLAG>0 CASE; PUT 1.0 INTO F6
+         STE   F6,H12 .                SET H12=1.0
+         LCER  F6,F6 .                 SET F6=-1.0
+         STE   F6,H21 .                SET H21=-1.0
+         B     FXHA&SYSNDX
+FXHB&SYSNDX LE   F6,=E'1.0' .          PUT 1.0 INTO F6(B1 BRANCH)
+         STE   F6,H11 .                SET H11=1.0
+         STE   F6,H22 .                SET H22=1.0
+FXHA&SYSNDX  LNER  F6,F6 .             SET F6=-1.
+         STE   F6,SFLAG .              SET SFLAG=-1.
+FXHC&SYSNDX  DS    0H
+         MEND
+./  ADD NAME=DFIXH
+         MACRO
+&LABEL   DFIXH
+&LABEL   LD    F6,DFLAG .              GET DFLAG
+         LTDR  F6,F6 .                 TEST DFLAG
+         BM    FXHC&SYSNDX .           IF DFLAG<0 RETURN
+         BZ    FXHB&SYSNDX .           IF DFLAG=0 BRANCH TO B1
+         LD    F6,=D'1.0' .            DFLAG>0 CASE; PUT 1.0 INTO F6
+         STD   F6,H12 .                SET H12=1.0
+         LCDR  F6,F6 .                 SET F6=-1.0
+         STD   F6,H21 .
+         B     FXHA&SYSNDX
+FXHB&SYSNDX LD   F6,=D'1.0' .          PUT 1.0 INTO F6(B1 BRANCH)
+         STD   F6,H11 .                SET H11=1.0
+         STD   F6,H22 .                SET H22=1.0
+FXHA&SYSNDX  LNDR  F6,F6 .             SET F6=-1.0
+        STD    F6,DFLAG .              SET DFLAG=-1.
+FXHC&SYSNDX  DS    0H
+         MEND
+//ASM.SYSIN DD *
+*********SINGLE PRECISION INNER PRODUCT, SDOT, IBM/360 ASM.************
+*        USAGE STATEMENT                                14 AUGUST 1975*
+*             SW = SDOT (N,SX,INCX,SY,INCY)           WASH. ST. U./ANL*
+*        SW,SDOT,SX( ),SY( ),REAL*4  N,INCX,INCY,INTEGER*4            *
+***********************************************************************
+SDOT     PROLOG R11
+         LM    R2,R6,0(R1)             GET POINTERS TO ARGUMENTS
+         SER   F0,F0                   SET SDOT = 0.0
+         NCHK  R7,R2,DONE              GET N AND EXIT IF N .LE. 0
+         L     R11,0(R4)               GET INCX
+         C     R11,0(R6)               COMPARE INCY WITH INCX
+         BNE   INCNE                   BRANCH TO GEN. LOOP IF NOT EQUAL
+         SLA   R11,RSTAR4              MULTIPLY INCS * 4
+         BM    INCNE                   BRANCH TO GEN. LOOP IF NEG.
+         LR    R8,R11                  STORE INCX*4 IN UNOCCUPIED R8
+         MR    R10,R7                  COMPUTE INCX * 4 * (N-1)
+         SR    R6,R6                   SET R6 = 0
+         LR    R10,R8                  LOAD R10 WITH LOOPEQ INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPEQ   LE    F2,0(R6,R3)             GET SX( ) AND MULTIPLY
+         ME    F2,0(R6,R5)             BY SY( ) AND ACCUMULATE
+         AER   F0,F2                   INNER PRODUCT IN F0
+         BXLE  R6,R10,LOOPEQ
+         B     DONE
+INCNE    INCFX R3,R4,R7,R9,RSTAR4,ICY    FIX SX( ) INCREMENT
+ICY      INCFX R5,R6,R7,R9,RSTAR4,LOOPNE FIX SY( ) INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPNE   LE    F2,0(R3)                GET SX( ) AND MULTIPLY
+         ME    F2,0(R5)                BY SY( ) AND ACCUMULATE
+         AER   F0,F2                   INNER PRODUCT IN F0
+         INCBR R3,R4,R5,R6,R2,LOOPNE   ADD INCREMENTS AND CONTINUE
+DONE     EPILOG
+         END
+*********DOUBLE PRECISION INNER PRODUCT, DSDOT, IBM/360 ASM.***********
+*        USAGE STATEMENT                                   19 MAY 1974*
+*             DW = DSDOT(N,SX,INCX,SY,INCY)                WASH. ST. U*
+*        DW,DSDOT,REAL*8 SX( ),SY( ) REAL *4, N,INCX,INCY INTEGER * 4 *
+***********************************************************************
+DSDOT    PROLOG R9
+         LM    R2,R6,0(R1)             GET POINTERS TO ARGUMENTS
+         SDR   F0,F0                   SET DSDOT = 0
+         NCHK  R7,R2,DONE              GET N AND QUIT IF N .LE. 0
+         INCFX R3,R4,R7,R9,RSTAR4,ICY  FIX SX( ) INCREMENT
+ICY      INCFX R5,R6,R7,R9,RSTAR4,LOOP FIX SY( ) INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP     LE    F2,0(R3)                GET SX( ) AND
+         ME    F2,0(R5)                MULTIPLY BY SY( ) AND
+         ADR   F0,F2                   ACCUMULATE INNER PRODUCT
+         INCBR R3,R4,R5,R6,R2,LOOP     ADD INCREMENTS AND CONTINUE LOOP
+DONE     EPILOG
+         END
+*********ACCUM. INNER. PROD. AND ADD SCALAR, SDSDOT, IBM/360 ASM.******
+*        USAGE STATEMENT                                   19 MAY 1974*
+*             SW = SDSDOT(N,SB,SX,INCX,SY,INCY)            WASH. ST. U*
+*        SW,SDSDOT,SB,SX( ),SY( ), REAL * 4, N,INCX,INCY INTEGER * 4  *
+***********************************************************************
+SDSDOT   PROLOG R11
+         LM    R2,R7,0(R1)             GET POINTERS TO ARGUMENTS
+         SDR   F0,F0                   SET SDSDOT =0.D0
+         LE    F0,0(R3)                LOAD DBLE(SB)
+         NCHK  R9,R2,DONE              GET N AND QUIT IF N .LE. 0
+         L     R11,0(R5)               LOAD R11 WITH INCX
+         C     R11,0(R7)               COMPARE INCX WITH INCY
+         BNE   INCNEN                  IF INCX .NE. INCY, GEN. LOOP.
+         SLA   R11,RSTAR4              MULT. INCX*4
+         BM    INCNEN                  IF BOTH INCX AND INCY NEG.,
+*                                      USE GEN. LOOP.
+         LR    R8,R11                  SAVE INCX*4 AS INCREMENT.
+*        THE CONTENTS OF REG R11 (CONTAINING INCX*4) ARE MOVED TO
+*        R8 (UNOCCUPIED) BECAUSE THE 'MR' INSTRUCTION WHICH FOLLOWS
+*        PLACES THE RESULT IN R11 AND ZEROES R10.
+         MR    R10,R9                  COMPUTE INCX*4*(N-1)
+         SR    R7,R7                   SET R7=0
+         LR    R10,R8                  LOAD R10 WITH INCREMENT USED IN
+*        LOOP.  THE 'BXLE' INSTRUCTION (BELOW) ADDS THE CONTENTS OF REG
+*        R10 TO REG. R7 AND COMPARES WITH THE CONTENTS OF REG R11.
+*        THE BRANCH (TO LOOPE) IS TAKEN WHEN THE CONTENTS OF R7
+*        DO NOT EXCEED THE CONTENTS OF REG R11.
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPE    LE    F2,0(R7,R4)             SET SX( )
+         ME    F2,0(R7,R6)             COMPUTE SX( )*SY( )
+         ADR   F0,F2                   ACCUMULATE INNER PRODUCT
+         BXLE  R7,R10,LOOPE
+         B     DONE
+INCNEN   INCFX R4,R5,R9,R11,RSTAR4,ICY  FIX SX( ) INCREMENT
+ICY      INCFX R6,R7,R9,R11,RSTAR4,LOOP FIX SY( ) INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP     LE    F2,0(R4)                GET SX( ) AND
+         ME    F2,0(R6)                MULTIPLY BY SY( ) AND
+         ADR   F0,F2                   ACCUMULATE INNER PRODUCT
+         INCBR R4,R5,R6,R7,R2,LOOP     ADD INCREMENTS AND CONTINUE LOOP
+DONE     EPILOG                        EXIT WITH SNGL(DBLE(SB)+DOT
+*                                      PRODUCT) IN F0 NOW.
+         END
+*********DOUBLE PRECISION INNER PRODUCT, DDOT, IBM/360 ASM.************
+*        USAGE STATEMENT                                  21 JULY 1975*
+*             DW = DDOT (N,DX,INCX,DY,INCY)            WASH. ST. U/ANL*
+*        DW,DDOT,DX( ),DY( ),REAL*8 N,INCX,INCY,INTEGER*4             *
+***********************************************************************
+DDOT     PROLOG R11
+         LM    R2,R6,0(R1)             GET POINTERS TO ARGUMENTS
+         SDR   F0,F0                   SET DDOT = 0.0D0
+         NCHK  R7,R2,DONE              GET N AND EXIT IF N .LE. 0
+         L     R11,0(R4)               GET INCX
+         C     R11,0(R6)               COMPARE INCY WITH INCX
+         BNE   INCNE                   BRANCH TO GEN. LOOP IF NOT EQUAL
+         SLA   R11,RSTAR8              MULTIPLY INCX * 8
+         BM    INCNE                   BRANCH TO GEN. LOOP IF NEG.
+         LR    R8,R11                  STORE INCX*8 IN UNOCCUPIED R8
+         MR    R10,R7                  COMPUTE INCX * 8 * (N-1)
+         SR    R6,R6                   SET R6 = 0
+         LR    R10,R8                  LOAD R10 WITH LOOPEQ INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPEQ   LD    F2,0(R6,R3)             GET DX( ) AND MULTIPLY
+         MD    F2,0(R6,R5)             BY DY( ) AND ACCUMULATE
+         ADR   F0,F2                   INNER PRODUCTS IN F0
+         BXLE  R6,R10,LOOPEQ
+         B     DONE
+INCNE    INCFX R3,R4,R7,R9,RSTAR8,ICY    FIX DX( ) INCREMENT
+ICY      INCFX R5,R6,R7,R9,RSTAR8,LOOPNE FIX DY( ) INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPNE   LD    F2,0(R3)                GET DX( ) AND MULTIPLY
+         MD    F2,0(R5)                BY DY( ) AND ACCUMULATE
+         ADR   F0,F2                   INNER PRODUCTS IN F0
+         INCBR R3,R4,R5,R6,R2,LOOPNE   ADD INCREMENTS AND CONTINUE
+DONE     EPILOG
+         END
+*********EXTENDED PREC. DOT PRODUCT, DQDOTA, IBM/360 ASM.**********
+*        USAGE STATEMENT                                          *
+*             DW = DQDOTA (N,DB,QC,DX,INCX,DY,INCY)               *
+*        QC(5) REAL*4,DW,DQDOTA,DB,DX(),DY() REAL*8,              *
+*        N,INCX,INCY INTEGER*4                                    *
+*******************************************************************
+DQDOTA   PROLOG R11
+         LM    R2,R8,0(R1)
+         SDR   F2,F2                   CLEAR REG. F2
+         LD    F0,0(R3)                LOAD EXTENDED (DB)
+         LE    F4,0(R4)                GET QC( )
+         STE   F4,TEMP
+         LE    F4,4(R4)
+         STE   F4,TEMP+4
+         LD    F4,TEMP
+         LE    F6,8(R4)
+         STE   F6,TEMP
+         LE    F6,12(R4)
+         STE   F6,TEMP+4
+         LD    F6,TEMP                 END GET QC( )
+*        AXR   F0,F4                   COMPUTE DB + QC( )
+*        WARNING: THE ABOVE INSTRUCTION MAY NOT BE PRESENT ON YOUR
+*        MACHINE. OPTIONS: REPLACE IT BY ADR  F0,F4 OR USE A SOFTWARE
+*        REPLACEMENT FOR THE OPERATION.
+         ADR   F0,F4                   COMPUTE DB + QC( )
+         NCHK  R9,R2,FIXQC
+         INCFX R5,R6,R9,R11,RSTAR8,INCY
+INCY     INCFX R7,R8,R9,R11,RSTAR8,LOOP
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP     LD    F4,0(R5)                GET DX( )
+*        MXD   F4,0(R7)                COMPUTE EXTEND. (DX()) * DY()
+*        WARNING: THE ABOVE INSTRUCTION MAY NOT BE PRESENT ON YOUR
+*        MACHINE. OPTIONS: REPLACE IT BY MD  F4,0(R7) OR USE A SOFTWARE
+*        REPLACEMENT FOR THE OPERATION.
+         MD    F4,0(R7)                COMPUTE EXTEND. (DX()) * DY()
+*
+*        AXR   F0,F4                   ACCUM. EXTEND. SUM
+*        WARNING: THE ABOVE INSTRUCTION MAY NOT BE PRESENT ON YOUR
+*        MACHINE. OPTIONS: REPLACE IT BY ADR  F0,F4 OR USE A SOFTWARE
+*        REPLACEMENT FOR THE OPERATION.
+         ADR   F0,F4                   ACCUM. EXTEND. SUM
+         INCBR R5,R6,R7,R8,R2,LOOP
+FIXQC    STD   F0,TEMP                 STORE RESULT IN
+         LE    F4,TEMP                 EXTEND. QC( )
+         STE   F4,0(R4)                THE REAL*4 OPS. ARE
+         LE    F4,TEMP+4               NEEDED BECAUSE
+         STE   F4,4(R4)                QC( ) MAY NOT HAVE
+         STD   F2,TEMP                 REAL*8 ALIGNMENT.
+         LE    F4,TEMP                 NOTE THAT ONLY
+         STE   F4,8(R4)                QC(I),I=1,4 ARE USED.
+         LE    F4,TEMP+4
+         STE   F4,12(R4)
+         EPILOG
+         DS    0D
+TEMP     DS    D
+         END
+*********EXTENDED PREC. DOT PRODUCT, DQDOTI, IBM/360 ASM.**********
+*        USAGE STATEMENT                                          *
+*             DW = DQDOTI (N,DB,QC,DX,INCX,DY,INCY)               *
+*        QC(5) REAL*4,DW,DQDOTI,DB,DX(),DY() REAL*8,              *
+*        N,INCX,INCY INTEGER*4                                    *
+*******************************************************************
+DQDOTI   PROLOG R11
+         LM    R2,R8,0(R1)
+         SDR   F2,F2                   CLEAR REG. F2
+         LD    F0,0(R3)                LOAD EXTENDED (DB)
+         NCHK  R9,R2,FIXQC
+         INCFX R5,R6,R9,R11,RSTAR8,INCY
+INCY     INCFX R7,R8,R9,R11,RSTAR8,LOOP
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP     LD    F4,0(R5)                GET DX( )
+*        MXD   F4,0(R7)                COMPUTE EXTEND. (DX()) * DY()
+*        WARNING: THE ABOVE INSTRUCTION MAY NOT BE PRESENT ON YOUR
+*        MACHINE. OPTIONS: REPLACE IT BY MD  F4,0(R7) OR USE A SOFTWARE
+*        REPLACEMENT FOR THE OPERATION.
+         MD    F4,0(R7)                COMPUTE EXTEND. (DX()) * DY()
+*
+*        AXR   F0,F4                   ACCUM. EXTEND. SUM
+*        WARNING: THE ABOVE INSTRUCTION MAY NOT BE PRESENT ON YOUR
+*        MACHINE. OPTIONS: REPLACE IT BY ADR  F0,F4 OR USE A SOFTWARE
+*        REPLACEMENT FOR THE OPERATION.
+         ADR   F0,F4                   ACCUM. EXTEND. SUM
+         INCBR R5,R6,R7,R8,R2,LOOP
+FIXQC    STD   F0,TEMP                 STORE RESULT IN
+         LE    F4,TEMP                 EXTEND. QC( )
+         STE   F4,0(R4)                THE REAL*4 OPS. ARE
+         LE    F4,TEMP+4               NEEDED BECAUSE
+         STE   F4,4(R4)                QC( ) MAY NOT HAVE
+         STD   F2,TEMP                 REAL*8 ALIGNMENT.
+         LE    F4,TEMP                 NOTE THAT ONLY
+         STE   F4,8(R4)                QC(I),I=1,4 ARE USED.
+         LE    F4,TEMP+4
+         STE   F4,12(R4)
+         EPILOG
+         DS    0D
+TEMP     DS    D
+         END
+*********COMPLEX (CONJUGATED) INNER PRODUCT, CDOTC,IBM/360 ASM.********
+*        USAGE STATEMENT                              3 SEPTEMBER 1975*
+*              CW = CDOTC(N,CX,INCX,CY,INCY)          WASH. ST. U./ANL*
+*        CW,CDOTC,CX( ), CY( ) COMPLEX*8, N,INCX,INCY INTEGER*4       *
+*        (THE ARRAY CX( ) HAS ITS ELEMENTS CONJUGATED).               *
+***********************************************************************
+CDOTC    PROLOG R11
+         LM    R2,R6,0(R1)         GET POINTERS TO ARGUMENTS
+         SER   F0,F0               SET CDOT=(0.,0.).
+         SER   F2,F2
+         NCHK  R7,R2,DONE          GET N AND QUIT IF N .LE. 0.
+         L     R11,0(R4)           GET INCX
+         C     R11,0(R6)           COMPARE INCY WITH INCX
+         BNE   INCNE               BRANCH TO GEN. LOOP IF NOT EQUAL
+         SLA   R11,CSTAR8          MULTIPLY INCX * 8
+         BM    INCNE               GEN. LOOP IF INCX,INCY NEG.
+         LR    R8,R11              SAVE INCX*8 IN UNOCCUPIED R8
+         MR    R10,R7              MULTIPLY INCX * 8 * (N-1)
+         SR    R6,R6               SET R6 = 0
+         LR    R10,R8              LOAD LOOPEQ INCREMENT INTO R10
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPEQ   LE    F4,0(R6,R3)         GET CX( ) = (S,T)
+         LE    F6,4(R6,R3)
+         ME    F4,0(R6,R5)         USE CY( ) = (U,V) TO FORM
+         ME    F6,4(R6,R5)         S*U AND T*V
+         AER   F0,F4               ACCUMULATE REAL PART OF
+         AER   F0,F6               PRODUCT CONJG(CX( ))*CY( )=S*U+T*V
+         LE    F4,0(R6,R3)         GET CX( ) = (S,T)
+         LE    F6,4(R6,R3)
+         ME    F4,4(R6,R5)         USE CY( ) = (U,V) TO FORM
+         ME    F6,0(R6,R5)         S*V AND T*U
+         AER   F2,F4               ACCUMULATE IMAG. PART OF
+         SER   F2,F6               PRODUCT CONJG(CX( ))*CY( )=S*V-T*U
+         BXLE  R6,R10,LOOPEQ
+         B     DONE
+INCNE    INCFX R3,R4,R7,R9,CSTAR8,ICY    FIX CX( ) INCREMENT
+ICY      INCFX R5,R6,R7,R9,CSTAR8,LOOPNE FIX CY( ) INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPNE   LE    F4,0(R3)            GET CX( ) =(S,T)
+         LE    F6,4(R3)
+         ME    F4,0(R5)            USE CY( ) = (U,V) TO FORM
+         ME    F6,4(R5)            S*U AND T*V.
+         AER   F0,F4               ACCUMULATE REAL PART OF
+         AER   F0,F6               PRODUCT CONJG(CX( ))*CY( ) =S*U+T*V
+         LE    F4,0(R3)            GET CX( ) = (S,T).
+         LE    F6,4(R3)
+         ME    F4,4(R5)            USE CY( ) = (U,V) TO FORM
+         ME    F6,0(R5)            S*V AND T*U
+         AER   F2,F4               ACCUMULATE IMAG. PART OF
+         SER   F2,F6               PRODUCT CONJG(CX( ))*CY( )=S*V-T*U
+         INCBR R3,R4,R5,R6,R2,LOOPNE ADD INCREMENTS AND CONTINUE LOOP
+DONE     EPILOG
+         END
+*********COMPLEX INNER PRODUCT, CDOTU, IBM/360 ASM.********************
+*        USAGE STATEMENT                              3 SEPTEMBER 1975*
+*              CW = CDOTU (N,CX,INCX,CY,INCY)         WASH. ST. U./ANL*
+*        CW,CDOTU,CX( ), CY( ) COMPLEX*8, N,INCX,INCY INTEGER*4       *
+***********************************************************************
+CDOTU    PROLOG R11
+         LM    R2,R6,0(R1)             GET POINTERS TO ARGUMENTS.
+         SER   F0,F0                   SET CDOTU = (0.,0.).
+         SER   F2,F2
+         NCHK  R7,R2,DONE              GET N AND QUIT IF N .LE. 0
+         L     R11,0(R4)               GET INCX
+         C     R11,0(R6)               COMPARE INCY WITH INCX
+         BNE   INCNE                   BRANCH TO GEN. LOOP IF NOT EQUAL
+         SLA   R11,CSTAR8              MULTIPLY INCX*8
+         BM    INCNE                   INCX,INCY NEG., GEN. LOOP
+         LR    R8,R11                  SAVE INCX*8 IN UNOCCUPIED R8
+         MR    R10,R7                  COMPUTE INCX * 8 * (N-1)
+         SR    R6,R6                   SET R6 = 0
+         LR    R10,R8                  LOAD LOOPEQ INCREMENT INTO R10
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPEQ   LE    F4,0(R6,R3)             GET CX( ) = (S,T)
+         LE    F6,4(R6,R3)
+         ME    F4,0(R6,R5)             USE CY( ) = (U,V) TO FORM
+         ME    F6,4(R6,R5)             S*U AND T*V
+         AER   F0,F4                   ACCUMULATE REAL PART OF
+         SER   F0,F6                   PRODUCT CX( )*CY( ) = S*U-T*V
+         LE    F4,0(R6,R3)             GET CX( ) = (S,T)
+         LE    F6,4(R6,R3)
+         ME    F4,4(R6,R5)             USE CY( ) = (U,V) TO FORM
+         ME    F6,0(R6,R5)             S*V AND T*U
+         AER   F2,F4                   ACCUMULATE IMAG. PART OF
+         AER   F2,F6                   PRODUCT CX( )*CY( ) = S*V+T*U
+         BXLE  R6,R10,LOOPEQ
+         B     DONE
+INCNE    INCFX R3,R4,R7,R9,CSTAR8,ICY    FIX CX( ) INCREMENT
+ICY      INCFX R5,R6,R7,R9,CSTAR8,LOOPNE FIX CY( ) INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPNE   LE    F4,0(R3)                GET CX( ) = (S,T)
+         LE    F6,4(R3)
+         ME    F4,0(R5)                USE CY( ) = (U,V) TO FORM
+         ME    F6,4(R5)                S*U AND T*V
+         AER   F0,F4                   ACCUMULATE REAL PART OF
+         SER   F0,F6                   PRODUCT CX( )*CY( ) = S*U-T*V
+         LE    F4,0(R3)                GET CX( ) = (S,T)
+         LE    F6,4(R3)
+         ME    F4,4(R5)                USE CY( ) = (U,V) TO FORM
+         ME    F6,0(R5)                S*V AND T*U
+         AER   F2,F4                   ACCUMULATE IMAG. PART OF
+         AER   F2,F6                   PRODUCT CX( )*CY( ) = S*V+T*U
+         INCBR R3,R4,R5,R6,R2,LOOPNE   ADD INCREMENTS AND CONTINUE LOOP
+DONE     EPILOG
+         END
+********SINGLE PREC. AFFINE TRANSFORMATION, SAXPY, IBM/360 ASM.********
+*       USAGE STATEMENT                                 14 AUGUST 1975*
+*            CALL SAXPY (N,SA,SX,INCX,SY,INCY)         WASH. ST. U/ANL*
+*       SA,SX( ),SY( ),REAL*4  N,INCX,INCY,INTEGER*4                  *
+***********************************************************************
+SAXPY    PROLOG R11
+         LM    R2,R7,0(R1)             GET POINTERS TO ARGUMENTS
+         NCHK  R9,R2,DONE              GET N AND EXIT IF N .LE. 0
+         LE    F2,0(R3)                GET SCALAR SA FOR MULTIPLYING
+         L     R11,0(R5)               GET INCX
+         C     R11,0(R7)               COMPARE INCY WITH INCX
+         BNE   INCNE                   BRANCH TO GEN. LOOP IF NOT EQUAL
+         SLA   R11,RSTAR4              MULTIPLY INCX * 4
+         BM    INCNE                   IF INCX, INCY NEG., GEN. LOOP
+         LR    R8,R11                  SAVE INCX * 4 IN UNOCCUPIED R8
+         MR    R10,R9                  COMPUTE INCX * 4 * (N-1)
+         SR    R7,R7                   SET R7 = 0
+         LR    R10,R8                  LOAD R10 WITH LOOPEQ INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPEQ   LE    F0,0(R7,R4)             GET SX( )
+         MER   F0,F2                   COMPUTE SA * SX( )
+         AE    F0,0(R7,R6)             COMPUTE SA * SX( ) + SY( )
+         STE   F0,0(R7,R6)             AND STORE AT SY( )
+         BXLE  R7,R10,LOOPEQ
+         B     DONE
+INCNE    INCFX R4,R5,R9,R11,RSTAR4,ICY    FIX SX( ) INCREMENT
+ICY      INCFX R6,R7,R9,R11,RSTAR4,LOOPNE FIX SY( ) INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPNE   LE    F0,0(R4)                GET SX(  )
+         MER   F0,F2                   COMPUTE SA * SX( )
+         AE    F0,0(R6)                COMPUTE SA * SX( ) + SY( )
+         STE   F0,0(R6)                AND STORE AT SY( )
+         INCBR R4,R5,R6,R7,R2,LOOPNE   ADD INCREMENTS AND CONTINUE
+DONE     EPILOG
+         END
+*********DBL. PREC. AFFINE TRANSFORMATION, DAXPY, IBM/360 ASM.*********
+*        USAGE STATEMENT                                14 AUGUST 1975*
+*             CALL DAXPY (N,DA,DX,INCX,DY,INCY)        WASH. ST. U/ANL*
+*        DA,DX( ),DY( ) REAL*8, N,INCX,INCY INTEGER*4                 *
+***********************************************************************
+DAXPY    PROLOG R11
+         LM    R2,R7,0(R1)             GET POINTERS TO ARGUMENTS
+         NCHK  R9,R2,DONE              GET N AND QUIT IF N .LE. 0
+         LD    F2,0(R3)                GET SCALAR DA FOR MULTIPLYING
+         L     R11,0(R5)               GET INCX
+         C     R11,0(R7)               COMPARE INCY WITH INCX
+         BNE   INCNE                   BRANCH TO GEN. LOOP IF NOT EQUAL
+         SLA   R11,RSTAR8              MULTIPLY INCX * 8
+         BM    INCNE                   IF INCX,INCY NEG., GEN. LOOP
+         LR    R8,R11                  SAVE INCX*8 IN UNOCCUPIED R8
+         MR    R10,R9                  COMPUTE INCX * 8 * (N-1)
+         SR    R7,R7                   SET R7 = 0
+         LR    R10,R8                  LOAD R10 WITH LOOPEQ INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPEQ   LD    F0,0(R7,R4)             GET DX( )
+         MDR   F0,F2                   COMPUTE DA * DX( )
+         AD    F0,0(R7,R6)             COMPUTE DA * DX( ) + DY( )
+         STD   F0,0(R7,R6)             AND STORE AT DY( )
+         BXLE  R7,R10,LOOPEQ
+         B     DONE
+INCNE    INCFX R4,R5,R9,R11,RSTAR8,ICY    FIX DX( ) INCREMENT
+ICY      INCFX R6,R7,R9,R11,RSTAR8,LOOPNE FIX DY( ) INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPNE   LD    F0,0(R4)                GET DX( )
+         MDR   F0,F2                   COMPUTE DA * DX( )
+         AD    F0,0(R6)                COMPUTE DA * DX( ) + DY( )
+         STD   F0,0(R6)                AND STORE AT DY( )
+         INCBR R4,R5,R6,R7,R2,LOOPNE   ADD INCREMENTS AND CONTINUE
+DONE     EPILOG
+         END
+*********COMPLEX AFFINE TRANSFORMATION, CAXPY, IBM/360 ASM.************
+*        USAGE STATEMENT                              3 SEPTEMBER 1975*
+*             CALL CAXPY (N,CA,CX,INCX,CY,INCY)        WASH. ST. U/ANL*
+*        CA,CX( ),CY( ) COMPLEX*8, N,INCX,INCY INTEGER*4              *
+***********************************************************************
+CAXPY    PROLOG R11
+         LM    R2,R7,0(R1)             GET POINTERS TO ARGUMENTS
+         NCHK  R9,R2,DONE              GET N AND QUIT IF N .LE. 0
+         LE    F4,0(R3)                GET REAL PART OF CA
+         STE   F4,AR                   STORE IT LOCALLY
+         LE    F6,4(R3)                GET IMAG. PART OF CA
+         L     R11,0(R5)               GET INCX
+         C     R11,0(R7)               COMPARE INCY WITH INCX
+         BNE   INCNE                   BRANCH TO GEN. LOOP IF NOT EQUAL
+         SLA   R11,CSTAR8              MULTIPLY INCX * 8
+         BM    INCNE                   GEN. LOOP IF INCX,INCY NEG.
+         LR    R8,R11                  SAVE INCX*8 IN UNOCCUPIED R8
+         MR    R10,R9                  MULTIPLY INCX * 8 * (N-1)
+         SR    R7,R7                   SET R7 = 0
+         LR    R10,R8                  LOAD LOOPEQ INCREMENT INTO R10
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPEQ   LE    F0,AR                   GET REAL PART OF CA
+         LER   F2,F6                   TRANSFER IMAG. PART OF CA TO F2
+         ME    F0,0(R7,R4)
+         ME    F2,4(R7,R4)
+         SER   F0,F2                   REAL PART OF CA * CX( )
+         AE    F0,0(R7,R6)             PLUS REAL PART OF CY( )
+         LE    F2,AR
+         ME    F2,4(R7,R4)
+         LER   F4,F6
+         ME    F4,0(R7,R4)
+         AER   F2,F4                   IMAG. PART OF CA * CX( )
+         AE    F2,4(R7,R6)             PLUS IMAG. PART OF CY( )
+         STE   F0,0(R7,R6)             STORE CY( ) + CA * CX( )
+         STE   F2,4(R7,R6)             AT CY( )
+         BXLE  R7,R10,LOOPEQ
+         B     DONE
+INCNE    INCFX R4,R5,R9,R11,CSTAR8,ICY    FIX CX( ) INCREMENT
+ICY      INCFX R6,R7,R9,R11,CSTAR8,LOOPNE FIX CY( ) INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPNE   LE    F0,AR                   GET REAL PART OF CA
+         LER   F2,F6                   TRANSFER IMAG. PART OF CA TO F2
+         ME    F0,0(R4)
+         ME    F2,4(R4)
+         SER   F0,F2                   REAL PART OF CA*CX( )
+         AE    F0,0(R6)                PLUS REAL PART OF CY( )
+         LE    F2,AR
+         ME    F2,4(R4)
+         LER   F4,F6
+         ME    F4,0(R4)
+         AER   F2,F4                   IMAG. PART OF CA*CX( )
+         AE    F2,4(R6)                PLUS IMAG. PART OF CY( )
+         STE   F0,0(R6)
+         STE   F2,4(R6)                STORE CY( )+CA*CX( ) AT CY( )
+         INCBR R4,R5,R6,R7,R2,LOOPNE
+DONE     EPILOG
+AR       DS    F
+         END
+*********CONSTRUCT GIVENS TRANS., SNGL PREC., SROTG, IBM/360 ASM.******
+*        USAGE STATEMENT                                  10 JUNE 1977*
+*             CALL SROTG (SA,SB,SC,SS)                     WASH. ST. U*
+*        SA,SB,SC,SS REAL*4                                           *
+***********************************************************************
+SROTG    PROLOG R5
+         LM    R2,R5,0(R1)             GET POINTERS TO ARGUMENTS
+         LE    F2,0(R2)                GET SA IN F2
+         LE    F0,0(R3)                GET SB IN F0
+         LPER  F4,F0                   NOW  ABS(SB) IN F4
+         LPER  F6,F2                   AND  ABS(SA) IN F6
+         CER   F6,F4                   TEST FOR
+         BNH   CASE2                   ABS(SA) .LE. ABS(SB)
+         AER   F2,F2                   COMPUTE 2*SA
+         DER   F0,F2                   COMPUTE W = SB/(2*SA)
+         STE   F0,W                    SAVE W
+         MER   F0,F0                   COMPUTE W**2
+         AE    F0,=E'0.25'             COMPUTE 0.25E0+W**2
+         STE   F0,VALUE                PUT AWAY FOR SQRT( ) CALL
+         L     R15,=V(SQRT)            GET LOC. OF SQRT( )
+         CNOP  0,4                     ALIGN PROPERLY
+         BAL   R1,SQRT1
+         DC    X'80',AL3(VALUE)
+SQRT1    BALR  R14,R15                 GO TO SQRT( ) SUBPROGRAM
+         LE    F2,=E'1.0'              NOW Q=SQRT(0.25E0+W**2) IN F0
+         AER   F0,F0                   COMPUTE 2*Q
+         DER   F2,F0                   COMPUTE 1.E0/(2*Q) = SC
+         ME    F0,0(R2)                COMPUTE R = SA*Q*2
+         STE   F0,0(R2)                STORE R ON SA
+         STE   F2,0(R4)                STORE SC
+         ME    F2,W                    COMPUTE SS = W*SC*2
+         AER   F2,F2
+         STE   F2,0(R5)                STORE SS
+         B     DONE
+CASE2    LTER  F0,F0                   SET COND. FOR SB
+         BNZ   CASE3
+         LE    F2,=E'1.0'              GET 1.0 AND
+         STE   F2,0(R4)                STORE SC
+         STE   F0,0(R5)                STORE 0. IN SS
+         B     DONE
+CASE3    AER   F0,F0                   COMPUTE 2*SB
+         DER   F2,F0                   COMPUTE W = SA/(2*SB)
+         STE   F2,W                    SAVE W
+         MER   F2,F2                   COMPUTE W**2
+         AE    F2,=E'0.25'             COMPUTE 0.25E0+W**2
+         STE   F2,VALUE                PUT AWAY FOR SQRT( )
+         L     R15,=V(SQRT)            GET LOC. OF SQRT( )
+         CNOP  0,4                     ALIGN PROPERLY
+         BAL   R1,SQRT2
+         DC    X'80',AL3(VALUE)
+SQRT2    BALR  R14,R15                 GO TO SQRT( ) SUBPROGRAM
+         LE    F2,=E'1.0'              NOW Q=SQRT(0.25E0+W**2) IN F0
+         AER   F0,F0                   COMPUTE 2*Q
+         DER   F2,F0                   COMPUTE 1.E0/(2*Q) = SS
+         ME    F0,0(R3)                COMPUTE R = SB*Q*2
+         STE   F0,0(R2)                STORE R ON SA
+         STE   F2,0(R5)                STORE SS
+         ME    F2,W                    COMPUTE SC = W*SS*2
+         AER   F2,F2
+         STE   F2,0(R4)                STORE SC
+DONE     LE    F0,0(R4)                GET SC IN F0.
+         LE    F2,0(R5)                GET SS IN F2.
+         LPER  F4,F0                   SAVE ABS(SC) IN F4.
+         LPER  F6,F2                   SAVE ABS(SS) IN F6.
+         CER   F6,F4                   TEST FOR
+         BNL   TESTSC                  ABS(SS).LT.ABS(SC)
+         STE   F2,0(R3)                STORE SS IN SB.
+         B     OUT
+TESTSC   LTER  F4,F4                   SET INDICATOR FOR SC.EQ.0.
+         BNZ   SAVERC
+         LE    F0,=E'1.0'
+         STE   F0,0(R3)                STORE 1.0 IN SB IF SC.EQ.0.
+         B     OUT
+SAVERC   LE    F2,=E'1.0'              COMPUTE 1./SC AND
+         DER   F2,F0                   STORE IN SB FOR LAST CASE.
+         STE   F2,0(R3)
+OUT      EPILOG
+W        DS    F
+VALUE    DS    F'0'
+         END
+*********CONSTRUCT GIVENS TRANS., DOUB. PREC., DROTG, IBM/360 ASM.*****
+*        USAGE STATEMENT                                 10 JUNE 1977 *
+*             CALL DROTG (DA,DB,DC,DS)                     WASH. ST. U*
+*        DA,DB,DC,DS REAL*8                                           *
+***********************************************************************
+DROTG    PROLOG R5
+         LM    R2,R5,0(R1)             GET POINTERS TO ARGUMENTS
+         LD    F2,0(R2)                GET DA IN F2
+         LD    F0,0(R3)                GET DB IN F0
+         LPDR  F4,F0                   NOW DABS(DB) IN F4
+         LPDR  F6,F2                   AND DABS(DA) IN F6
+         CDR   F6,F4                   TEST FOR
+         BNH   CASE2                   DABS(DA) .LE. DABS(DB)
+         ADR   F2,F2                   COMPUTE 2*DA
+         DDR   F0,F2                   COMPUTE W= DB/(2*DA)
+         STD   F0,W                    SAVE W
+         MDR   F0,F0                   COMPUTE W**2
+         AD    F0,=D'0.25'             COMPUTE 0.25D0+W**2
+         STD   F0,VALUE                PUT AWAY FOR DSQRT( ) CALL
+         L     R15,=V(DSQRT)           GET LOC OF DSQRT( )
+         CNOP  0,4                     ALIGN PROPERLY
+         BAL   R1,SQRT1
+         DC    X'80',AL3(VALUE)
+SQRT1    BALR  R14,R15                 GO TO DSQRT( ) SUBPROGRAM
+         LD    F2,=D'1.0'              NOW Q=DSQRT(0.25D0+W**2) IN F0
+         ADR   F0,F0                   COMPUTE 2*Q
+         DDR   F2,F0                   COMPUTE 1.D0/(2*Q) = DC
+         MD    F0,0(R2)                COMPUTE R = DA*Q*2
+STORE1   STD   F0,0(R2)                STORE R ON DA
+         STD   F2,0(R4)                STORE DC
+         MD    F2,W                    COMPUTE DS=W*DC*2
+         ADR   F2,F2
+         STD   F2,0(R5)                STORE DS
+         B     DONE
+CASE2    LTDR  F0,F0                   SET COND. FOR DB
+         BNZ   CASE3
+         LD    F2,=D'1.0'              GET 1.0 AND
+         STD   F2,0(R4)                STORE DC
+         STD   F0,0(R5)                STORE 0.0 IN  DS
+         B     DONE
+CASE3    ADR   F0,F0                   COMPUTE 2*DB
+         DDR   F2,F0                   COMPUTE  W=DA/(2*DB)
+         STD   F2,W                    SAVE W
+         MDR   F2,F2                   COMPUTE W**2
+         AD    F2,=D'0.25'             COMPUTE 0.25D0+W**2
+         STD   F2,VALUE                PUT AWAY FOR DSQRT( )
+         L     R15,=V(DSQRT)           GET LOC OF DSQRT( )
+         CNOP  0,4                     ALIGN PROPERLY
+         BAL   1,SQRT2
+         DC    X'80',AL3(VALUE)
+SQRT2    BALR  R14,R15                 GO TO DSQRT( ) SUBROUTINE
+         LD    F2,=D'1.0'              NOW Q=DSQRT(0.25D0+W**2) IN F0
+         ADR   F0,F0                   COMPUTE 2*Q
+         DDR   F2,F0                   COMPUTE 1.D0/(2*Q) =DS
+         MD    F0,0(R3)                COMPUTE  R=DB*Q*2
+         STD   F0,0(R2)                STORE R ON DA
+         STD   F2,0(R5)                STORE DS
+         MD    F2,W                    COMPUTE DC=W*DS*2
+         ADR   F2,F2
+         STD   F2,0(R4)                STORE DC
+DONE     LD    F0,0(R4)                GET DC IN F0.
+         LD    F2,0(R5)                GET DS IN F2.
+         LPDR  F4,F0                   SAVE ABS(DC) IN F4.
+         LPDR  F6,F2                   SAVE ABS(DS) IN F6.
+         CDR   F6,F4                   TEST FOR
+         BNL   TESTSC                  ABS(DS).LT.ABS(DC)
+         STD   F2,0(R3)                STORE DS IN DB.
+         B     OUT
+TESTSC   LTDR  F4,F4                   SET INDICATOR FOR DC.EQ.0.
+         BNZ   SAVERC
+         LD    F0,=D'1.0'
+         STD   F0,0(R3)                STORE 1.0 IN DB IF DC.EQ.0.
+         B     OUT
+SAVERC   LD    F2,=D'1.0'              COMPUTE 1./DC AND
+         DDR   F2,F0                   STORE IN DB FOR LAST CASE.
+         STD   F2,0(R3)
+OUT      EPILOG
+VALUE    DS    D'0'
+W        DS    D
+         END
+*********APPLY SINGLE PREC. PLANE ROTATION, SROT, IBM/360 ASM.*********
+*       USAGE STATEMENT                               3 SEPTEMBER 1975*
+*              CALL SROT (N,SX,INCX,SY,INCY,SC,SS)    WASH. ST. U./ANL*
+*        SX( ),SY( ), SC,SS REAL*4, N,INCX,INCY INTEGER *4            *
+***********************************************************************
+SROT     PROLOG R11
+         LM    R2,R8,0(R1)         GET POINTERS TO ARGUMENTS
+         NCHK  R9,R2,DONE          GET N AND QUIT IF N .LE. 0
+         LE    F4,0(R7)            GET SC AND
+         LE    F6,0(R8)            SS FOR MULTIPLYING
+         LER   F0,F4                   IF SC .EQ. 1.0
+         SE    F0,=E'1.0'              AND SS .EQ. 0.
+         BNZ   UCASE                   NO TRANS.
+         LTER  F6,F6                   IS
+         BZ    DONE                    NECESSARY.
+UCASE    L     R11,0(R4)           GET INCX
+         C     R11,0(R6)           COMPARE INCY WITH INCX
+         BNE   INCNE               BRANCH TO GEN. LOOP IF NOT EQUAL
+         SLA   R11,RSTAR4          MULTIPLY INCX * 4
+         BM    INCNE               GEN. LOOP IF INCX,INCY NEG.
+         LR    R8,R11              SAVE INCX*4 IN UNOCCUPIED R8
+         MR    R10,R9              MULTIPLY INCX * 4 * (N-1)
+         SR    R6,R6               SET R6 = 0
+         LR    R10,R8              LOAD LOOPEQ INCREMENT INTO R10
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPEQ   LE    F0,0(R6,R3)         GET SX( )
+         LE    F2,0(R6,R5)         GET SY( )
+         MER   F0,F4               COMPUTE SC * SX( )
+         MER   F2,F6               COMPUTE SS * SY( )
+         AER   F0,F2               COMPUTE SC*SX( ) + SS*SY( )
+         LE    F2,0(R6,R3)         GET SX( )
+         STE   F0,0(R6,R3)         OVERWRITE SX( ) WITH PRODUCT
+         LE    F0,0(R6,R5)         GET SY( )
+         MER   F0,F4               COMPUTE SC * SY( )
+         MER   F2,F6               COMPUTE SS * SX( )
+         SER   F0,F2               COMPUTE -SS*SX( ) + SC*SY( )
+         STE   F0,0(R6,R5)         OVERWRITE SY( ) WITH PRODUCT
+         BXLE  R6,R10,LOOPEQ
+         B     DONE
+INCNE    INCFX R3,R4,R9,R11,RSTAR4,ICY    FIX SX( ) INCREMENT
+ICY      INCFX R5,R6,R9,R11,RSTAR4,LOOPNE FIX SY( ) INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPNE   LE    F0,0(R3)            GET SX( )
+         LE    F2,0(R5)            GET SY( )
+         MER   F0,F4               COMPUTE SC*SX( )
+         MER   F2,F6               COMPUTE SS*SY( )
+         AER   F0,F2               COMPUTE SC*SX( )+SS*SY( )
+         LE    F2,0(R3)            GET SX( )
+         STE   F0,0(R3)            OVERWRITE SX( ) WITH PRODUCT
+         LE    F0,0(R5)            GET SY( )
+         MER   F0,F4               COMPUTE SC*SY( )
+         MER   F2,F6               COMPUTE SS*SX( )
+         SER   F0,F2               COMPUTE -SS*SX( )+SC*SY( )
+         STE   F0,0(R5)            OVERWRITE SY( ) WITH PRODUCT
+         INCBR R3,R4,R5,R6,R2,LOOPNE
+DONE     EPILOG
+         END
+*********APPLY DBLE PREC. PLANE ROTATION, DROT, IBM/360 ASM.***********
+*        USAGE STATEMENT                              3 SEPTEMBER 1975*
+*              CALL DROT (N,DX,INCX,DY,INCY,DC,DS)    WASH. ST. U./ANL*
+*        DX( ),DY( ),DC,DS, REAL *8, N,INCX,INCY INTEGER *4           *
+***********************************************************************
+DROT     PROLOG R11
+         LM    R2,R8,0(R1)         GET POINTER TO ARGUMENTS.
+         NCHK  R9,R2,DONE          GET N AND QUIT IF N .LE. 0
+         LD    F4,0(R7)            GET DC AND
+         LD    F6,0(R8)            DS FOR MULTIPLYING
+         LDR   F0,F4                   IF DC .EQ. 1.0
+         SD    F0,=D'1.0'              AND DS .EQ. 0.
+         BNZ   UCASE                   NO TRANS.
+         LTDR  F6,F6
+         BZ    DONE                    NECESSARY.
+UCASE    L     R11,0(R4)           GET INCX
+         C     R11,0(R6)           COMPARE INCY WITH INCX
+         BNE   INCNE               BRANCH TO GEN. LOOP IF NOT EQUAL
+         SLA   R11,RSTAR8          MULTIPLY INCX * 8
+         BM    INCNE               GEN. LOOP IF INCX, INCY NEG.
+         LR    R8,R11              SAVE INCX*8 IN UNOCCUPIED R8
+         MR    R10,R9              COMPUTE INCX * 8 * (N-1)
+         SR    R6,R6               SET R6 = 0
+         LR    R10,R8              LOAD R10 WITH LOOPEQ INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPEQ   LD    F0,0(R6,R3)         GET DX( )
+         LD    F2,0(R6,R5)         GET DY( )
+         MDR   F0,F4               COMPUTE DC * DX( )
+         MDR   F2,F6               COMPUTE DS * DY( )
+         ADR   F0,F2               COMPUTE DC*DX( ) + DS*DY( )
+         LD    F2,0(R6,R3)         GET DX( )
+         STD   F0,0(R6,R3)         OVERWRITE DX( ) WITH PRODUCT
+         LD    F0,0(R6,R5)         GET DY( )
+         MDR   F0,F4               COMPUTE DC * DY( )
+         MDR   F2,F6               COMPUTE DS * DX( )
+         SDR   F0,F2               COMPUTE -DS*DX( ) + DC*DY( )
+         STD   F0,0(R6,R5)         OVERWRITE DY( ) WITH PRODUCT
+         BXLE  R6,R10,LOOPEQ
+         B     DONE
+INCNE    INCFX R3,R4,R9,R11,RSTAR8,ICY    FIX DX( ) INCREMENT
+ICY      INCFX R5,R6,R9,R11,RSTAR8,LOOPNE FIX DY( ) INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPNE   LD    F0,0(R3)            GET DX( )
+         LD    F2,0(R5)            GET DY( )
+         MDR   F0,F4               COMPUTE DC*DX( )
+         MDR   F2,F6               COMPUTE DS*DY( )
+         ADR   F0,F2               COMPUTE DC*DX( )+DS*DY( )
+         LD    F2,0(R3)            GET DX( )
+         STD   F0,0(R3)            OVERWRITE DX( ) WITH PRODUCT
+         LD    F0,0(R5)            GET DY( )
+         MDR   F0,F4               COMPUTE DC*DY( )
+         MDR   F2,F6               COMPUTE DS*DX( )
+         SDR   F0,F2               COMPUTE -DS*DX( )+DC*DY( )
+         STD   F0,0(R5)            OVERWRITE DY( ) WITH PRODUCT
+         INCBR R3,R4,R5,R6,R2,LOOPNE
+DONE     EPILOG
+         END
+*********CONSTRUCT MOD. GIVENS TRANS., SNGL PREC., SROTMG, IBM/360 ASM.
+*              USAGE STATEMENT                              2 JUN 1975*
+*        CALL SROTMG (D1,D2,B1,B2,SPARAM)                  WASH. ST. U*
+*        REAL * 4 D1,D2,B1,B2,SPARAM(5)                               *
+***********************************************************************
+SROTMG   PROLOG R6
+         LM    R2,R6,0(R1)             GET POINTERS TO ARGUMENTS
+         USING SPARAM,R6               USE ADDRESS OF SPARAM(1) AS BASE
+         LE    F4,0(R4)                GET B1
+         LE    F6,0(R5)                GET B2
+         LER   F0,F4                   SAVE B1 IN F0
+         LER   F2,F6                   SAVE B2 IN F2
+         ME    F4,0(R2)                COMPUTE P1=D1*B1
+         ME    F6,0(R3)                COMPUTE P2=D2*B2
+         MER   F0,F4                   COMPUTE P1*B1
+         MER   F2,F6                   COMPUTE P2*B2
+         STE   F2,P2B2                 SAVE P2*B2
+         LPER  F0,F0                   COMPUTE ABS(P1*B1)
+         LPER  F2,F2                   COMPUTE ABS(P2*B2)
+         CER   F0,F2                   SEE IF ABS(P1*B1) .GE.
+         BH    BR1                     ABS(P2*B2)
+         LE    F2,P2B2                 SEE IF P2*B2 .GE. 0
+         LTER  F2,F2
+         BZ    NOTRANS                 P2*B2=0 CASE, NO TRANSFORMATION
+         BM    BR2                     P2*B2<0, BRANCH TO BR2
+         LE    F0,=E'1.0'              P2*B2>0 CASE
+         STE   F0,SFLAG                SET SFLAG=1.0
+         DER   F4,F6                   COMPUTE P1/P2
+         STE   F4,H11                  STORE H11=P1/P2
+         LE    F0,0(R4)                GET B1
+         LE    F2,0(R5)                GET B2
+         DER   F0,F2                   COMPUTE B1/B2
+         STE   F0,H22                  STORE H22=B1/B2
+         MER   F0,F4                   COMPUTE H11*H22
+         AE    F0,=E'1.0'              COMPUTE U=1.0+H11*H22
+         MER   F2,F0                   COMPUTE B2*U
+         STE   F2,0(R4)                STORE B1=B2*U
+         LE    F4,0(R3)                GET D2
+         DER   F4,F0                   COMPUTE D2/U
+         LE    F2,0(R2)                GET D1
+         DER   F2,F0                   COMPUTE D1/U
+         STE   F4,0(R2)                STORE D1=D2/U
+         STE   F2,0(R3)                STORE D2=D1/U
+         B     DWLP1
+NOTRANS  LE    F0,=E'-2.0'             NO TRANSFORMATION CASE;
+         STE   F0,SFLAG                SET SFLAG=-2.0
+         B     DONE                    RETURN
+BR2      LE    F0,=E'-1.0'             P2*B2<0 CASE
+         STE   F0,SFLAG                SET SFLAG=-1.0
+         SER   F0,F0
+         STE   F0,H11                  SET H11=0.
+         STE   F0,H12                  SET H12=0.
+         STE   F0,H21                  SET H21=0.
+         STE   F0,H22                  SET H22=0.
+         STE   F0,0(R2)                SET D1=0.
+         STE   F0,0(R3)                SET D2=0.
+         STE   F0,0(R4)                SET B1=0.
+         B     DONE                    RETURN
+BR1      DER   F6,F4                   COMPUTE P2/P1
+         STE   F6,H12                  STORE H12=P2/P1
+         LE    F2,0(R5)                GET B2
+         LE    F0,0(R4)                GET B1
+         DER   F2,F0                   COMPUTE B2/B1
+         MER   F6,F2                   COMPUTE H12*B2/B1
+         AE    F6,=E'1.0'              COMPUTE U=1.0+H12*B2/B1
+         LCER  F2,F2                   COMPUTE H21=-B2/B1
+         STE   F2,H21                  STORE H21
+         CE    F6,TOL                  SEE IF U .LE. TOL
+         BNH   BR2
+         SER   F2,F2
+         STE   F2,SFLAG                SET SFLAG=0.
+         LE    F4,0(R2)                GET D1
+         LE    F2,0(R3)                GET D2
+         DER   F4,F6                   COMPUTE D1/U
+         DER   F2,F6                   COMPUTE D2/U
+         MER   F0,F6                   COMPUTE B1*U
+         STE   F4,0(R2)                STORE D1=D1/U
+         STE   F2,0(R3)                STORE D2=D2/U
+         STE   F0,0(R4)                STORE B1=B1*U
+DWLP1    LPER  F0,F4                   PUT ABS(D1) INTO F0
+         CE    F0,TWOM24               SEE IF ABS(D1) .GT. TWOM24
+         BH    DWLP2
+         LTER  F4,F4                   SEE IF D1=0.
+         BZ    DWLP3                   IF D1=0. BRANCH TO DWLP3
+         FIXH
+         ME    F4,TWO12                MULTIPLY TWICE TO COMPUTE
+         ME    F4,TWO12                D1*(C**2)
+         STE   F4,0(R2)                STORE D1=D1*(C**2)
+         LE    F6,0(R4)                GET B1
+         DE    F6,TWO12                COMPUTE B1 C
+         STE   F6,0(R4)                STORE B1=B1/C
+         LE    F6,H11                  GET H11
+         DE    F6,TWO12                COMPUTE H11/C
+         STE   F6,H11                  STORE H11=H11/C
+         LE    F6,H12                  GET H12
+         DE    F6,TWO12                COMPUTE H12/C
+         STE   F6,H12                  STORE H12=H12/C
+         B     DWLP1
+DWLP2    LPER  F0,F4                   PUT ABS(D1) INTO F0
+         CE    F0,TWO24                SEE IF ABS(D1) .LT. TWO24
+         BL    DWLP3
+         FIXH
+         DE    F4,TWO12                DIVIDE TWICE TO COMPUTE
+         DE    F4,TWO12                D1/C**2
+         STE   F4,0(R2)                STORE D1=D1/C**2
+         LE    F6,0(R4)                GET B1
+         ME    F6,TWO12                COMPUTE B1*C
+         STE   F6,0(R4)                STORE B1=B1*C
+         LE    F6,H11                  GET H11
+         ME    F6,TWO12                COMPUTE H11*C
+         STE   F6,H11                  STORE H11=H11*C
+         LE    F6,H12                  GET H12
+         ME    F6,TWO12                COMPUTE H12*C
+         STE   F6,H12                  STORE H12=H12*C
+         B     DWLP2
+DWLP3    LPER  F0,F2                   PUT ABS(D2) INTO F0
+         CE    F0,TWOM24               SEE IF ABS(D2) .GT. TWOM24
+         BH    DWLP4
+         LTER  F2,F2                   SEE IF D2=0.
+         BZ    DONE                    IF D2=0. RETURN
+         FIXH
+         ME    F2,TWO12                MULTIPLY TWICE TO COMPUTE
+         ME    F2,TWO12                D2*(C**2)
+         STE   F2,0(R3)                STORE D2=D2*(C**2)
+         LE    F6,H21                  GET H21
+         DE    F6,TWO12                COMPUTE H21/C
+         STE   F6,H21                  STORE H21=H21/C
+         LE    F6,H22                  GET H22
+         DE    F6,TWO12                COMPUTE H22/C
+         STE   F6,H22                  STORE H22=H22/C
+         B     DWLP3
+DWLP4    LPER  F0,F2                   PUT ABS(D2) INTO F0
+         CE    F0,TWO24                SEE IF ABS(D2) .LT. TWO24
+         BL    DONE
+         FIXH
+         DE    F2,TWO12                DIVIDE TWICE TO COMPUTE
+         DE    F2,TWO12                D2/C**2
+         STE   F2,0(R3)                STORE D2=D2/C**2
+         LE    F6,H21                  GET H21
+         ME    F6,TWO12                COMPUTE H21*C
+         STE   F6,H21                  STORE H21=H21*C
+         LE    F6,H22                  GET H22
+         ME    F6,TWO12                COMPUTE H22*C
+         STE   F6,H22                  STORE H22=H22*C
+         B     DWLP4
+DONE     EPILOG
+         LTORG
+         DS    0F
+P2B2     DS    F
+TWO12    DC    E'4096.'
+TWO24    DC    E'16777216.'
+TWOM24   DC    E'5.960E-08'
+TOL      DC    E'0.0'
+SPARAM   DSECT
+SFLAG    DS    F
+H11      DS    F
+H21      DS    F
+H12      DS    F
+H22      DS    F
+         END
+*********CONSTRUCT MOD. GIVENS TRANS., DBLE PREC., DROTMG, IBM/360 ASM.
+*              USAGE STATEMENT                              2 JUN 1975*
+*        CALL DROTMG (D1,D2,B1,B2,DPARAM)                  WASH. ST. U*
+*        REAL * 8 D1,D2,B1,B2,DPARAM(5)                               *
+***********************************************************************
+DROTMG   PROLOG R6
+         LM    R2,R6,0(R1)             GET POINTERS TO ARGUMENTS
+         USING DPARAM,R6               LOAD ADDRESS OF DPARAM
+         LD    F4,0(R4)                GET B1
+         LD    F6,0(R5)                GET B2
+         LDR   F0,F4                   SAVE B1 IN F0
+         LDR   F2,F6                   SAVE B2 IN F2
+         MD    F4,0(R2)                COMPUTE P1=D1*B1
+         MD    F6,0(R3)                COMPUTE P2=D2*B2
+         MDR   F0,F4                   COMPUTE P1*B1
+         MDR   F2,F6                   COMPUTE P2*B2
+         STD   F2,P2B2                 SAVE P2*B2
+         LPDR  F0,F0                   COMPUTE DABS(P1*B1)
+         LPDR  F2,F2                   COMPUTE DABS(P2*B2)
+         CDR   F0,F2                   SEE IF DABS(P1*B1) .GT.
+         BH    BR1                     DABS(P2*B2)
+         LD    F2,P2B2                 SEE IF P2*B2 .GE. 0
+         LTDR  F2,F2
+         BZ    NOTRANS                 P2*B2=0 CASE, NO TRANSFORMATION
+         BM    BR2                     P2*B2<0, BRANCH TO BR2
+         LD    F0,=D'1.0'              P2*B2>0 CASE
+         STD   F0,DFLAG                SET DFLAG=1.0
+         DDR   F4,F6                   COMPUTE P1/P2
+         STD   F4,H11                  STORE H11=P1/P2
+         LD    F0,0(R4)                GET B1
+         LD    F2,0(R5)                GET B2
+         DDR   F0,F2                   COMPUTE B1/B2
+         STD   F0,H22                  STORE H22=B1/B2
+         MDR   F0,F4                   COMPUTE H11*H22
+         AD    F0,=D'1.0'              COMPUTE U=1.0+H11*H22
+         MDR   F2,F0                   COMPUTE B2*U
+         STD   F2,0(R4)                STORE B1=B2*U
+         LD    F4,0(R3)                GET D2
+         DDR   F4,F0                   COMPUTE D2/U
+         LD    F2,0(R2)                GET D1
+         DDR   F2,F0                   COMPUTE D1/U
+         STD   F4,0(R2)                STORE D1=D2/U
+         STD   F2,0(R3)                STORE D2=D1/U
+         B     DWLP1
+NOTRANS  LD    F0,=D'-2.0'             NO TRANSFORMATION CASE;
+         STD   F0,DFLAG                SET DFLAG=-2.0
+         B     DONE                    RETURN
+BR2      LD    F0,=D'-1.0'             P2*B2<0 CASE
+         STD   F0,DFLAG                SET DFLAG=-1.0
+         SDR   F0,F0
+         STD   F0,H11                  SET H11=0.
+         STD   F0,H12                  SET H12=0.
+         STD   F0,H21                  SET H21=0.
+         STD   F0,H22                  SET H22=0.
+         STD   F0,0(R2)                SET D1=0.
+         STD   F0,0(R3)                SET D2=0.
+         STD   F0,0(R4)                SET B1=0.
+         B     DONE                    RETURN
+BR1      DDR   F6,F4                   COMPUTE P2/P1
+         STD   F6,H12                  STORE H12=P2/P1
+         LD    F2,0(R5)                GET B2
+         LD    F0,0(R4)                GET B1
+         DDR   F2,F0                   COMPUTE B2/B1
+         MDR   F6,F2                   COMPUTE H12*B2/B1
+         AD    F6,=D'1.0'              COMPUTE U=1+H12*B2/B1
+         LCDR  F2,F2                   COMPUTE H21=-B2/B1
+         STD   F2,H21                  STORE H21
+         CD    F6,TOL                  SEE IF U .LE. TOL
+         BNH   BR2
+         SDR   F2,F2
+         STD   F2,DFLAG                SET DFLAG=0.
+         LD    F4,0(R2)                GET D1
+         LD    F2,0(R3)                GET D2
+         DDR   F4,F6                   COMPUTE D1/U
+         DDR   F2,F6                   COMPUTE D2/U
+         MDR   F0,F6                   COMPUTE B1*U
+         STD   F4,0(R2)                STORE D1=D1/U
+         STD   F2,0(R3)                STORE D2=D2/U
+         STD   F0,0(R4)                STORE B1=B1*U
+DWLP1    LPDR  F0,F4                   PUT DABS(D1) INTO F0
+         CD    F0,TWOM24               SEE IF DABS(D1) .GT. TWOM24
+         BH    DWLP2
+         LTDR  F4,F4                   SEE IF D1=0.
+         BZ    DWLP3                   IF D1=0. BRANCH TO DWLP3
+         DFIXH
+         MD    F4,TWO12                MULTIPLY TWICE TO COMPUTE
+         MD    F4,TWO12                D1*(C**2)
+         STD   F4,0(R2)                STORE D1=D1*(C**2)
+         LD    F6,0(R4)                GET B1
+         DD    F6,TWO12                COMPUTE B1/C
+         STD   F6,0(R4)                STORE B1=B1/C
+         LD    F6,H11                  GET H11
+         DD    F6,TWO12                COMPUTE H11/C
+         STD   F6,H11                  STORE H11=H11/C
+         LD    F6,H12                  GET H12
+         DD    F6,TWO12                COMPUTE H12/C
+         STD   F6,H12                  STORE H12=H12/C
+         B     DWLP1
+DWLP2    LPDR  F0,F4                   PUT DABS(D1) INTO F0
+         CD    F0,TWO24                SEE IF DABS(D1) .LT. TWO24
+         BL    DWLP3
+         DFIXH
+         DD    F4,TWO12                DIVIDE TWICE TO COMPUTE
+         DD    F4,TWO12                D1/C**2
+         STD   F4,0(R2)                STORE D1=D1/C**2
+         LD    F6,0(R4)                GET B1
+         MD    F6,TWO12                COMPUTE B1*C
+         STD   F6,0(R4)                STORE B1=B1*C
+         LD    F6,H11                  GET H11
+         MD    F6,TWO12                COMPUTE H11*C
+         STD   F6,H11                  STORE H11=H11*C
+         LD    F6,H12                  GET H12
+         MD    F6,TWO12                COMPUTE H12*C
+         STD   F6,H12                  STORE H12=H12*C
+         B     DWLP2
+DWLP3    LPDR  F0,F2                   PUT DABS(D2) INTO F0
+         CD    F0,TWOM24               SEE IF DABS(D2) .GT. TWOM24
+         BH    DWLP4
+         LTDR  F2,F2                   SEE IF D2=0.
+         BZ    DONE                    IF D2=0. RETURN
+         DFIXH
+         MD    F2,TWO12                MULTIPLY TWICE TO COMPUTE
+         MD    F2,TWO12                D2*(C**2)
+         STD   F2,0(R3)                STORE D2=D2*(C**2)
+         LD    F6,H21                  GET H21
+         DD    F6,TWO12                COMPUTE H21/C
+         STD   F6,H21                  STORE H21=H21/C
+         LD    F6,H22                  GET H22
+         DD    F6,TWO12                COMPUTE H22/C
+         STD   F6,H22                  STORE H22=H22/C
+         B     DWLP3
+DWLP4    LPDR  F0,F2                   PUT DABS(D2) INTO F0
+         CD    F0,TWO24                SEE IF DABS(D2) .LT. TWO24
+         BL    DONE
+         DFIXH
+         DD    F2,TWO12                DIVIDE TWICE TO COMPUTE
+         DD    F2,TWO12                D2/C**2
+         STD   F2,0(R3)                STORE D2=D2/C**2
+         LD    F6,H21                  GET H21
+         MD    F6,TWO12                COMPUTE H21*C
+         STD   F6,H21                  STORE H21=H21*C
+         LD    F6,H22                  GET H22
+         MD    F6,TWO12                COMPUTE H22*C
+         STD   F6,H22                  STORE H22=H22*C
+         B     DWLP4
+DONE     EPILOG
+         LTORG
+         DS    0D
+P2B2     DS    D
+TWO12    DC    D'4096.'
+TWO24    DC    D'16777216.'
+TWOM24   DC    D'5.960E-08'
+TOL      DC    D'0.0'
+DPARAM   DSECT
+DFLAG    DS    D
+H11      DS    D
+H21      DS    D
+H12      DS    D
+H22      DS    D
+         END
+*********APPLY MOD. GIVENS TRANS., SNGL PREC., SROTM, IBM/360 ASM.*****
+*        USAGE STATEMENT                                  30 SEPT 1975*
+*              CALL SROTM (N,SX,INCX,SY,INCY,SPARAM)       WASH. ST. U*
+*        REAL*4 SX( ),SY( ),SPARAM(5), INTEGER * 4 N,INCX,INCY        *
+***********************************************************************
+SROTM    PROLOG R11
+         LM    R2,R7,0(R1)             GET POINTERS TO ARGUMENTS
+         USING SPARAM,R7               LOAD ADDRESS OF SPARAM( )
+         NCHK  R9,R2,DONE              GET N AND QUIT IF N .LE. 0
+         LE    F0,FLAG                 GET FLAG TO SEE WHICH MODE
+         LTER  F0,F0                   THE TRANSFORMATION WILL HAVE
+         BZ    B1                      FLAG=0. CASE
+         BP    B2                      FLAG=1. CASE
+         AE    F0,=E'2.0'              CHECK FOR FLAG=-2. CASE
+         BZ    DONE
+         B     C3                      BRANCH TO LOOP 3
+B1       LE    F4,H12                  SAVE H12 AND H21 FOR MULTIPLYING
+         LE    F6,H21                  IN LOOP 1
+         L     R11,0(R4)               GET INCX
+         C     R11,0(R6)               COMPARE INCY WITH INCX
+         BNE   C1                      BRANCH TO GEN. LOOP IF NOT EQUAL
+         SLA   R11,RSTAR4              MULTIPLY INCX * 4
+         BM    C1                      GEN. LOOP IF INCX,INCY NEG.
+         LR    R8,R11                  SAVE INCX*4 IN UNOCCUPIED R8
+         MR    R10,R9                  COMPUTE INCX * 4 * (N-1)
+         SR    R6,R6                   SET R6 = 0
+         LR    R10,R8                  LOAD R10 WITH LOOP1E INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP1E   LE    F0,0(R6,R3)             GET SX()
+         LE    F2,0(R6,R5)             GET SY()
+         MER   F2,F4                   COMPUTE H12*SY()
+         MER   F0,F6                   COMPUTE H21*SX()
+         AE    F2,0(R6,R3)             COMPUTE SX()+H12*SY()
+         AE    F0,0(R6,R5)             COMPUTE H21*SX()+SY()
+         STE   F2,0(R6,R3)             OVERWRITE SX()
+         STE   F0,0(R6,R5)             OVERWRITE SY()
+         BXLE  R6,R10,LOOP1E
+         B     DONE
+C1       INCFX R3,R4,R9,R11,RSTAR4,ICY1  FIX SX() INCREMENT
+ICY1     INCFX R5,R6,R9,R11,RSTAR4,LOOP1N FIX SY() INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP1N   LE    F0,0(R3)                GET SX()
+         LE    F2,0(R5)                GET SY()
+         MER   F2,F4                   COMPUTE H12*SY()
+         MER   F0,F6                   COMPUTE H21*SX()
+         AE    F2,0(R3)                COMPUTE SX()+H12*SY()
+         AE    F0,0(R5)                COMPUTE H21*SX()+SY()
+         STE   F2,0(R3)                OVERWRITE SX()
+         STE   F0,0(R5)                OVERWRITE SY()
+         INCBR R3,R4,R5,R6,R2,LOOP1N
+         B     DONE
+B2       LE    F4,H11                  SAVE H11 AND H22 FOR MULTIPLYING
+         LE    F6,H22                  IN LOOP2
+         L     R11,0(R4)               GET INCX
+         C     R11,0(R6)               COMPARE INCY WITH INCX
+         BNE   C2                      BRANCH TO GEN. LOOP IF NOT EQUAL
+         SLA   R11,RSTAR4              MULTIPLY INCX * 4
+         BM    C2                      GEN. LOOP IF INCX,INCY NEG.
+         LR    R8,R11                  SAVE INCX*4 IN UNOCCUPIED R8
+         MR    R10,R9                  COMPUTE INCX * 4 * (N-1)
+         SR    R6,R6                   SET R6 = 0
+         LR    R10,R8                  LOAD R10 WITH LOOP2E INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP2E   LE    F0,0(R6,R3)             GET SX()
+         LE    F2,0(R6,R5)             GET SY()
+         MER   F0,F4                   COMPUTE H11*SX()
+         MER   F2,F6                   COMPUTE H22*SY()
+         AE    F0,0(R6,R5)             COMPUTE H11*SX()+SY()
+         SE    F2,0(R6,R3)             COMPUTE -SX()+H22*SY()
+         STE   F0,0(R6,R3)             OVERWRITE SX()
+         STE   F2,0(R6,R5)             OVERWRITE SY()
+         BXLE  R6,R10,LOOP2E
+         B     DONE
+C2       INCFX R3,R4,R9,R11,RSTAR4,ICY2  FIX SX() INCREMENT
+ICY2     INCFX R5,R6,R9,R11,RSTAR4,LOOP2N FIX SY() INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP2N   LE    F0,0(R3)                GET SX()
+         LE    F2,0(R5)                GET SY()
+         MER   F0,F4                   COMPUTE H11*SX()
+         MER   F2,F6                   COMPUTE H22*SY()
+         AE    F0,0(R5)                COMPUTE H11*SX()+SY()
+         SE    F2,0(R3)                COMPUTE -SX()+H22*SY()
+         STE   F0,0(R3)                OVERWRITE SX()
+         STE   F2,0(R5)                OVERWRITE SY()
+         INCBR R3,R4,R5,R6,R2,LOOP2N
+         B     DONE
+C3       INCFX R3,R4,R9,R11,RSTAR4,ICY3  FIX SX() INCREMENT
+ICY3     INCFX R5,R6,R9,R11,RSTAR4,LOOP3 FIX SY() INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP3    LE    F4,0(R3)                GET SX()
+         LE    F6,0(R5)                GET SY()
+         LE    F0,H11                  GET H11
+         LE    F2,H12                  GET H12
+         MER   F0,F4                   COMPUTE H11*SX()
+         MER   F2,F6                   COMPUTE H12*SY()
+         AER   F2,F0                   COMPUTE H11*SX()+H12*SY()
+         LE    F0,H21                  GET H21
+         MER   F0,F4                   COMPUTE H21*SX()
+         STE   F2,0(R3)                OVERWRITE SX()
+         LE    F2,H22                  GET H22
+         MER   F2,F6                   COMPUTE H22*SY()
+         AER   F0,F2                   COMPUTE H21*SX()+H22*SY()
+         STE   F0,0(R5)                OVERWRITE SY()
+         INCBR R3,R4,R5,R6,R2,LOOP3
+DONE     EPILOG
+         LTORG
+SPARAM   DSECT
+FLAG     DS    F
+H11      DS    F
+H21      DS    F
+H12      DS    F
+H22      DS    F
+         END
+*********APPLY MOD. GIVENS TRANS., DBLE PREC., DROTM, IBM/360 ASM.*****
+*        USAGE STATEMENT                                  30 SEPT 1975*
+*              CALL DROTM (N,DX,INCX,DY,INCY,DPARAM)       WASH. ST. U*
+*        REAL*8 DX( ),DY( ),DPARAM(5), INTEGER * 4 N,INCX,INCY        *
+***********************************************************************
+DROTM    PROLOG R11
+         LM    R2,R7,0(R1)             GET POINTERS TO ARGUMENTS
+         USING DPARAM,R7               LOAD ADDRESS OF DPARAM( )
+         NCHK  R9,R2,DONE              GET N AND QUIT IF N .LE. 0
+         LD    F0,FLAG                 GET FLAG TO SEE WHICH MODE
+         LTDR  F0,F0                   THE TRANSFORMATION WILL HAVE
+         BZ    B1                      FLAG=0. CASE
+         BP    B2                      FLAG=1. CASE
+         AD    F0,=D'2.0'              CHECK FOR FLAG=-2. CASE
+         BZ    DONE
+         B     C3                      BRANCH TO LOOP 3
+B1       LD    F4,H12                  SAVE H12 AND H21 FOR MULTIPLYING
+         LD    F6,H21                  IN LOOP 1
+         L     R11,0(R4)               GET INCX
+         C     R11,0(R6)               COMPARE INCY WITH INCX
+         BNE   C1                      BRANCH TO GEN. LOOP IF NOT EQUAL
+         SLA   R11,RSTAR8              MULTIPLY INCX * 8
+         BM    C1                      GEN. LOOP IF INCX,INCY NEG.
+         LR    R8,R11                  SAVE INCX*8 IN UNOCCUPIED R8
+         MR    R10,R9                  COMPUTE INCX * 8 * (N-1)
+         SR    R6,R6                   SET R6 = 0
+         LR    R10,R8                  LOAD R10 WITH LOOP1E INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP1E   LD    F0,0(R6,R3)             GET DX()
+         LD    F2,0(R6,R5)             GET DY()
+         MDR   F2,F4                   COMPUTE H12*DY()
+         MDR   F0,F6                   COMPUTE H21*DX()
+         AD    F2,0(R6,R3)             COMPUTE DX()+H12*DY()
+         AD    F0,0(R6,R5)             COMPUTE H21*DX()+DY()
+         STD   F2,0(R6,R3)             OVERWRITE DX()
+         STD   F0,0(R6,R5)             OVERWRITE DY()
+         BXLE  R6,R10,LOOP1E
+         B     DONE
+C1       INCFX R3,R4,R9,R11,RSTAR8,ICY1  FIX DX() INCREMENT
+ICY1     INCFX R5,R6,R9,R11,RSTAR8,LOOP1N FIX DY() INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP1N   LD    F0,0(R3)                GET DX()
+         LD    F2,0(R5)                GET DY()
+         MDR   F2,F4                   COMPUTE H12*DY()
+         MDR   F0,F6                   COMPUTE H21*DX()
+         AD    F2,0(R3)                COMPUTE DX()+H12*DY()
+         AD    F0,0(R5)                COMPUTE H21*DX()+DY()
+         STD   F2,0(R3)                OVERWRITE DX()
+         STD   F0,0(R5)                OVERWRITE DY()
+         INCBR R3,R4,R5,R6,R2,LOOP1N
+         B     DONE
+B2       LD    F4,H11                  SAVE H11 AND H22 FOR MULTIPLYING
+         LD    F6,H22                  IN LOOP2
+         L     R11,0(R4)               GET INCX
+         C     R11,0(R6)               COMPARE INCY WITH INCX
+         BNE   C2                      BRANCH TO GEN. LOOP IF NOT EQUAL
+         SLA   R11,RSTAR8              MULTIPLY INCX * 8
+         BM    C2                      GEN. LOOP IF INCX,INCY NEG.
+         LR    R8,R11                  SAVE INCX*8 IN UNOCCUPIED R8
+         MR    R10,R9                  COMPUTE INCX * 8 * (N-1)
+         SR    R6,R6                   SET R6 = 0
+         LR    R10,R8                  LOAD R10 WITH LOOP2E INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP2E   LD    F0,0(R6,R3)             GET DX()
+         LD    F2,0(R6,R5)             GET DY()
+         MDR   F0,F4                   COMPUTE H11*DX()
+         MDR   F2,F6                   COMPUTE H22*DY()
+         AD    F0,0(R6,R5)             COMPUTE H11*DX()+DY()
+         SD    F2,0(R6,R3)             COMPUTE -DX()+H22*DY()
+         STD   F0,0(R6,R3)             OVERWRITE DX()
+         STD   F2,0(R6,R5)             OVERWRITE DY()
+         BXLE  R6,R10,LOOP2E
+         B     DONE
+C2       INCFX R3,R4,R9,R11,RSTAR8,ICY2  FIX DX() INCREMENT
+ICY2     INCFX R5,R6,R9,R11,RSTAR8,LOOP2N FIX DY() INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP2N   LD    F0,0(R3)                GET DX()
+         LD    F2,0(R5)                GET DY()
+         MDR   F0,F4                   COMPUTE H11*DX()
+         MDR   F2,F6                   COMPUTE H22*DY()
+         AD    F0,0(R5)                COMPUTE H11*DX()+DY()
+         SD    F2,0(R3)                COMPUTE -DX()+H22*DY()
+         STD   F0,0(R3)                OVERWRITE DX()
+         STD   F2,0(R5)                OVERWRITE DY()
+         INCBR R3,R4,R5,R6,R2,LOOP2N
+         B     DONE
+C3       INCFX R3,R4,R9,R11,RSTAR8,ICY3  FIX DX() INCREMENT
+ICY3     INCFX R5,R6,R9,R11,RSTAR8,LOOP3 FIX DY() INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP3    LD    F4,0(R3)                GET DX()
+         LD    F6,0(R5)                GET DY()
+         LD    F0,H11                  GET H11
+         LD    F2,H12                  GET H12
+         MDR   F0,F4                   COMPUTE H11*DX()
+         MDR   F2,F6                   COMPUTE H12*DY()
+         ADR   F2,F0                   COMPUTE H11*DX()+H12*DY()
+         LD    F0,H21                  GET H21
+         MDR   F0,F4                   COMPUTE H21*DX()
+         STD   F2,0(R3)                OVERWRITE DX()
+         LD    F2,H22                  GET H22
+         MDR   F2,F6                   COMPUTE H22*DY()
+         ADR   F0,F2                   COMPUTE H21*DX()+H22*DY()
+         STD   F0,0(R5)                OVERWRITE DY()
+         INCBR R3,R4,R5,R6,R2,LOOP3
+DONE     EPILOG
+         LTORG
+DPARAM   DSECT
+FLAG     DS    2F
+H11      DS    2F
+H21      DS    2F
+H12      DS    2F
+H22      DS    2F
+         END
+*********SINGLE PRECISION COPY ROUTINE, SCOPY, IBM/360 ASM.************
+*        USAGE STATEMENT                                14 AUGUST 1975*
+*             CALL SCOPY (N,SX,INCX,SY,INCY)           WASH. ST. U/ANL*
+*        SX( ),SY( ),REAL*4 N,INCX,INCY,INTEGER*4                     *
+***********************************************************************
+SCOPY    PROLOG R11
+         LM    R2,R6,0(R1)             GET POINTERS TO ARGUMENTS
+         NCHK  R9,R2,DONE              GET N AND EXIT IF N .LE. 0
+         L     R11,0(R4)               GET INCX
+         C     R11,0(R6)               COMPARE INCY WITH INCX
+         BNE   INCNE                   BRANCH TO GEN. LOOP IF NOT EQUAL
+         SLA   R11,RSTAR4              MULTIPLY INCX * 4
+         BM    INCNE                   IF INCX,INCY NEG., GEN. LOOP
+         LR    R8,R11                  SAVE INCX*4 IN UNOCCUPIED R8
+         MR    R10,R9                  COMPUTE INCX * 4 * (N-1)
+         SR    R6,R6                   SET R6 = 0
+         LR    R10,R8                  LOAD R10 WITH LOOPEQ INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPEQ   LE    F0,0(R6,R3)             GET SX( ) AND
+         STE   F0,0(R6,R5)             STORE IN LOCATION SY( )
+         BXLE  R6,R10,LOOPEQ
+         B     DONE
+INCNE    INCFX R3,R4,R9,R11,RSTAR4,INCYT  FIX SX( ) INCREMENT
+INCYT    INCFX R5,R6,R9,R11,RSTAR4,LOOPNE FIX SY( ) INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPNE   LE    F0,0(R3)                GET SX( ) AND
+         STE   F0,0(R5)                STORE IN LOCATION SY( )
+         INCBR R3,R4,R5,R6,R2,LOOPNE   ADD INCREMENTS AND CONTINUE LOOP
+DONE     EPILOG
+         END
+*********DOUBLE PRECISION COPY ROUTINE, DCOPY, IBM/360 ASM.************
+*        USAGE STATEMENT                                14 AUGUST 1975*
+*             CALL COPY (N,DX,INCX,DY,INCY)            WASH. ST. U/ANL*
+*        DX( ),DY( ),REAL*8 N,INCX,INCY,INTEGER*4                     *
+***********************************************************************
+DCOPY    PROLOG R11
+         LM    R2,R6,0(R1)             GET POINTERS TO ARGUMENTS
+         NCHK  R9,R2,DONE              GET N AND EXIT IF N .LE. 0
+         L     R11,0(R4)               GET INCX
+         C     R11,0(R6)               COMPARE INCY WITH INCX
+         BNE   INCNE                   BRANCH TO GEN. LOOP IF NOT EQUAL
+         SLA   R11,RSTAR8              MULTIPLY INCX * 8
+         BM    INCNE                   IF INCX,INCY NEG., GEN. LOOP
+         LR    R8,R11                  SAVE INCX*8 IN UNOCCUPIED R8
+         MR    R10,R9                  COMPUTE INCX * 8 * (N-1)
+         SR    R6,R6                   SET R6 = 0
+         LR    R10,R8                  LOAD R10 WITH LOOPEQ INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPEQ   LD    F0,0(R6,R3)             GET DX( ) AND
+         STD   F0,0(R6,R5)             STORE IN LOCATION DY( )
+         BXLE  R6,R10,LOOPEQ
+         B     DONE
+INCNE    INCFX R3,R4,R9,R11,RSTAR8,INCYT  FIX DX( ) INCREMENT
+INCYT    INCFX R5,R6,R9,R11,RSTAR8,LOOPNE FIX DY( ) INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPNE   LD    F0,0(R3)                GET DX( ) AND
+         STD   F0,0(R5)                STORE IN LOCATION DY( )
+         INCBR R3,R4,R5,R6,R2,LOOPNE   ADD INCREMENTS AND CONTINUE LOOP
+DONE     EPILOG
+         END
+*********COMPLEX COPY ROUTINE,CCOPY, IBM/360 ASM.**********************
+*        USAGE STATEMENT                                   19 MAY 1974*
+*             CALL CCOPY(N,CX,INCX,CY,INCY)                WASH. ST. U*
+*        CX( ),CY( ),COMPLEX*8, N,INCX,INCY,INTEGER*4                 *
+***********************************************************************
+CCOPY    PROLOG R10
+         LM    R2,R6,0(R1)             GET POINTERS TO ARGUMENTS
+         NCHK  R10,R2,DONE             GET N AND QUIT IF N .LE. 0
+         INCFX R3,R4,R10,R9,CSTAR8,ICY   FIX CX( ) INCREMENT
+ICY      INCFX R5,R6,R10,R9,CSTAR8,LOOP  FIX CY( ) INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP     LE    F0,0(R3)                GET REAL AND IMAGINARY PARTS
+         LE    F2,4(R3)                OF CX( ) AND
+         STE   F0,0(R5)                STORE THESE IN REAL AND
+         STE   F2,4(R5)                IMAGINARY PARTS OF CY( )
+         INCBR R3,R4,R5,R6,R2,LOOP     ADD INCREMENTS AND CONTINUE LOOP
+DONE     EPILOG
+         END
+*********SINGLE PRECISION SWAP ROUTINE, SSWAP, IBM/360 ASM.************
+*        USAGE STATEMENT                                14 AUGUST 1975*
+*             CALL SSWAP (N,SX,INCX,SY,INCY)           WASH. ST. U/ANL*
+*        SX( ),SY( ),REAL*4 N,INCX,INCY,INTEGER*4                     *
+***********************************************************************
+SSWAP    PROLOG R11
+         LM    R2,R6,0(R1)             GET POINTERS TO ARGUMENTS
+         NCHK  R9,R2,DONE              GET N AND EXIT IF N .LE. 0
+         L     R11,0(R4)               GET INCX
+         C     R11,0(R6)               COMPARE INCY WITH INCX
+         BNE   INCNE                   BRANCH TO GEN. LOOP IF NOT EQUAL
+         SLA   R11,RSTAR4              MULTIPLY INCX * 4
+         BM    INCNE                   IF INCX,INCY NEG., GEN. LOOP
+         LR    R8,R11                  SAVE INCX*4 IN UNOCCUPIED R8
+         MR    R10,R9                  COMPUTE INCX * 4 * (N-1)
+         SR    R6,R6                   SET R6 = 0
+         LR    R10,R8                  LOAD R10 WITH LOOPEQ INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPEQ   LE    F0,0(R6,R3)             GET SX( )
+         LE    F2,0(R6,R5)             GET SY( )
+         STE   F0,0(R6,R5)             STORE SX( ) AT LOCATION SY( )
+         STE   F2,0(R6,R3)             STORE SY( ) AT LOCATION SX( )
+         BXLE  R6,R10,LOOPEQ
+         B     DONE
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+INCNE    INCFX R3,R4,R9,R11,RSTAR4,ICY    FIX SX( ) INCREMENT
+ICY      INCFX R5,R6,R9,R11,RSTAR4,LOOPNE FIX SY( ) INCREMENT
+LOOPNE   LE    F0,0(R3)                GET SX( )
+         LE    F2,0(R5)                GET SY( )
+         STE   F0,0(R5)                STORE SX( ) AT LOCATION SY( )
+         STE   F2,0(R3)                STORE SY( ) AT LOCATION SX( )
+         INCBR R3,R4,R5,R6,R2,LOOPNE   ADD INCREMENTS AND CONTINUE
+DONE     EPILOG
+         END
+*********DOUBLE PRECISION SWAP ROUTINE, DSWAP, IBM/360 ASM.************
+*        USAGE STATEMENT                                14 AUGUST 1975*
+*              CALL DSWAP (N,DX,INCX,DY,INCY)          WASH. ST. U/ANL*
+*        DX( ),DY( ),REAL*8  N,INCX,INCY,INTEGER*4                    *
+***********************************************************************
+DSWAP    PROLOG R11
+         LM    R2,R6,0(R1)             GET POINTERS TO ARGUMENTS
+         NCHK  R9,R2,DONE              GET N AND EXIT IF N .LE. 0
+         L     R11,0(R4)               GET INCX
+         C     R11,0(R6)               COMPARE INCY WITH INCX
+         BNE   INCNE                   BRANCH TO GEN. LOOP IF NOT EQUAL
+         SLA   R11,RSTAR8              MULTIPLY INCX * 8
+         BM    INCNE                   IF INCX,INCY NEG., GEN. LOOP
+         LR    R8,R11                  SAVE INCX*8 IN UNOCCUPIED R8
+         MR    R10,R9                  COMPUTE INCX * 8 * (N-1)
+         SR    R6,R6                   SET R6 = 0
+         LR    R10,R8                  LOAD R10 WITH LOOPEQ INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPEQ   LD    F0,0(R6,R3)             GET DX( )
+         LD    F2,0(R6,R5)             GET DY( )
+         STD   F0,0(R6,R5)             STORE DX( ) AT LOCATION DY( )
+         STD   F2,0(R6,R3)             STORE DY( ) AT LOCATION DX( )
+         BXLE  R6,R10,LOOPEQ
+         B     DONE
+INCNE    INCFX R3,R4,R9,R11,RSTAR8,ICY    FIX DX( ) INCREMENT
+ICY      INCFX R5,R6,R9,R11,RSTAR8,LOOPNE FIX DY( ) INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOPNE   LD    F0,0(R3)                GET DX( )
+         LD    F2,0(R5)                GET DY( )
+         STD   F0,0(R5)                STORE DX( ) AT LOCATION DY( )
+         STD   F2,0(R3)                STORE DY( ) AT LOCATION DX( )
+         INCBR R3,R4,R5,R6,R2,LOOPNE   ADD INCREMENTS AND CONTINUE
+DONE     EPILOG
+         END
+*********COMPLEX SWAPPING ROUTINE, CSWAP,     IBM/360 ASM.*************
+*        USAGE STATEMENT                                   19 MAY 1974*
+*             CALL CSWAP(N,CX,INCX,CY,INCY)                WASH. ST. U*
+*        CX( ),CY( ),COMPLEX*8, N,INCX,INCY,INTEGER*4                 *
+***********************************************************************
+CSWAP    PROLOG R10
+         LM    R2,R6,0(R1)             GET POINTERS TO ARGUMENTS
+         NCHK  R10,R2,DONE             GET N AND QUIT IF N .LE. 0
+         INCFX R3,R4,R10,R9,CSTAR8,ICY FIX DX( ) INCREMENT
+ICY      INCFX R5,R6,R10,R9,CSTAR8,LOOP  FIX CY( ) INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP     LE    F0,0(R3)                GET REAL AND IMAGINARY
+         LE    F2,4(R3)                PART OF CX( )
+         LE    F4,0(R5)                GET REAL AND IMAGINARY
+         LE    F6,4(R5)                PART OF CY( )
+         STE   F0,0(R5)                STORE REAL AND IMAG.
+         STE   F2,4(R5)                PARTS OF CX( ) AT CY( )
+         STE   F4,0(R3)                STORE REAL AND IMAG.
+         STE   F6,4(R3)                PARTS OF CY( ) AT CX( )
+         INCBR R3,R4,R5,R6,R2,LOOP     ADD INCREMENTS AND CONTINUE LOOP
+DONE     EPILOG
+         END
+*********EUCLIDEAN NORM SINGLE PREC.,SNRM2, IBM/360 ASM.***************
+*        USAGE STATEMENT                                   22 MAY 1974*
+*             SW = SNRM2(N,SX,INCX)                        WASH. ST. U*
+*        SW,SNRM2,SX( ) REAL *4, N,INCX INTEGER * 4                   *
+***********************************************************************
+SNRM2    PROLOG R6
+         LM    R2,R4,0(R1)             GET POINTERS TO ARGUMENTS
+         SER   F0,F0                   SET SNRM2 = 0.0
+         L     R2,0(R2)                GET VALUE OF N
+         LTR   R5,R2                   CHECK IF N .LE. 0 AND SAVE N
+         BNP   DONE                    IF YES RETURN
+         LR    R6,R3                   SAVE BASE ADDRESS OF SX( )
+         L     R4,0(R4)                GET VALUE OF INCX.
+         SLA   R4,RSTAR4               COMPUTE INCX*4 AND SET CODES
+         BM    DONE                    IF INCX .LT. 0 RETURN
+         SER   F6,F6                   SET U = 0.0 (LEAVE IN REG. F6)
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP1    LE    F4,0(R3)                GET SX( )
+         LPER  F4,F4                   COMPUTE ABS(SX( ))
+         CE    F4,ALPHA                SET CODES FOR UNDERFLOW
+         BH    LOOP2                   BRANCH IF UNFL. DON'T HURT NUM.
+         CER   F6,F4                   FIND MAX. VALUE OF ABS(SX( ))
+         BNL   UBIG                    IF BRANCH OCCURS U(F6) IS LARGER
+         LER   F6,F4                   F6 CONTAINS MAX SO FAR
+UBIG     AR    R3,R4                   COMPUTE ADDRESS OF NEXT ELEMENT
+         BCT   R2,LOOP1
+         CER   F0,F6                   SEE IF MAX. IS ZERO.
+         BE    DONE                    QUIT IF SO.
+         LE    F2,=E'1.0'
+         DER   F2,F6                   COMPUTE SCALE FACTOR FOR UNFL
+         LR    R2,R5                   RESTORE VALUES OF N AND
+         LR    R3,R6                   BASE ADDRESS OF SX( )
+         B     LOOP3
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP2    LE    F4,0(R3)                MAIN LOOP BEGINS HERE
+         LPER  F4,F4                   COMPUTE ABS(SX( ))
+         CE    F4,GAMMA                CHECK FOR OVERFLOW
+         BH    OVRFL                   BRANCH TO OTHER LOOP IF OVERFL.
+         MER   F4,F4                   SQUARE VALUE
+         AER   F0,F4                   ACCUMULATE SUM IN F0
+         AR    R3,R4                   GET ADDRESS OF NEXT ELEMENT
+         BCT   R2,LOOP2                END OF MAIN LOOP
+         LE    F6,=E'1.0'              FINAL SCALE FACTOR
+         B     CALSQ                   BRANCH AND COMPUTE SQRT( )
+OVRFL    LE    F6,U1                   SET OVERFLOW PARAMETER
+         LE    F2,U2                   RECIPROCAL OF SCALE FACTOR
+         MER   F0,F2                   USE TWO MULTIPLIES BY OVERFLOW
+         MER   F0,F2                   PARAMETER TO SCALE RESULT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP3    LE    F4,0(R3)                CONTINUE ACCUMULATION BY
+         MER   F4,F2                   MULTIPLYING EACH ELEMENT BY THE
+         MER   F4,F4                   SCALE FACTOR AND SQUARE RESULT
+         AER   F0,F4                   CONTINUE ACCUMULATION
+         AR    R3,R4                   GET ADDRESS OF NEXT ELEMENT
+         BCT   R2,LOOP3                END OF SCALED LOOP.
+CALSQ    STE   F0,VALUE                STORE VALUE FOR BRANCH
+         STE   F6,U                    SAVE FINAL RESCALING VALUE.
+         L     R15,=V(SQRT)            GET ADDRESS OF SQRT
+         CNOP  0,4
+         BAL   R1,SQRTC
+         DC    X'80',AL3(VALUE)
+SQRTC    BALR  R14,R15
+         ME    F0,U                    MULTIPLY RESULT BY SCALE FACTOR
+DONE     EPILOG
+ALPHA    DC    E'1.E-34'
+GAMMA    DC    E'1.E+35'
+U1       DC    E'1.E+36'
+U2       DC    E'1.E-36'
+VALUE    DC    E'0'
+U        DS    F
+         END
+*********EUCLIDEAN NORM DOUBLE PREC., DNRM2, IBM/360 ASM.**************
+*        USAGE STATEMENT                                   22 MAY 1974*
+*             DW = DNRM2(N,DX,INCX)                        WASH. ST. U*
+*        DW,DNRM2,DX( ), REAL * 8, N,INCX REAL * 4                    *
+***********************************************************************
+DNRM2    PROLOG R6
+         LM    R2,R4,0(R1)             GET POINTERS TO ARGUMENTS
+         SDR   F0,F0                   SET DNRM2 = 0.0
+         L     R2,0(R2)                GET VALUE OF N
+         LTR   R5,R2                   CHECK IF N .LE. 0 AND SAVE N
+         BNP   DONE                    IF YES RETURN
+         LR    R6,R3                   SAVE BASE ADDRESS OF DX( )
+         L     R4,0(R4)                GET VALUE OF INCX
+         SLA   R4,RSTAR8               COMPUTE INCX*8 AND SET CODES
+         BM    DONE                    IF INCX .LT. 0 RETURN
+         SDR   F6,F6                   SET U = 0.0 (LEAVE IN REG. F6)
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP1    LD    F4,0(R3)                GET DX( )
+         LPDR  F4,F4                   COMPUTE DABS(DX( ))
+         CD    F4,ALPHA                SET CODES FOR UNDERFLOW
+         BH    LOOP2                   BRANCH IF ELEMENT IS LARGER
+         CDR   F6,F4                   FIND MAX. VALUE OF DABS(DX( ))
+         BNL   UBIG                    TEST FOR MAX. ELEMENT.
+         LDR   F6,F4                   F6 CONTAINS MAX SO FAR
+UBIG     AR    R3,R4                   COMPUTE ADDRESS OF NEXT ELEMENT
+         BCT   R2,LOOP1                END OF FIRST LOOP
+         CDR   F6,F0                   CHECK IF MAX ELEMENT OF DX = 0.0
+         BE    DONE                    IF YES RETURN
+         LD    F2,=D'1.0'
+         DDR   F2,F6                   COMPUTE SCALE FACTOR FOR UNDFLOW
+         LR    R2,R5                   RESTORE VALUES OF N AND
+         LR    R3,R6                   BASE ADDRESS OF DX( )
+         B     LOOP3
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP2    LD    F4,0(R3)                MAIN LOOP BEGINS HERE
+         LPDR  F4,F4                   COMPUTE DABS(DX( ))
+         CD    F4,GAMMA                CHECK FOR OVERFLOW
+         BH    OVRFL                   IF YES BRANCH FOR FIXUP
+         MDR   F4,F4                   SQUARE VALUE
+         ADR   F0,F4                   ACCUMULATE SUM IN F0
+         AR    R3,R4                   GET ADDRESS OF NEXT ELEMENT
+         BCT   R2,LOOP2                END OF MAIN LOOP
+         LD    F6,=D'1.0'              SCALE FACTOR
+         B     CALSQ                   BRANCH AND COMPUTE DSQRT( )
+OVRFL    LD    F6,U1                   SET OVERFLOW PARAMETER
+         LD    F2,U2                   RECIPROCAL OF SCALE FACTOR
+         MDR   F0,F2                   USE TWO MULTIPLIES BY OVERFLOW
+         MDR   F0,F2                   PARAMETER TO SCALE RESOLT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP3    LD    F4,0(R3)                CONTINUE ACCUMULATION BY
+         MDR   F4,F2                   MULTIPLYING EACH ELEMENT BY
+         MDR   F4,F4                   SCALE FACTOR AND SQUARE RESULT
+         ADR   F0,F4                   CONTINUE ACCUMULATION
+         AR    R3,R4                   GET ADDRESS OF NEXT ELEMENT
+         BCT   R2,LOOP3                END OF SCALED LOOP.
+CALSQ    STD   F0,VALUE                STORE VALUE FOR BRANCH
+         STD   F6,U                    SAVE FINAL RESCALING VALUE.
+         L     R15,=V(DSQRT)           GET ADDRESS OF DSQRT
+         CNOP  0,4
+         BAL   1,SQRTC
+         DC    X'80',AL3(VALUE)
+SQRTC    BALR  R14,R15                 BRANCH TO DSQRT
+         MD    F0,U                    MULTIPLY RESULT BY SCALE FACTOR
+DONE     EPILOG
+ALPHA    DC    D'1.0E-29'
+GAMMA    DC    D'1.0E+35'
+U1       DC    D'1.0E+36'
+U2       DC    D'1.0E-36'
+VALUE    DC    D'0'
+U        DS    D
+         END
+***********EUCLIDEAN NORM, COMPLEX, SCNRM2, IBM/360 ASM.***************
+*           USAGE STATEMENT                            30 OCTOBER 1975*
+*         SW = SCNRM2 (N,CX,INCX)                          WASH. ST. U*
+*    SW,SCNRM2 REAL*4, N,INCX INTEGER*4, CX( ) COMPLEX*8              *
+***********************************************************************
+SCNRM2   PROLOG R6
+         LM    R2,R4,0(R1)             GET POINTERS TO ARGUMENTS.
+         SER   F0,F0                   SET SCNRM2 = 0.0
+         L     R2,0(R2)                GET VALUE OF N.
+         LTR   R5,R2                   CHECK IF N .LE. 0, SAVE N.
+         BNP   DONE                    IF YES RETURN.
+         LR    R6,R3                   SAVE BASE ADDRESS OF CX( )
+         L     R4,0(R4)                GET VALUE OF INCX
+         SLA   R4,CSTAR8               COMPUTE INCX*8 AND SET CODES.
+         BM    DONE                    IF INCX .LT. 0 RETURN
+         SER   F6,F6                   SET U = 0.0 (LEAVE IN REG. F6)
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP1    LE    F4,0(R3)                GET REAL (CX())
+         LPER  F4,F4                   COMPUTE ABS REAL (CX())
+         CE    F4,ALPHA                SET CODES FOR UNDERFLOW.
+         BH    LOOP2                   BRANCH IF UNFL. DON'T HURT NUM.
+         CER   F6,F4                   FIND MAX VAL OF ABS REAL(CX())
+         BNL   IMGPRT                  IF BRANCH OCCURS U(F6) IS LARGER
+         LER   F6,F4                   F6 CONTAINS MAX SO FAR.
+IMGPRT   LE    F4,4(R3)                GET AIMAG (CX()).
+         LPER  F4,F4                   COMPUTE ABS(AIMAG(CX())).
+         CE    F4,ALPHA                SET CODES FOR UNDERFLOW.
+         BH    LOOP2                   BRANCH IF UNFL. DON'T HURT NUM.
+         CER   F6,F4                   FIND MAX ABS(REAL),ABS(AIMAG).
+         BNL   UBIG                    IF BRANCH OCCURS U(F6) IS LARGER
+         LER   F6,F4                   F6 CONTAINS MAX SO FAR.
+UBIG     AR    R3,R4                   COMPUTE ADDRESS OF NEXT ELEMENT.
+         BCT   R2,LOOP1                END OF FIRST LOOP
+         CER   F0,F6                   SEE IF MAX. IS ZERO.
+         BE    DONE                    QUIT IF SO.
+         LE    F2,=E'1.0'
+         DER   F2,F6                   COMPUTE SCALE FACTOR FOR UNFL.
+         LR    R2,R5                   RESTORE VALUE OF N AND
+         LR    R3,R6                   BASE ADDRESS OF CX( ).
+         B     LOOP3
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP2    LE    F4,0(R3)                MAIN LOOP BEGINS HERE.
+         LPER  F4,F4                   COMPUTE ABS(REAL(CX())).
+         CE    F4,GAMMA                CHECK FOR OVERFLOW.
+         BH    OVRFL                   BRANCH TO OTHER LOOP IF OVERFL.
+         MER   F4,F4                   SQUARE VALUE.
+         LE    F2,4(R3)
+         LPER  F2,F2                   COMPUTE ABS(AIMAG(CX())).
+         CE    F2,GAMMA                CHECK FOR OVERFLOW.
+         BH    OVRFL
+         MER   F2,F2                   SQUARE VALUE.
+         AER   F0,F2
+         AER   F0,F4                   ACCUMULATE SUM IN F0
+         AR    R3,R4                   GET ADDRESS OF NEXT ELEMENT.
+         BCT   R2,LOOP2                END OF MAIN LOOP.
+         LE    F6,=E'1.0'              FINAL SCALE FACTOR
+         B     CALSQ                   BRANCH AND COMPUTE SQRT( ).
+OVRFL    LE    F2,U2                   LOAD SCALE FACT, ALL COMPONENTS
+         LE    F6,U1                   GET FINAL SCALE FACTOR.
+         MER   F0,F2                   USE TWO MULTIPLIES BY OVERFLOW.
+         MER   F0,F2                   PARAMETER TO SCALE RESULT.
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP3    LE    F4,0(R3)                CONTINUE ACCUMULATION BY
+         MER   F4,F2                   MULTIPLYING EACH ELEMENT BY THE
+         MER   F4,F4                   SCALE FACTOR AND SCALE RESULT.
+         AER   F0,F4                   CONTINUE ACCUMULATION.
+         LE    F4,4(R3)
+         MER   F4,F2
+         MER   F4,F4
+         AER   F0,F4
+         AR    R3,R4                   GET ADDRESS OF NEXT ELEMENT.
+         BCT   R2,LOOP3                END OF SCALED LOOP.
+CALSQ    STE   F0,VALUE                STORE VALUE FOR BRANCH
+         STE   F6,U                    SAVE FINAL RESCALING VALUE.
+         L     R15,=V(SQRT)            GET ADDRESS OF SQRT
+         CNOP  0,4
+         BAL   R1,SQRTC
+         DC    X'80',AL3(VALUE)
+SQRTC    BALR  R14,R15
+         ME    F0,U                    MULTIPLY RESULT BY SCALE FACTOR.
+DONE     EPILOG
+ALPHA    DC    E'1.E-34'
+GAMMA    DC    E'1.E+35'
+U1       DC    E'1.E+36'
+U2       DC    E'1.E-36'
+VALUE    DC    E'0'
+U        DS    F
+         END
+*********SUM OF MAGS. OF VECTORS, SNGL PREC., SASUM, IBM/360 ASM.******
+*        USAGE STATEMENT                                   24 MAY 1974*
+*             SW = SASUM(N,SX,INCX)                        WASH. ST. U*
+*        SW,SASUM,SX( ) REAL *4, N,INCX INTEGER * 4                   *
+***********************************************************************
+SASUM    PROLOG R4
+         LM    R2,R4,0(R1)             GET POINTERS TO ARGUMENTS
+         SER   F0,F0                   SET SASUM = 0.
+         L     R2,0(R2)                GET N
+         LTR   R2,R2                   SET COND. CODES
+         BNP   DONE                    EXIT IF N .LE. 0
+         L     R4,0(R4)                GET INCX
+         SLA   R4,RSTAR4               COMPUTE INCX*4 AND SET COND.
+         BM    DONE                    EXIT IF INCX .LT. 0
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP     LE    F2,0(R3)                GET SX( ) IN F2
+         LPER  F2,F2                   TAKE ABS. VALUE OF SX( )
+         AER   F0,F2                   ACCUMULATE SUM OF ABS. VALUES
+         AR    R3,R4                   UPDATE SX( ) ADDRESS
+         BCT   2,LOOP
+DONE     EPILOG
+         END
+*********SUM OF MAGS. OF VECTOR, DBLE PREC., DASUM, IBM/360 ASM.*******
+*        USAGE STATEMENT                                   23 MAY 1974*
+*             DW = DASUM(N,DX,INCX)                        WASH. ST. U*
+*        DW,DASUM,DX( ) REAL * 8, N,INCX INTEGER * 4                  *
+***********************************************************************
+DASUM    PROLOG R4
+         LM    R2,R4,0(R1)             GET POINTERS TO ARGUMENTS
+         SDR   F0,F0                   SET DASUM = 0.
+         L     R2,0(R2)                GET N
+         LTR   R2,R2                   SET COND. CODES
+         BNP   DONE                    EXIT IF N .LE. 0
+         L     R4,0(R4)                GET INCX
+         SLA   R4,RSTAR8               COMPUTE INCX*8 AND SET COMD.
+         BM    DONE                    EXIT IF INCX .LT. 0
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP     LD    F2,0(R3)                GET DX( ) IN F2
+         LPDR  F2,F2                   TAKE ABS. VALUE OF DX( )
+         ADR   F0,F2                   ACCUMULATE SUM OF ABS. VALUES
+         AR    R3,R4                   UPDATE DX( ) ADDRESS
+         BCT   2,LOOP
+DONE     EPILOG
+         END
+*********SUM OF RE. AND IM. MAGS., CMPLX VECTOR, SCASUM, IBM/360 ASM.**
+*        USAGE STATEMENT                                   23 MAY 1974*
+*             SW = SCASUM(N,CX,INCX)                       WASH. ST. U*
+*        SW,SCASUM REAL * 4, CX( ) COMPLEX * 8, (,INCX INTEGER * 4    *
+***********************************************************************
+SCASUM   PROLOG R4
+         LM    R2,R4,0(R1)             GET POINTERS TO ARGUMENTS
+         SER   F0,F0                   SET SCASUM = 0.
+         L     R2,0(R2)                GET N
+         LTR   R2,R2                   SET COND. CODES
+         BNP   DONE                    EXIT IF N .LE. 0
+         L     R4,0(R4)                GET INCX
+         SLA   R4,CSTAR8               COMPUTE INCX*8 AND SET COND.
+         BM    DONE                    EXIT IF INCX .LT. 0
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP     LE    F2,0(R3)                GET RE. AND IM. PARTS
+         LE    F4,4(R3)                OF CX( ) IN F2,F4
+         LPER  F2,F2                   TAKE ABS. VALUES OF
+         LPER  F4,F4                   BOTH PARTS OF CX( )
+         AER   F0,F2
+         AER   F0,F4                   ACCUMULATE SUM OF ABS. VALUES
+         AR    R3,R4                   UPDATE CX( ) ADDRESS
+         BCT   R2,LOOP
+DONE     EPILOG
+         END
+*********SNGL PREC. SCALING, SNGL PREC. VECTOR, SSCAL,  IBM/360 ASM.***
+*        USAGE STATEMENT                                   22 MAY 1974*
+*             CALL SSCAL  (N,SA,SX,INCX)                   WASH. ST. U*
+*        SA,SX( ) REAL * 4, N,INCX INTEGER * 4                        *
+***********************************************************************
+SSCAL    PROLOG R5
+         LM    R2,R5,0(R1)             GET POINTERS TO ARGUMENTS
+         L     R2,0(R2)                GET N
+         LTR   R2,R2                   SET COND. CODES
+         BNP   DONE                    EXIT IF N .LE. 0
+         L     R5,0(R5)                GET INCX
+         SLA   R5,RSTAR4               COMPUTE INCX*4 AND SET COND.
+         BM    DONE                    EXIT IF INCX .LT. 0
+         LE    F4,0(R3)                GET SA IN F4
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP     LE    F0,0(R4)                GET SX( ) IN F0
+         MER   F0,F4                   COMPUTE SA*SX( )
+         STE   F0,0(R4)                STORE SA*SX( ) IN SX( )
+         AR    R4,R5                   UPDATE SX( ) ADDRESS
+         BCT   R2,LOOP
+DONE     EPILOG
+         END
+*********DBLE PREC. SCALING, DBLE PREC. VECTOR, DSCAL,  IBM/360 ASM.***
+*        USAGE STATEMENT                                   21 MAY 1974*
+*             CALL DSCAL  (N,DA,DX,INCX)                   WASH. ST. U*
+*        DA, DX( ) REAL * 8, N,INCX INTEGER * 4                       *
+***********************************************************************
+DSCAL    PROLOG R5
+         LM    R2,R5,0(R1)             GET POINTERS TO ARGUMENTS
+         L     R2,0(R2)                GET N
+         LTR   R2,R2                   SET COND. CODES
+         BNP   DONE                    EXIT IF N .LE. 0
+         L     R5,0(R5)                GET INCX
+         SLA   R5,RSTAR8               COMPUTE INCX*8 AND SET COND.
+         BM    DONE                    EXIT IF INCX .LT. 0
+         LD    F4,0(R3)                GET DA IN F4
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP     LD    F0,0(R4)                GET DX( ) IN F0
+         MDR   F0,F4                   COMPUTE DA*DX( )
+         STD   F0,0(R4)                STORE DA*DX( ) IN DX( )
+         AR    R4,R5                   UPDATE DX( ) ADDRESS
+         BCT   R2,LOOP
+DONE     EPILOG
+         END
+*********COMPLEX SCALING, COMPLEX VECTOR, CSCAL,  IBM/360 ASM.*********
+*        USAGE STATEMENT                                   21 MAY 1974*
+*             CALL CSCAL  (N,CA,CX,INCX)                   WASH. ST. U*
+*        CA,CX( ) COMPLEX * 8, N,INCX INTEGER * 4                     *
+***********************************************************************
+CSCAL    PROLOG R10
+         LM    R2,R5,0(R1)             GET POINTERS TO ARGUMENTS
+         NCHK  R10,R2,DONE             EXIT IF N .LE. 0
+         LE    F4,0(R3)                GET RE. PART OF CA IN F4
+         LE    F6,4(R3)                AND IM. PART OF CA IN F6
+         INCFX R4,R5,R10,R9,CSTAR8,LOOP FIX CX( ) INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP     LE    F0,0(R4)                GET RE. PART OF CX( ) IN F0
+         LE    F2,4(R4)                GET IM. PART OF CX( ) IN F2
+         MER   F0,F4
+         MER   F2,F6
+         SER   F0,F2                   NOW RE. PART OF CA*CX( ) IN F0
+         LE    F2,0(R4)                GET RE. PART OF CX( ) IN F2
+         STE   F0,0(R4)                STORE RE. PART OF CA*CX( )
+         LE    F0,4(R4)                GET IM. PART OF CX( ) IN F0
+         MER   F0,F4
+         MER   F2,F6
+         AER   F0,F2                   NOW IM. PART OF CA*CX( ) IN F0
+         STE   F0,4(R4)                STORE IM. PART OF CA*CX( )
+         AR    R4,R5                   UPDATE CX( ) ADDRESS
+         BCT   R2,LOOP
+DONE     EPILOG
+         END
+*********REAL SCALING, COMPLEX VECTOR, CSSCAL, IBM/360 ASM.************
+*        USAGE STATEMENT                                   21 MAY 1974*
+*             CALL CSSCAL (N,SA,CX,INCX)                   WASH. ST. U*
+*        SA REAL * 4, CX( ) COMPLEX * 8, N,INCX INTEGER * 4           *
+***********************************************************************
+CSSCAL   PROLOG R10
+         LM    R2,R5,0(R1)             GET POINTERS TO ARGUMENTS
+         NCHK  R10,R2,DONE
+         LE    F4,0(R3)                GET SA IN F.P.
+         LER   F6,F4                   REGS. 4,6
+         INCFX R4,R5,R10,R9,CSTAR8,LOOP FIX CX( ) INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP     LE    F0,0(R4)                GET RE. PART OF CX( ) IN F0
+         LE    F2,4(R4)                GET IM. PART OF CX( ) IN F2
+         MER   F0,F4                   SCALE
+         MER   F2,F6                   COMPONENT
+         STE   F0,0(R4)                STORE IN
+         STE   F2,4(R4)                CX( )
+         AR    R4,R5                   UPDATE CX( ) ADDRESS
+         BCT   R2,LOOP
+DONE     EPILOG
+         END
+*********POINT TO MAX. ABS. VAL., SNGL PREC., ISAMAX, IBM/360 ASM******
+*        USAGE STATEMENT                                   21 MAY 1974*
+*             IMAX = ISAMAX(N,SX,INCX)                     WASH. ST. U*
+*        IMAX,ISAMAX,N,INCX INTEGER*4,SX( ) REAL*4                    *
+***********************************************************************
+ISAMAX   PROLOG R5
+         L     R0,=F'0'                NOMINAL 0 IN REG. 0
+         LM    R2,R4,0(R1)             GET POINTERS TO ARGUMENTS
+         L     R2,0(R2)                GET N
+         LTR   R5,R2                   SAVE N AND SET COND. CODES
+         BNP   DONE                    EXIT IF N .LE. 0
+         L     R4,0(R4)                GET INCX
+         SLA   R4,RSTAR4               COMPUTE INCX*4 AND SET COND.
+         BNP   DONE                    EXIT IF INCX .LE. 0
+         LR    R0,R2                   NOMINAL N IN REG. 0
+         SER   F4,F4                   SET MAX. KEY TO ZERO
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP     LE    F0,0(R3)                GET SX( )
+         LPER  F0,F0                   TAKE ABS. VALUE
+         CER   F0,F4                   COMPARE WITH CURRENT KEY
+         BNH   INCLOOP
+         LR    R0,R2                   UPDATE POINTER AND
+         LER   F4,F0                   CURRENT KEY
+INCLOOP  AR    R3,R4                   UPDATE SX( ) ADDRESS
+         BCT   R2,LOOP
+         SR    R0,R5                   COMPUTE
+         BCTR  R0,0                    CORRECT VALUE
+         LPR   R0,R0                   OF POINTER
+DONE     EPILOG (0)
+         END
+*********POINT TO MAX. ABS. VAL., DBLE  PREC., IDAMAX, IBM/360 ASM*****
+*        USAGE STATEMENT                                   21 MAY 1974*
+*             IMAX = IDAMAX(N,DX,INCX)                     WASH. ST. U*
+*        IMAX,IDAMAX,N,INCX INTEGER*4, DX( ) REAL*8                   *
+***********************************************************************
+IDAMAX   PROLOG R5
+         L     R0,=F'0'                NOMINAL 0 IN REG. 0
+         LM    R2,R4,0(R1)             GET POINTERS TO ARGUMENTS
+         L     R2,0(R2)                GET N
+         LTR   R5,R2                   SAVE N AND SET COND. CODES
+         BNP   DONE                    EXIT IF N .LE. 0
+         L     R4,0(R4)                GET INCX
+         SLA   R4,RSTAR8               COMPUTE INCX*8 AND SET COND.
+         BNP   DONE                    EXIT IF INCX .LE. 0
+         LR    R0,R2                   NOMINAL N IN REG. 0
+         SDR   F4,F4                   SET MAX. KEY TO ZERO
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP     LD    F0,0(R3)                GET DX( )
+         LPDR  F0,F0                   TAKE ABS. VALUE
+         CDR   F0,F4                   COMPARE WITH CURRENT KEY
+         BNH   INCLOOP
+         LR    R0,R2                   UPDATE POINTER AND
+         LDR   F4,F0                   CURRENT KEY
+INCLOOP  AR    R3,R4                   UPDATE DX( ) ADDRESS
+         BCT   R2,LOOP
+         SR    R0,R5                   COMPUTE
+         BCTR  R0,0                    CORRECT VALUE
+         LPR   R0,R0                   OF POINTER
+DONE     EPILOG (0)
+         END
+*********POINT TO MAX. SUM OF ABS. VALS., COMPLEX, ICAMAX, IBM/360 ASM*
+*        USAGE STATEMENT                                  30 NOV. 1974*
+*             IMAX = ICAMAX(N,CX,INCX)                     WASH. ST. U*
+*        IMAX,ICAMAX,N,INCX INTEGER*4, CX( ) COMPLEX*8                *
+***********************************************************************
+ICAMAX   PROLOG R10
+         LM    R2,R4,0(R1)             GET POINTERS TO ARGUMENTS
+         SR    R0,R0                   NOMINAL 0 IN REG. R0
+         NCHK  R10,R2,DONE
+         LR    R5,R2                   SAVE N IN R5
+         LR    R0,R5                   LOAD STARTING N IN REG. R0
+         SER   F4,F4                   SET MAX. KEY TO ZERO
+         INCFX R3,R4,R10,R9,CSTAR8,LOOP FIX CX( ) INCREMENT
+         CNOP  0,8                     ALIGN ON DOUBLE WORD.
+LOOP     LE    F0,0(R3)                GET REAL PART
+         LPER  F0,F0                   TAKE ABS. VALUE
+         LE    F2,4(R3)                GET IMAG. PART
+         LPER  F2,F2                   TAKE ABS. VALUE
+         AER   F0,F2                   ADD MAGNITUDES
+         CER   F0,F4                   COMPARE WITH CURRENT KEY
+         BNH   INCLOOP
+         LR    R0,R2                   UPDATE POINTER AND
+         LER   F4,F0                   CURRENT KEY
+INCLOOP  AR    R3,R4                   UPDATE CX( ) ADDRESS
+         BCT   R2,LOOP
+         SR    R0,R5                   COMPUTE (N-ICAMAX( )+1)-N
+         BCTR  R0,0                    CORRECT VALUE (-ICAMAX( ) )
+         LPR   R0,R0                   OF POINTER (ICAMAX( ) )
+DONE     EPILOG (0)
+         END

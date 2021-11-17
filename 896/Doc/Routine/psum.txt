@@ -1,0 +1,354 @@
+***********************************************************************
+*                                                                     *
+* PSUM - A PRIMAL INTERIOR-POINT VARIABLE METRIC AND DISCRETE NEWTON  *
+*        METHODS WITH DIRECT DECOMPOSITION TRUST-REGION SUBALGORITHM  *
+*        FOR MINIMIZING LARGE-SCALE SUMS OF ABSOLUTE VALUES.          *
+*                                                                     *
+***********************************************************************
+
+
+1. Introduction:
+----------------
+
+      The double-precision FORTRAN 77 basic subroutine PSUM is designed
+to find a close approximation to a local minimum of a sum of absolute
+values
+
+      F(X) =  |FA_1(X)| + |FA_2(X)| + ... + |FA_NA(X)|.
+
+Here X is a vector of NF variables and FA_I(X), 1 <= I <= NA, are
+twice continuously differentiable functions. We assume that NF and
+NA are large, but partial functions FA_I(X), 1 <= I <= NA, depend
+on a small number of variables. This implies that the mapping
+AF(X) = [FA_1(X), FA_2(X), ..., FA_NA(X)] has a sparse Jacobian
+matrix, which will be denoted by AG(X) (it has NA rows and NF
+columns). The sparsity pattern of the Jacobian matrix is stored in
+the coordinate form if ISPAS=1 or in the standard compressed row
+format if ISPAS=2 using arrays IAG and JAG. For example, if the
+Jacobian matrix has the following pattern
+
+                AG = | * * 0 * |
+                     | * * * 0 |
+                     | * 0 0 * |
+                     | 0 * * 0 |
+                     | * 0 * 0 |
+
+(asterisks denote nonzero elements) then arrays IAG and JAG contain
+elements
+
+IAG(1)=1, IAG(2)=1, IAG(3)=1, IAG(4)=2,  IAG(5)=2,  IAG(6)=2,
+IAG(7)=3, IAG(8)=3, IAG(9)=4, IAG(10)=4, IAG(11)=5, IAG(12)=5,
+JAG(1)=1, JAG(2)=2, JAG(3)=4, JAG(4)=1,  JAG(5)=2,  JAG(6)=3,
+JAG(7)=1, JAG(8)=4, JAG(9)=2, JAG(10)=3, JAG(11)=1, JAG(12)=3
+
+if ISPAS=1 or
+
+IAG(1)=1, IAG(2)=4, IAG(3)=7, IAG(4)=9,  IAG(5)=11, IAG(6)=13,
+JAG(1)=1, JAG(2)=2, JAG(3)=4, JAG(4)=1,  JAG(5)=2,  JAG(6)=3,
+JAG(7)=1, JAG(8)=4, JAG(9)=2, JAG(10)=3, JAG(11)=1, JAG(12)=3
+
+if ISPAS=2. In the first case, nonzero elements can be sorted in an
+arbitrary order (not only by rows as in the above example). Arrays
+IAG and JAG have to be declared with lengths NA+MA and MA at least,
+respectively, where MA is the number of nonzero elements. In the
+second case, nonzero elements can be sorted only by rows. Components
+of IAG contain total numbers of nonzero elements in all previous
+rows increased by 1 and elements of JAG contain corresponding column
+indices (note that IAG has NA+1 elements and the last element is
+equal to MA+1). Arrays IAG and JAG have to be declared with length
+NA+1 and MA at least, respectively.
+      To simplify user's work, an additional easy to use subroutine
+PSUMU is added. It calls the basic general subroutine PSUM. All
+subroutines contain a description of formal parameters and extensive
+comments. Furthermore, test program TSUMU is included, which contains
+several test problems (see e.g. [2]). This test program serves as an
+example for using the subroutine PSUMU, verifies its correctness and
+demonstrates its efficiency.
+      In this short guide, we describe all subroutines which can be
+called from the user's program. A detailed description of the method is
+given in [1]. In the description of formal parameters, we introduce a
+type of the argument that specifies whether the argument must have a
+value defined on entry to the subroutine (I), whether it is a value
+which will be returned (O), or both (U), or whether it is an auxiliary
+value (A). Note that the arguments of the type I can be changed on
+output under some circumstances, especially if improper input values
+were given. Besides formal parameters, we can use a COMMON /STAT/ block
+containing statistical information. This block, used in each subroutine
+has the following form:
+
+      COMMON /STAT/ NRES,NDEC,NIN,NIT,NFV,NFG,NFH
+
+The arguments have the following meaning:
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NRES      O   Positive INTEGER variable that indicates the number of
+                restarts.
+  NDEC      O   Positive INTEGER variable that indicates the number of
+                matrix decompositions.
+  NIN       O   Positive INTEGER variable that indicates the number of
+                inner iterations (for solving linear systems).
+  NIT       O   Positive INTEGER variable that indicates the number of
+                iterations.
+  NFV       O   Positive INTEGER variable that indicates the number of
+                function evaluations.
+  NFG       O   Positive INTEGER variable that specifies the number of
+                gradient evaluations.
+  NFH       O   Positive INTEGER variable that specifies the number of
+                Hessian evaluations.
+
+
+2. Subroutine PSUMU:
+--------------------
+
+The calling sequence is
+
+      CALL PSUMU(NF,NA,MA,X,AF,IAG,JAG,IPAR,RPAR,F,GMAX,ISPAS,IPRNT,ITERM)
+
+The arguments have the following meaning.
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NF        I   Positive INTEGER variable that specifies the number of
+                variables of the sum of absolute values.
+  NA        I   Positive INTEGER variable that specifies the number of
+                partial functions.
+  MA        I   Number of nonzero elements in the Jacobian matrix. This
+                parameter is used as input only if ISPAS=1 (it defines
+                dimensions of arrays IAG and JAG in this case).
+  X(NF)     U   On input, DOUBLE PRECISION vector with the initial
+                estimate to the solution. On output, the approximation
+                to the minimum.
+  AF(NA)    O   DOUBLE PRECISION vector which contains values of partial
+                functions.
+  IAG(NA+1) I   INTEGER array which contains pointers of the first
+                elements in rows of the Jacobian matrix.
+  JAG(MA)   I   INTEGER array which contains column indices of the
+                nonzero elements.
+  IPAR(7)   I   INTEGER parameters:
+                  IPAR(1)=MIT,  IPAR(2)=MFV,  IPAR(3)=MFG,
+                  IPAR(4)=IEST, IPAR(5)=MED,  IPAR(6)-NONE,
+                  IPAR(7)=IFIL.
+                Parameters MIT, MFV, MFG, IEST, MED are described in
+                Section 3 together with other parameters of the subroutine
+                PSUM. Parameter IFIL specifies a relative size of the
+                space reserved for fill-in. The choice IFIL=0 causes that
+                the default value IFIL=1 will be taken.
+  RPAR(9)   I   DOUBLE PRECISION parameters:
+                  RPAR(1)=XMAX,  RPAR(2)=TOLX,  RPAR(3)=TOLF,
+                  RPAR(4)=TOLB,  RPAR(5)=TOLG,  RPAR(6)=FMIN,
+                  RPAR(7)=XDEL,  RPAR(8)-NONE,  RPAR(9)=ETA5.
+                Parameters XMAX, TOLX, TOLF, TOLB, TOLG, FMIN, XDEL,
+                ETA5 are described in Section 3 together with other
+                parameters of the subroutine PSUM.
+  F         O   DOUBLE PRECISION value of the objective function at the
+                solution X.
+  GMAX      O   DOUBLE PRECISION maximum absolute value of a partial
+                derivative of the Lagrangian function.
+  ISPAS     I   INTEGER variable that specifies sparse structure of the
+                Jacobian matrix:
+                  ISPAS= 1 - the coordinate form is used,
+                  ISPAS= 2 - the standard row compresed format is used.
+  IPRNT     I   INTEGER variable that specifies PRINT:
+                  IPRNT= 0 - print is suppressed,
+                  IPRNT= 1 - basic print of final results,
+                  IPRNT=-1 - extended print of final results,
+                  IPRNT= 2 - basic print of intermediate and final
+                             results,
+                  IPRNT=-2 - extended print of intermediate and final
+                             results.
+  ITERM     O   INTEGER variable that indicates the cause of termination:
+                  ITERM= 1 - if |X - XO| was less than or equal to TOLX
+                             in two subsequent iterations,
+                  ITERM= 2 - if |F - FO| was less than or equal to TOLF
+                             in two subsequent iterations,
+                  ITERM= 3 - if F is less than or equal to TOLB,
+                  ITERM= 4 - if GMAX is less than or equal to TOLG,
+                  ITERM= 6 - if termination criterion was not satisfied,
+                             but the solution is probably acceptable,
+                  ITERM=11 - if NIT exceeded MIT,
+                  ITERM=12 - if NFV exceeded MFV,
+                  ITERM=13 - if NFG exceeded MFG,
+                  ITERM< 0 - if the method failed. Values ITERM<=-40
+                             detect a lack of space. In this case,
+                             parameter IPAR(7)=IFIL has to be increased
+                             (IFIL=2, IFIL=3, etc.).
+
+      The subroutine PSUMU requires the user supplied subroutines FUN and
+DFUN that define partial functions and their gradients and have the form
+
+      SUBROUTINE  FUN(NF,KA,X,FA)
+      SUBROUTINE DFUN(NF,KA,X,GA)
+
+The arguments of the user supplied subroutines have the following
+meaning.
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NF        I   Positive INTEGER variable that specifies the number of
+                variables of the objective function.
+  KA        I   INTEGER index of the partial function.
+  X(NF)     I   DOUBLE PRECISION an estimate to the solution.
+  FA        O   DOUBLE PRECISION value of the KA-th partial function at
+                the point X.
+  GA(NF)    O   DOUBLE PRECISION gradient of the KA-th partial function
+                at the point X. Note that only nonzero elements of this
+                gradient have to be assigned.
+
+
+3. Subroutine PSUM:
+-------------------
+
+      This general subroutine is called from all subroutines described
+in Section 2. The calling sequence is
+
+      CALL PSUM(NF,NA,MMAX,X,IX,AF,AFO,AG,AGO,GA,AH,AS,AZ,G,H,IH,JH,IA,
+     & IAG,JAG,S,XO,GO,GS,COL,PSL,PERM,INVP,WN11,WN12,WN13,WN14,XMAX,
+     & TOLX,TOLF,TOLB,TOLG,FMIN,XDEL,ETA5,GMAX,F,MIT,MFV,MFG,IEST,MED,
+     & IPRNT,ITERM)
+
+The arguments NF, NA, X, AF, IAG, JAG, GMAX, F, IPRNT, ITERM have the
+same meaning as in Section 2. Other arguments have the following meaning:
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  MMAX       I   INTEGER size of array H.
+  IX(NF)     A   INTEGER auxiliary array.
+  AFO(NA)    A   DOUBLE PRECISION auxiliary array.
+  AG(MA)     A   DOUBLE PRECISION nonzero elements of the Jacobian
+                 matrix
+  AGO(MA)    A   DOUBLE PRECISION difference between the current and the
+                 old Jacobian matrices. This array is used only if MED=1.
+  GA(NF)     A   DOUBLE PRECISION gradient of the partial function.
+  AH(MH)     A   DOUBLE PRECISION approximation of the partitioned
+                 Hessian matrix. This array is used only if MED=1.
+  AS(NA)     A   DOUBLE PRECISION vector of slack variables.
+  AZ(NA)     A   DOUBLE PRECISION vector of Lagrange multipliers.
+  G(NF)      A   DOUBLE PRECISION gradient of the objective function.
+  H(MMAX)    A   DOUBLE PRECISION nonzero elements of the approximation
+                 of the Hessian matrix and nonzero elements of the
+                 Choleski factor.
+  IH(NF+1)   I   INTEGER array which contains pointers of the diagonal
+                 elements in the upper part of the Hessian matrix.
+  JH(MMAX)   I   INTEGER array which contains column indices of the
+                 nonzero elements and additional working space for the
+                 Choleski factor.
+  IA(NA)     A   INTEGER auxiliary array.
+  S(NF)      A   DOUBLE PRECISION direction vector.
+  XO(NF)     A   DOUBLE PRECISION array which contains increments of
+                 variables.
+  GO(NF)     A   DOUBLE PRECISION array which contains increments of
+                 gradients.
+  GS(NF)     A   DOUBLE PRECISION auxiliary array.
+  COL(NF)    A   INTEGER auxiliary array.
+  PSL(NF+1)  A   INTEGER pointer vector in the compact form of the
+                 Choleski factor.
+  PERM(NF)   A   INTEGER permutation vector.
+  INVP(NF)   A   INTEGER inverse permutation vector.
+  WN11(NF+1) A   INTEGER auxiliary array.
+  WN12(NF+1) A   INTEGER auxiliary array.
+  WN13(NF+1) A   INTEGER auxiliary array.
+  WN14(NF+1) A   INTEGER auxiliary array.
+  XMAX       I   DOUBLE PRECISION maximum stepsize; the choice XMAX=0
+                 causes that the default value 1.0D+16 will be taken.
+  TOLX       I   DOUBLE PRECISION tolerance for the change of the
+                 coordinate vector X; the choice TOLX=0 causes that the
+                 default value TOLX=1.0D-16 will be taken.
+  TOLF       I   DOUBLE PRECISION tolerance for the change of function
+                 values; the choice TOLF=0 causes that the default
+                 value TOLF=1.0D-12 will be taken.
+  TOLB       I   DOUBLE PRECISION minimum acceptable function value;
+                 the choice TOLB=0 causes that the default value
+                 TOLB=FMIN+1.0D-12 will be taken.
+  TOLG       I   DOUBLE PRECISION tolerance for the Lagrangian function
+                 gradient; the choice TOLG=0 causes that the default
+                 value TOLG=1.0D-6 will be taken.
+  FMIN       I   DOUBLE PRECISION lower bound for the minimum function
+                 value.
+  XDEL       I   DOUBLE PRECISION trust region stepsize; the choice
+                 XDEL=0 causes that a suitable default value is
+                 computed.
+  ETA5       I   DOUBLE PRECISION minimum permitted value of the barrier
+                 parameter; the choice ETA5=0 causes that the default
+                 value ETA5=1.0D-8 will be taken.
+  MIT        I   INTEGER variable that specifies the maximum number of
+                 iterations; the choice MIT=0 causes that the default
+                 value 5000 will be taken.
+  MFV        I   INTEGER variable that specifies the maximum number of
+                 function evaluations; the choice MFV=0 causes that
+                 the default value 5000 will be taken.
+  MFG        I   INTEGER variable that specifies the maximum number of
+                 gradient evaluations; the choice MFG=0 causes that
+                 the default value 10000 will be taken.
+  IEST       I   INTEGER estimation of the minimum functiom value for
+                 the line search:
+                   IEST=0 - estimation is not used,
+                   IEST=1 - lower bound FMIN is used as an estimation
+                            for the minimum function value.
+  MED        I   INTEGER variable that specifies the method used.
+                   MED=1 - partitioned variable metric method,
+                   MED=2 - safeguarded discrete Newton method.
+
+The choice of parameter XMAX can be sensitive in many cases. First, the
+objective function can be evaluated only in a relatively small region
+(if it contains exponentials) so that the maximum stepsize is necessary.
+Secondly, the problem can be very ill-conditioned far from the solution
+point so that large steps can be unsuitable. Finally, if the problem has
+more local solutions, a suitably chosen maximum stepsize can lead to
+obtaining a better local solution. A suitable choice of parameter ETA5
+(larger than 1.0d-8) can sometimes improve the efficiency of the method.
+      The subroutine PSUM requires the user supplied subroutines FUN
+and DFUN which are described in Section 2.
+
+4. Verification of the subroutines:
+-----------------------------------
+
+      Subroutine PSUMU can be verified and tested using the program
+TSUMU. This program calls the subroutines TIUB15 (initiation), TAFU15
+(function evaluation) and TAGU15 (gradient evaluation) containing
+22 unconstrained test problems with at most 200 variables [2]. The
+results obtained by the program TSUMU on a PC computer with Microsoft
+Power Station Fortran compiler have the following form.
+
+NIT=  337  NFV=  355  NFG=  338  F= 0.193178806E-13  G= 0.254E-05  ITERM=  3
+NIT=  127  NFV=  151  NFG=  128  F= 0.120336380E-12  G= 0.424E-05  ITERM=  3
+NIT=   25  NFV=   28  NFG=   26  F= 0.383710546E-09  G= 0.331E-06  ITERM=  4
+NIT=   67  NFV=   77  NFG=   68  F=  126.863549      G= 0.358E-02  ITERM=  2
+NIT=    6  NFV=    7  NFG=    7  F= 0.494049246E-14  G= 0.666E-07  ITERM=  3
+NIT=   13  NFV=   17  NFG=   14  F= 0.663150090E-13  G= 0.141E-06  ITERM=  3
+NIT=   73  NFV=  108  NFG=   74  F=  2391.16999      G= 0.209E+00  ITERM=  2
+NIT=  241  NFV=  243  NFG=  242  F= 0.383133726E-07  G= 0.708E-06  ITERM=  4
+NIT=  209  NFV=  251  NFG=  209  F=  552.682636      G= 0.267E+01  ITERM= -6
+NIT=   84  NFV=  106  NFG=   85  F=  131.888475      G= 0.242E-05  ITERM=  2
+NIT=  732  NFV=  751  NFG=  733  F= 0.799693645E-12  G= 0.581E-05  ITERM=  3
+NIT=  203  NFV=  237  NFG=  204  F=  612.723020      G= 0.601E-04  ITERM=  2
+NIT=   90  NFV=  111  NFG=   91  F=  2940.50941      G= 0.245E-03  ITERM=  2
+NIT=   84  NFV=  107  NFG=   85  F=  112.314955      G= 0.480E-05  ITERM=  2
+NIT=   39  NFV=   64  NFG=   40  F=  36.0935678      G= 0.163E-01  ITERM=  2
+NIT=   67  NFV=  108  NFG=   67  F=  13.2000005      G= 0.139E-03  ITERM=  6
+NIT=  337  NFV=  344  NFG=  338  F= 0.100472795E-13  G= 0.167E-06  ITERM=  3
+NIT= 3637  NFV= 3794  NFG= 3638  F= 0.199840144E-14  G= 0.419E-09  ITERM=  3
+NIT=   23  NFV=   24  NFG=   24  F= 0.938360500E-12  G= 0.217E-04  ITERM=  3
+NIT=   22  NFV=   44  NFG=   22  F= 0.121058719E-11  G= 0.398E-05  ITERM=  6
+NIT=   65  NFV=   90  NFG=   66  F=  262.921649      G= 0.108E-05  ITERM=  2
+NIT=  608  NFV=  627  NFG=  609  F=  593.367735      G= 0.525E-02  ITERM=  2
+NITER = 7089    NFVAL = 7644    NSUCC =   21
+TIME= 0:00:02.80
+
+The rows corresponding to individual test problems contain the number of
+iterations NIT, the number of function evaluations NFV, the number of
+gradient evaluations NFG, the final value of the objective function F,
+the norm of gradient G and the cause of termination ITERM.
+
+References:
+-----------
+
+[1] Luksan L., Matonoha C., Vlcek J.: LSA: Algorithms for large-scale
+    unconstrained and box constrained optimization Technical Report V-896.
+    Prague, ICS AS CR, 2004.
+
+[2] Luksan L., Vlcek J.: Sparse and partially separable test problems
+    for unconstrained and equality constrained optimization. Research
+    Report V-767, Institute of Computer Science, Academy of Sciences
+    of the Czech Republic, Prague, Czech Republic, 1998.
+

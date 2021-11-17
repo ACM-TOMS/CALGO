@@ -1,0 +1,1886 @@
+C      ALGORITHM 740, COLLECTED ALGORITHMS FROM ACM.
+C      THIS WORK PUBLISHED IN TRANSACTIONS ON MATHEMATICAL SOFTWARE,
+C      VOL. 21, NO. 1, MARCH, 1995, P. 18-19.
+C
+C*** src.f
+*****************************************************************
+*      A DRIVER PROGRAM TO TEST WHETHER THE INCOMPLETE FACTORIZATION
+*      SUBROUTINES ARE FUNCTIONING CORRECTLY
+*****************************************************************
+       PROGRAM DRIVER
+
+*      THE MAXIMUM SIZE OF A MATRIX THAT CAN BE STORED
+       INTEGER MAXN
+       PARAMETER (MAXN=50)
+
+*      THE ORDER OF THE MATRIX
+       INTEGER N
+
+*      THE MAXIMUM NUMBER OF OFF-DIAGONAL ELEMENTS IN THE STRICTLY
+*      LOWER TRIANGLE OF A
+       INTEGER NZ
+       PARAMETER (NZ=2500)
+
+*      STORAGE FOR THE ORIGINAL MATRIX IN COLUMN MAJOR ORDER
+*      (DIAGONALS, OFF-DIAGONALS, COLUMN PTR'S, ROW NUMBERS)
+       DOUBLE PRECISION CDIAG(MAXN)
+       DOUBLE PRECISION COFDAG(NZ)
+       INTEGER CCLPTR(MAXN+1)
+       INTEGER CRWNUM(NZ)
+*      DESCRIPTION OF COLUMN STORAGE FORMAT
+*      ONLY THE LOWER TRIANGULAR PORTION OF THE MATRIX IS STORED.
+*      (1) THE N DIAGONALS ARE STORED IN CDIAG
+*      (2) THE NZ OFFDIAGONALS ARE STORED IN COFDAG
+*      (3) A POINTER TO THE BEGINNING OF EACH COLUMN
+*          IS GIVEN IN CCLPTR.  CCLPTR(I) POINTS TO THE
+*          BEGINNING OF COLUMN I IN COFDAG.  THE LAST ELEMENT
+*          IN THIS COLUMN IS AT POSITION CCLPTR(I+1)-1.
+*          THIS VECTOR IS LENGTH N+1 BECAUSE THE END OF COLUMN
+*          N MUST BE GIVEN.
+*      (4) THE ROW NUMBERS FOR THE NZ OFFDIAGONALS ARE GIVEN
+*          IN CRWNUM.  CRWNUM(I) IS THE COLUMN NUMBER FOR THE
+*          OFFDIAGONAL IN COFDAG(I).
+*      THE STORAGE FORMAT FOR THE FOLLOWING MATRIX IS GIVEN
+*      IN THE SAMPLE DRIVER.
+*                          4
+*                          0   5
+*                          1   0   6
+*                          2   .1  0   7
+
+*      STORAGE FOR THE ORIGINAL MATRIX IN ROW MAJOR ORDER
+*      (DIAGONALS, OFF-DIAGONALS, ROW PTR'S, COLUMN NUMBERS)
+       DOUBLE PRECISION RDIAG(MAXN)
+       DOUBLE PRECISION ROFDAG(NZ)
+       INTEGER RRWPTR(MAXN+1)
+       INTEGER RCLNUM(NZ)
+*      DESCRIPTION OF ROW STORAGE FORMAT
+*      ONLY THE LOWER TRIANGULAR PORTION OF THE MATRIX IS STORED.
+*      (1) THE N DIAGONALS ARE STORED IN RDIAG
+*      (2) THE NZ OFFDIAGONALS ARE STORED IN ROFDAG
+*      (3) A POINTER TO THE BEGINNING OF EACH ROW
+*          IS GIVEN IN RRWPTR.  RRWPTR(I) POINTS TO THE
+*          BEGINNING OF ROW I IN ROFDAG.  THE LAST ELEMENT
+*          IN THIS ROW IS AT POSITION RRWPTR(I+1)-1.
+*          THIS VECTOR IS LENGTH N+1 BECAUSE THE END OF ROW
+*          N MUST BE GIVEN.
+*      (4) THE COLUMN NUMBERS FOR THE NZ OFFDIAGONALS ARE GIVEN
+*          IN RCLNUM.  RCLNUM(I) IS THE ROW NUMBER FOR THE
+*          OFFDIAGONAL IN ROFDAG(I).
+*      THE STORAGE FORMAT FOR THE FOLLOWING MATRIX IS GIVEN
+*      IN THE SAMPLE DRIVER.
+*                          4
+*                          0   5
+*                          1   0   6
+*                          2   .1  0   7
+
+*      MATRIX STORAGE NEEDED BY THE STANDARD FACTORIZATION ALGORITHM
+*      (DIAGONALS, OFF-DIAGONALS)
+       DOUBLE PRECISION STDAG(MAXN)
+       DOUBLE PRECISION STOFF(NZ)
+
+*      MATRIX STORAGE NEEDED BY THE COLUMN FACTORIZATION ALGORITHM
+*      (DIAGONALS, OFF-DIAGONALS, COLUMN PTR'S)
+       DOUBLE PRECISION CFDAG(MAXN)
+       DOUBLE PRECISION CFOFF(NZ)
+       INTEGER CFRWNM(NZ)
+
+*      MATRIX STORAGE NEEDED BY THE ROW FACTORIZATION ALGORITHM
+*      (DIAGONALS, OFF-DIAGONALS, ROW PTR'S)
+       DOUBLE PRECISION RFDAG(MAXN)
+       DOUBLE PRECISION RFOFF(NZ)
+       INTEGER RFCLNM(NZ)
+
+*      WORK VECTORS FOR USE BY THE FACTORIZATION ALGORITHMS
+       DOUBLE PRECISION RWORK(MAXN)
+       INTEGER IWORK1(MAXN)
+       INTEGER IWORK2(MAXN)
+       INTEGER IWORK3(MAXN)
+       INTEGER BIWRK1(NZ)
+       INTEGER BIWRK2(NZ)
+
+*      WORK MATRICES FOR THE TEST PROCEDURE
+       DOUBLE PRECISION DMAT(MAXN,MAXN)
+       DOUBLE PRECISION COLUMN(MAXN)
+       INTEGER IFIRST(MAXN)
+
+*      THE RETURN VALUE FROM THE FACTORIZATION PROCEDURES
+       INTEGER RETVAL
+
+*      SOME COUNTERS
+       INTEGER I, J
+
+*      THE NUMBER OF TEST PROBLEMS
+       INTEGER NUMTST
+
+*      THE NUMBER OF THE CURRENT TEST PROBLEM
+       INTEGER TSTNUM
+
+*      IF IPRINT=1, THEN PRINT THE MATRIX, OTHERWISE DO NOT PRINT
+       INTEGER IPRINT
+
+*      DEFINE THE FACTORIZATION SUBPROGRAMS AS INTEGER FUNCTIONS
+       INTEGER ISTDIC, JPICC, JPICR
+       EXTERNAL ISTDIC, JPICC, JPICR
+
+*      DEFINE MATRIX CREATION AND MANIPULATION ROUTINES FOR DRIVER
+*      AS EXTERNALS
+       EXTERNAL CBAND, RBAND, CARROW, RARROW, CLAPL, RLAPL
+       EXTERNAL CMTMUL, CMATSB, MATSTT, RMTMUL, RMATSB
+
+*****************************************
+*      START OF EXECUTABLE STATEMENTS
+*****************************************
+       WRITE(6,2000) 'TEST DRIVER PROGRAM:'
+       WRITE(6,2000) 'FOR EACH MATRIX, A, THREE DIFFERENT ALGORITHMS'
+       WRITE(6,2000) 'FOR FINDING THE INCOMPLETE FACTORIZATION, L, ARE'
+       WRITE(6,2000) 'USED. FOR EACH METHOD, WE COMPUTE N=L*L(T).  WE'
+       WRITE(6,2000) 'THEN FIND M=A-N AND COMPUTE THE FROBENIUS NORM OF'
+       WRITE(6,2000) 'THE LOWER SYMMETRIC HALF OF M AS WELL AS THE'
+       WRITE(6,2000) 'LARGEST ABSOLUTE VALUE OF AN ELEMENT IN M.'
+
+*      THE NUMBER OF TESTS IS FOUR
+       NUMTST = 4
+
+*      DO NOT PRINT THE MATRIX
+*      CHANGE TO IPRINT=1 IF YOU WANT TO PRINT THE MATRIX
+       IPRINT = 0
+
+*      EXECUTE THIS LOOP ONCE FOR EACH TEST PROBLEM
+       DO 900 TSTNUM = 1, NUMTST
+          IF (TSTNUM .EQ. 1) THEN
+*            A BANDED MATRIX -- PERFECT ELIMINATION IS EXPECTED
+*            FROM EACH ALGORITHM
+             N = 50
+             CALL CBAND(N,25,CDIAG,COFDAG,CCLPTR,CRWNUM)
+             CALL RBAND(N,25,RDIAG,ROFDAG,RRWPTR,RCLNUM)
+             WRITE(6,2000) ' '
+             WRITE(6,2000) '*******************************************'
+             WRITE(6,2000) 'FACTORING A BANDED MATRIX:'
+             WRITE(6,2000) 'EACH ALGORITHM COMPUTES THE EXACT FACTOR.'
+             WRITE(6,2000) 'ON A SUN SPARC 10/51 THE RESULTS ARE:'
+             WRITE(6,2000) 'STANDARD: F-NORM=1.17D-13, ABS VAL=4.26D-14'
+             WRITE(6,2000) 'COLUMN  : F-NORM=1.17D-13, ABS VAL=4.26D-14'
+             WRITE(6,2000) 'ROW     : F-NORM=1.17D-13, ABS VAL=4.26D-14'
+          ELSE IF (TSTNUM .EQ. 2) THEN
+*            A ARROWHEAD, BANDED MATRIX -- COLUMN-ORIENTED ALGORITHM
+*            IS EXPECTED TO BE SUPERIOR
+             N = 20
+             CALL CARROW(N,6,CDIAG,COFDAG,CCLPTR,CRWNUM)
+             CALL RARROW(N,6,RDIAG,ROFDAG,RRWPTR,RCLNUM)
+             WRITE(6,2000) ' '
+             WRITE(6,2000) '*******************************************'
+             WRITE(6,2000) 'FACTORING AN ARROWHEAD MATRIX:'
+             WRITE(6,2000) 'ON A SUN SPARC 10/51 THE RESULTS ARE:'
+             WRITE(6,2000) 'STANDARD: F-NORM=4.82D-01, ABS VAL=5.00D-02'
+             WRITE(6,2000) 'COLUMN  : F-NORM=3.22D-01, ABS VAL=6.01D-02'
+             WRITE(6,2000) 'ROW     : F-NORM=1.10D+00, ABS VAL=9.97D-01'
+          ELSE IF (TSTNUM .EQ. 3) THEN
+*            2-D LAPLACIAN WITH 5-POINT STENCIL, ALL ALGORITHMS ABOUT
+*            THE SAME
+             N = 25
+             CALL CLAPL(5,CDIAG,COFDAG,CCLPTR,CRWNUM)
+             CALL RLAPL(5,RDIAG,ROFDAG,RRWPTR,RCLNUM)
+             WRITE(6,2000) ' '
+             WRITE(6,2000) '*******************************************'
+             WRITE(6,2000) 'FACTORING A 2-D LAPLACIAN WITH'
+             WRITE(6,2000) '5-POINT STENCIL:'
+             WRITE(6,2000) 'EACH ALGORITHM PERFORMS ROUGHLY THE SAME.'
+             WRITE(6,2000) 'ON A SUN SPARC 10/51 THE RESULTS ARE:'
+             WRITE(6,2000) 'STANDARD: F-NORM=1.12D+00, ABS VAL=2.93D-01'
+             WRITE(6,2000) 'COLUMN  : F-NORM=1.13D+00, ABS VAL=2.96D-01'
+             WRITE(6,2000) 'ROW     : F-NORM=1.13D+00, ABS VAL=2.96D-01'
+          ELSE IF (TSTNUM .EQ. 4) THEN
+*            SPECIAL TEST CASE, ROW-ORIENTED ALGORITHM
+*            IS EXPECTED TO BE SUPERIOR
+*            DEFINE THE MATRIX IN ROW MAJOR ORDER
+             N = 4
+             RDIAG(1) = 4.0D0
+             RDIAG(2) = 5.0D0
+             RDIAG(3) = 6.0D0
+             RDIAG(4) = 1.0D0
+             ROFDAG(1) = 1.0D0
+             ROFDAG(2) = 2.0D0
+             ROFDAG(3) = 0.1D0
+             RRWPTR(1) = 1
+             RRWPTR(2) = 1
+             RRWPTR(3) = 1
+             RRWPTR(4) = 2
+             RRWPTR(5) = 4
+             RCLNUM(1) = 1
+             RCLNUM(2) = 1
+             RCLNUM(3) = 2
+*            DEFINE THE MATRIX IN COLUMN MAJOR ORDER
+             CDIAG(1) = 4.0D0
+             CDIAG(2) = 5.0D0
+             CDIAG(3) = 6.0D0
+             CDIAG(4) = 1.0D0
+             COFDAG(1) = 1.0D0
+             COFDAG(2) = 2.0D0
+             COFDAG(3) = 0.1D0
+             CCLPTR(1) = 1
+             CCLPTR(2) = 3
+             CCLPTR(3) = 4
+             CCLPTR(4) = 4
+             CCLPTR(5) = 4
+             CRWNUM(1) = 3
+             CRWNUM(2) = 4
+             CRWNUM(3) = 4
+             WRITE(6,2000) ' '
+             WRITE(6,2000) '*******************************************'
+             WRITE(6,2000) 'FACTORING A SIMPLE 4X4 SPARSE MATRIX:'
+             WRITE(6,2000) 'EACH OF THE ALGORITHMS WILL FAIL TO FACTOR'
+             WRITE(6,2000) 'THE MATRIX AND GIVE A RETURN CODE OF -4.'
+             WRITE(6,2000) 'ON A SUN SPARC 10/51 THE RESULTS ARE:'
+             WRITE(6,2000) 'STANDARD: F-NORM=1.12D+00, ABS VAL=1.00D+00'
+             WRITE(6,2000) 'COLUMN  : F-NORM=1.12D+00, ABS VAL=1.00D+00'
+             WRITE(6,2000) 'ROW     : F-NORM=4.59D+00, ABS VAL=4.01D+00'
+          ENDIF
+
+          WRITE(6,2100) N
+          WRITE(6,2200) CCLPTR(N+1)-1
+      
+*************************************************
+*         TEST THE STANDARD INCOMPLETE FACTORIZATION
+*************************************************
+*         COPY THE NONZEROES TO THE SPACE FOR THE FACTORS
+          DO 200 I = 1, N
+             STDAG(I) = CDIAG(I)
+             DO 100 J = CCLPTR(I), CCLPTR(I+1)-1
+                STOFF(J) = COFDAG(J)
+100          CONTINUE
+200       CONTINUE
+
+*         CALL THE SUBROUTINE TO PERFORM THE STANDARD INCOMPLETE
+*         FACTORIZATION
+          RETVAL = ISTDIC(N,STDAG,STOFF,CCLPTR,CRWNUM,RWORK,IWORK1,
+     C       IWORK2)
+          WRITE(6,2000) ' '
+          WRITE(6,2300) RETVAL
+          CALL CMTMUL(N,STDAG,STOFF,CCLPTR,CRWNUM,MAXN,DMAT)
+          CALL CMATSB(N,CDIAG,COFDAG,CCLPTR,CRWNUM,MAXN,DMAT)
+          CALL MATSTT(N,MAXN,DMAT)
+
+*************************************************
+*         TEST THE COLUMN INCOMPLETE FACTORIZATION
+*************************************************
+*         COPY THE NONZEROES TO THE SPACE FOR THE FACTORS
+          DO 400 I = 1, N
+             CFDAG(I) = CDIAG(I)
+             DO 300 J = CCLPTR(I), CCLPTR(I+1)-1
+                CFOFF(J) = COFDAG(J)
+                CFRWNM(J) = CRWNUM(J)
+300          CONTINUE
+400       CONTINUE
+
+*         CALL THE SUBROUTINE TO PERFORM THE COLUMN INCOMPLETE
+*         FACTORIZATION
+          RETVAL = JPICC(N,CFDAG,CFOFF,CCLPTR,CFRWNM,RWORK,
+     C                    IWORK1,IWORK2,IWORK3)
+          WRITE(6,2000) ' '
+          WRITE(6,2400) RETVAL
+          CALL CMTMUL(N,CFDAG,CFOFF,CCLPTR,CFRWNM,MAXN,DMAT)
+          CALL CMATSB(N,CDIAG,COFDAG,CCLPTR,CRWNUM,MAXN,DMAT)
+          CALL MATSTT(N,MAXN,DMAT)
+*************************************************
+*         TEST THE ROW INCOMPLETE FACTORIZATION
+*************************************************
+*         COPY THE NONZEROES TO THE SPACE FOR THE FACTORS
+          DO 600 I = 1, N
+             RFDAG(I) = RDIAG(I)
+             DO 500 J = RRWPTR(I), RRWPTR(I+1)-1
+                RFOFF(J) = ROFDAG(J)
+                RFCLNM(J) = RCLNUM(J)
+500          CONTINUE
+600       CONTINUE
+
+*         CALL THE SUBROUTINE TO PERFORM THE ROW INCOMPLETE
+*         FACTORIZATION
+          RETVAL = JPICR(N,RFDAG,RFOFF,RRWPTR,RFCLNM,RWORK,
+     C                    IWORK1,IWORK2,BIWRK1,BIWRK2,IWORK3)
+          WRITE(6,2000) ' '
+          WRITE(6,2500) RETVAL
+          CALL RMTMUL(N,RFDAG,RFOFF,RRWPTR,RFCLNM,MAXN,DMAT,IFIRST,
+     C       COLUMN)
+          CALL RMATSB(N,RDIAG,ROFDAG,RRWPTR,RCLNUM,MAXN,DMAT)
+          CALL MATSTT(N,MAXN,DMAT)
+
+*         PRINT THE MATRIX
+          IF (IPRINT .EQ. 1) THEN
+             WRITE(6,2000) ' '
+             WRITE(6,2000) 'THE UNFACTORED MATRIX'
+             DO 800 I = 1, N
+                WRITE(6,2600) I, I, CDIAG(I)
+                DO 700 J = CCLPTR(I), CCLPTR(I+1)-1
+                   WRITE(6,2600) CRWNUM(J), I, COFDAG(J)
+700             CONTINUE
+800          CONTINUE
+          ENDIF
+
+900    CONTINUE
+
+2000   FORMAT(1X,71A)
+2100   FORMAT(1X,'MATRIX ORDER = ',I5)
+2200   FORMAT(1X,'NUMBER OF NONZEROS BELOW THE DIAGONAL = ',I5)
+2300   FORMAT(1X,'STANDARD FACTORIZATION RETURN VALUE IS ',I5)
+2400   FORMAT(1X,'COLUMN FACTORIZATION RETURN VALUE IS ',I5)
+2500   FORMAT(1X,'ROW FACTORIZATION RETURN VALUE IS ',I5)
+2600   FORMAT(1X,'ELEMENT(',I3,',',I3,') = ',1PD12.2)
+
+       STOP
+*************************************************
+*      END OF DRIVER PROGRAM
+*************************************************
+       END
+*****************************************************************
+*     USED IN THE TESTING PROCESS:
+*     CONSTRUCT A BANDED MATRIX OF SIZE N WITH SEMI-BANDWIDTH, 
+*     IBAND.  THE DIAGONAL HAS VALUES OF (IBAND*4)+1 AND THE
+*     OFF-DIAGONALS ARE ALL -1 INSIDE THE BAND AND 0 OUTSIDE.
+*     THE SPARSE MATRIX IS STORED IN THE COLUMN FORMAT DESCRIBED
+*     IN THE DRIVER PROGRAM.
+*****************************************************************
+      SUBROUTINE CBAND(N,IBAND,DIAG,A,IA,JA)
+*     THE ORDER OF THE MATRIX
+*     INPUT ONLY
+      INTEGER N
+*     THE SEMI-BANDWIDTH OF THE MATRIX
+*     INPUT ONLY
+      INTEGER IBAND
+*     THE DIAGONALS OF A
+*     OUTPUT ONLY
+      DOUBLE PRECISION DIAG(*)
+*     THE OFF-DIAGONALS OF A
+*     OUTPUT ONLY
+      DOUBLE PRECISION A(*)
+*     POINTERS TO THE COLUMNS OF A
+*     IA(K) IS THE INDEX IN A() AND JA() WHERE COLUMN K STARTS
+*     ONLY THE STRICTLY LOWER TRIANGLE OF A IS STORED
+*     IA IS LENGTH N+1 (POSITION N+1 INDICATES WHERE COLUMN N+1
+*     WOULD START IF IT EXISTED)
+*     OUTPUT ONLY
+      INTEGER IA(*)
+*     THE ROW NUMBERS OF THE OFF-DIAGONALS OF A
+*     OUTPUT ONLY
+      INTEGER JA(*)
+
+*     THE REST ARE INTERNAL VARIABLES
+      INTEGER I, J
+
+*****************************************
+*     START OF EXECUTABLE STATEMENTS
+*****************************************
+      IA(1) = 1
+      DO 200 I = 1, N
+         IA(I+1) = IA(I)
+         DIAG(I) = 4*IBAND + 1
+         DO 100 J = I+1, MIN(N,I+IBAND)
+            JA(IA(I+1)) = J
+            A(IA(I+1)) = -1
+            IA(I+1) = IA(I+1) + 1
+100      CONTINUE
+200   CONTINUE
+
+      RETURN
+*****************************************************************
+*     END OF CBAND
+*****************************************************************
+      END
+*****************************************************************
+*     USED IN THE TESTING PROCESS:
+*     CONSTRUCT A BANDED MATRIX OF SIZE N WITH SEMI-BANDWIDTH, 
+*     IBAND.  THE DIAGONAL HAS VALUES OF (IBAND*4)+1 AND THE
+*     OFF-DIAGONALS ARE ALL -1 INSIDE THE BAND AND 0 OUTSIDE.
+*     THE SPARSE MATRIX IS STORED IN THE ROW FORMAT DESCRIBED
+*     IN THE DRIVER PROGRAM.
+*****************************************************************
+      SUBROUTINE RBAND(N,IBAND,DIAG,A,IA,JA)
+*     THE ORDER OF THE MATRIX
+*     INPUT ONLY
+      INTEGER N
+*     THE SEMI-BANDWIDTH OF THE MATRIX
+*     INPUT ONLY
+      INTEGER IBAND
+*     THE DIAGONALS OF A
+*     OUTPUT ONLY
+      DOUBLE PRECISION DIAG(*)
+*     THE OFF-DIAGONALS OF A
+*     OUTPUT ONLY
+      DOUBLE PRECISION A(*)
+*     POINTERS TO THE ROWS OF A
+*     IA(K) IS THE INDEX IN A() AND JA() WHERE ROW K STARTS
+*     ONLY THE STRICTLY LOWER TRIANGLE OF A IS STORED
+*     IA IS LENGTH N+1 (POSITION N+1 INDICATES WHERE ROW N+1
+*     WOULD START IF IT EXISTED)
+*     OUTPUT ONLY
+      INTEGER IA(*)
+*     THE COLUMN NUMBERS OF THE OFF-DIAGONALS OF A
+*     OUTPUT ONLY
+      INTEGER JA(*)
+
+*     THE REST ARE INTERNAL VARIABLES
+      INTEGER I, J
+
+*****************************************
+*     START OF EXECUTABLE STATEMENTS
+*****************************************
+      IA(1) = 1
+      DO 200 I = 1, N
+         IA(I+1) = IA(I)
+         DIAG(I) = 4*IBAND + 1
+         DO 100 J = MAX(1,I-IBAND), I-1
+            JA(IA(I+1)) = J
+            A(IA(I+1)) = -1
+            IA(I+1) = IA(I+1) + 1
+100      CONTINUE
+200   CONTINUE
+
+      RETURN
+*****************************************************************
+*     END OF RBAND
+*****************************************************************
+      END
+*****************************************************************
+*     USED IN THE TESTING PROCESS:
+*     CONSTRUCT AN ARROWHEAD MATRIX: A MATRIX OF SIZE N WITH 
+*     SEMI-BANDWIDTH, IBAND AND NONZERO VALUES IN EVERY ELEMENT
+*     OF THE FIRST ROW AND COLUMN.  THE DIAGONAL HAS VALUES OF 
+*     (IBAND/N)+1 EXCEPT FOR A(1,1) WHICH HAS A VALUE OF N.
+*     THE OFF-DIAGONALS ARE ALL 1/N INSIDE THE BAND AND 0 OUTSIDE
+*     EXCEPT FOR THE FIRST ROW/COLUMN WHICH HAS VALUES OF -1.
+*     IN ADDITION, EXCEPT FOR THE DIAGONALS, THERE ARE NO
+*     NONZEROES IN THE (IBAND X IBAND) LOWER RIGHT CORNER.
+*     THE SPARSE MATRIX IS STORED IN THE COLUMN FORMAT DESCRIBED
+*     IN THE DRIVER PROGRAM.
+*****************************************************************
+      SUBROUTINE CARROW(N,IBAND,DIAG,A,IA,JA)
+*     THE ORDER OF THE MATRIX
+*     INPUT ONLY
+      INTEGER N
+*     THE SEMI-BANDWIDTH OF THE MATRIX
+*     INPUT ONLY
+      INTEGER IBAND
+*     THE DIAGONALS OF A
+*     OUTPUT ONLY
+      DOUBLE PRECISION DIAG(*)
+*     THE OFF-DIAGONALS OF A
+*     OUTPUT ONLY
+      DOUBLE PRECISION A(*)
+*     POINTERS TO THE COLUMNS OF A
+*     IA(K) IS THE INDEX IN A() AND JA() WHERE COLUMN K STARTS
+*     ONLY THE STRICTLY LOWER TRIANGLE OF A IS STORED
+*     IA IS LENGTH N+1 (POSITION N+1 INDICATES WHERE COLUMN N+1
+*     WOULD START IF IT EXISTED)
+*     OUTPUT ONLY
+      INTEGER IA(*)
+*     THE ROW NUMBERS OF THE OFF-DIAGONALS OF A
+*     OUTPUT ONLY
+      INTEGER JA(*)
+
+*     THE REST ARE INTERNAL VARIABLES
+      INTEGER I, J
+      DOUBLE PRECISION VAL1, VAL2
+
+*****************************************
+*     START OF EXECUTABLE STATEMENTS
+*****************************************
+      VAL1 = IBAND
+      VAL1 = VAL1 / N
+      VAL1 = VAL1 + 1.0D0
+      VAL2 = N
+      VAL2 = 1.0D0 / VAL2
+
+      IA(1) = 1
+      IA(2) = 1
+      DIAG(1) = N
+      DO 100 I = 2, N
+         JA(IA(2)) = I
+         A(IA(2)) = -1
+         IA(2) = IA(2) + 1
+100   CONTINUE
+      DO 300 I = 2, N
+         IA(I+1) = IA(I)
+         DIAG(I) = VAL1
+         IF (I.GT.N-IBAND) GOTO 300
+         DO 200 J = I+1, MIN(N,I+IBAND)
+            JA(IA(I+1)) = J
+            A(IA(I+1)) = VAL2
+            IA(I+1) = IA(I+1) + 1
+200      CONTINUE
+300   CONTINUE
+
+      RETURN
+*****************************************************************
+*     END OF CARROW
+*****************************************************************
+      END
+*****************************************************************
+*     USED IN THE TESTING PROCESS:
+*     CONSTRUCT AN ARROWHEAD MATRIX: A MATRIX OF SIZE N WITH 
+*     SEMI-BANDWIDTH, IBAND AND NONZERO VALUES IN EVERY ELEMENT
+*     OF THE FIRST ROW AND COLUMN.  THE DIAGONAL HAS VALUES OF 
+*     (IBAND/N)+1 EXCEPT FOR A(1,1) WHICH HAS A VALUE OF N.
+*     THE OFF-DIAGONALS ARE ALL 1/N INSIDE THE BAND AND 0 OUTSIDE
+*     EXCEPT FOR THE FIRST ROW/COLUMN WHICH HAS VALUES OF -1.
+*     IN ADDITION, EXCEPT FOR THE DIAGONALS, THERE ARE NO
+*     NONZEROES IN THE (IBAND X IBAND) LOWER RIGHT CORNER.
+*     THE SPARSE MATRIX IS STORED IN THE ROW FORMAT DESCRIBED
+*     IN THE DRIVER PROGRAM.
+*****************************************************************
+      SUBROUTINE RARROW(N,IBAND,DIAG,A,IA,JA)
+*     THE ORDER OF THE MATRIX
+*     INPUT ONLY
+      INTEGER N
+*     THE SEMI-BANDWIDTH OF THE MATRIX
+*     INPUT ONLY
+      INTEGER IBAND
+*     THE DIAGONALS OF A
+*     OUTPUT ONLY
+      DOUBLE PRECISION DIAG(*)
+*     THE OFF-DIAGONALS OF A
+*     OUTPUT ONLY
+      DOUBLE PRECISION A(*)
+*     POINTERS TO THE ROWS OF A
+*     IA(K) IS THE INDEX IN A() AND JA() WHERE ROW K STARTS
+*     ONLY THE STRICTLY LOWER TRIANGLE OF A IS STORED
+*     IA IS LENGTH N+1 (POSITION N+1 INDICATES WHERE ROW N+1
+*     WOULD START IF IT EXISTED)
+*     OUTPUT ONLY
+      INTEGER IA(*)
+*     THE COLUMN NUMBERS OF THE OFF-DIAGONALS OF A
+*     OUTPUT ONLY
+      INTEGER JA(*)
+
+*     THE REST ARE INTERNAL VARIABLES
+      INTEGER I, J
+      DOUBLE PRECISION VAL1, VAL2
+
+*****************************************
+*     START OF EXECUTABLE STATEMENTS
+*****************************************
+      VAL1 = IBAND
+      VAL1 = VAL1 / N
+      VAL1 = VAL1 + 1.0D0
+      VAL2 = N
+      VAL2 = 1.0D0 / VAL2
+
+      IA(1) = 1
+      DO 200 I = 1, N
+         IA(I+1) = IA(I)
+         DIAG(I) = VAL1
+         JA(IA(I+1)) = 1
+         A(IA(I+1)) = -1
+         IA(I+1) = IA(I+1) + 1
+         DO 100 J = MAX(2,I-IBAND), MIN(I-1,N-IBAND)
+            JA(IA(I+1)) = J
+            A(IA(I+1)) = VAL2
+            IA(I+1) = IA(I+1) + 1
+100      CONTINUE
+200   CONTINUE
+      DIAG(1) = N
+
+      RETURN
+*****************************************************************
+*     END OF RARROW
+*****************************************************************
+      END
+*****************************************************************
+*     USED IN THE TESTING PROCESS:
+*     CONSTRUCT THE MATRIX FOR LAPLACE'S EQUATION ON A SQUARE
+*     GRID (LN X LN) USING THE STANDARD 5-POINT STENCIL, YIELDING
+*     A SPARSE MATRIX OF SIZE LN**2 WITH 4'S ON THE DIAGONAL AND
+*     -1'S IN THE APPROPRIATE POSITIONS OFF THE DIAGONAL.
+*     THE SPARSE MATRIX IS STORED IN THE COLUMN FORMAT DESCRIBED
+*     IN THE DRIVER PROGRAM.
+*****************************************************************
+      SUBROUTINE CLAPL(LN,DIAG,A,IA,JA)
+*     THE SIZE OF THE GRID
+*     INPUT ONLY
+      INTEGER LN
+*     THE DIAGONALS OF A
+*     OUTPUT ONLY
+      DOUBLE PRECISION DIAG(*)
+*     THE OFF-DIAGONALS OF A
+*     OUTPUT ONLY
+      DOUBLE PRECISION A(*)
+*     POINTERS TO THE COLUMNS OF A
+*     IA(K) IS THE INDEX IN A() AND JA() WHERE COLUMN K STARTS
+*     ONLY THE STRICTLY LOWER TRIANGLE OF A IS STORED
+*     IA IS LENGTH N+1 (POSITION N+1 INDICATES WHERE COLUMN N+1
+*     WOULD START IF IT EXISTED)
+*     OUTPUT ONLY
+      INTEGER IA(*)
+*     THE ROW NUMBERS OF THE OFF-DIAGONALS OF A
+*     OUTPUT ONLY
+      INTEGER JA(*)
+
+*     THE REST ARE INTERNAL VARIABLES
+      INTEGER I, J, CNT
+
+*****************************************
+*     START OF EXECUTABLE STATEMENTS
+*****************************************
+      IA(1) = 1
+      CNT = 1
+      DO 200 I = 1, LN
+         DO 100 J = 1, LN
+            IA(CNT+1) = IA(CNT)
+            DIAG(CNT) = 4
+            IF (J + 1 .LE. LN) THEN
+               JA(IA(CNT+1)) = CNT + 1
+               A(IA(CNT+1)) = -1
+               IA(CNT+1) = IA(CNT+1) + 1
+            ENDIF
+            IF (I + 1 .LE. LN) THEN
+               JA(IA(CNT+1)) = CNT + LN
+               A(IA(CNT+1)) = -1
+               IA(CNT+1) = IA(CNT+1) + 1
+            ENDIF
+            CNT = CNT + 1
+100      CONTINUE
+200   CONTINUE
+
+      RETURN
+*****************************************************************
+*     END OF CLAPL
+*****************************************************************
+      END
+*****************************************************************
+*     USED IN THE TESTING PROCESS:
+*     CONSTRUCT THE MATRIX FOR LAPLACE'S EQUATION ON A SQUARE
+*     GRID (LN X LN) USING THE STANDARD 5-POINT STENCIL, YIELDING
+*     A SPARSE MATRIX OF SIZE LN**2 WITH 4'S ON THE DIAGONAL AND
+*     -1'S IN THE APPROPRIATE POSITIONS OFF THE DIAGONAL.
+*     THE SPARSE MATRIX IS STORED IN THE ROW FORMAT DESCRIBED
+*     IN THE DRIVER PROGRAM.
+*****************************************************************
+      SUBROUTINE RLAPL(LN,DIAG,A,IA,JA)
+*     THE SIZE OF THE GRID
+*     INPUT ONLY
+      INTEGER LN
+*     THE DIAGONALS OF A
+*     OUTPUT ONLY
+      DOUBLE PRECISION DIAG(*)
+*     THE OFF-DIAGONALS OF A
+*     OUTPUT ONLY
+      DOUBLE PRECISION A(*)
+*     POINTERS TO THE ROWS OF A
+*     IA(K) IS THE INDEX IN A() AND JA() WHERE ROW K STARTS
+*     ONLY THE STRICTLY LOWER TRIANGLE OF A IS STORED
+*     IA IS LENGTH N+1 (POSITION N+1 INDICATES WHERE ROW N+1
+*     WOULD START IF IT EXISTED)
+*     OUTPUT ONLY
+      INTEGER IA(*)
+*     THE COLUMN NUMBERS OF THE OFF-DIAGONALS OF A
+*     OUTPUT ONLY
+      INTEGER JA(*)
+
+*     THE REST ARE INTERNAL VARIABLES
+      INTEGER I, J, CNT
+
+*****************************************
+*     START OF EXECUTABLE STATEMENTS
+*****************************************
+      IA(1) = 1
+      CNT = 1
+      DO 200 I = 1, LN
+         DO 100 J = 1, LN
+            IA(CNT+1) = IA(CNT)
+            DIAG(CNT) = 4
+            IF (J - 1 .GE. 1) THEN
+               JA(IA(CNT+1)) = CNT - 1
+               A(IA(CNT+1)) = -1
+               IA(CNT+1) = IA(CNT+1) + 1
+            ENDIF
+            IF (I - 1 .GE. 1) THEN
+               JA(IA(CNT+1)) = CNT - LN
+               A(IA(CNT+1)) = -1
+               IA(CNT+1) = IA(CNT+1) + 1
+            ENDIF
+            CNT = CNT + 1
+100      CONTINUE
+200   CONTINUE
+
+      RETURN
+*****************************************************************
+*     END OF RLAPL
+*****************************************************************
+      END
+*****************************************************************
+*     USED IN THE TESTING PROCESS:
+*     A SUBROUTINE THAT MULTIPLIES A SPARSE MATRIX, A, BY ITS
+*     TRANSPOSE AND PLACES THE RESULT IN THE DENSE MATRIX, DMAT.
+*     THE SPARSE MATRIX IS STORED IN THE COLUMN FORMAT DESCRIBED
+*     IN THE DRIVER.
+*****************************************************************
+      SUBROUTINE CMTMUL(N,DIAG,A,IA,JA,LDA,DMAT)
+*     THE ORDER OF THE MATRIX
+*     INPUT ONLY
+      INTEGER N
+*     THE DIAGONALS OF A
+*     INPUT ONLY
+      DOUBLE PRECISION DIAG(*)
+*     THE OFF-DIAGONALS OF A
+*     INPUT ONLY
+      DOUBLE PRECISION A(*)
+*     POINTERS TO THE COLUMNS OF A
+*     IA(K) IS THE INDEX IN A() AND JA() WHERE COLUMN K STARTS
+*     ONLY THE STRICTLY LOWER TRIANGLE OF A IS STORED
+*     IA IS LENGTH N+1 (POSITION N+1 INDICATES WHERE COLUMN N+1
+*     WOULD START IF IT EXISTED)
+*     INPUT ONLY
+      INTEGER IA(*)
+*     THE ROW NUMBERS OF THE OFF-DIAGONALS OF A
+*     INPUT ONLY
+      INTEGER JA(*)
+*     THE LEADING DIMENSION OF DMAT
+*     INPUT ONLY
+      INTEGER LDA
+*     THE DENSE MATRIX REPRESENTING A(T)*A
+*     OUTPUT ONLY
+      DOUBLE PRECISION DMAT(LDA,*)
+
+*     THE REST ARE INTERNAL VARIABLES
+      INTEGER I, J
+      INTEGER IPTR, JPTR
+
+*****************************************
+*     START OF EXECUTABLE STATEMENTS
+*****************************************
+
+      DO 200 I = 1, N
+         DO 100 J = 1, N
+            DMAT(I,J) = 0.0
+100      CONTINUE
+200   CONTINUE
+      DO 600 I = 1, N
+         DMAT(I,I) = DMAT(I,I) + DIAG(I)*DIAG(I)
+         DO 300 IPTR = IA(I), IA(I+1)-1
+            DMAT(I,JA(IPTR)) = DMAT(I,JA(IPTR)) + DIAG(I)*A(IPTR)
+300      CONTINUE
+         DO 500 IPTR = IA(I), IA(I+1)-1
+            DMAT(JA(IPTR),I) = DMAT(JA(IPTR),I) + A(IPTR)*DIAG(I)
+            DO 400 JPTR = IA(I), IA(I+1)-1
+               DMAT(JA(IPTR),JA(JPTR)) = DMAT(JA(IPTR),JA(JPTR)) +
+     C            A(IPTR)*A(JPTR)
+400         CONTINUE
+500      CONTINUE
+600   CONTINUE
+
+      RETURN
+*****************************************************************
+*     END OF CMTMUL
+*****************************************************************
+      END
+*****************************************************************
+*     USED IN THE TESTING PROCESS:
+*     A SUBROUTINE THAT MULTIPLIES A SPARSE MATRIX, A, BY ITS
+*     TRANSPOSE AND PLACES THE RESULT IN THE DENSE MATRIX, DMAT.
+*     THE SPARSE MATRIX IS STORED IN THE ROW FORMAT DESCRIBED
+*     IN THE DRIVER.
+*****************************************************************
+      SUBROUTINE RMTMUL(N,DIAG,A,IA,JA,LDA,DMAT,IFIRST,COLUMN)
+*     THE ORDER OF THE MATRIX
+*     INPUT ONLY
+      INTEGER N
+*     THE DIAGONALS OF A
+*     INPUT ONLY
+      DOUBLE PRECISION DIAG(*)
+*     THE OFF-DIAGONALS OF A
+*     INPUT ONLY
+      DOUBLE PRECISION A(*)
+*     POINTERS TO THE ROWS OF A
+*     IA(K) IS THE INDEX IN A() AND JA() WHERE ROW K STARTS
+*     ONLY THE STRICTLY LOWER TRIANGLE OF A IS STORED
+*     IA IS LENGTH N+1 (POSITION N+1 INDICATES WHERE ROW N+1
+*     WOULD START IF IT EXISTED)
+*     INPUT ONLY
+      INTEGER IA(*)
+*     THE COLUMN NUMBERS OF THE OFF-DIAGONALS OF A
+*     INPUT ONLY
+      INTEGER JA(*)
+*     THE LEADING DIMENSION OF DMAT
+*     INPUT ONLY
+      INTEGER LDA
+*     THE DENSE MATRIX REPRESENTING A(T)*A
+*     OUTPUT ONLY
+      DOUBLE PRECISION DMAT(LDA,*)
+*     AN INTEGER AND A DOUBLE PRECISION WORK VECTOR
+*     OUTPUT ONLY
+      INTEGER IFIRST(*)
+      DOUBLE PRECISION COLUMN(*)
+
+*     THE REST ARE INTERNAL VARIABLES
+      INTEGER I, J, K
+
+*****************************************
+*     START OF EXECUTABLE STATEMENTS
+*****************************************
+      DO 200 I = 1, N
+         IFIRST(I) = IA(I)
+         DO 100 J = 1, N
+            DMAT(I,J) = 0.0
+100      CONTINUE
+200   CONTINUE
+      DO 600 I = 1, N
+         COLUMN(I) = DIAG(I)
+         DO 300 J = I+1, N
+            IF (IFIRST(J) .LT. IA(J+1)) THEN
+               IF (JA(IFIRST(J)) .EQ. I) THEN
+                  COLUMN(J) = A(IFIRST(J))
+                  IFIRST(J) = IFIRST(J) + 1
+               ELSE
+                  COLUMN(J) = 0.0
+               ENDIF
+            ELSE
+               COLUMN(J) = 0.0
+            ENDIF
+300      CONTINUE
+         DO 500 J = I, N
+            DO 400 K = I, N
+               DMAT(J,K) = DMAT(J,K) + COLUMN(J)*COLUMN(K)
+400         CONTINUE
+500      CONTINUE
+600   CONTINUE
+
+      RETURN
+*****************************************************************
+*     END OF RMTMUL
+*****************************************************************
+      END
+*****************************************************************
+*     USED IN THE TESTING PROCESS:
+*     A SUBROUTINE THAT SUBTRACTS A SPARSE MATRIX, A, FROM A
+*     DENSE MATRIX, DMAT AND PLACES THE RESULT IN DMAT.
+*     ONLY THE LOWER SYMMETRIC HALF OF DMAT IS AFFECTED.
+*     THE SPARSE MATRIX IS STORED IN THE COLUMN FORMAT DESCRIBED
+*     IN THE DRIVER.
+*****************************************************************
+      SUBROUTINE CMATSB(N,DIAG,A,IA,JA,LDA,DMAT)
+*     THE ORDER OF THE MATRIX
+*     INPUT ONLY
+      INTEGER N
+*     THE DIAGONALS OF A
+*     INPUT ONLY
+      DOUBLE PRECISION DIAG(*)
+*     THE OFF-DIAGONALS OF A
+*     INPUT ONLY
+      DOUBLE PRECISION A(*)
+*     POINTERS TO THE COLUMNS OF A
+*     IA(K) IS THE INDEX IN A() AND JA() WHERE COLUMN K STARTS
+*     ONLY THE STRICTLY LOWER TRIANGLE OF A IS STORED
+*     IA IS LENGTH N+1 (POSITION N+1 INDICATES WHERE COLUMN N+1
+*     WOULD START IF IT EXISTED)
+*     INPUT ONLY
+      INTEGER IA(*)
+*     THE ROW NUMBERS OF THE OFF-DIAGONALS OF A
+*     INPUT ONLY
+      INTEGER JA(*)
+*     THE LEADING DIMENSION OF DMAT
+*     INPUT ONLY
+      INTEGER LDA
+*     THE DENSE MATRIX REPRESENTING DMAT=DMAT-A
+*     INPUT/OUTPUT
+      DOUBLE PRECISION DMAT(LDA,*)
+
+*     THE REST ARE INTERNAL VARIABLES
+      INTEGER I, J
+
+*****************************************
+*     START OF EXECUTABLE STATEMENTS
+*****************************************
+      DO 200 I = 1, N
+         DMAT(I,I) = DMAT(I,I) - DIAG(I)
+         DO 100 J = IA(I), IA(I+1)-1
+            DMAT(JA(J),I) = DMAT(JA(J),I) - A(J)
+100      CONTINUE
+200   CONTINUE
+
+      RETURN
+*****************************************************************
+*     END OF CMATSB
+*****************************************************************
+      END
+*****************************************************************
+*     USED IN THE TESTING PROCESS:
+*     A SUBROUTINE THAT SUBTRACTS A SPARSE MATRIX, A, FROM A
+*     DENSE MATRIX, DMAT AND PLACES THE RESULT IN DMAT.
+*     ONLY THE LOWER SYMMETRIC HALF OF DMAT IS AFFECTED.
+*     THE SPARSE MATRIX IS STORED IN THE ROW FORMAT DESCRIBED
+*     IN THE DRIVER.
+*****************************************************************
+      SUBROUTINE RMATSB(N,DIAG,A,IA,JA,LDA,DMAT)
+*     THE ORDER OF THE MATRIX
+*     INPUT ONLY
+      INTEGER N
+*     THE DIAGONALS OF A
+*     INPUT ONLY
+      DOUBLE PRECISION DIAG(*)
+*     THE OFF-DIAGONALS OF A
+*     INPUT ONLY
+      DOUBLE PRECISION A(*)
+*     POINTERS TO THE ROWS OF A
+*     IA(K) IS THE INDEX IN A() AND JA() WHERE ROW K STARTS
+*     ONLY THE STRICTLY LOWER TRIANGLE OF A IS STORED
+*     IA IS LENGTH N+1 (POSITION N+1 INDICATES WHERE ROW N+1
+*     WOULD START IF IT EXISTED)
+*     INPUT ONLY
+      INTEGER IA(*)
+*     THE COLUMN NUMBERS OF THE OFF-DIAGONALS OF A
+*     INPUT ONLY
+      INTEGER JA(*)
+*     THE LEADING DIMENSION OF DMAT
+*     INPUT ONLY
+      INTEGER LDA
+*     THE DENSE MATRIX REPRESENTING DMAT=DMAT-A
+*     INPUT/OUTPUT
+      DOUBLE PRECISION DMAT(LDA,*)
+
+*     THE REST ARE INTERNAL VARIABLES
+      INTEGER I, J
+
+*****************************************
+*     START OF EXECUTABLE STATEMENTS
+*****************************************
+      DO 200 I = 1, N
+         DMAT(I,I) = DMAT(I,I) - DIAG(I)
+         DO 100 J = IA(I), IA(I+1)-1
+            DMAT(I,JA(J)) = DMAT(I,JA(J)) - A(J)
+100      CONTINUE
+200   CONTINUE
+
+      RETURN
+*****************************************************************
+*     END OF RMATSB
+*****************************************************************
+      END
+*****************************************************************
+*     USED IN THE TESTING PROCESS:
+*     A SUBROUTINE THAT COMPUTES THE FROBENIUS NORM OF THE LOWER
+*     SYMMETRIC HALF OF A DENSE MATRIX, A.  IN ADDITION THE
+*     LARGEST ABSOLUTE VALUE OF AN ELEMENT IN THE LOWER SYMMETRIC
+*     HALF OF A IS ALSO COMPUTED.  BOTH OF THE VALUE ARE PRINTED.
+*****************************************************************
+      SUBROUTINE MATSTT(N,LDA,A)
+*     THE ORDER OF THE MATRIX
+*     INPUT ONLY
+      INTEGER N
+*     THE LEADING DIMENSION OF A
+*     INPUT ONLY
+      INTEGER LDA
+*     THE MATRIX TO BE ANALYZED
+*     INPUT ONLY
+      DOUBLE PRECISION A(LDA,*)
+
+*     THE REST ARE INTERNAL VARIABLES
+*     THE FROBENIUS NORM OF A
+      DOUBLE PRECISION FNRM
+*     THE LARGEST ABSOLUTE VALUE OF AN ENTRY IN A
+      DOUBLE PRECISION DMAXEL
+      INTEGER I, J
+
+*****************************************
+*     START OF EXECUTABLE STATEMENTS
+*****************************************
+      DMAXEL = 0.0
+      FNRM = 0.0
+      DO 200 I = 1, N
+         DO 100 J = 1, I
+            FNRM = FNRM + A(I,J)*A(I,J)
+            DMAXEL = MAX(DMAXEL,ABS(A(I,J)))
+100      CONTINUE
+200   CONTINUE
+      FNRM = SQRT(FNRM)
+      IF (FNRM .GE. 1E-12) THEN
+         WRITE(6,2000) FNRM
+      ELSE
+         WRITE(6,2100)
+      ENDIF
+      IF (DMAXEL .GE. 1E-12) THEN
+         WRITE(6,2200) DMAXEL
+      ELSE
+         WRITE(6,2300)
+      ENDIF
+      
+2000  FORMAT(1X,'THE FROBENIUS NORM IS ',1PD12.2)
+2100  FORMAT(1X,'THE FROBENIUS NORM IS LESS THAN 1E-12')
+2200  FORMAT(1X,'THE LARGEST ABSOLUTE VALUE IS',1PD12.2)
+2300  FORMAT(1X,'THE LARGEST ABSOLUTE VALUE IS LESS THAN 1E-12')
+
+      RETURN
+*****************************************************************
+*     END OF MATSTT
+*****************************************************************
+      END
+*****************************************************************
+*     PERFORM STANDARD INCOMPLETE CHOLESKI: COLUMN ORIENTED
+*****************************************************************
+      INTEGER FUNCTION ISTDIC(N,DIAG,A,IA,JA,TA,IFIRST,LIST)
+
+*     IF THE FACTORIZATION WAS P.D. THEN 0 IS RETURNED
+*     OTHERWISE A NEGATIVE VALUE IS RETURNED THAT INDICATES
+*     THE COLUMN NUMBER WHERE A NEGATIVE DIAGONAL WAS ENCOUNTERED
+
+*     THE ORDER OF THE MATRIX
+*     INPUT ONLY
+      INTEGER N
+*     THE DIAGONALS OF A
+*     INPUT/OUTPUT
+      DOUBLE PRECISION DIAG(*)
+*     THE OFF-DIAGONALS OF A
+*     INPUT/OUTPUT
+      DOUBLE PRECISION A(*)
+*     POINTERS TO THE COLUMNS OF A
+*     IA(K) IS THE INDEX IN A() AND JA() WHERE COLUMN K STARTS
+*     ONLY THE STRICTLY LOWER TRIANGLE OF A IS STORED
+*     IA IS LENGTH N+1 (POSITION N+1 INDICATES WHERE COLUMN N+1
+*     WOULD START IF IT EXISTED)
+*     INPUT
+      INTEGER IA(*)
+*     THE ROW NUMBERS OF THE OFF-DIAGONALS OF A
+*     INPUT
+      INTEGER JA(*)
+*     A TEMPORARY WORK VECTOR OF LENGTH N TO KEEP THE CURRENT COLUMN
+*     CONTENTS DESTROYED
+      DOUBLE PRECISION TA(*)
+*     IFIRST(J) POINTS TO THE NEXT VALUE IN COLUMN J TO USE (LENGTH N)
+*     IFIRST ALSO HAS A DUAL USE.  AT STEP K, ONLY THE FIRST K-1 
+*     ELEMENTS ARE USED FOR THE ABOVE PURPOSE.  FOR THE LAST N-K 
+*     ELEMENTS, IFIRST(J) INDICATES IF IF A NONZERO VALUE EXISTS IN 
+*     POSITION J OF COLUMN K.
+*     CONTENTS DESTROYED
+      INTEGER IFIRST(*)
+*     LIST(J) POINTS TO A LINKED LIST OF COLUMNS THAT WILL UPDATE
+*     COLUMN J (LENGTH N)
+*     CONTENTS DESTROYED
+      INTEGER LIST(*)
+
+*     VARIABLES USED
+      INTEGER ISK, IEK, ISJ, IEJ
+      INTEGER I, J, K
+      INTEGER ROW
+      DOUBLE PRECISION LVAL, T
+      INTEGER IPTR
+ 
+*****************************************
+*      START OF EXECUTABLE STATEMENTS
+*****************************************
+
+      DO 100 J = 1, N
+        IFIRST(J) = 0
+        LIST(J) = 0
+100   CONTINUE
+
+*     LOOP OVER ALL COLUMNS
+      DO 700 K = 1,N
+*        LOAD COLUMN K INTO TA
+         ISK = IA(K)
+         IEK = IA(K+1)-1
+         DO 200 J = ISK, IEK
+           ROW = JA(J)
+           TA(ROW) = A(J)
+           IFIRST(ROW) = 1
+200      CONTINUE
+
+*        MAKE SURE THE DIAGONAL OF K IS OKAY AND THEN TAKE THE SQRT
+         IF (DIAG(K).LE.0.0D0) THEN
+           DIAG(K) = -1.0D0
+           GOTO 800
+         ENDIF
+         DIAG(K) = SQRT(DIAG(K))
+
+*        UPDATE COLUMN K USING THE PREVIOUS COLUMNS
+         J = LIST(K)
+300      CONTINUE
+         IF (J.EQ.0) GOTO 500
+           ISJ = IFIRST(J)
+           IEJ = IA(J+1)-1
+           LVAL = A(ISJ)
+           ISJ = ISJ + 1
+           IF (ISJ.LT.IEJ) THEN
+             IFIRST(J) = ISJ
+             IPTR = J
+             J = LIST(J)
+             LIST(IPTR) = LIST(JA(ISJ))
+             LIST(JA(ISJ)) = IPTR
+           ELSE
+             J = LIST(J)
+           ENDIF
+           DO 400 I = ISJ, IEJ
+             ROW = JA(I)
+             IF (IFIRST(ROW).NE.0) THEN
+               TA(ROW) = TA(ROW) - LVAL*A(I)
+             ENDIF
+400        CONTINUE
+         GOTO 300
+500      CONTINUE
+
+*        IFIRST AND LIST KEEP TRACK OF WHERE IN COLUMN K WE ARE
+         IF (ISK.LT.IEK) THEN
+           IPTR = JA(ISK)
+           LIST(K) = LIST(IPTR)
+           LIST(IPTR) = K
+           IFIRST(K) = ISK
+         ENDIF
+
+*        UPDATE REMAINING DIAGONALS USING COLUMN K
+         LVAL = DIAG(K)
+         DO 600 J = ISK, IEK
+           ROW = JA(J)
+           T = TA(ROW)
+           IFIRST(ROW) = 0
+           T = T/LVAL
+           DIAG(ROW) = DIAG(ROW) - T*T
+           A(J) = T
+600      CONTINUE
+
+700   CONTINUE
+
+*     RETURN A NON-NEGATIVE VALUE
+      ISTDIC = 0
+      RETURN
+
+*     IF AN ERROR OCCURED, RETURN A NEGATIVE VALUE
+800   CONTINUE
+      ISTDIC = -K
+      RETURN
+*****************************************************************
+*     END OF ISTDIC
+*****************************************************************
+      END
+*****************************************************************
+*     PERFORM JONES/PLASSMANN INCOMPLETE CHOLESKI:COLUMN ORIENTED
+*****************************************************************
+      INTEGER FUNCTION JPICC(N,DIAG,A,IA,JA,TA,ITCOL,IFIRST,LIST)
+
+*     IF THE FACTORIZATION WAS P.D. THEN 0 IS RETURNED
+*     OTHERWISE A NEGATIVE VALUE IS RETURNED THAT INDICATES
+*     THE COLUMN NUMBER WHERE A NEGATIVE DIAGONAL WAS ENCOUNTERED
+
+*     THE ORDER OF THE MATRIX
+*     INPUT ONLY
+      INTEGER N
+*     THE DIAGONALS OF A
+*     INPUT/OUTPUT
+      DOUBLE PRECISION DIAG(*)
+*     THE OFF-DIAGONALS OF A
+*     INPUT/OUTPUT
+      DOUBLE PRECISION A(*)
+*     POINTERS TO THE COLUMNS OF A
+*     IA(K) IS THE INDEX IN A() AND JA() WHERE COLUMN K STARTS
+*     ONLY THE STRICTLY LOWER TRIANGLE OF A IS STORED
+*     IA IS LENGTH N+1 (POSITION N+1 INDICATES WHERE COLUMN N+1
+*     WOULD START IF IT EXISTED)
+*     INPUT
+      INTEGER IA(*)
+*     THE ROW NUMBERS OF THE OFF-DIAGONALS OF A
+*     INPUT/OUTPUT
+      INTEGER JA(*)
+*     A TEMPORARY WORK VECTOR OF LENGTH N TO KEEP THE CURRENT COLUMN
+*     CONTENTS DESTROYED
+      DOUBLE PRECISION TA(*)
+*     A TEMPORARY WORK VECTOR OF LENGTH N TO KEEP TRACK OF THE ROW
+*     VALUES IN THE CURRENT COLUMN
+*     CONTENTS DESTROYED
+      INTEGER ITCOL(*)
+*     IFIRST(J) POINTS TO THE NEXT VALUE IN COLUMN J TO USE (LENGTH N)
+*     IFIRST ALSO HAS A DUAL USE.  AT STEP K, ONLY THE FIRST K-1 
+*     ELEMENTS ARE USED FOR THE ABOVE PURPOSE.  FOR THE LAST N-K 
+*     ELEMENTS, IFIRST(J) INDICATES IF IF A NONZERO VALUE EXISTS IN 
+*     POSITION J OF COLUMN K.
+*     CONTENTS DESTROYED
+      INTEGER IFIRST(*)
+*     LIST(J) POINTS TO A LINKED LIST OF COLUMNS THAT WILL UPDATE
+*     COLUMN J (LENGTH N)
+*     CONTENTS DESTROYED
+      INTEGER LIST(*)
+
+*     SUBROUTINES USED 
+      EXTERNAL IBSORT, DBSORT, DHSORT
+
+*     VARIABLES USED
+      INTEGER ISJ, IEJ, ISK, IEK
+      INTEGER I, J, K
+      INTEGER TALEN
+      INTEGER ROW, COUNT
+      DOUBLE PRECISION LVAL
+      INTEGER IPTR
+ 
+*****************************************
+*      START OF EXECUTABLE STATEMENTS
+*****************************************
+
+      DO 100 J = 1, N
+        IFIRST(J) = 0
+        LIST(J) = 0
+100    CONTINUE
+
+*     LOOP OVER ALL COLUMNS
+      DO 900 K = 1,N
+*        LOAD COLUMN K INTO TA
+         TALEN = 0
+         ISK = IA(K)
+         IEK = IA(K+1)-1
+         DO 200 J = ISK, IEK
+           ROW = JA(J)
+           TA(ROW) = A(J)
+           TALEN = TALEN + 1
+           ITCOL(TALEN) = ROW
+           IFIRST(ROW) = 1
+200       CONTINUE
+
+*        MAKE SURE THE DIAGONAL OF K IS OKAY AND THEN TAKE THE SQRT
+         IF (DIAG(K).LE.0.0D0) THEN
+           DIAG(K) = -1.0D0
+           GOTO 1000
+         ENDIF
+         DIAG(K) = SQRT(DIAG(K))
+
+*        UPDATE COLUMN K USING THE PREVIOUS COLUMNS
+         J = LIST(K)
+300      CONTINUE
+         IF (J.EQ.0) GOTO 500
+           ISJ = IFIRST(J)
+           IEJ = IA(J+1)-1
+           LVAL = A(ISJ)
+           ISJ = ISJ + 1
+           IF (ISJ.LT.IEJ) THEN
+             IFIRST(J) = ISJ
+             IPTR = J
+             J = LIST(J)
+             LIST(IPTR) = LIST(JA(ISJ))
+             LIST(JA(ISJ)) = IPTR
+           ELSE
+             J = LIST(J)
+           ENDIF
+           DO 400 I = ISJ, IEJ
+             ROW = JA(I)
+             IF (IFIRST(ROW).NE.0) THEN
+               TA(ROW) = TA(ROW) - LVAL*A(I)
+             ELSE
+               IFIRST(ROW) = 1
+               TALEN = TALEN + 1
+               ITCOL(TALEN) = ROW
+               TA(ROW) = - LVAL*A(I)
+             ENDIF
+400        CONTINUE
+         GOTO 300
+500      CONTINUE
+
+*        UPDATE REMAINING DIAGONALS USING COLUMN K
+         DO 600 J = 1, TALEN
+           ROW = ITCOL(J)
+           TA(ROW) = TA(ROW)/DIAG(K)
+           DIAG(ROW) = DIAG(ROW) - TA(ROW)*TA(ROW)
+600      CONTINUE
+
+*        FIND THE LARGEST ELEMENTS IN COLUMN K NOW
+         COUNT = MIN(IEK-ISK+1,TALEN)
+         CALL IBSORT(TALEN,COUNT,TA,ITCOL)
+         IF (COUNT.LT.20) THEN
+           CALL DBSORT(COUNT,ITCOL)
+         ELSE
+           CALL DHSORT(COUNT,ITCOL)
+         ENDIF
+
+*        PUT THE LARGEST ELEMENTS BACK INTO THE SPARSE DATA STRUCTURE
+         COUNT = 1
+         DO 700 J = ISK, IEK
+           A(J) = TA(ITCOL(COUNT))
+           JA(J) = ITCOL(COUNT)
+           COUNT = COUNT + 1
+700      CONTINUE
+
+*        IFIRST AND LIST KEEP TRACK OF WHERE IN COLUMN K WE ARE
+         IF (ISK.LT.IEK) THEN
+           IPTR = JA(ISK)
+           LIST(K) = LIST(IPTR)
+           LIST(IPTR) = K
+           IFIRST(K) = ISK
+         ENDIF
+
+         DO 800 J = 1, TALEN
+           IFIRST(ITCOL(J)) = 0
+800      CONTINUE
+
+900   CONTINUE
+
+      JPICC = 0
+      RETURN
+
+*     IF AN ERROR OCCURED, RETURN A NEGATIVE VALUE
+1000  CONTINUE
+      JPICC = -K
+      RETURN
+*****************************************************************
+*     END OF JPICC
+*****************************************************************
+      END
+*****************************************************************
+*     PERFORM JONES/PLASSMANN INCOMPLETE CHOLESKI: ROW ORIENTED
+*****************************************************************
+      INTEGER FUNCTION JPICR(N,DIAG,A,IA,JA,TA,ITCOL,ICLPTR,
+     C ICLIST,IRVALS,IOCCPY)
+
+*     IF THE FACTORIZATION WAS P.D. THEN 0 IS RETURNED
+*     OTHERWISE A NEGATIVE VALUE IS RETURNED THAT INDICATES
+*     THE ROW NUMBER WHERE A NEGATIVE DIAGONAL WAS ENCOUNTERED
+*     THE ORDER OF THE MATRIX
+*     INPUT ONLY
+      INTEGER N
+*     THE DIAGONALS OF A
+*     INPUT/OUTPUT
+      DOUBLE PRECISION DIAG(*)
+*     THE OFF-DIAGONALS OF A
+*     INPUT/OUTPUT
+      DOUBLE PRECISION A(*)
+*     POINTERS TO THE ROWS OF A
+*     IA(K) IS THE INDEX IN A() AND JA() WHERE ROW K STARTS
+*     ONLY THE STRICTLY LOWER TRIANGLE OF A IS STORED
+*     IA IS LENGTH N+1 (POSITION N+1 INDICATES WHERE ROW N+1
+*     WOULD START IF IT EXISTED)
+*     IA IS LENGTH N+1
+*     INPUT
+      INTEGER IA(*)
+*     THE COLUMN NUMBERS OF THE OFF-DIAGONALS OF A
+*     INPUT/OUTPUT
+      INTEGER JA(*)
+*     A TEMPORARY WORK VECTOR OF LENGTH N TO KEEP THE CURRENT ROW
+*     CONTENTS DESTROYED
+      DOUBLE PRECISION TA(*)
+*     A TEMPORARY WORK VECTOR OF LENGTH N TO KEEP THE COLUMN VALUES IN
+*     THE CURRENT ROW
+*     CONTENTS DESTROYED
+      INTEGER ITCOL(*)
+*     ICLPTR(J) POINTS TO THE HEAD OF THE LIST CONTAINING COLUMN J
+*     LENGTH N
+*     CONTENTS DESTROYED
+      INTEGER ICLPTR(*)
+*     A TEMPORARY WORK VECTOR OF THE SAME LENGTH AS JA
+*     ICLIST(I) POINTS TO THE NEXT VALUE IN THE COLUMN LIST THAT 
+*     ELEMENT I BELONGS TO
+*     CONTENTS DESTROYED
+      INTEGER ICLIST(*)
+*     A TEMPORARY WORK VECTOR OF THE SAME LENGTH AS JA
+*     IRVALS(I) IS THE ROW NUMBER FOR ELEMENT I
+*     CONTENTS DESTROYED
+      INTEGER IRVALS(*)
+*     A TEMPORARY WORK VECTOR OF LENGTH N
+*     IOCCPY(I) INDICATES WHETHER OR NOT AN ELEMENT IS PRESENT IN
+*     COLUMN I IN THE CURRENT ROW
+*     CONTENTS DESTROYED
+      INTEGER IOCCPY(*)
+
+*     SUBROUTINES USED 
+      EXTERNAL IBSORT, DBSORT, DHSORT
+
+*     VARIABLES USED
+      INTEGER ISK, IEK
+      INTEGER I, J, K
+      INTEGER TALEN
+      INTEGER COL, COUNT, ROW
+      DOUBLE PRECISION LVAL
+      INTEGER IPTR, RPTR
+      INTEGER LEFT, MID, RIGHT
+ 
+*****************************************
+*      START OF EXECUTABLE STATEMENTS
+*****************************************
+
+      DO 100 J = 1, N
+        IOCCPY(J) = 0
+        ICLPTR(J) = 0
+100   CONTINUE
+
+*     LOOP OVER ALL COLUMNS
+      DO 600 K = 1,N
+*        LOAD ROW K INTO TA
+         TALEN = 0
+         ISK = IA(K)
+         IEK = IA(K+1)-1
+         DO 150 J = ISK, IEK
+           COL = JA(J)
+           TA(COL) = A(J)
+           TALEN = TALEN + 1
+           ITCOL(TALEN) = COL
+           IOCCPY(COL) = 1
+150      CONTINUE
+
+         IPTR = 1
+200      CONTINUE
+         IF (IPTR.LE.TALEN) THEN
+           COL = ITCOL(IPTR)
+           LVAL = TA(COL)/DIAG(COL)
+           TA(COL) = LVAL
+           DIAG(K) = DIAG(K) - LVAL*LVAL
+           RPTR = ICLPTR(COL)
+250        CONTINUE
+           IF (RPTR.NE.0) THEN
+             ROW = IRVALS(RPTR)
+             IF (IOCCPY(ROW).NE.0) THEN
+               TA(ROW) = TA(ROW) - LVAL*A(RPTR)
+             ELSE
+               IOCCPY(ROW) = 1
+               TA(ROW) = - LVAL*A(RPTR)
+               IF (IPTR.LT.TALEN) THEN
+                 IF (ROW.LT.ITCOL(IPTR+1)) THEN
+                   DO 300 I = TALEN, IPTR+1, -1
+                     ITCOL(I+1) = ITCOL(I)
+300                CONTINUE
+                   TALEN = TALEN + 1
+                   ITCOL(IPTR+1) = ROW
+                   GOTO 450
+                 ELSE
+                   LEFT = IPTR+1
+                   IF (ROW.GT.ITCOL(TALEN)) THEN
+                     TALEN = TALEN + 1
+                     ITCOL(TALEN) = ROW
+                     GOTO 450
+                   ELSE
+                     RIGHT = TALEN
+                   ENDIF
+                 ENDIF
+               ELSE
+                 TALEN = TALEN + 1
+                 ITCOL(TALEN) = ROW
+                 GOTO 450
+               ENDIF
+350            CONTINUE
+               IF (RIGHT.GT.LEFT+1) THEN
+                 MID = (RIGHT + LEFT)/2
+                 IF (ROW.GT.ITCOL(MID)) THEN
+                   LEFT = MID
+                 ELSE
+                   RIGHT = MID
+                 ENDIF
+                 GOTO 350
+               ELSE
+                 DO 400 I = TALEN, RIGHT, -1
+                   ITCOL(I+1) = ITCOL(I)
+400              CONTINUE
+                 TALEN = TALEN + 1
+                 ITCOL(RIGHT) = ROW
+               ENDIF
+450            CONTINUE
+             ENDIF
+             RPTR = ICLIST(RPTR)
+             GOTO 250
+           ENDIF
+           IPTR = IPTR + 1
+           GOTO 200
+         ENDIF
+
+*        MAKE SURE THE DIAGONAL OF K IS OKAY AND THEN TAKE THE SQRT
+         IF (DIAG(K).LE.0.0D0) THEN
+           DIAG(K) = -1.0D0
+           GOTO 650
+         ENDIF
+         DIAG(K) = SQRT(DIAG(K))
+
+*        FIND THE LARGEST ELEMENTS IN ROW K NOW
+         COUNT = MIN(IEK-ISK+1,TALEN)
+         CALL IBSORT(TALEN,COUNT,TA,ITCOL)
+         IF (COUNT.LT.20) THEN
+           CALL DBSORT(COUNT,ITCOL)
+         ELSE
+           CALL DHSORT(COUNT,ITCOL)
+         ENDIF
+
+*        PUT THE LARGEST ELEMENTS BACK INTO THE SPARSE DATA STRUCTURE
+         COUNT = 1
+         DO 500 J = ISK, IEK
+           A(J) = TA(ITCOL(COUNT))
+           JA(J) = ITCOL(COUNT)
+           ICLIST(J) = ICLPTR(ITCOL(COUNT))
+           ICLPTR(ITCOL(COUNT)) = J
+           IRVALS(J) = K
+           COUNT = COUNT + 1
+500      CONTINUE
+
+         DO 550 J = 1, TALEN
+           IOCCPY(ITCOL(J)) = 0
+550      CONTINUE
+
+600   CONTINUE
+
+*     RETURN A NON-NEGATIVE VALUE
+      JPICR = 0
+      RETURN
+
+*     IF AN ERROR OCCURED, RETURN A NEGATIVE VALUE
+650   CONTINUE
+      JPICR = -K
+      RETURN
+*****************************************************************
+*     END OF JPICR
+*****************************************************************
+      END
+*****************************************************************
+*      GET THE K LARGEST NONZEROES IN AKEYS INDIRECTLY ADDRESSED 
+*      BY INDVEC; UPON EXIT THE FIRST K ELEMENTS IN INDVEC WILL
+*      CONTAIN THE INDICES OF THE K LARGEST ELEMENTS IN AKEYS
+*****************************************************************
+       SUBROUTINE IBSORT(N,K,AKEYS,INDVEC)
+
+*      THE LENGTH OF THE INTEGER VECTOR
+       INTEGER N
+*      THE NUMBER WANTED
+       INTEGER K
+*      THE DOUBLE PRECISION VECTOR TO BE SORTED
+       DOUBLE PRECISION AKEYS(*)
+*      THE INTEGER VECTOR ASSOCIATED WITH AKEYS
+*      INDVEC(I) GIVES THE POSITION IN AKEYS OF THE ITH ELEMENT
+       INTEGER INDVEC(*)
+ 
+*      THE REST ARE INTERNAL VARIABLES
+       INTEGER I,J
+       INTEGER ITEMP, CURPTR, RIGHT, LEFT
+       DOUBLE PRECISION CURMIN, NEWVAL, CURVAL, LVAL
+
+       EXTERNAL IHSORT
+ 
+*****************************************
+*      START OF EXECUTABLE STATEMENTS
+*****************************************
+
+*      IF THE LIST IS SMALL OR THE NUMBER REQUIRED IS 0 THEN 
+*      RETURN
+       IF ((N.LE.1).OR.(K.LE.0)) RETURN
+
+*      HEAP SORT THE FIRST K ELEMENTS OF THE VECTOR
+       CALL IHSORT(K,INDVEC,AKEYS)
+
+*      LOOP THROUGH THE REST OF THE VECTOR AND FIND ANY ELEMENTS
+*      THAT ARE LARGER THAN ANY OF THE FIRST K ELEMENTS
+       CURMIN = ABS(AKEYS(INDVEC(K)))
+       DO 400 I = K+1, N
+          ITEMP = INDVEC(I)
+          NEWVAL = ABS(AKEYS(ITEMP))
+          IF (NEWVAL.GT.CURMIN) THEN
+*           FIND POSITION FOR NEW VALUE
+            LEFT = 1
+            LVAL = ABS(AKEYS(INDVEC(1)))
+            IF (NEWVAL.GT.LVAL) THEN
+              CURPTR = 1
+              GOTO 200
+            ENDIF
+            RIGHT = K
+            CURPTR = (K+1)/2
+100         CONTINUE            
+            IF (RIGHT.GT.LEFT+1) THEN
+              CURVAL = ABS(AKEYS(INDVEC(CURPTR)))
+              IF (CURVAL.LT.NEWVAL) THEN
+                RIGHT = CURPTR
+              ELSE
+                LEFT = CURPTR
+                LVAL = CURVAL
+              ENDIF
+              CURPTR = (RIGHT+LEFT)/2
+              GOTO 100
+            ENDIF
+            CURPTR = RIGHT
+
+*           SHIFT SORTED VALUES AND INSERT NEW VALUE
+200         CONTINUE
+            INDVEC(I) = INDVEC(K)
+            DO 300 J = K, CURPTR+1, -1
+              INDVEC(J) = INDVEC(J-1)
+300         CONTINUE
+            INDVEC(CURPTR) = ITEMP
+            CURMIN = ABS(AKEYS(INDVEC(K)))
+          ENDIF
+400    CONTINUE
+ 
+       RETURN
+*****************************************************************
+*      END OF IBSORT
+*****************************************************************
+       END
+*****************************************************************
+*      SORTS AN INTEGER VECTOR (USES BUBBLE SORT)
+*      ASCENDING ORDER
+*****************************************************************
+       SUBROUTINE DBSORT(N,KEYVEC)
+
+*      THE LENGTH OF THE VECTOR
+       INTEGER N
+*      THE INTEGER VECTOR TO BE SORTED
+       INTEGER KEYVEC(*)
+ 
+*      THE REST ARE INTERNAL VARIABLES
+       INTEGER I,J
+       INTEGER TEMP
+ 
+*****************************************
+*      START OF EXECUTABLE STATEMENTS
+*****************************************
+       DO 200 I = 1, N-1
+          DO 100 J = I+1, N
+             IF (KEYVEC(I).GT.KEYVEC(J)) THEN
+                TEMP = KEYVEC(I)
+                KEYVEC(I) = KEYVEC(J)
+                KEYVEC(J) = TEMP
+             ENDIF
+100       CONTINUE
+200    CONTINUE
+ 
+       RETURN
+*****************************************************************
+*      END OF DBSORT
+*****************************************************************
+       END
+*****************************************************************
+*      SORTS AN INTEGER VECTOR (USES HEAP SORT)
+*      ASCENDING ORDER
+*****************************************************************
+       SUBROUTINE DHSORT(LEN,KEYS)
+*      THE LENGTH OF THE ARRAY
+       INTEGER LEN
+*      THE ARRAY TO BE SORTED
+       INTEGER KEYS(*)
+
+*      THE REST ARE INTERNAL VARIABLES
+       INTEGER K, M, LHEAP, RHEAP, MID
+       INTEGER X
+
+*****************************************
+*      START OF EXECUTABLE STATEMENTS
+*****************************************
+       IF (LEN.LE.1) RETURN
+
+*      BUILD THE HEAP
+       MID = LEN/2
+       DO 300 K = MID, 1, -1
+          X = KEYS(K)
+          LHEAP = K
+          RHEAP = LEN
+          M = LHEAP*2
+100       CONTINUE
+             IF (M.GT.RHEAP) THEN
+                KEYS(LHEAP) = X
+                GOTO 200
+             ENDIF
+             IF (M.LT.RHEAP) THEN
+                IF (KEYS(M) .LT. KEYS(M+1)) M = M+1
+             ENDIF
+             IF (X.GE.KEYS(M)) THEN
+                M = RHEAP + 1
+             ELSE
+                KEYS(LHEAP) = KEYS(M)
+                LHEAP = M
+                M = 2*LHEAP
+             ENDIF
+             GOTO 100
+200       CONTINUE
+300    CONTINUE
+
+*      SORT THE HEAP
+       DO 600 K = LEN, 2, -1
+          X = KEYS(K)
+          KEYS(K) = KEYS(1)
+          LHEAP = 1
+          RHEAP = K-1
+          M = 2
+400       CONTINUE
+             IF (M.GT.RHEAP) THEN
+                KEYS(LHEAP) = X
+                GOTO 500
+             ENDIF
+             IF (M.LT.RHEAP) THEN
+                IF (KEYS(M) .LT. KEYS(M+1)) M = M+1
+             ENDIF
+             IF (X.GE.KEYS(M)) THEN
+                M = RHEAP + 1
+             ELSE
+                KEYS(LHEAP) = KEYS(M)
+                LHEAP = M
+                M = 2*LHEAP
+             ENDIF
+             GOTO 400
+500       CONTINUE
+600    CONTINUE
+
+       RETURN
+*****************************************************************
+*      END OF DHSORT
+*****************************************************************
+       END
+*****************************************************************
+*      SORTS A DOUBLE PRECISION VECTOR INDIRECTLY ADDRESSED BY
+*      AN INTEGER VECTOR(USES HEAP SORT)
+*      THE INDVEC IS REARRANGED SUCH THAT INDVEC(1) ADDRESSES
+*      THE LARGEST ELEMENT IN AKEYS, INDVEC(2) ADDRESSES THE
+*      NEXT LARGEST ....
+*****************************************************************
+       SUBROUTINE IHSORT(LEN,INDVEC,AKEYS)
+*      THE LENGTH OF THE INTEGER ARRAY
+       INTEGER LEN
+*      THE INTEGER ARRAY THAT INDIRECTLY ADDRESSES THE D.P. ARRAY
+       INTEGER INDVEC(*)
+*      THE ARRAY TO BE SORTED
+       DOUBLE PRECISION AKEYS(*)
+
+*      THE REST ARE INTERNAL VARIABLES
+       INTEGER K, M, LHEAP, RHEAP, MID
+       INTEGER X
+
+*****************************************
+*      START OF EXECUTABLE STATEMENTS
+*****************************************
+       IF (LEN.LE.1) RETURN
+
+*      BUILD THE HEAP
+       MID = LEN/2
+       DO 300 K = MID, 1, -1
+          X = INDVEC(K)
+          LHEAP = K
+          RHEAP = LEN
+          M = LHEAP*2
+100       CONTINUE
+             IF (M.GT.RHEAP) THEN
+                INDVEC(LHEAP) = X
+                GOTO 200
+             ENDIF
+             IF (M.LT.RHEAP) THEN
+                IF (ABS(AKEYS(INDVEC(M))).GT.ABS(AKEYS(INDVEC(M+1))))
+     C              M = M + 1
+             ENDIF
+             IF (ABS(AKEYS(X)).LE.ABS(AKEYS(INDVEC(M)))) THEN
+                M = RHEAP + 1
+             ELSE
+                INDVEC(LHEAP) = INDVEC(M)
+                LHEAP = M
+                M = 2*LHEAP
+             ENDIF
+             GOTO 100
+200       CONTINUE
+300    CONTINUE
+
+*      SORT THE HEAP
+       DO 600 K = LEN, 2, -1
+          X = INDVEC(K)
+          INDVEC(K) = INDVEC(1)
+          LHEAP = 1
+          RHEAP = K-1
+          M = 2
+400       CONTINUE
+             IF (M.GT.RHEAP) THEN
+                INDVEC(LHEAP) = X
+                GOTO 500
+             ENDIF
+             IF (M.LT.RHEAP) THEN
+                IF (ABS(AKEYS(INDVEC(M))).GT.ABS(AKEYS(INDVEC(M+1))))
+     C              M = M + 1
+             ENDIF
+             IF (ABS(AKEYS(X)).LE.ABS(AKEYS(INDVEC(M)))) THEN
+                M = RHEAP + 1
+             ELSE
+                INDVEC(LHEAP) = INDVEC(M)
+                LHEAP = M
+                M = 2*LHEAP
+             ENDIF
+             GOTO 400
+500       CONTINUE
+600    CONTINUE
+
+       RETURN
+*****************************************************************
+*      END OF IHSORT
+*****************************************************************
+       END
+c*** output
+ TEST DRIVER PROGRAM:
+ FOR EACH MATRIX, A, THREE DIFFERENT ALGORITHMS
+ FOR FINDING THE INCOMPLETE FACTORIZATION, L, ARE
+ USED. FOR EACH METHOD, WE COMPUTE N=L*L(T).  WE
+ THEN FIND M=A-N AND COMPUTE THE FROBENIUS NORM OF
+ THE LOWER SYMMETRIC HALF OF M AS WELL AS THE
+ LARGEST ABSOLUTE VALUE OF AN ELEMENT IN M.
+  
+ *******************************************
+ FACTORING A BANDED MATRIX:
+ EACH ALGORITHM COMPUTES THE EXACT FACTOR.
+ ON A SUN SPARC 10/51 THE RESULTS ARE:
+ STANDARD: F-NORM=1.17D-13, ABS VAL=4.26D-14
+ COLUMN  : F-NORM=1.17D-13, ABS VAL=4.26D-14
+ ROW     : F-NORM=1.17D-13, ABS VAL=4.26D-14
+ MATRIX ORDER =    50
+ NUMBER OF NONZEROS BELOW THE DIAGONAL =   925
+  
+ STANDARD FACTORIZATION RETURN VALUE IS     0
+ THE FROBENIUS NORM IS LESS THAN 1E-12
+ THE LARGEST ABSOLUTE VALUE IS LESS THAN 1E-12
+  
+ COLUMN FACTORIZATION RETURN VALUE IS     0
+ THE FROBENIUS NORM IS LESS THAN 1E-12
+ THE LARGEST ABSOLUTE VALUE IS LESS THAN 1E-12
+  
+ ROW FACTORIZATION RETURN VALUE IS     0
+ THE FROBENIUS NORM IS LESS THAN 1E-12
+ THE LARGEST ABSOLUTE VALUE IS LESS THAN 1E-12
+  
+ *******************************************
+ FACTORING AN ARROWHEAD MATRIX:
+ ON A SUN SPARC 10/51 THE RESULTS ARE:
+ STANDARD: F-NORM=4.82D-01, ABS VAL=5.00D-02
+ COLUMN  : F-NORM=3.22D-01, ABS VAL=6.01D-02
+ ROW     : F-NORM=1.10D+00, ABS VAL=9.97D-01
+ MATRIX ORDER =    20
+ NUMBER OF NONZEROS BELOW THE DIAGONAL =    97
+  
+ STANDARD FACTORIZATION RETURN VALUE IS     0
+ THE FROBENIUS NORM IS     4.82D-01
+ THE LARGEST ABSOLUTE VALUE IS    5.00D-02
+  
+ COLUMN FACTORIZATION RETURN VALUE IS     0
+ THE FROBENIUS NORM IS     3.22D-01
+ THE LARGEST ABSOLUTE VALUE IS    6.01D-02
+  
+ ROW FACTORIZATION RETURN VALUE IS     0
+ THE FROBENIUS NORM IS     1.10D+00
+ THE LARGEST ABSOLUTE VALUE IS    9.97D-01
+  
+ *******************************************
+ FACTORING A 2-D LAPLACIAN WITH
+ 5-POINT STENCIL:
+ EACH ALGORITHM PERFORMS ROUGHLY THE SAME.
+ ON A SUN SPARC 10/51 THE RESULTS ARE:
+ STANDARD: F-NORM=1.12D+00, ABS VAL=2.93D-01
+ COLUMN  : F-NORM=1.13D+00, ABS VAL=2.96D-01
+ ROW     : F-NORM=1.13D+00, ABS VAL=2.96D-01
+ MATRIX ORDER =    25
+ NUMBER OF NONZEROS BELOW THE DIAGONAL =    40
+  
+ STANDARD FACTORIZATION RETURN VALUE IS     0
+ THE FROBENIUS NORM IS     1.12D+00
+ THE LARGEST ABSOLUTE VALUE IS    2.93D-01
+  
+ COLUMN FACTORIZATION RETURN VALUE IS     0
+ THE FROBENIUS NORM IS     1.13D+00
+ THE LARGEST ABSOLUTE VALUE IS    2.96D-01
+  
+ ROW FACTORIZATION RETURN VALUE IS     0
+ THE FROBENIUS NORM IS     1.13D+00
+ THE LARGEST ABSOLUTE VALUE IS    2.96D-01
+  
+ *******************************************
+ FACTORING A SIMPLE 4X4 SPARSE MATRIX:
+ EACH OF THE ALGORITHMS WILL FAIL TO FACTOR
+ THE MATRIX AND GIVE A RETURN CODE OF -4.
+ ON A SUN SPARC 10/51 THE RESULTS ARE:
+ STANDARD: F-NORM=1.12D+00, ABS VAL=1.00D+00
+ COLUMN  : F-NORM=1.12D+00, ABS VAL=1.00D+00
+ ROW     : F-NORM=4.59D+00, ABS VAL=4.01D+00
+ MATRIX ORDER =     4
+ NUMBER OF NONZEROS BELOW THE DIAGONAL =     3
+  
+ STANDARD FACTORIZATION RETURN VALUE IS    -4
+ THE FROBENIUS NORM IS     1.12D+00
+ THE LARGEST ABSOLUTE VALUE IS    1.00D+00
+  
+ COLUMN FACTORIZATION RETURN VALUE IS    -4
+ THE FROBENIUS NORM IS     1.12D+00
+ THE LARGEST ABSOLUTE VALUE IS    1.00D+00
+  
+ ROW FACTORIZATION RETURN VALUE IS    -4
+ THE FROBENIUS NORM IS     4.59D+00
+ THE LARGEST ABSOLUTE VALUE IS    4.01D+00

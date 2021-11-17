@@ -1,0 +1,1626 @@
+
+This is a list of the files for version 1.2 of FMLIB.
+
+1.  FMSAVE.f90        Module for FM internal global variables
+
+2.  FMZM90.f90        Modules for interfaces and definitions of derived-types
+
+3.  FM.f90            Subroutine library for multiple-precision operations
+
+4.  TestFM.f90        Test program for most of the FM routines
+
+5.  SampleFM.f90      Small sample program using FM
+
+6.  SAMPLE.CHK        Expected output file SAMPLE.LOG from SampleFM.f90
+
+
+Here is an example set of compiler/linker commands for building
+the programs.  For lines on which there is no *.f90 file listed,
+the f90 script skips the compiler and calls the linker.
+Options:
+      -c       compile to object code -- don't make executable
+      -O       optimization on
+      -f free  Fortran-90 free source form
+      -o       output file name
+
+
+f90   FMSAVE.f90  -c  -f free   -o FMSAVE.o
+
+
+f90   FMZM90.f90  -c  -f free   -o FMZM90.o
+
+
+f90   FM.f90  -O  -c  -f free   -o FM.o
+
+
+f90   TestFM.f90  -c  -f free   -o TestFM.o
+
+f90   TestFM.o    FMSAVE.o    FMZM90.o     FM.o      -o TestFM
+
+
+f90   SampleFM.f90  -c    -f free   -o  SampleFM.o
+
+f90   SampleFM.o    FMSAVE.o     FMZM90.o      FM.o     -o SampleFM
+
+
+Basically the first three files are compiled as object code libraries, and
+then a program using FM is compiled and linked to those three libraries.
+
+Most compilers also produce files FMVALS.mod, FMZM.mod, etc., containing
+module information from the first two files.
+
+
+Troubleshooting
+
+1.  After downloading the files, if the compiler gives many error messages or
+    it appears to see no code in the file at all, check that the lines in the
+    file have the proper end-of-line characters for your system.
+
+    For a PC, this means each line should end with both a carriage return <cr>
+    character (ascii 13) and a line feed <lf> character (ascii 10).  If the
+    file appears to be one huge line when viewed in an editor, one of these
+    two characters is probably missing and should be added to each line.
+
+    To use FM on a Unix system, lines end with <lf>, and for a Mac system they
+    end with <cr>.  On these systems, failing to fix the end-of-line characters
+    might mean the file seems to have twice the expected number of lines, with
+    a blank line between each line of code when viewed in an editor.
+
+    Many good editors will recognize a foreign end-of-line format and
+    automatically fix each file the first time it is opened.
+
+2.  Compiler gives an "out of memory" error message or crashes during compile
+    of FM.f90 or FMZM90.f90.
+
+    It might be necessary to break the file into smaller pieces or split it
+    into separate files for each routine or module.  This could be caused by
+    lack of system memory, lack of virtual memory, or a bug (memory leak) in
+    the compiler.
+
+    Some compilers have an option (-split) to do this automatically.
+
+3.  Most of the routines compile, but a few fail with error messages like
+    "symbol 120 is not the label of a branch target statement".
+    However, looking at the code shows there is a label 120 in that routine.
+
+    This might happen in the larger routines.  Some compilers may require
+    additional options be enabled (e.g., to force 32-bit branches or addresses
+    to be used).  Check in the compiler manual and try turning on any options
+    that mention "long branches", "32-bit addresses", etc.
+
+4.  All files compile, but the TestFM program reports a few errors when it runs.
+    There are other possibilities, but one thing to check is whether the
+    compiler has any options controlling arithmetic precision of intermediate
+    results.
+
+    Because the FM numbers are stored as integer values in double precision
+    arrays, any sloppy rounding can cause problems.  In one case, a compiler
+    optimized an expression by leaving the result of a division in an 80-bit
+    register and then used that result later in the calculation.  Rounding
+    the division back to double precision would have fixed the error, but
+    using the inaccurate extended precision value caused the final result to
+    be off by one when it was returned to an integer value.
+
+    This compiler had an option (-ap) to force intermediate results to not be
+    left in registers, and that fixed the problem.
+
+    Another way to check to see if this is the problem is to create a version
+    of FM that uses integer arrays instead of double precision.  See the section
+    titled "EFFICIENCY" below to see how to make this change.  On most machines,
+    there is little if any speed penalty for using integer arrays as long as the
+    precision is under 100 significant digits (i.e., NDIG < 15 or so with MBASE
+    = 10**7).
+
+5.  Several messages like this appear:
+    C:\t\FMZM90.f90(6563) : Info: This variable has not been used. [MA]
+      FUNCTION FMTINY_ZM(MA)
+
+    This and the other messages of the same type are not errors.  The argument
+    for functions like TINY is not used for anything except telling the
+    compiler which routine to call by checking the argument's type.  The same
+    is true of the Fortran intrinsic function TINY.  If we say TINY(1.0) or
+    TINY(2.0), the input argument is not used, other than to indicate that we
+    want the single precision value of TINY.
+
+
+
+================================================================================
+================================================================================
+
+
+                    USER'S GUIDE FOR THE FM PACKAGE
+
+
+The various lists of available multiple precision operations and
+routines have been collected here, along with some general advice
+on using the package.
+
+See the program SampleFM.f90 for some examples of initializing and
+using the package.
+
+
+INITIALIZATION:    The default precision for the multiple-precision numbers
+                   is about 50 significant digits.
+
+                   To set precision to a different value, put
+      CALL FMSET(N)
+                   in the main program before any multiple precision
+                   operations are done, with N replaced by the number
+                   of decimal digits of accuracy to be used.
+
+ROUTINE NAMES:     For each multiple precision operation there are
+                   several routines with related names that perform
+                   variations of that operation.  For example, the
+                   addition operation has these forms:
+
+                   Using the Fortran-90 interface module, to perform
+                   real (floating-point) multiple precision addition,
+                   declare the variables as FM derived types with
+
+      USE FMZM
+      TYPE ( FM ) A,B,C
+
+                   and then add using
+
+      C = A + B
+
+                   Normally, using the interface module avoids the need
+                   to know the name of the FM routine being called.  For
+                   some operations, usually those that are not Fortran-90
+                   functions (such as formatting a number), a direct call
+                   may be needed.  The addition above can be done as
+
+      CALL FM_ADD(A,B,C)
+
+                   It is rare for a program to bypass the derived types
+                   and work directly with the arrays that define the
+                   multiple-precision numbers.  The only real drawback
+                   to using the derived types is a small performance
+                   penalty (that varies from one compiler to another).
+                   If FM.f90 is used without the interface module, then
+                   the multiple precision numbers are declared as arrays
+
+      DOUBLE PRECISION A(-1:LUNPCK),B(-1:LUNPCK),C(-1:LUNPCK)
+
+                   where LUNPCK is defined in FMSAVE.f90.  The numbers are
+                   then added by calling the FM routine where the arguments
+                   are assumed to be arrays, not TYPE (FM) derived types:
+
+      CALL FMADD(A,B,C)
+
+                   For each of the routines listed below (like FMADD),
+                   there is a version that assumes the arguments have
+                   the appropriate derived type.  These have the same
+                   names, except "_" has been inserted after the first
+                   two letters of the name (like FM_ADD).
+
+                   If direct calls are done instead of using the
+                   interface module, there is another form for these
+                   routine names that is used when the arrays have been
+                   declared in a packed format that takes roughly half
+                   as much space:
+
+      DOUBLE PRECISION A(-1:LPACK),B(-1:LPACK),C(-1:LPACK)
+
+                   The routines that work with packed arrays have names
+                   where the second letter has been changed from M to P:
+
+      CALL FPADD(A,B,C)
+
+                   The packed versions are slower.
+
+                   For multiple precision integer (IM) or complex (ZM)
+                   operations there are similar Fortran-90 derived types
+                   and the various routines:
+
+      USE FMZM
+      ...
+      TYPE ( IM ) A,B,C
+      TYPE ( ZM ) X,Y,Z
+      ...
+      C = A + B
+      ...
+      Z = X + Y
+
+                   with explicit calls of the form
+
+      CALL IM_ADD(A,B,C)
+      CALL ZM_ADD(X,Y,Z)
+
+                   Without using the interface module:
+
+      DOUBLE PRECISION A(-1:LUNPCK),B(-1:LUNPCK),C(-1:LUNPCK)
+      DOUBLE PRECISION X(-1:LUNPKZ),Y(-1:LUNPKZ),Z(-1:LUNPKZ)
+      ...
+      CALL IMADD(A,B,C)
+      ...
+      CALL ZMADD(X,Y,Z)
+
+                   Packed format without the interface module:
+
+      DOUBLE PRECISION A(-1:LPACK),B(-1:LPACK),C(-1:LPACK)
+      DOUBLE PRECISION X(-1:LPACKZ),Y(-1:LPACKZ),Z(-1:LPACKZ)
+      ...
+      CALL IPADD(A,B,C)
+      ...
+      CALL ZPADD(X,Y,Z)
+
+
+
+--------------------------------------------------------------------------------
+-----------------------   Fortran-90 Interface Notes   -------------------------
+
+
+
+
+There are three multiple precision data types:
+   FM  (multiple precision real)
+   IM  (multiple precision integer)
+   ZM  (multiple precision complex)
+
+Some of the interface routines assume that the precision chosen in the
+calling program (using FMSET) represents more significant digits than does
+the machine's double precision.
+
+Most of the functions defined in this module are multiple precision versions
+of standard Fortran-90 functions.  In addition, there are functions for
+direct conversion, formatting, and some mathematical special functions.
+
+TO_FM is a function for converting other types of numbers to type FM.  Note
+that TO_FM(3.12) converts the REAL constant to FM, but it is accurate only
+to single precision.  TO_FM(3.12D0) agrees with 3.12 to double precision
+accuracy, and TO_FM('3.12') or TO_FM(312)/TO_FM(100) agrees to full FM
+accuracy.
+
+TO_IM converts to type IM, and TO_ZM converts to type ZM.
+
+Functions are also supplied for converting the three multiple precision types
+to the other numeric data types:
+   TO_INT   converts to machine precision integer
+   TO_SP    converts to single precision
+   TO_DP    converts to double precision
+   TO_SPZ   converts to single precision complex
+   TO_DPZ   converts to double precision complex
+
+WARNING:   When multiple precision type declarations are inserted in an
+           existing program, take care in converting functions like DBLE(X),
+           where X has been declared as a multiple precision type.  If X
+           was single precision in the original program, then replacing
+           the DBLE(X) by TO_DP(X) in the new version could lose accuracy.
+           For this reason, the Fortran type-conversion functions defined
+           in this module assume that results should be multiple precision
+           whenever inputs are.  Examples:
+           DBLE(TO_FM('1.23E+123456')) is type FM
+           REAL(TO_FM('1.23E+123456')) is type FM
+           REAL(TO_ZM('3.12+4.56i'))   is type FM   = TO_FM('3.12')
+           INT(TO_FM('1.23'))          is type IM   = TO_IM(1)
+           INT(TO_IM('1E+23'))         is type IM
+           CMPLX(TO_FM('1.23'),TO_FM('4.56')) is type ZM
+
+Programs using this module may sometimes need to call FM, IM, or ZM routines
+directly.  This is normally the case when routines are needed that are not
+Fortran-90 intrinsics, such as the formatting subroutine FMFORM.  In a
+program using this module, suppose MAFM has been declared with
+TYPE ( FM ) MAFM.  To use the routine FMFORM, which expects the second
+argument to be an array and not a derived type, the call would have to be
+CALL FMFORM('F65.60',MAFM%MFM,ST1) so that the array contained in MAFM is
+passed.
+
+As an alternative so the user can refer directly to the FM-, IM-, and ZM-type
+variables and avoid the cumbersome "%MFM" suffixes, the FM package provides a
+collection of interface routines to supply any needed argument conversions.
+For each FM, IM, and ZM routine that is designed to be called by the user,
+there is also a version that assumes any multiple-precision arguments are
+derived types instead of arrays.  Each interface routine has the same name as
+the original with an underscore after the first two letters of the routine
+name.  To convert the number to a character string with F65.60 format, use
+CALL FM_FORM('F65.60',MAFM,ST1) if MAFM is of TYPE ( FM ), or use
+CALL FMFORM('F65.60',MA,ST1) if MA is declared as an array.  All the routines
+shown below may be used this way.
+
+For each of the operations =,  == ,  /= ,  < ,  <= ,  > ,  >= , +, -, *, /,
+and **, the interface module defines all mixed mode variations involving one
+of the three multiple precision derived types and another argument having one
+of the types: { integer, real, double, complex, complex double, FM, IM, ZM }.
+So mixed mode expressions such as
+      MAFM = 12
+      MAFM = MAFM + 1
+      IF (ABS(MAFM) > 1.0D-23) THEN
+are handled correctly.
+
+Not all the named functions are defined for all three multiple precision
+derived types, so the list below shows which can be used.  The labels "real",
+"integer", and "complex" refer to types FM, IM, and ZM respectively, "string"
+means the function accepts character strings (e.g., TO_FM('3.45')), and
+"other" means the function can accept any of the machine precision data types
+integer, real, double, complex, or complex double.  For functions that accept
+two or more arguments, like ATAN2 or MAX, all the arguments must be of the
+same type.
+
+
+AVAILABLE OPERATIONS:
+
+   =
+   +
+   -
+   *
+   /
+   **
+   ==
+   /=
+   <
+   <=
+   >
+   >=
+   ABS          real    integer    complex
+   ACOS         real               complex
+   AIMAG                           complex
+   AINT         real               complex
+   ANINT        real               complex
+   ASIN         real               complex
+   ATAN         real               complex
+   ATAN2        real
+   BTEST                integer
+   CEILING      real               complex
+   CMPLX        real    integer
+   CONJ                            complex
+   COS          real               complex
+   COSH         real               complex
+   DBLE         real    integer    complex
+   DIGITS       real    integer    complex
+   DIM          real    integer
+   DINT         real               complex
+   DOTPRODUCT   real    integer    complex
+   EPSILON      real
+   EXP          real               complex
+   EXPONENT     real
+   FLOOR        real    integer    complex
+   FRACTION     real               complex
+   HUGE         real    integer    complex
+   INT          real    integer    complex
+   LOG          real               complex
+   LOG10        real               complex
+   MATMUL       real    integer    complex
+   MAX          real    integer
+   MAXEXPONENT  real
+   MIN          real    integer
+   MINEXPONENT  real
+   MOD          real    integer
+   MODULO       real    integer
+   NEAREST      real
+   NINT         real    integer    complex
+   PRECISION    real               complex
+   RADIX        real    integer    complex
+   RANGE        real    integer    complex
+   REAL         real    integer    complex
+   RRSPACING    real
+   SCALE        real               complex
+   SETEXPONENT  real
+   SIGN         real    integer
+   SIN          real               complex
+   SINH         real               complex
+   SPACING      real
+   SQRT         real               complex
+   TAN          real               complex
+   TANH         real               complex
+   TINY         real    integer    complex
+   TO_FM        real    integer    complex    string    other
+   TO_IM        real    integer    complex    string    other
+   TO_ZM        real    integer    complex    string    other
+   TO_INT       real    integer    complex
+   TO_SP        real    integer    complex
+   TO_DP        real    integer    complex
+   TO_SPZ       real    integer    complex
+   TO_DPZ       real    integer    complex
+
+Some other functions are defined that do not correspond to machine precision
+intrinsic functions.  These include formatting functions, integer modular
+functions and GCD, and the Gamma function and its related functions.
+N below is a machine precision integer, J1, J2, J3 are TYPE (IM), FMT, FMTR,
+FMTI are character strings, A,B,X are TYPE (FM), and Z is TYPE (ZM).
+The three formatting functions return a character string containing the
+formatted number, the three TYPE (IM) functions return a TYPE (IM) result,
+and the 12 special functions return TYPE (FM) results.
+
+Formatting functions:
+
+   FM_FORMAT(FMT,A)        Put A into FMT (real) format
+   IM_FORMAT(FMT,J1)       Put J1 into FMT (integer) format
+   ZM_FORMAT(FMTR,FMTI,Z)  Put Z into (complex) format, FMTR for the real
+                           part and FMTI for the imaginary part
+
+   Examples:
+      ST = FM_FORMAT('F65.60',A)
+      WRITE (*,*) ' A = ',TRIM(ST)
+      ST = FM_FORMAT('E75.60',B)
+      WRITE (*,*) ' B = ',ST(1:75)
+      ST = IM_FORMAT('I50',J1)
+      WRITE (*,*) ' J1 = ',ST(1:50)
+      ST = ZM_FORMAT('F35.30','F30.25',Z)
+      WRITE (*,*) ' Z = ',ST(1:70)
+
+   These functions are used for one-line output.  The returned character
+   strings are of length 200.  Avoid using the formatting function in the
+   write list, as in
+      WRITE (*,*) ' J1 = ',IM_FORMAT('I50',J1)(1:50)
+   since the formatting functions may themselves execute an internal WRITE
+   and that would cause a recursive write reference.
+
+   For higher precision numbers, the output can be broken onto multiple
+   lines automatically by calling subroutines FM_PRNT, IM_PRNT, ZM_PRNT,
+   or the line breaks can be done by hand after calling one of the
+   subroutines FM_FORM, IM_FORM, ZM_FORM.
+
+   For ZM_FORMAT the length of the output is 5 more than the sum of the
+   two field widths.
+
+Integer functions:
+
+   GCD(J1,J2)              Greatest Common Divisor of J1 and J2.
+   MULTIPLY_MOD(J1,J2,J3)  J1 * J2 mod J3
+   POWER_MOD(J1,J2,J3)     J1 ** J2 mod J3
+
+Special functions:
+
+   BERNOULLI(N)            Nth Bernoulli number
+   BETA(A,B)               Integral (0 to 1)  t**(A-1) * (1-t)**(B-1)  dt
+   BINOMIAL(A,B)           Binomial Coefficient  A! / ( B! (A-B)! )
+   FACTORIAL(A)            A!
+   GAMMA(A)                Integral (0 to infinity)  t**(A-1) * exp(-t)  dt
+   INCOMPLETE_BETA(X,A,B)  Integral (0 to X)  t**(A-1) * (1-t)**(B-1)  dt
+   INCOMPLETE_GAMMA1(A,X)  Integral (0 to X)  t**(A-1) * exp(-t)  dt
+   INCOMPLETE_GAMMA2(A,X)  Integral (X to infinity)  t**(A-1) * exp(-t)  dt
+   LOG_GAMMA(A)            Ln( GAMMA(A) )
+   POLYGAMMA(N,A)          Nth derivative of Psi(x), evaluated at A
+   POCHHAMMER(A,N)         A*(A+1)*(A+2)*...*(A+N-1)
+   PSI(A)                  Derivative of Ln(Gamma(x)), evaluated at A
+
+
+
+--------------------------------------------------------------------------------
+------------------------------   FM.f90 Notes   --------------------------------
+
+
+
+The routines in this package perform multiple precision arithmetic and
+functions on three kinds of numbers.
+FM routines handle floating-point real multiple precision numbers,
+IM routines handle integer multiple precision numbers, and
+ZM routines handle floating-point complex multiple precision numbers.
+
+
+1. INITIALIZING THE PACKAGE
+
+The variables that contain values to be shared among the different routines
+are located in module FMVALS in file FMSAVE.f90.  Variables that are described
+below for controlling various features of the FM package are found in this
+module.  They are initialized to default values assuming 32-bit integers and
+64-bit double precision representation of the arrays holding multiple
+precision numbers.  The base and number of digits to be used are initialized
+to give slightly more than 50 decimal digits.  Subroutine FMVARS can be used
+to get a list of these variables and their values.
+
+The intent of module FMVALS is to hide the FM internal variables from the
+user's program, so that no name conflicts can occur.  Subroutine FMSETVAR can
+be used to change the variables listed below to new values.  It is not always
+safe to try to change these variables directly by putting USE FMVALS into the
+calling program and then changing them by hand.  Some of the saved constants
+depend upon others, so that changing one variable may cause errors if others
+depending on that one are not also changed.  FMSETVAR automatically updates
+any others that depend upon the one being changed.
+
+Subroutine FMSET also initializes these variables.  It tries to compute the
+best value for each, and it checks several of the values set in FMVALS to see
+that they are reasonable for a given machine.  FMSET can also be called to
+set or change the current precision level for the multiple precision numbers.
+
+Calling FMSET is optional in version 1.2 of the FM package.  In previous
+versions one call was required before any other routine in the package could
+be used.
+
+The routine ZMSET from version 1.1 is no longer needed, and the complex
+operations are automatically initialized in FMVALS.  It has been left in the
+package for compatibility with version 1.1.
+
+
+2.  REPRESENTATION OF FM NUMBERS
+
+MBASE is the base in which the arithmetic is done.  MBASE must be
+      bigger than one, and less than or equal to the square root of
+      the largest representable integer.  For best efficiency MBASE
+      should be large, but no more than about 1/4 of the square root
+      of the largest representable integer.  Input and output
+      conversions are much faster when MBASE is a power of ten.
+
+NDIG  is the number of base MBASE digits that are carried in the
+      multiple precision numbers.  NDIG must be at least two.  The
+      upper limit for NDIG is defined in FMVALS and is restricted
+      only by the amount of memory available.
+
+Sometimes it is useful to dynamically vary NDIG during the program.  Routine
+FMEQU should be used to round numbers to lower precision or zero-pad them to
+higher precision when changing NDIG.
+
+The default value of MBASE is a large power of ten.  FMSET also sets MBASE to
+a large power of ten.  For an application where another base is used, such as
+simulating a given machine's base two arithmetic, use subroutine FMSETVAR to
+change MBASE, so that the other internal values depending on MBASE will be
+changed accordingly.
+
+There are two representations for a floating point multiple precision number.
+The unpacked representation used by the routines while doing the computations
+is base MBASE and is stored in NDIG+2 words.  A packed representation is
+available to store the numbers in the user's program in compressed form.  In
+this format, the NDIG (base MBASE) digits of the mantissa are packed two per
+word to conserve storage.  Thus the external, packed form of a number
+requires (NDIG+1)/2+2 words.
+
+This version uses double precision arrays to hold the numbers.  Version 1.0
+of FM used integer arrays, which are faster on some machines.  The package
+can be changed to use integer arrays --- see section 11 on EFFICIENCY below.
+
+The unpacked format of a floating multiple precision number is as follows.
+A number MA is kept in an array with MA(1) containing the exponent, and
+MA(2) through MA(NDIG+1) each containing one digit of the mantissa, expressed
+in base MBASE.  The array is dimensioned to start at MA(-1), with the
+sign of the number (+1 or -1) held in MA(-1), and the  approximate number
+of bits of precision stored in MA(0).  This precision value is intended to
+be used by FM functions that need to monitor cancellation error in addition
+and subtraction.  The cancellation monitor code is usually disabled for user
+calls, and FM functions only check for cancellation when they must.  Tracking
+cancellation causes most routines to run slower, with addition and
+subtraction being affected the most.  The exponent is a power of MBASE and
+the implied radix point is immediately before the first digit of the
+mantissa.  Every nonzero number is normalized so that the second array
+element (the first digit of the mantissa) is nonzero.
+
+In both representations the sign of the number is carried on the second array
+element only.  Elements 3,4,... are always nonnegative.  The exponent is a
+signed integer and may be as large in magnitude as MXEXP.
+
+For MBASE = 10,000 and NDIG = 4, the number -pi would have these
+representations:
+                 Word 1         2         3         4         5
+
+       Unpacked:      1        -3      1415      9265      3590
+       Packed:        1    -31415  92653590
+
+In both formats MA(0) would be 42, indicating that the mantissa has about 42
+bits of precision, and MA(-1) = -1 since the number is negative.
+
+Because of normalization in a large base, the equivalent number of base 10
+significant digits for an FM number may be as small as
+LOG10(MBASE)*(NDIG-1) + 1.
+
+The integer routines use the FM format to represent numbers, without the
+number of digits (NDIG) being fixed.  Integers in IM format are essentially
+variable precision, using the minimum number of words to represent each
+value.
+
+For programs using both FM and IM numbers, FM routines should not be called
+with IM numbers, and IM routines should not be called with FM numbers, since
+the implied value of NDIG used for an IM number may not match the explicit
+NDIG expected by an FM routine.  Use the conversion routines IMFM2I and
+IMI2FM to change between the FM and IM formats.
+
+The format for complex FM numbers (called ZM numbers below) is very similar
+to that for real FM numbers.  Each ZM array holds two FM numbers to represent
+the real and imaginary parts of a complex number.  Each ZM array is twice as
+long as a corresponding FM array, with the imaginary part starting at the
+midpoint of the array.  As with FM, there are packed and unpacked formats for
+the numbers.
+
+
+3. INPUT/OUTPUT ROUTINES
+
+All versions of the input routines perform free-format conversion from
+characters to FM numbers.
+
+a. Conversion to or from a character array
+
+   FMINP converts from a character*1 array to an FM number.
+
+   FMOUT converts an FM number to base 10 and formats it for output as an
+         array of type character*1.  The output is left justified in the
+         array, and the format is defined by two variables in module FMVALS,
+         so that a separate format definition does not have to be provided
+         for each output call.
+
+   JFORM1 and JFORM2 define a default output format.
+
+   JFORM1 = 0     E   format       ( .314159M+6 )
+          = 1     1PE format       ( 3.14159M+5 )
+          = 2     F   format       ( 314159.000 )
+
+   JFORM2 is the number of significant digits to display (if JFORM1 =
+          0 or 1).  If JFORM2 = 0 then a default number of digits is chosen.
+          The default is roughly the full precision of the number.
+   JFORM2 is the number of digits after the decimal point (if JFORM1 = 2).
+          See the FMOUT documentation for more details.
+
+b. Conversion to or from a character string
+
+   FMST2M converts from a character string to an FM number.
+
+   FMFORM converts an FM number to a character string according to a format
+          provided in each call.  The format description is more like that of
+          a Fortran FORMAT statement, and integer or fixed-point output is
+          right justified.
+
+c. Direct read or write
+
+   FMPRNT uses FMOUT to print one FM number.
+
+   FMFPRT uses FMFORM to print one FM number.
+
+   FMWRIT writes FM numbers for later input using FMREAD.
+
+   FMREAD reads FM numbers written by FMWRIT.
+
+The values given to JFORM1 and JFORM2 can be used to define a default output
+format when FMOUT or FMPRNT are called.  The explicit format used in a call
+to FMFORM or FMFPRT overrides the settings of JFORM1 and JFORM2.
+
+KW is the unit number to be used for standard output from the package,
+   including error and warning messages, and trace output.
+
+For multiple precision integers, the corresponding routines IMINP, IMOUT,
+IMST2M, IMFORM, IMPRNT, IMFPRT, IMWRIT, and IMREAD provide similar input and
+output conversions.  For output of IM numbers, JFORM1 and JFORM2 are ignored
+and integer format (JFORM1=2, JFORM2=0) is used.
+
+For ZM numbers, the corresponding routines ZMINP, ZMOUT, ZMST2M, ZMFORM,
+ZMPRNT, ZMFPRT, ZMWRIT, and ZMREAD provide similar input and output
+conversions.
+
+For the output format of ZM numbers, JFORM1 and JFORM2 determine the default
+format for the individual parts of a complex number as with FM numbers.
+
+   JFORMZ determines the combined output format of the real and
+          imaginary parts.
+
+   JFORMZ = 1  normal setting    :    1.23 - 4.56 i
+          = 2  use capital I     :    1.23 - 4.56 I
+          = 3  parenthesis format:  ( 1.23 , -4.56 )
+
+   JPRNTZ controls whether to print real and imaginary parts
+          on one line whenever possible.
+
+   JPRNTZ = 1  print both parts as a single string :
+                   1.23456789M+321 - 9.87654321M-123 i
+          = 2  print on separate lines without the 'i' :
+                   1.23456789M+321
+                  -9.87654321M-123
+
+For further description of these routines, see sections 9 and 10 below.
+
+
+4. ARITHMETIC TRACING
+
+NTRACE and LVLTRC control trace printout from the package.
+
+NTRACE =  0   No output except warnings and errors.  (Default)
+       =  1   The result of each call to one of the routines
+                 is printed in base 10, using FMOUT.
+       = -1   The result of each call to one of the routines
+                 is printed in internal base MBASE format.
+       =  2   The input arguments and result of each call to one
+                 of the routines is printed in base 10, using FMOUT.
+       = -2   The input arguments and result of each call to one
+                 of the routines is printed in base MBASE format.
+
+LVLTRC defines the call level to which the trace is done.  LVLTRC = 1
+       means only FM routines called directly by the user are traced,
+       LVLTRC = 2 also prints traces for FM routines called by other
+       FM routines called directly by the user, etc.  Default is 1.
+
+In the above description, internal MBASE format means the number is
+printed as it appears in the array --- an exponent followed by NDIG
+base MBASE digits.
+
+
+5. ERROR CONDITIONS
+
+KFLAG is a condition value returned by the package after each call to one of
+      the routines.  Negative values indicate conditions for which a warning
+      message will be printed unless KWARN = 0.
+      Positive values indicate conditions that may be of interest but are not
+      errors.  No warning message is printed if KFLAG is nonnegative.
+
+Subroutine FMFLAG is provided to give the user access to the current
+condition code.  For example, to set the user's local variable LFLAG
+to FM's internal KFLAG value:      CALL FMFLAG(LFLAG)
+
+  KFLAG =  0     Normal operation.
+
+        =  1     One of the operands in FMADD or FMSUB was insignificant with
+                     respect to the other, so that the result was equal to
+                     the argument of larger magnitude.
+        =  2     In converting an FM number to a one word integer in FMM2I,
+                     the FM number was not exactly an integer.  The next
+                     integer toward zero was returned.
+
+        = -1     NDIG was less than 2 or more than NDIGMX.
+        = -2     MBASE was less than 2 or more than MXBASE.
+        = -3     An exponent was out of range.
+        = -4     Invalid input argument(s) to an FM routine.
+                      UNKNOWN was returned.
+        = -5     + or - OVERFLOW was generated as a result from an
+                      FM routine.
+        = -6     + or - UNDERFLOW was generated as a result from an
+                      FM routine.
+        = -7     The input string (array) to FMINP was not legal.
+        = -8     The character array was not large enough in an
+                 input or output routine.
+        = -9     Precision could not be raised enough to provide all
+                      requested guard digits.  Increasing the value
+                      of NDIGMX in file FMSAVE.f90 may fix this.
+                      UNKNOWN was returned.
+        = -10    An FM input argument was too small in magnitude to
+                      convert to the machine's single or double
+                      precision in FMM2SP or FMM2DP.  Check that the
+                      definitions of SPMAX and DPMAX in file FMSAVE.f90
+                      are correct for the current machine.
+                      Zero was returned.
+        = -11    Array MBERN is not dimensioned large enough for the
+                      requested number of Bernoulli numbers.
+        = -12    Array MJSUMS is not dimensioned large enough for
+                      the number of coefficients needed in the
+                      reflection formula in FMPGAM.
+
+When a negative KFLAG condition is encountered, the value of KWARN
+determines the action to be taken.
+
+KWARN = 0     Execution continues and no message is printed.
+      = 1     A warning message is printed and execution continues.
+      = 2     A warning message is printed and execution stops.
+
+The default setting is KWARN = 1.
+
+When an overflow or underflow is generated for an operation in which an input
+argument was already an overflow or underflow, no additional message is
+printed.  When an unknown result is generated and an input argument was
+already unknown, no additional message is printed.  In these cases the
+negative KFLAG value is still returned.
+
+IM routines handle exceptions like OVERFLOW or UNKNOWN in the same way as FM
+routines.  When using IMMPY, the product of two large positive integers will
+return +OVERFLOW.  The routines IMMPYM and IMPMOD can be used to obtain a
+modular result without overflow.  The largest representable IM integer is
+MBASE**NDIGMX - 1.  For example, if MBASE is 10**7 and NDIGMX is set to 256,
+integers less than 10**1792 can be used.
+
+
+6. OTHER OPTIONS
+
+KRAD = 0     All angles in the trigonometric functions and inverse functions
+             are measured in degrees.
+     = 1     All angles are measured in radians.  (Default)
+
+KROUND = -1  All results are rounded toward minus infinity.
+       =  0  All results are rounded toward zero (chopped).
+       =  1  All results are rounded to the nearest FM number, or to the
+             value with an even last digit if the result is halfway
+             between two FM numbers.  (Default)
+       =  2  All results are rounded toward plus infinity.
+
+       In all cases, while a function is being computed all intermediate
+       results are rounded to nearest, with only the final result being
+       rounded according to KROUND.
+
+KRPERF = 0   A smaller number of guard digits used, to give nearly perfect
+             rounding.  This number is chosen so that the last intermediate
+             result should have error less than 0.001 unit in the last place
+             of the final rounded result.  (Default)
+       = 1   Causes more guard digits to be used, to get perfect rounding in
+             the mode set by KROUND.  This slows execution speed.
+
+       If a small base is used for the arithmetic, like MBASE = 2, 10, or 16,
+       FM assumes that the arithmetic hardware for some machine is being
+       simulated, so perfect rounding is done without regard for the value
+       of KRPERF.
+       If KROUND = 1, then KRPERF = 1 means returned results are no more than
+       0.500 units in the last place from the exact mathematical result,
+       versus 0.501 for KRPERF = 0.
+       If KROUND is not 1, then KRPERF = 1 means returned results are no more
+       than 1.000 units in the last place from the exact mathematical result,
+       versus 1.001 for KRPERF = 0.
+
+KSWIDE defines the maximum screen width to be used for all unit KW output.
+       Default is 80.
+
+KESWCH controls the action taken in FMINP and other input routines for
+       strings like 'E7' that have no digits before the exponent field.
+       This is sometimes a convenient abbreviation when doing interactive
+       keyboard input.
+       KESWCH = 1 causes 'E7' to translate like '1.0E+7'.  (Default)
+       KESWCH = 0 causes 'E7' to translate like '0.0E+7' and give 0.
+
+CMCHAR defines the exponent letter to be used for FM variable output.
+       Default is 'M', as in 1.2345M+678.
+       Change it to 'E' for output to be read by a non-FM program.
+
+KDEBUG = 0   No error checking is done to see if input arguments are valid
+             and parameters like NDIG and MBASE are correct upon entry to
+             each routine.  (Default)
+       = 1   Some error checking is done.  (Slower speed)
+
+See module FMVALS in file FMSAVE.f90 for additional description of these and
+other variables defining various FM conditions.
+
+
+7. ARRAY DIMENSIONS
+
+The dimensions of the arrays in the FM package are defined using parameters
+NDIGMX and NBITS.
+NDIGMX is the maximum value the user may set for NDIG.
+NBITS  is the number of bits used to represent integers for a given machine.
+       See the EFFICIENCY discussion below.
+
+The standard version of FM sets NDIGMX = 55, so on a 32-bit machine using
+MBASE = 10**7 the maximum precision is about 7*54+1 = 379 significant
+digits.  Previous versions of FM set NDIGMX = 256.  Two reasons for making
+this change are:
+(a) Almost all applications using FM use only 30 to 50 significant digits
+    for checking double or quadruple precision results, and the larger
+    arrays are wasted space.
+(b) Most FM applications use the derived type interface so that the number
+    of changes to existing code is minimized.  Many compilers implement the
+    FM interface by doing copy in / copy out argument passing of the derived
+    types.  Copying the entire large array when only a small part of it is
+    being used causes the derived type arithmetic to be slow compared to
+    making direct calls to the subroutines.  Setting NDIGMX to be only
+    slightly higher than a program actually uses minimizes any performance
+    penalty for the derived type arithmetic.
+
+To change dimensions so that 10,000 significant digit calculation can be
+done, NDIGMX needs to be at least  10**4/7 + 5 = 1434.  This allows for a
+few user guard digits to be defined when the precision is changed using
+CALL FMSET(10000).  Changing 'NDIGMX = 55' to 'NDIGMX = 1434' in FMSAVE.f90
+will define all the new array sizes.
+
+If NDIG much greater than 256 is to be used and elementary functions will
+be needed, they will be faster if array MJSUMS is larger.  The parameter
+defining the size of MJSUMS is set in the standard version by
+    LJSUMS = 8*(LUNPCK+2)
+The 8 means that up to eight concurrent sums can be used by the elementary
+functions.  The approximate number needed for best speed is given by
+    0.051*Log(MBASE)*NDIG**0.333 + 1.85
+For example, with MBASE=10**7 and NDIG=1434 this gives 11.  Changing
+'LJSUMS = 8*(LUNPCK+2)' to 'LJSUMS = 11*(LUNPCK+2)' in FMSAVE.f90 will give
+slightly better speed.
+
+FM numbers in packed format have dimension -1:LPACK, and those in unpacked
+format have dimension -1:LUNPCK.
+
+The parameters LPACKZ and LUNPKZ define the size of the packed and unpacked
+ZM arrays.  The real part starts at the beginning of the array, and the
+imaginary part starts at word KPTIMP for packed format or at word KPTIMU for
+unpacked format.
+
+
+8. PORTABILITY
+
+In FMSET several variables are set to machine-dependent values, and many of
+the variables initialized in module FMVALS in file FMSAVE.f90 are checked to
+see that they have reasonable values.  FMSET will print warning messages on
+unit KW for any of the FMVALS variables that seem to be poorly initialized.
+
+If an FM run fails, call FMVARS to get a list of all the FMVALS variables
+printed on unit KW.  Setting KDEBUG = 1 at the start may also identify some
+errors.
+
+Some compilers object to a function like FMCOMP with side effects such as
+changing KFLAG or other module variables.  Blocks of code in FMCOMP and
+IMCOMP that modify these variables are identified so they may be removed or
+commented out to produce a function without side effects.  This disables
+trace printing in FMCOMP and IMCOMP, and error codes are not returned in
+KFLAG.  See FMCOMP and IMCOMP for further details.
+
+In FMBER2 and FMPGAM several constants are used that require the machine's
+integer word size to be at least 32 bits.
+
+
+9. LIST OF ROUTINES - Shown after section 11 below.
+
+
+10. NEW FOR VERSION 1.2
+
+Version 1.2 is written in Fortran-90 free source format.
+
+The routines for the Gamma function and related mathematical special
+functions are new in version 1.2.
+
+Several new derived-type function interfaces are included in module FMZM in
+file FMZM90.f90, such as integer multiple precision operations GCD, modular
+multiplication, and modular powers.  There are also formatting functions and
+function interfaces for the Gamma and related special functions.
+
+Two new rounding modes have been added, round toward -infinity and round
+toward +infinity.  See the description of KROUND above.
+An option has been added to force more guard digits to be used, so that basic
+arithmetic operations will always round perfectly.  See the description of
+KRPERF above.
+These options are included for applications that use FM to check IEEE
+hardware arithmetic.  They are not normally useful for most multiple
+precision calculations.
+
+The random number routine FM_RANDOM_NUMBER uses 49-digit prime numbers in a
+shuffled multiplicative congruential generator.  Historically, some popular
+random number routines tried so hard for maximum speed that they were later
+found to fail some tests for randomness.  FM_RANDOM_NUMBER tries to return
+high-quality random values.  It is much slower than other generators, but can
+return about 60,000 numbers per second on a 400 MHz single-processor machine.
+This is usually fast enough to be used as a check for suspicious monte carlo
+results from other generators.
+For more details, see the comments in the routine.
+
+The arrays for multiple precision numbers were dimensioned starting at 0 in
+version 1.1, and now begin at -1.  Array(-1) now holds the sign of the number
+instead of combining the sign with Array(2) as before.  The reason for moving
+the sign bit is that many of the original routines, written before Fortran-90
+existed, simplified the logic by temporarily making input arguments positive,
+working with positive values, then restoring the signs to the input arguments
+upon return.  This became illegal under Fortran-90 when used with the derived
+type interface, which demands the inputs to functions for arithmetic operator
+overloading be declared with INTENT(IN).
+
+The common blocks of earlier versions have been replaced by module FMVALS.
+This makes it easier to hide the FM internal variable names from the calling
+program, and these variables can be initialized in the module so the
+initializing call to FMSET is no longer mandatory.  Several new routines are
+provided to set or return the values for some of these variables.  See the
+descriptions for FMSETVAR, FMFLAG, and FMVARS above.
+
+Version 1.0 used integer arrays and integer arithmetic internally to perform
+the multiple precision operations.  Later versions use double precision
+arithmetic and arrays internally.  This is usually faster at higher
+precisions, and on many machines it is also faster at lower precisions.
+Version 1.2 is written so that the arithmetic used can easily be changed from
+double precision to integer, or any other available arithmetic type.  This
+permits the user to make the best use of a given machine's arithmetic
+hardware.  See the EFFICIENCY discussion below.
+
+
+11. EFFICIENCY
+
+When the derived type interface is used to access the FM routines, there may
+be a loss of speed if the arrays used to define the multiple precision data
+types are larger than necessary.  See comment (b) in the section above on
+array dimensions.
+
+To take advantage of hardware architecture on different machines, the package
+has been designed so that the arithmetic used to perform the multiple
+precision operations can easily be changed.  All variables that must be
+changed to get a different arithmetic have names beginning with 'M' and are
+declared using REAL (KIND(1.0D0)) ...
+
+For example, to change the package to use integer arithmetic internally, make
+these two changes everywhere in the FM.f90 file.
+Change  'REAL (KIND(1.0D0))'  to  'INTEGER'.
+Change  'AINT ('  to  'INT('.  Note the blank between AINT and (.
+On some systems, changing  'AINT ('  to  '('  may give better speed.
+
+In most places in FM, an AINT function is not supposed to be changed.  These
+are written 'AINT(', with no embedded blank, so they will not be changed by
+the global change above.
+
+The first of these changes must also be made throughout the files FMZM90.f90
+and FMSAVE.f90.
+Change  'REAL (KIND(1.0D0))'  to  'INTEGER'.
+
+Many of the variables in FMSAVE.f90 are initialized when they are declared,
+so the initialization values should be changed to integer values.
+Find the lines beginning '! Integer initialization' in file FMSAVE.f90 and
+change the values.  The values needed for 32-bit integer arithmetic are next
+to the double precision values, but commented out.  In every case, the line
+before the '! Integer initialization' should have '!' inserted in column 1
+and the line after should have the '!' removed from column 1.  If a different
+wordsize is used, the first call to FMSET will check the values defined in
+file FMSAVE.f90 and write messages (on unit KW) if any need to be changed.
+
+When changing to a different type of arithmetic, any FM arrays in the user's
+program must be changed to agree.  If derived types are used instead of
+direct calls, no changes should be needed in the calling program.
+
+For example, in the test program TestFM.f90, change all
+'REAL (KIND(1.0D0))'  to  'INTEGER', as with the other files.
+
+This version of FM restricts the base used to be also representable in
+integer variables, so using precision above double usually does not save much
+time unless integers can also be declared at a higher precision.  Using IEEE
+Extended would allow a base of around 10**9 to be chosen, but the delayed
+digit-normalization method used for multiplication and division means that a
+slightly smaller base like 10**8 would probably run faster.  This would
+usually not be much faster than using the usual base 10**7 with double
+precision.
+
+The value of NBITS defined as a parameter in FMVALS refers to the number of
+bits used to represent integers in an M-variable word.  Typical values for
+NBITS are:  24 for IEEE single precision, 32 for integer, 53 for IEEE double
+precision.  NBITS controls only array size, so setting it too high is ok, but
+then the program will use slightly more memory than necessary.
+
+For cases where special compiler directives or minor re-writing of the code
+may improve speed, several of the most important loops in FM are identified
+by comments containing the string '(Inner Loop)'.
+
+
+
+--------------------------------------------------------------------------------
+---------------   Routines for Real Floating-Point Operations   ----------------
+
+
+
+These are the FM routines that are designed to be called by the user.
+All are subroutines except logical function FMCOMP.
+MA, MB, MC refer to FM format numbers.
+
+In Fortran-90 and later versions of the Fortran standard, it is potentially
+unsafe to use the same array more than once in the calling sequence.  The
+operation MA = MA + MB should not be written as
+      CALL FMADD(MA,MB,MA)
+since the compiler is allowed to pass the three arguments with a copy in /
+copy out mechanism.  This means the third argument, containing the result,
+might not be copied out last, and then a later copy out of the original
+input MA could destroy the computed result.
+
+One solution is to use a third array and then put the result back in MA:
+      CALL FMADD(MA,MB,MC)
+      CALL FMEQ(MC,MA)
+
+When the first call is doing one of the "fast" operations like addition,
+the extra call to move the result back to MA can cause a noticeable loss
+in efficiency.  To avoid this, separate routines are provided for the basic
+arithmetic operations when the result is to be returned in the same array
+as one of the inputs.
+
+A routine name with a suffix of  "_R1" returns the result in the first input
+array, and a suffix of "_R2" returns the result in the second input array.
+The example above would then be:
+      CALL FMADD_R1(MA,MB)
+
+These routines each have one less argument than the original version, since
+the output is re-directed to one of the inputs.  The result array should not
+be the same as any input array when the original version of the routine is
+used.
+
+The routines that can be used this way are listed below.  For others, like
+      CALL FMEXP(MA,MA)
+the relative cost of doing an extra copy is small.  This one should become
+      CALL FMEXP(MA,MB)
+      CALL FMEQ(MB,MA)
+
+If the derived-type interface is used, as in
+      TYPE (FM) A,B
+      ...
+      A = A + B
+there is no problem putting the result back into A, since the interface routine
+creates a temporary scratch array for the result of A + B, allowing copy in /
+copy out to work.
+
+For each of these routines there is also a version available for which the
+argument list is the same but all FM numbers are in packed format.  The
+routines using packed numbers have the same names except 'FM' is replaced by
+'FP' at the start of each name.
+
+
+FMABS(MA,MB)         MB = ABS(MA)
+
+FMACOS(MA,MB)        MB = ACOS(MA)
+
+FMADD(MA,MB,MC)      MC = MA + MB
+
+FMADD_R1(MA,MB)      MA = MA + MB
+
+FMADD_R2(MA,MB)      MB = MA + MB
+
+FMADDI(MA,IVAL)      MA = MA + IVAL   Increment an FM number by a one word
+                                      integer.  Note this call does not have
+                                      an "MB" result like FMDIVI and FMMPYI.
+
+FMASIN(MA,MB)        MB = ASIN(MA)
+
+FMATAN(MA,MB)        MB = ATAN(MA)
+
+FMATN2(MA,MB,MC)     MC = ATAN2(MA,MB)
+
+FMBIG(MA)            MA = Biggest FM number less than overflow.
+
+FMCHSH(MA,MB,MC)     MB = COSH(MA),  MC = SINH(MA).
+                          Faster than making two separate calls.
+
+FMCOMP(MA,LREL,MB)        Logical comparison of MA and MB.
+                          LREL is a CHARACTER*2 value identifying
+                          which of the six comparisons is to be made.
+                          Example:  IF (FMCOMP(MA,'GE',MB)) ...
+                          Also can be:  IF (FMCOMP(MA,'>=',MB)) ...
+                          CHARACTER*1 is ok:  IF (FMCOMP(MA,'>',MB)) ...
+
+FMCONS                    Set several saved constants that depend on MBASE,
+                          the base being used.  FMCONS should be called
+                          immediately after changing MBASE.
+
+FMCOS(MA,MB)         MB = COS(MA)
+
+FMCOSH(MA,MB)        MB = COSH(MA)
+
+FMCSSN(MA,MB,MC)     MB = COS(MA),  MC = SIN(MA).
+                          Faster than making two separate calls.
+
+FMDIG(NSTACK,KST)         Find a set of precisions to use during Newton
+                          iteration for finding a simple root starting with
+                          about double precision accuracy.
+
+FMDIM(MA,MB,MC)      MC = DIM(MA,MB)
+
+FMDIV(MA,MB,MC)      MC = MA / MB
+
+FMDIV_R1(MA,MB)      MA = MA / MB
+
+FMDIV_R2(MA,MB)      MB = MA / MB
+
+FMDIVI(MA,IVAL,MB)   MB = MA/IVAL   IVAL is a one word integer.
+
+FMDIVI_R1(MA,IVAL)   MA = MA/IVAL
+
+FMDP2M(X,MA)         MA = X    Convert from double precision to FM.
+
+FMDPM(X,MA)          MA = X    Convert from double precision to FM.
+                               Faster than FMDP2M, but MA agrees with X only
+                               to D.P. accuracy.  See the comments in the
+                               two routines.
+
+FMEQ(MA,MB)          MB = MA   Both have precision NDIG.
+                               This is the version to use for standard
+                               B = A  statements.
+
+FMEQU(MA,MB,NA,NB)   MB = MA   Version for changing precision.
+                               MA has NA digits (i.e., MA was computed
+                               using NDIG = NA), and MB will be defined
+                               having NB digits.
+                               MB is rounded if NB < NA
+                               MB is zero-padded if NB > NA
+
+FMEXP(MA,MB)         MB = EXP(MA)
+
+FMFLAG(K)            K = KFLAG  get the value of the FM condition
+                                flag -- stored in the internal FM
+                                variable KFLAG in module FMVALS.
+
+FMFORM(FORM,MA,STRING)    MA is converted to a character string using format
+                             FORM and returned in STRING.  FORM can represent
+                             I, F, E, or 1PE formats.  Example:
+                             CALL FMFORM('F60.40',MA,STRING)
+
+FMFPRT(FORM,MA)           Print MA on unit KW using FORM format.
+
+FMI2M(IVAL,MA)       MA = IVAL   Convert from one word integer to FM.
+
+FMINP(LINE,MA,LA,LB) MA = LINE   Input conversion.
+                                 Convert LINE(LA) through LINE(LB)
+                                 from characters to FM.
+
+FMINT(MA,MB)         MB = INT(MA)    Integer part of MA.
+
+FMIPWR(MA,IVAL,MB)   MB = MA**IVAL   Raise an FM number to a one word
+                                     integer power.
+
+FMLG10(MA,MB)        MB = LOG10(MA)
+
+FMLN(MA,MB)          MB = LOG(MA)
+
+FMLNI(IVAL,MA)       MA = LOG(IVAL)   Natural log of a one word integer.
+
+FMM2DP(MA,X)         X  = MA     Convert from FM to double precision.
+
+FMM2I(MA,IVAL)       IVAL = MA   Convert from FM to integer.
+
+FMM2SP(MA,X)         X  = MA     Convert from FM to single precision.
+
+FMMAX(MA,MB,MC)      MC = MAX(MA,MB)
+
+FMMIN(MA,MB,MC)      MC = MIN(MA,MB)
+
+FMMOD(MA,MB,MC)      MC = MA mod MB
+
+FMMPY(MA,MB,MC)      MC = MA * MB
+
+FMMPY_R1(MA,MB)      MA = MA * MB
+
+FMMPY_R2(MA,MB)      MB = MA * MB
+
+FMMPYI(MA,IVAL,MB)   MB = MA*IVAL    Multiply by a one word integer.
+
+FMMPYI_R1(MA,IVAL)   MA = MA*IVAL
+
+FMNINT(MA,MB)        MB = NINT(MA)   Nearest FM integer.
+
+FMOUT(MA,LINE,LB)    LINE = MA   Convert from FM to character.
+                                 LINE is a character array of length LB.
+
+FMPI(MA)             MA = pi
+
+FMPRNT(MA)                Print MA on unit KW using current format.
+
+FMPWR(MA,MB,MC)      MC = MA**MB
+
+FM_RANDOM_NUMBER(X)  X    is returned as a double precision random number,
+                          uniform on (0,1).  High-quality, long-period
+                          generator.
+                          Note that X is double precision, unlike the similar
+                          Fortran intrinsic random number routine, which
+                          returns a single-precision result.
+                          See the comments in section 10 below and also those
+                          in the routine for more details.
+
+FMREAD(KREAD,MA)     MA   is returned after reading one (possibly multi-line)
+                          FM number on unit KREAD.  This routine reads
+                          numbers written by FMWRIT.
+
+FMRPWR(MA,K,J,MB)    MB = MA**(K/J)  Rational power.
+                          Faster than FMPWR for functions like the cube root.
+
+FMSET(NPREC)              Set the internal FM variables so that the precision
+                          is at least NPREC base 10 digits plus three base 10
+                          guard digits.
+
+FMSETVAR(STRING)          Define a new value for one of the internal FM
+                          variables in module FMVALS that controls one of the
+                          FM options.  STRING has the form  variable = value.
+                          Example:  To change the screen width for FM output:
+                                CALL FMSETVAR(' KSWIDE = 120 ')
+                          The variables that can be changed and the options
+                          they control are listed in sections 2 through 6
+                          above.  Only one variable can be set per call.
+                          The variable name in STRING must have no embedded
+                          blanks.  The value part of STRING can be in any
+                          numerical format, except in the case of variable
+                          CMCHAR, which is character type.  To set CMCHAR to
+                          'E', don't use any quotes in STRING:
+                                CALL FMSETVAR(' CMCHAR = E ')
+
+FMSIGN(MA,MB,MC)     MC = SIGN(MA,MB)   Sign transfer.
+
+FMSIN(MA,MB)         MB = SIN(MA)
+
+FMSINH(MA,MB)        MB = SINH(MA)
+
+FMSP2M(X,MA)         MA = X   Convert from single precision to FM.
+
+FMSQR(MA,MB)         MB = MA * MA   Faster than FMMPY.
+
+FMSQR_R1(MA)         MA = MA * MA
+
+FMSQRT(MA,MB)        MB = SQRT(MA)
+
+FMSQRT_R1(MA)        MA = SQRT(MA)
+
+FMST2M(STRING,MA)    MA = STRING
+                          Convert from character string to FM.
+                          STRING may be in any numerical format.
+                          Often more convenient than FMINP, which converts
+                          an array of CHARACTER*1 values.  Example:
+                                CALL FMST2M('123.4',MA)
+
+FMSUB(MA,MB,MC)      MC = MA - MB
+
+FMSUB_R1(MA,MB)      MA = MA - MB
+
+FMSUB_R2(MA,MB)      MB = MA - MB
+
+FMTAN(MA,MB)         MB = TAN(MA)
+
+FMTANH(MA,MB)        MB = TANH(MA)
+
+FMULP(MA,MB)         MB = One Unit in the Last Place of MA.
+
+FMVARS                    Write the current values of the internal FM
+                          variables on unit KW.
+
+FMWRIT(KWRITE,MA)         Write MA on unit KWRITE.
+                          Multi-line numbers will have '&' as the last
+                          nonblank character on all but the last line.  These
+                          numbers can then be read easily using FMREAD.
+
+
+
+These are the Gamma and Related Functions.
+
+FMBERN(N,MA,MB)      MB = MA*B(N)  Multiply by Nth Bernoulli number
+
+FMBETA(MA,MB,MC)     MC = Beta(MA,MB)
+
+FMCOMB(MA,MB,MC)     MC = Combination MA choose MB  (Binomial coeff.)
+
+FMEULR(MA)           MA = Euler's constant ( 0.5772156649... )
+
+FMFACT(MA,MB)        MB = MA Factorial  (Gamma(MA+1))
+
+FMGAM(MA,MB)         MB = Gamma(MA)
+
+FMIBTA(MX,MA,MB,MC)  MC = Incomplete Beta(MX,MA,MB)
+
+FMIGM1(MA,MB,MC)     MC = Incomplete Gamma(MA,MB).  Lower case Gamma(a,x)
+
+FMIGM2(MA,MB,MC)     MC = Incomplete Gamma(MA,MB).  Upper case Gamma(a,x)
+
+FMLNGM(MA,MB)        MB = Ln(Gamma(MA))
+
+FMPGAM(N,MA,MB)      MB = Polygamma(N,MA)  (Nth derivative of Psi)
+
+FMPOCH(MA,N,MB)      MB = MA*(MA+1)*(MA+2)*...*(MA+N-1)  (Pochhammer)
+
+FMPSI(MA,MB)         MB = Psi(MA)      (Derivative of Ln(Gamma(MA))
+
+
+
+
+--------------------------------------------------------------------------------
+---------------------   Routines for Integer Operations   ----------------------
+
+
+
+These are the integer routines that are designed to be called by the user.
+All are subroutines except logical function IMCOMP.  MA, MB, MC refer to IM
+format numbers.  In each case the version of the routine to handle packed IM
+numbers has the same name, with 'IM' replaced by 'IP'.
+
+IMABS(MA,MB)         MB = ABS(MA)
+
+IMADD(MA,MB,MC)      MC = MA + MB
+
+IMBIG(MA)            MA = Biggest IM number less than overflow.
+
+IMCOMP(MA,LREL,MB)        Logical comparison of MA and MB.
+                          LREL is a CHARACTER*2 value identifying which of
+                          the six comparisons is to be made.
+                          Example:  IF (IMCOMP(MA,'GE',MB)) ...
+                          Also can be:  IF (IMCOMP(MA,'>=',MB))
+                          CHARACTER*1 is ok:  IF (IMCOMP(MA,'>',MB)) ...
+
+IMDIM(MA,MB,MC)      MC = DIM(MA,MB)
+
+IMDIV(MA,MB,MC)      MC = int(MA/MB)
+                          Use IMDIVR if the remainder is also needed.
+
+IMDIVI(MA,IVAL,MB)   MB = int(MA/IVAL)
+                          IVAL is a one word integer.
+                          Use IMDVIR to get the remainder also.
+
+IMDIVR(MA,MB,MC,MD)  MC = int(MA/MB),   MD = MA mod MB
+                          When both the quotient and remainder are needed,
+                          this routine is twice as fast as calling both
+                          IMDIV and IMMOD.
+
+IMDVIR(MA,IVAL,MB,IREM)   MB = int(MA/IVAL),   IREM = MA mod IVAL
+                          IVAL and IREM are one word integers.
+
+IMEQ(MA,MB)          MB = MA
+
+IMFM2I(MAFM,MB)      MB = MAFM  Convert from real (FM) format to
+                                integer (IM) format.
+
+IMFORM(FORM,MA,STRING)    MA is converted to a character string using format
+                             FORM and returned in STRING.  FORM can represent
+                             I, F, E, or 1PE formats.  Example:
+                             CALL IMFORM('I70',MA,STRING)
+
+IMFPRT(FORM,MA)           Print MA on unit KW using FORM format.
+
+IMGCD(MA,MB,MC)      MC = greatest common divisor of MA and MB.
+
+IMI2FM(MA,MBFM)      MBFM = MA  Convert from integer (IM) format to
+                                real (FM) format.
+
+IMI2M(IVAL,MA)       MA = IVAL   Convert from one word integer to IM.
+
+IMINP(LINE,MA,LA,LB) MA = LINE   Input conversion.
+                                 Convert LINE(LA) through LINE(LB)
+                                 from characters to IM.
+
+IMM2DP(MA,X)         X  = MA     Convert from IM to double precision.
+
+IMM2I(MA,IVAL)       IVAL = MA   Convert from IM to one word integer.
+
+IMMAX(MA,MB,MC)      MC = MAX(MA,MB)
+
+IMMIN(MA,MB,MC)      MC = MIN(MA,MB)
+
+IMMOD(MA,MB,MC)      MC = MA mod MB
+
+IMMPY(MA,MB,MC)      MC = MA*MB
+
+IMMPYI(MA,IVAL,MB)   MB = MA*IVAL    Multiply by a one word integer.
+
+IMMPYM(MA,MB,MC,MD)  MD = MA*MB mod MC
+                          Slightly faster than calling IMMPY and IMMOD
+                          separately, and it works for cases where IMMPY
+                          would return OVERFLOW.
+
+IMOUT(MA,LINE,LB)    LINE = MA   Convert from IM to character.
+                                 LINE is a character array of length LB.
+
+IMPMOD(MA,MB,MC,MD)  MD = MA**MB mod MC
+
+IMPRNT(MA)                Print MA on unit KW.
+
+IMPWR(MA,MB,MC)      MC = MA**MB
+
+IMREAD(KREAD,MA)     MA   is returned after reading one (possibly multi-line)
+                          IM number on unit KREAD.
+                          This routine reads numbers written by IMWRIT.
+
+IMSIGN(MA,MB,MC)     MC = SIGN(MA,MB)   Sign transfer.
+
+IMSQR(MA,MB)         MB = MA*MA   Faster than IMMPY.
+
+IMST2M(STRING,MA)    MA = STRING
+                          Convert from character string to IM.
+                          Often more convenient than IMINP, which converts an
+                          array of CHARACTER*1 values.  Example:
+                               CALL IMST2M('12345678901',MA)
+
+IMSUB(MA,MB,MC)      MC = MA - MB
+
+IMWRIT(KWRITE,MA)         Write MA on unit KWRITE.
+                          Multi-line numbers will have '&' as the last nonblank
+                          character on all but the last line.
+                          These numbers can then be read easily using IMREAD.
+
+
+
+
+--------------------------------------------------------------------------------
+--------------   Routines for Complex Floating-Point Operations   --------------
+
+
+
+These are the complex routines that are designed to be called by the user.
+All are subroutines, and in each case the version of the routine to handle
+packed ZM numbers has the same name, with 'ZM' replaced by 'ZP'.
+
+MA, MB, MC refer to ZM format complex numbers.
+MAFM, MBFM, MCFM refer to FM format real numbers.
+INTEG is a Fortran INTEGER variable.
+ZVAL is a Fortran COMPLEX variable.
+
+ZMABS(MA,MBFM)       MBFM = ABS(MA)    Result is real.
+
+ZMACOS(MA,MB)        MB = ACOS(MA)
+
+ZMADD(MA,MB,MC)      MC = MA + MB
+
+ZMADDI(MA,INTEG)     MA = MA + INTEG  Increment an ZM number by a one word
+                                      integer.  Note this call does not have
+                                      an "MB" result like ZMDIVI and ZMMPYI.
+
+ZMARG(MA,MBFM)       MBFM = Argument(MA)    Result is real.
+
+ZMASIN(MA,MB)        MB = ASIN(MA)
+
+ZMATAN(MA,MB)        MB = ATAN(MA)
+
+ZMCHSH(MA,MB,MC)     MB = COSH(MA),  MC = SINH(MA).
+                          Faster than 2 calls.
+
+ZMCMPX(MAFM,MBFM,MC) MC = CMPLX(MAFM,MBFM)
+
+ZMCONJ(MA,MB)        MB = CONJG(MA)
+
+ZMCOS(MA,MB)         MB = COS(MA)
+
+ZMCOSH(MA,MB)        MB = COSH(MA)
+
+ZMCSSN(MA,MB,MC)     MB = COS(MA),  MC = SIN(MA).
+                          Faster than 2 calls.
+
+ZMDIV(MA,MB,MC)      MC = MA / MB
+
+ZMDIVI(MA,INTEG,MB)  MB = MA / INTEG
+
+ZMEQ(MA,MB)          MB = MA
+
+ZMEQU(MA,MB,NDA,NDB) MB = MA    Version for changing precision.
+                                (NDA and NDB are as in FMEQU)
+
+ZMEXP(MA,MB)         MB = EXP(MA)
+
+ZMFORM(FORM1,FORM2,MA,STRING)   STRING = MA
+                     MA is converted to a character string using format
+                     FORM1 for the real part and FORM2 for the imaginary
+                     part.  The  result is returned in STRING.  FORM1 and
+                     FORM2 can represent I, F, E, or 1PE formats.  Example:
+                           CALL ZMFORM('F20.10','F15.10',MA,STRING)
+                     A 1PE in the first format does not carry over to the
+                     other format descriptor, as it would in an ordinary
+                     FORMAT statement.
+
+ZMFPRT(FORM1,FORM2,MA)    Print MA on unit KW using formats FORM1 and FORM2.
+
+ZMI2M(INTEG,MA)           MA = CMPLX(INTEG,0)
+
+ZM2I2M(INTEG1,INTEG2,MA)  MA = CMPLX(INTEG1,INTEG2)
+
+ZMIMAG(MA,MBFM)           MBFM = IMAG(MA)    Imaginary part.
+
+ZMINP(LINE,MA,LA,LB)      MA = LINE   Input conversion.
+                               Convert LINE(LA) through LINE(LB) from
+                               characters to ZM.  LINE is a character array
+                               of length at least LB.
+
+ZMINT(MA,MB)         MB = INT(MA)        Integer part of both Real
+                                         and Imaginary parts of MA.
+
+ZMIPWR(MA,INTEG,MB)  MB = MA ** INTEG    Integer power function.
+
+ZMLG10(MA,MB)        MB = LOG10(MA)
+
+ZMLN(MA,MB)          MB = LOG(MA)
+
+ZMM2I(MA,INTEG)      INTEG = INT(REAL(MA))
+
+ZMM2Z(MA,ZVAL)       ZVAL = MA
+
+ZMMPY(MA,MB,MC)      MC = MA * MB
+
+ZMMPYI(MA,INTEG,MB)  MB = MA * INTEG
+
+ZMNINT(MA,MB)        MB = NINT(MA)   Nearest integer of both Real
+                                     and Imaginary.
+
+ZMOUT(MA,LINE,LB,LAST1,LAST2)        LINE = MA
+                     Convert from FM to character.
+                     LINE  is the returned character*1 array.
+                     LB    is the dimensioned size of LINE.
+                     LAST1 is returned as the position in LINE of
+                           the last character of REAL(MA).
+                     LAST2 is returned as the position in LINE
+                           of the last character of AIMAG(MA).
+
+ZMPRNT(MA)           Print MA on unit KW using current format.
+
+ZMPWR(MA,MB,MC)      MC = MA ** MB
+
+ZMREAD(KREAD,MA)     MA   is returned after reading one (possibly multi-line)
+                          ZM number on unit KREAD.
+                          This routine reads numbers written by ZMWRIT.
+
+ZMREAL(MA,MBFM)      MBFM = REAL(MA)    Real part.
+
+ZMRPWR(MA,IVAL,JVAL,MB)     MB = MA ** (IVAL/JVAL)
+
+ZMSET(NPREC)         Set precision to the equivalent of a few more than NPREC
+                     base 10 digits.  This is now the same as FMSET, but is
+                     retained for compatibility with earlier versions of the
+                     package.
+
+ZMSIN(MA,MB)         MB = SIN(MA)
+
+ZMSINH(MA,MB)        MB = SINH(MA)
+
+ZMSQR(MA,MB)         MB = MA*MA    Faster than ZMMPY.
+
+ZMSQRT(MA,MB)        MB = SQRT(MA)
+
+ZMST2M(STRING,MA)    MA = STRING
+                          Convert from character string to ZM.
+                          Often more convenient than ZMINP, which
+                          converts an array of CHARACTER*1 values.
+                          Example: CALL ZMST2M('123.4+5.67i',MA).
+
+ZMSUB(MA,MB,MC)      MC = MA - MB
+
+ZMTAN(MA,MB)         MB = TAN(MA)
+
+ZMTANH(MA,MB)        MB = TANH(MA)
+
+ZMWRIT(KWRITE,MA)    Write MA on unit KWRITE.  Multi-line numbers are
+                     formatted for automatic reading with ZMREAD.
+
+ZMZ2M(ZVAL,MA)       MA = ZVAL
+
+
+
+================================================================================
+================================================================================

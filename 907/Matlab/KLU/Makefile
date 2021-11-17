@@ -1,0 +1,44 @@
+VERSION = 1.1.1
+
+default: demos
+
+include ../UFconfig/UFconfig.mk
+
+demos:
+	( cd Lib ; $(MAKE) )
+	( cd Demo ; $(MAKE) )
+
+library:
+	( cd Lib ; $(MAKE) )
+
+clean:
+	( cd Demo ; $(MAKE) clean )
+	( cd Lib ; $(MAKE) clean )
+	( cd Tcov ; $(MAKE) clean )
+
+distclean:
+	( cd Demo ; $(MAKE) distclean )
+	( cd Lib ; $(MAKE) distclean )
+	( cd Tcov ; $(MAKE) distclean )
+	( cd User ; $(MAKE) distclean )
+	( cd MATLAB ; $(MAKE) distclean )
+
+mex:
+	( cd MATLAB ; $(MAKE) )
+
+purge: distclean
+
+cov: library
+	( cd Tcov ; $(MAKE) )
+
+# install KLU
+install:
+	$(CP) Lib/libklu.a $(INSTALL_LIB)/libklu.$(VERSION).a
+	( cd $(INSTALL_LIB) ; ln -s libklu.$(VERSION).a libklu.a )
+	$(CP) Include/klu.h $(INSTALL_INCLUDE)
+
+# uninstall KLU
+uninstall:
+	$(RM) $(INSTALL_LIB)/libklu*.a
+	$(RM) $(INSTALL_INCLUDE)/klu.h
+

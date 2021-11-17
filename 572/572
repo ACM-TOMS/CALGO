@@ -1,0 +1,2024 @@
+C ACM ALGORITHM 572
+C
+C SOLUTION OF THE HELMHOLTZ EQUATION FOR THE DIRICHLET PROBLEM ON
+C GENERAL BOUNDED THREE DIMENSIONAL REGIONS
+C
+C BY DIANNE P. O'LEARY AND OLOF WIDLUND
+C
+C ACM TRANSACTIONS ON MATHEMATICAL SOFTWARE, JUNE 1981
+C
+C THIS FILE IS IN TWO PARTS.  THE FIRST (ABOUT 250 LINES) CONTAINS
+C A TEST DRIVER AND SOME DATA.  THE SECOND CONTAINS THE BODY OF THE
+C ALGORITHM.
+C
+      DIMENSION UU(16,16,17), DELTA(3,150), ICOORD(3,150), INDORD(150),   A   1
+     1S(150), R(150), P(150), AP(300)                                     A   2
+      DIMENSION V(16,16,17)                                               A   3
+      LOGICAL IRREG                                                       A   4
+C                                                                         A   5
+C       THIS IS A TEST DRIVER PROGRAM TO SOLVE THE HELMHOLTZ              A   6
+C       EQUATION ON AN ARBITRARY BOUNDED 3 DIMENSIONAL REGION             A   7
+C       USING A MAIN SUBROUTINE HELM3D. THIS SAMPLE PROGRAM IS            A   8
+C       INEFFICIENT IN THAT IT TESTS EVERY MESH POINT IN A CUBE,          A   9
+C       IN WHICH THE REGION IS IMBEDDED, TO FIND THE IRREGULAR            A  10
+C       POINTS, I.E. THOSE MESH POINTS IN THE REGION WHICH HAVE           A  11
+C       EXTERIOR NEIGHBORS.  A NEIGHBOR IS CONSIDERED EXTERIOR IF         A  12
+C       IT FALLS ON OR OUTSIDE THE BOUNDARY OF THE REGION.                A  13
+C       IN THE DOCUMENTATION, H WILL REFER TO THE MESH WIDTH              A  14
+C       HX, HY, OR HZ AS APPROPRIATE.  FOR FURTHER INFORMATION,           A  15
+C       SEE THE COMMENTS IN SUBROUTINE HELM3D.                            A  16
+C       THE GIVEN DATA TESTS EACH MODE OF  HELM3D                         A  17
+C       PLUS THE ERROR RETURNS.                                           A  18
+C                                                                         A  19
+      NXDIM=16                                                            A  20
+      NYDIM=16                                                            A  21
+      NZDIM=17                                                            A  22
+      NIPDIM=150                                                          A  23
+      NAPDIM=300                                                          A  24
+      NIT=20                                                              A  25
+   10 CONTINUE                                                            A  26
+      READ (5,160) MODE,M1,M2,EPS                                         A  27
+      IF (MODE.GE.5) GO TO 90                                             A  28
+C       M1 AND M2 ARE DUMMY VARIABLES.                                    A  29
+      READ (5,160) NNX,NNY,NNZ,CC                                         A  30
+      WRITE (6,140) NNX,NNY,NNZ,CC                                        A  31
+      IF (MODE.GE.3) GO TO 60                                             A  32
+      HX=1.E0/FLOAT(NNX)                                                  A  33
+      HY=1.E0/FLOAT(NNY)                                                  A  34
+      HZ=1.E0/FLOAT(NNZ-1)                                                A  35
+C                                                                         A  36
+C                         2          2          2                         A  37
+C        REGION IS A(X-AL)  + B(Y-BE)  + C(Z-GA)  .LE. D                  A  38
+C                                                                         A  39
+      READ (5,170) A,B,C,D,AL,BE,GA                                       A  40
+      WRITE (6,150) A,B,C,D,AL,BE,GA                                      A  41
+C                                                                         A  42
+C       TEXT EACH MESH POINT IN THE CUBE TO FIND THOSE                    A  43
+C       IN THE INTERIOR OF THE REGION WHICH HAVE EXTERIOR                 A  44
+C       NEIGHBORS.  SET UP ARRAYS FOR THESE IRREGULAR POINTS.             A  45
+C                                                                         A  46
+      IP1=0                                                               A  47
+      IP2=0                                                               A  48
+      DO 40 K=1,NNZ                                                       A  49
+      Z=FLOAT(K-1)*HZ                                                     A  50
+      T3=C*(Z-GA)**2                                                      A  51
+      DO 40 J=1,NNY                                                       A  52
+      Y=FLOAT(J-1)*HY                                                     A  53
+      T2=B*(Y-BE)**2                                                      A  54
+      IF ((T2+T3).GE.D) GO TO 40                                          A  55
+      DO 30 I=1,NNX                                                       A  56
+      X=FLOAT(I-1)*HX                                                     A  57
+      T1=A*(X-AL)**2                                                      A  58
+      IF ((T1+T2+T3).GE.D) GO TO 30                                       A  59
+C                                                                         A  60
+C       (X,Y,Z) IS IN REGION.  TEST WHETHER IT IS AN IRREGULAR POINT.     A  61
+C       CALCULATE SIGNED DISTANCES TO BOUNDARY IN COORDINATE              A  62
+C       DIRECTIONS. IF ALL ARE .GT. H THEN THE POINT IS REGULAR.          A  63
+C      IF AN IRREGULAR MESH POINT FALLS VERY CLOSE TO THE                 A  64
+C      BOUNDARY, THIS CODE MIGHT FAIL.  TO HANDLE SUCH A CASE,            A  65
+C      THE CODE NEEDS TO BE CHANGED SO THAT EITHER THE ABSOLUTE           A  66
+C      VALUE OF EACH SMALL  DELTA  IS INCREASED WHILE ITS SIGN            A  67
+C      IS RETAINED, OR SMALL  DELTAS  ARE CONSIDERED TO BE ZERO           A  68
+C      AND THE CORRESPONDING POINT IS CONSIDERED TO BE EXTERIOR.          A  69
+C      EITHER OF THESE MODIFICATIONS CORRESPONDS TO A SLIGHT              A  70
+C      PERTURBATION OF THE BOUNDARY.  FOR FURTHER ADVICE ON THIS,         A  71
+C      SEE THE COMMENTS IN  HELM3D.                                       A  72
+C                                                                         A  73
+C                                                                         A  74
+      IRREG=.FALSE.                                                       A  75
+      XTERM=SQRT((D-T2-T3)/A)                                             A  76
+      XDIST1=XTERM+AL-X                                                   A  77
+      XDIST2=-XTERM+AL-X                                                  A  78
+      IF (ABS(XDIST1).LE.HX) IRREG=.TRUE.                                 A  79
+      IF (ABS(XDIST2).LE.HX) IRREG=.TRUE.                                 A  80
+      YTERM=SQRT((D-T1-T3)/B)                                             A  81
+      YDIST1=YTERM+BE-Y                                                   A  82
+      YDIST2=-YTERM+BE-Y                                                  A  83
+      IF (ABS(YDIST1).LE.HY) IRREG=.TRUE.                                 A  84
+      IF (ABS(YDIST2).LE.HY) IRREG=.TRUE.                                 A  85
+      ZTERM=SQRT((D-T1-T2)/C)                                             A  86
+      ZDIST1=ZTERM+GA-Z                                                   A  87
+      ZDIST2=-ZTERM+GA-Z                                                  A  88
+      IF (ABS(ZDIST1).LE.HZ) IRREG=.TRUE.                                 A  89
+      IF (ABS(ZDIST2).LE.HZ) IRREG=.TRUE.                                 A  90
+      IF (.NOT.IRREG) GO TO 30                                            A  91
+C                                                                         A  92
+C       WE HAVE FOUND AN IRREGULAR POINT.  STORE COORDINATES AND          A  93
+C       DISTANCES IN UNITS OF H.                                          A  94
+C                                                                         A  95
+      IF ((ABS(XDIST1).LE.HX).AND.(ABS(XDIST2).LE.HX)) GO TO 20           A  96
+      IF ((ABS(YDIST1).LE.HY).AND.(ABS(YDIST2).LE.HY)) GO TO 20           A  97
+      IF ((ABS(ZDIST1).LE.HZ).AND.(ABS(ZDIST2).LE.HZ)) GO TO 20           A  98
+      IP1=IP1+1                                                           A  99
+      ICOORD(1,IP1)=I                                                     A 100
+      ICOORD(2,IP1)=J                                                     A 101
+      ICOORD(3,IP1)=K                                                     A 102
+      XDIST=XDIST1                                                        A 103
+      YDIST=YDIST1                                                        A 104
+      ZDIST=ZDIST1                                                        A 105
+      IF (ABS(XDIST2).LT.ABS(XDIST1)) XDIST=XDIST2                        A 106
+      IF (ABS(YDIST2).LT.ABS(YDIST1)) YDIST=YDIST2                        A 107
+      IF (ABS(ZDIST2).LT.ABS(ZDIST1)) ZDIST=ZDIST2                        A 108
+      DELTA(1,IP1)=XDIST/HX                                               A 109
+      DELTA(2,IP1)=YDIST/HY                                               A 110
+      DELTA(3,IP1)=ZDIST/HZ                                               A 111
+      GO TO 30                                                            A 112
+C                                                                         A 113
+C       WE HAVE FOUND AN IRREGULAR POINT WITH EXTERIOR NEIGHBORS IN       A 114
+C       BOTH THE POSITIVE AND NEGATIVE DIRECTIONS ALONG SOME              A 115
+C       AXIS.  STORE ITS INFORMATION AT THE END OF THE ICOORD             A 116
+C       AND DELTA ARRAYS.                                                 A 117
+C                                                                         A 118
+   20 IP2=IP2+1                                                           A 119
+      INDEXD=NIPDIM-2*IP2+1                                               A 120
+      INDEXI=NIPDIM-IP2+1                                                 A 121
+      ICOORD(1,INDEXI)=I                                                  A 122
+      ICOORD(2,INDEXI)=J                                                  A 123
+      ICOORD(3,INDEXI)=K                                                  A 124
+      DELTA(1,INDEXD)=XDIST1/HX                                           A 125
+      DELTA(2,INDEXD)=YDIST1/HY                                           A 126
+      DELTA(3,INDEXD)=ZDIST1/HZ                                           A 127
+      DELTA(1,INDEXD+1)=XDIST2/HX                                         A 128
+      DELTA(2,INDEXD+1)=YDIST2/HY                                         A 129
+      DELTA(3,INDEXD+1)=ZDIST2/HZ                                         A 130
+   30 CONTINUE                                                            A 131
+   40 CONTINUE                                                            A 132
+      MINSPC=IP1+2*IP2                                                    A 133
+      WRITE (6,130) IP1,IP2,NIPDIM,MINSPC                                 A 134
+      IF (MINSPC.GT.NIPDIM) STOP                                          A 135
+C                                                                         A 136
+C       SHIFT THE INFORMATION ABOUT THE IRREGULAR POINTS                  A 137
+C       WITH EXTERIOR NEIGHBORS IN BOTH A POSITIVE AND                    A 138
+C       NEGATIVE DIRECTION TO LOCATIONS IP1+1 AND FOLLOWING.              A 139
+C                                                                         A 140
+      IF (IP2.EQ.0) GO TO 60                                              A 141
+      DO 50 LL=1,IP2                                                      A 142
+      IP1PLL=IP1+LL                                                       A 143
+      INDEXD=NIPDIM-(IP2-LL)*2-1                                          A 144
+      INDEXI=NIPDIM-IP2+LL                                                A 145
+      IDELT=IP1+2*LL-1                                                    A 146
+      DO 50 KK=1,3                                                        A 147
+      ICOORD(KK,IP1PLL)=ICOORD(KK,INDEXI)                                 A 148
+      DELTA(KK,IDELT)=DELTA(KK,INDEXD)                                    A 149
+      DELTA(KK,IDELT+1)=DELTA(KK,INDEXD+1)                                A 150
+   50 CONTINUE                                                            A 151
+   60 IP=IP1+IP2                                                          A 152
+C                                                                         A 153
+C       STORE HZ**2 TIMES G1 IN V.                                        A 154
+C       STORE BOUNDARY CONDITIONS IN R, AP, AND P.                        A 155
+C       CALL THE SUBROUTINE.                                              A 156
+C                                                                         A 157
+      HZ2=HZ*HZ                                                           A 158
+      DO 70 K=1,NNZ                                                       A 159
+      DO 70 J=1,NNY                                                       A 160
+      DO 70 I=1,NNX                                                       A 161
+      V(I,J,K)=-8.E0*HZ2+CC*HZ2*((FLOAT(I-1)*HX)**2+(FLOAT(J-1)*HY)**2+2  A 162
+     1.E0*(FLOAT(K-1)*HZ)**2)                                             A 163
+   70 CONTINUE                                                            A 164
+      DO 80 LKT=1,IP                                                      A 165
+      L=LKT                                                               A 166
+      I=ICOORD(1,L)                                                       A 167
+      J=ICOORD(2,L)                                                       A 168
+      K=ICOORD(3,L)                                                       A 169
+      IF (LKT.GT.IP1) L=IP1+2*(L-IP1)-1                                   A 170
+      X=FLOAT(I-1)*HX                                                     A 171
+      Y=FLOAT(J-1)*HY                                                     A 172
+      Z=FLOAT(K-1)*HZ                                                     A 173
+      R(L)=(X+DELTA(1,L)*HX)**2+Y*Y+2.E0*Z*Z                              A 174
+      P(L)=X*X+(Y+DELTA(2,L)*HY)**2+2.E0*Z*Z                              A 175
+      AP(L)=X*X+Y*Y+2.E0*(Z+DELTA(3,L)*HZ)**2                             A 176
+      IF (L.LE.IP1) GO TO 80                                              A 177
+      R(L+1)=(X+DELTA(1,L+1)*HX)**2+Y*Y+2.E0*Z*Z                          A 178
+      P(L+1)=X*X+(Y+DELTA(2,L+1)*HY)**2+2.E0*Z*Z                          A 179
+      AP(L+1)=X*X+Y*Y+2.E0*(Z+DELTA(3,L+1)*HZ)**2                         A 180
+   80 CONTINUE                                                            A 181
+   90 CONTINUE                                                            A 182
+      CALL HELM3D (MODE,UU,V,NXDIM,NYDIM,NZDIM,IP1,IP2,DELTA,NNX,NNY,NNZ  A 183
+     1,NIPDIM,NAPDIM,ICOORD,INDORD,CC,NIT,EPS,S,R,P,AP,IER)               A 184
+      WRITE (6,180) IER                                                   A 185
+      IF ((IER.EQ.1).OR.(IER.EQ.2)) GO TO 10                              A 186
+C                                                                         A 187
+C       CHECK ANSWER                                                      A 188
+C       THE TRUE SOLUTION TO THIS SAMPLE PROBLEM IS                       A 189
+C       U(X,Y,Z) = X*X + Y*Y + 2Z*Z.                                      A 190
+C                                                                         A 191
+      EMAX=0.E0                                                           A 192
+      DO 110 K=1,NNZ                                                      A 193
+      Z=FLOAT(K-1)*HZ                                                     A 194
+      DO 110 J=1,NNY                                                      A 195
+      Y=FLOAT(J-1)*HY                                                     A 196
+      DO 100 I=1,NNX                                                      A 197
+      X=FLOAT(I-1)*HX                                                     A 198
+      UU(I,J,K)=X*X+Y*Y+2.E0*Z*Z-UU(I,J,K)                                A 199
+C                                                                         A 200
+C       SET ERROR EQUAL TO ZERO FOR POINTS ON THE BOUNDARY OR             A 201
+C       OUTSIDE THE REGION TO INCREASE READABILITY OF THE OUTPUT.         A 202
+C                                                                         A 203
+      IF ((A*(X-AL)**2+B*(Y-BE)**2+C*(Z-GA)**2).GE.D) UU(I,J,K)=0.E0      A 204
+C                                                                         A 205
+C       COMPUTE THE MAXIMUM ERROR.                                        A 206
+C      (VALID ONLY IF MODE IS EVEN.)                                      A 207
+C                                                                         A 208
+      IF (ABS(UU(I,J,K)).GT.EMAX) EMAX=ABS(UU(I,J,K))                     A 209
+  100 CONTINUE                                                            A 210
+      WRITE (6,120) (UU(I,J,K),I=1,NNX)                                   A 211
+  110 CONTINUE                                                            A 212
+      IF (MODE/2*2.EQ.MODE) WRITE (6,190) EMAX                            A 213
+C                                                                         A 214
+C      GO ON TO NEXT PROBLEM.                                             A 215
+C                                                                         A 216
+      GO TO 10                                                            A 217
+C                                                                         A 218
+C                                                                         A 219
+C                                                                         A 220
+  120 FORMAT (1X,16E8.1)                                                  A 221
+  130 FORMAT (1X,6HIP1 = ,I7,7H IP2 = ,I5,27H SPACE AVAILABLE (NIPDIM) =  A 222
+     1,I6,23H MINIMUM SPACE NEEDED =,I6)                                  A 223
+  140 FORMAT (40H NNX, NNY, NNZ, AND HELMHOLTZ CONSTANT  ,3I7,F20.7)      A 224
+  150 FORMAT (43H ELLIPSOIDAL REGION WITH WEIGHTS A,B,C,D = ,4F7.3,12H A  A 225
+     1ND CENTER ,3F7.3)                                                   A 226
+  160 FORMAT (3I6,F20.7)                                                  A 227
+  170 FORMAT (7F6.3)                                                      A 228
+  180 FORMAT (30H0 ON RETURN FROM HELM3D, IER =,I3)                       A 229
+  190 FORMAT (40H  MAXIMUM DEVIATION FROM TRUE SOLUTION  ,E20.7)          A 230
+      END                                                                 A 231-
+     2                           1.E-5   1. NONZERO RHS
+     8     8     9   0.
+   1.    1.    1.   .08    .5    .5    .5
+     6                           1.E-8   2. REFINE ANSWER
+     4                           1.E-5   3. SAME REGION
+     8     8     9   1.
+     2                           1.E-5   4. NEW REGION
+     8     8     9   0.
+   1.    1.    1. .0625  .5    .5    .5
+     4                           1.E-8   5. SAME REGION
+     8     8     9   0.
+     2                           1.E-8   6. ERROR REGION
+     8     8     9   0.
+   1.    1.    1.    .5    .5    .5    .5
+     1                           1.E-5   7. ZERO RHS
+    16    16    17   1.
+   1.    1.    1. .0625  .6    .6    .6
+     3                           1.E-5   8. SAME REGION
+    16    16    17   0.
+     5                           1.E-8   9. REFINE ANSWER
+C### END OF DRIVER AND DATA.
+      SUBROUTINE HELM3D (MODE,W,GG,NXDIM,NYDIM,NZDIM,IPP1,IPP2,DELTA,NNX  B   1
+     1,NNY,NNZ,NIPDIM,NAPDIM,ICOORD,INDORD,CC,NIT,EPS,S,R,P,AP,IER)
+      INTEGER MODE,NXDIM,NYDIM,NZDIM,IPP1,IPP2,NNX,NNY,NNZ,NIPDIM,ICOORD
+     1(3,NIPDIM),INDORD(NIPDIM),NIT,IER
+      REAL W(NXDIM,NYDIM,NZDIM),GG(NXDIM,NYDIM,NZDIM),DELTA(3,NIPDIM),CC
+     1,EPS,S(NIPDIM),R(NIPDIM),P(NIPDIM),AP(NAPDIM)
+C
+C       THIS PROGRAM WAS DEVELOPED BY DIANNE P O'LEARY AND OLOF WIDLUND.
+C       THIS IS  VERSION.MD2,  OCTOBER, 1979.
+C
+C       THIS PROGRAM SOLVES THE DIRICHLET PROBLEM FOR THE
+C       HELMHOLTZ EQUATION OVER A GENERAL BOUNDED 3 DIMENSIONAL
+C       REGION IMBEDDED IN A UNIT CUBE
+C
+C        -W   - W   - W   + CC*W = G1   IN THE REGION
+C          XX    YY    ZZ
+C
+C         W = F                        ON THE BOUNDARY
+C
+C       WHERE F AND G1 ARE GIVEN FUNCTIONS OF X, Y, AND Z, AND  CC  IS
+C       A REAL CONSTANT.  THE BOUNDARY IS ARBITRARY.  THE PROGRAM
+C       PROVIDES A SOLUTION OF THE WELL KNOWN SHORTLEY-WELLER
+C       APPROXIMATION OF THE DIFFERENTIAL EQUATION.  THE MESH IS UNIFORM
+C       IN EACH COORDINATE DIRECTION AND A SIMPLE SEVEN POINT FORMULA
+C       IS USED FOR INTERIOR MESH POINTS.  A CAPACITANCE MATRIX
+C       METHOD,  WITH DISCRETE DIPOLES,  IS USED.  THE CAPACITANCE
+C       MATRIX EQUATION IS FORMULATED AS A LEAST SQUARES PROBLEM
+C       AND SOLVED USING THE CONJUGATE GRADIENT METHOD.
+C
+C     REFERENCES:
+C
+C       O'LEARY AND WIDLUND, CAPACITANCE MATRIX METHODS
+C       FOR THE HELMHOLTZ EQUATION ON GENERAL 3-DIMENSIONAL
+C       REGIONS,  NYU-DOE REPORT  COO-3077-155, OCTOBER, 1978;
+C       MATH. COMP. 33, 1979 849-880.
+C
+C       PROSKUROWSKI AND WIDLUND,  MATH.COMP. 30, 1976 443-468.
+C       ALSO  NYU-DOE REPORT.
+C
+C       PROSKUROWSKI, LAWRENCE BERKELEY LAB REPORTS AND
+C       "NUMERICAL SOLUTION OF HELMHOLTZ'S EQUATION BY
+C       IMPLICIT CAPACITANCE MATRIX METHODS," ACM TRANS.
+C       ON MATH. SOFTWARE 5, 1979 36-49.
+C
+C       SHIEH, MRC-WISCONSIN REPORTS AND NUMER. MATH. 29
+C       1978 307-327.
+C
+C
+C     MACHINE DEPENDENT FEATURES:
+C
+C       THIS PROGRAM SHOULD BE CONVERTED TO DOUBLE PRECISION
+C       IF IT IS TO BE USED ON COMPUTERS WITH SHORT WORD
+C       LENGTH ,SUCH AS IBM 360/370.
+C
+C
+C     GENERAL DESCRIPTION OF THE PARAMETERS:
+C
+C       INTEGER VALUES:
+C         DIMENSIONS OF ARRAYS  (NXDIM, NYDIM, NZDIM,
+C             NIPDIM, NAPDIM)
+C         NUMBER OF MESH POINTS IN CUBE  (NNX X NNY X
+C             NNZ)
+C         NUMBER OF POINTS IN REGION ADJACENT TO BOUNDARY
+C             (IPP1, IPP2)
+C         MAXIMUM NUMBER OF ITERATIONS ALLOWED  (NIT)
+C         ERROR CODE  (IER)
+C         CODE TO CONTROL PROGRAM OPTIONS  (MODE)
+C
+C       REAL VALUES:
+C         HELMHOLTZ CONSTANT  (CC)
+C         CONVERGENCE TOLERANCE  (EPS)
+C
+C       INTEGER ARRAYS:
+C         COORDINATES OF POINTS IN REGION ADJACENT TO
+C              BOUNDARY ('IRREGULAR POINTS')  (ICOORD)
+C         WORK SPACE  (INDORD)
+C
+C       REAL ARRAYS:
+C         G1  VALUES  (GG)
+C         BOUNDARY VALUES  (R, P, AP)
+C         DISTANCES FROM IRREGULAR POINTS TO BOUNDARY
+C              (DELTA)
+C         WORK SPACE  (W, S)
+C
+C
+C       TOTAL ARRAY SPACE NEEDED:
+C         REAL:  2  NXDIM * NYDIM * NZDIM  (1  IF  G1=0)
+C                6  NIPDIM
+C                1  NAPDIM
+C         INTEGER:
+C                4  NIPDIM
+C
+C         WHERE  NXDIM .GE. NNX,  NYDIM .GE. NNY,
+C                NZDIM .GE. NNZ,
+C                NIPDIM .GE. IPP1 + 2 * IPP2,
+C                NAPDIM .GE. MAX (IPP1+2*IPP2, NNX*NNZ,
+C                                 NNY*NNZ)
+C
+C
+C     NOTE:
+C
+C       IN THIS DOCUMENTATION,  NN  REFERS TO  NNX,  NNY,  OR  NNZ
+C       AS APPROPRIATE, AND SIMILARLY  H REFERS TO  HX,  HY,  OR  HZ.
+C       THE MESH POINT (X,Y,Z) IS SAID TO HAVE 6 NEIGHBORS:
+C          (X+HX,Y,Z), (X-HX,Y,Z), (X,Y+HY,Z), (X,Y-HY,Z),
+C          (X,Y,Z+HZ), AND (X,Y,Z-HZ).
+C       A MESH POINT IS CALLED IRREGULAR IF IT IS IN THE INTERIOR OF
+C       THE REGION AND AT LEAST ONE OF ITS SIX NEIGHBORS IS ON OR
+C       OUTSIDE THE BOUNDARY.
+C
+C   ON INPUT . . .
+C    -- MODE =  1 IF THE REGION HAS BEEN CHANGED FROM THE PREVIOUS CALL
+C                 AND  G1=0
+C               2 IF THE REGION HAS BEEN CHANGED FROM THE PREVIOUS CALL
+C                 AND  G1  IS NONZERO
+C               3 IF THE REGION IS THE SAME AS ON THE PREVIOUS CALL
+C                 AND  G1=0
+C               4 IF THE REGION IS THE SAME AS ON THE PREVIOUS CALL
+C                 AND  G1  IS NONZERO
+C               5 IF THE PROBLEM IS THE SAME AS ON THE  PREVIOUS CALL,
+C                 G1=0,  AND THE ONLY CHANGE IS THAT  EPS  AND/OR  NIT
+C                 MAY HAVE BEEN CHANGED
+C               6 IF THE PROBLEM IS THE SAME AS ON THE PREVIOUS CALL,
+C                 G1  IS NONZERO, AND THE ONLY CHANGE IS THAT  EPS
+C                 AND/OR  NIT  MAY HAVE BEEN CHANGED
+C        IF  MODE = 3,4,5, OR 6  DELTA,  ICOORD,  INDORD,  NXDIM,
+C        NYDIM,  NZDIM,  NNX,  NNY,  NNZ,  IPP1,  AND IPP2  MUST BE
+C        UNCHANGED FROM THE PREVIOUS CALL.  THE CURRENT VALUE OF  S
+C        WILL BE USED AS THE INITIAL GUESS FOR THE DIPOLE STRENGTHS.
+C        (S=0 WILL BE USED IF MODE=1 OR 2.)
+C        TO IMPROVE THE ACCURACY OF A PREVIOUSLY CALCULATED SOLUTION,
+C        USE  MODE=5  OR MODE=6  IF ROUNDOFF IS NOT SUSPECTED.  IF
+C        ROUNDOFF IS SUSPECTED, REINITIALIZE THE BOUNDARY VALUES IN  R,
+C        AP,  AND  P,  AND USE  MODE = 3 TO FORCE THE RESIDUAL TO BE
+C        RECOMPUTED; IF G1 IS NONZERO, ADD GG TO THE SOLUTION
+C        RETURNED BY THE SUBROUTINE.
+C
+C    -- W(NXDIM, NYDIM, NZDIM) IS UNINITIALIZED.
+C    -- GG(NXDIM, NYDIM, NZDIM) INITIALIZED TO  G1*HZ*HZ  IN THE
+C                              REGION, WITH ARBITRARY VALUES OUTSIDE.
+C         FOR  I=1,...,NNX,  J=1,...,NNY, AND   K=1,...,NNZ,
+C         GG(I,J,K) CORRESPONDS TO G1((I-1)*HX,(J-1)*HY,(K-1)*HZ)*HZ**2.
+C         IF  MODE = 1, 3 OR 5,  G1  MAY BE A DUMMY ARRAY (I.E.,
+C         IT NEED NOT BE DIMENSIONED BY THE CALLING PROGRAM).
+C
+C    -- IPP1 IS THE NUMBER OF IRREGULAR POINTS WITH AT LEAST 1
+C            INTERIOR NEIGHBOR IN EACH DIRECTION X, Y, AND Z.
+C    -- IPP2 IS THE NUMBER OF IRREGULAR POINTS WHICH, ALONG
+C            AT LEAST ONE DIRECTION, HAVE TWO EXTERIOR NEIGHBORS.
+C
+C       IN THE EXCEPTIONAL CASE WHEN  IPP1+IPP2.EQ.0,  THE ROUTINE
+C       WILL SOLVE THE PROBLEM ON THE WHOLE CUBE WITH THE
+C       BOUNDARY CONDITIONS#
+C             G1(X,Y,Z) = 0    Z .LT. 0    OR Z .GT. 1
+C             W(0,Y,Z) = W(1,Y,Z)  AND  W(X,0,Z) = W(X,1,Z)
+C             W(X,Y,0)=0 AND W(X,Y,Z) BOUNDED FOR ALL Z.
+C       ARRAY  GG  MUST BE INITIALIZED TO  G1*HZ*HZ  AND  MODE = 2.
+C       W  MAY BE A DUMMY ARRAY.  THE ANSWER WILL BE STORED
+C       IN THE ARRAY  GG  IN THIS CASE.
+C
+C    -- DELTA(3, NIPDIM)  RECORDS + OR - DISTANCE TO BOUNDARY
+C            FROM IRREGULAR POINT  L  IN THE  X,  Y,  AND  Z
+C            DIRECTIONS  (3*IPP1 + 6*IPP2  VALUES).  THESE DISTANCES
+C            ARE EXPRESSED AS MULTIPLES OF THE MESH SPACING: I.E.,
+C            IF A  DELTA  HAS THE VALUE  Q,  THE DISTANCE IS  Q*H.
+C        THERE ARE THREE DELTAS FOR EACH OF THE  IPP1  POINTS
+C        FOR  L=1,IPP1,
+C         DELTA(1,L) = SHORTER DISTANCE TO BOUNDARY ALONG X DIRECTION
+C         DELTA(2,L) = SHORTER DISTANCE TO BOUNDARY ALONG Y DIRECTION
+C         DELTA(3,L) = SHORTER DISTANCE TO BOUNDARY ALONG Z DIRECTION
+C        THERE ARE SIX DELTAS FOR EACH OF THE IPP2 POINTS,
+C        FOR  L=1,IPP2  ,  LL=IPP1+2*L-1,
+C         DELTA(1,LL)  AND  DELTA(1,LL+1)  ARE THE DISTANCES TO THE
+C            BOUNDARY ALONG THE POSITIVE AND NEGATIVE  X  DIRECTIONS
+C         DELTA(2,LL)  AND  DELTA(2,LL+1)  ARE THE DISTANCES TO THE
+C            BOUNDARY ALONG THE POSITIVE AND NEGATIVE  Y  DIRECTIONS
+C         DELTA(3,LL)  AND  DELTA(3,LL+1)  ARE THE DISTANCES TO THE
+C            BOUNDARY ALONG THE POSITIVE AND NEGATIVE  Z  DIRECTIONS
+C        THE PROGRAM WILL INTERCHANGE  DELTAS  IF NECESSARY SO THAT
+C        FOR  L=1,IPP2  ,  LL=IPP1+2*L-1,
+C        ABS(DELTA(S,LL)) .LE. ABS(DELTA(S,LL+1)).
+C        NO  DELTA  CAN BE SO CLOSE TO  0  AS TO CAUSE OVERFLOW
+C        UPON DIVISION BY A PRODUCT OF TWO  DELTAS.  SUCH SMALL
+C        DELTAS  SHOULD BE AVOIDED BY CHANGING THE REGION
+C        SLIGHTLY OR BY SHIFTING IT INSIDE THE CUBE OR BY
+C        USING ANOTHER MESH SIZE.
+C
+C    -- NNX, NNY, NNZ ARE THE NUMBER OF MESH POINTS IN THE X, Y, AND Z
+C                    DIRECTIONS.
+C       MAX(NNX,NNY) MUST BE .LE. 256 UNLESS THE ERROR CHECK IN
+C       HELMCK AND THE DIMENSIONS OF IB AND S IN COMMON FFT
+C       (SUBROUTINES CUBE,RFORT AND FORT) ARE CHANGED.
+C        THE MESH SPACINGS WILL BE CALCULATED TO BE
+C                 HX = 1 / NNX
+C                 HY = 1 / NNY
+C                 HZ = 1 / (NNZ - 1)
+C        NNX  AND  NNY  MUST BE POWERS OF  2  AND  .GE. 8  UNLESS
+C        THE FFT ROUTINES  RFORT  AND  FORT  ARE REPLACED.
+C
+C    -- NIPDIM, THE DIMENSION OF THE ONE DIMENSIONAL ARRAYS,
+C              MUST BE .GE. IPP1+2*IPP2.
+C    -- NAPDIM , THE DIMENSION OF  AP , MUST
+C              BE .GE.  MAX(IPP1+2*IPP2, NNX*NNZ, NNY*NNZ ).
+C    -- ICOORD(3,NIPDIM)  RECORDS THE  3*(IPP1+IPP2)  INDICES OF
+C              THE IRREGULAR POINTS.  THESE INDICES MUST LIE BETWEEN
+C              2 AND NN-1 INCLUSIVE.
+C              FOR  L = 1, IPP1
+C                THE  L-TH  COLUMN OF  ICOORD
+C                GIVES THE INDICES CORRESPONDING
+C                TO DATA IN THE  L-TH  COLUMNS OF
+C                DELTA,  P,  R,  AND  AP.
+C             FOR  L = 1, IPP2 ,   LL = IPP1 + 2 * L - 1
+C                THE  (IPP1+L)-TH  COLUMN OF  ICOORD
+C                GIVES THE INDICES CORRESPONDING TO
+C                DATA IN THE  LL-TH  AND  (LL+1)-TH
+C                COLUMNS OF  DELTA,  P,  R,  AND  AP.
+C    -- INDORD (NIPDIM)  IS UNINITIALIZED.  THE PROGRAM WILL
+C              RECORD A CODE (1-6) FOR THE ORDER OF THE DELTAS.
+C    -- CC  IS THE CONSTANT IN THE HELMHOLTZ EQUATION.
+C    -- NIT IS THE MAXIMUM NUMBER OF CONJUGATE GRADIENT ITERATIONS
+C              ALLOWED.
+C    -- EPS IS THE TOLERANCE FOR THE EUCLIDEAN NORM OF
+C              THE CAPACITANCE EQUATION RESIDUAL DIVIDED BY THE
+C              SQRT OF THE DIMENSION OF THIS VECTOR.
+C                          T T     T                T
+C              RESIDUAL = C U F - C C S  WHERE C = U AGV .
+C              IT IS DIFFICULT TO GIVE A RELIABLE RULE OF
+C              THUMB FOR THE CHOICE OF EPS. FOR MANY PROBLEMS
+C              ONE TENTH OF THE DESIRED ACCURACY FOR THE
+C              SOLUTION OF THE ORIGINAL DISCRETE PROBLEM IS A
+C              SUITABLE VALUE.A SMALLER TOLERANCE IS REQUIRED
+C              WHEN THE DISCRETE HELMHOLTZ OPERATOR IS CLOSE
+C              TO SINGULAR.
+C    -- S , P , R  ARE OF DIMENSION  NIPDIM .
+C           AP  IS OF DIMENSION  NAPDIM
+C              S IS UNINITIALIZED IF  MODE = 1 OR 2.
+C              IF MODE .LT. 5 , FOR  L=1,IPP1+2*IPP2,
+C               R(L) = F(X+DELTA(1,L)*HX, Y, Z)
+C               P(L) = F(X, Y+DELTA(2,L)*HY, Z)
+C               AP(L) = F(X, Y, Z+DELTA(3,L)*HZ)
+C       WHERE X,Y, AND Z ARE THE COORDINATES OF THE
+C       IRREGULAR POINT  CORRESPONDING TO THE DELTAS.
+C       THE VALUES OF  R , P , AND  AP  ARE NOT USED IN THE
+C       COMPUTATION IF THE ABSOLUTE VALUE OF THE CORRESPONDING
+C       DELTA  IS GREATER THAN 1.
+C
+C    -- IER IS UNINITIALIZED.  THE PROGRAM WILL RECORD AN ERROR
+C       CODE (0-3).
+C       THE USE OF DISCRETE DIPOLES IMPOSES A MILD RESTRICTION
+C       ON THE GEOMETRY OF THE REGION.  THE THREE MESH POINTS, OBTAINED
+C       BY STEPPING FROM AN IRREGULAR POINT IN THE DIRECTION OF THE
+C       SMALLEST MAGNITUDE  DELTA,  FROM THIS NEW POINT IN
+C       THE DIRECTION OF THE MEDIUM, AND FROM THERE IN THE DIRECTION
+C       OF THE LARGEST MUST NOT BE INTERIOR POINTS OF THE REGION.
+C       ASSOCIATED WITH AN IRREGULAR POINT WHICH HAS AT
+C       LEAST  2  EXTERIOR NEIGHBORS IN SOME MESH
+C       DIRECTION ARE TWO COLUMNS OF THE ARRAY  DELTA .
+C       THE  DELTA'S  RELEVANT TO THIS TEST ARE THE
+C       SMALLER IN MAGNITUDE OF THE TWO POSSIBLE
+C       CHOICES IN EACH COORDINATE DIRECTION.  IF THE
+C       RESTRICTION IS VIOLATED, A SUBROUTINE  HELMCK  WILL RETURN AN
+C       ERROR FLAG  IER = 2.  A REFINEMENT OF THE MESH OR
+C       A SLIGHT SHIFT OF THE REGION IN THE UNIT CUBE MIGHT
+C       RESOLVE THE PROBLEM.
+C
+C   ON OUTPUT . . .
+C         W  WILL CONTAIN VALUES OF THE SOLUTION INSIDE THE
+C                REGION AND USELESS VALUES OUTSIDE AND ON THE
+C                BOUNDARY.
+C         S  WILL RECORD DIPOLE STRENGTHS.  THIS IS THE SOLUTION
+C                VECTOR OF THE CAPACITANCE MATRIX EQUATION.
+C         R  WILL BE THE RESIDUAL OF THE CAPACITANCE EQUATION.
+C
+C         P , AP , AND  GG  WILL BE CHANGED, AND THE  DELTAS  MAY
+C         BE REORDERED AS INDICATED ABOVE.
+C
+C       ERROR RETURNS:
+C           IER=0      NO ERROR
+C              =1      ERROR IN INTEGER PARAMETER
+C              =2      ERROR IN  ICOORD  OR VIOLATION OF DIPOLE
+C                      RESTRICTION OR IRREGULAR POINT MISSING
+C              =3      TOO MANY CONJUGATE GRADIENT ITERATIONS
+C                      WITHOUT CONVERGENCE. ANSWER DOES NOT
+C                      HAVE THE REQUESTED ACCURACY.
+C
+C
+C       AFTER EACH ITERATION,THE FOLLOWING INFORMATION IS PRINTED:
+C          -- THE CONJUGATE GRADIENT PARAMETERS  ALPHA  AND  BETA.
+C               THIS INFORMATION COULD BE USED TO ESTIMATE THE
+C               CONDITION NUMBER OF THE CAPACITANCE MATRIX.
+C          -- THE EUCLIDEAN NORM OF THE RESIDUAL OF THE
+C             CAPACITANCE MATRIX EQUATION.
+C                               T T   T              T
+C                 THE RESIDUAL=C U F-C CS  WHERE C= U AGV.
+C
+C   THE ROLES OF THE SUBROUTINES:
+C         HELM3D  CONTROLS THE CONJUGATE GRADIENT ITERATION.
+C         HELMCK  CHECKS THE INPUT DATA FOR CORRECTNESS.
+C         VMULT   USES THE DIPOLE STRENGTHS IN A  NIPDIM  ARRAY TO
+C                 SET UP THE DIPOLES IN A 3 DIMENSIONAL ARRAY.
+C                 THIS SUBROUTINE THUS DEFINES A LINEAR MAPPING
+C                 FROM A SPACE OF  1-DIMENSIONAL ARRAYS TO A SPACE
+C                 OF  3-DIMENSIONAL ARRAYS.
+C         VTRANS  DEFINES THE TRANSPOSE OF THE MAPPING DEFINED
+C                 BY  VMULT.
+C         UTAMLT  MAPS  3-DIMENSIONAL ARRAYS INTO  1-DIMENSIONAL
+C                 ARRAYS BY USING A FINITE DIFFERENCE FORMULA WHICH
+C                 CORRESPONDS TO A PART OF THE SHORTLEY-WELLER
+C                 APPROXIMATION.  THE REMAINING PART IS HANDLED BY
+C                 BNDRY.
+C         UTATRN  DEFINES THE TRANSPOSE OF THE MAPPING DEFINED BY
+C                 UTAMLT.
+C         BNDRY   PROCESSES THE DIRICHLET DATA AND THE VALUES OF  G1
+C                 CLOSE TO THE BOUNDARY, PRODUCING  U(TRANSPOSE)F  FOR
+C                 USE IN THE RIGHT HAND SIDE OF THE CAPACITANCE EQUATION
+C         CUBE    SOLVES THE HELMHOLTZ EQUATION OVER A CUBE USING A
+C                 FOURIER-TOEPLITZ ALGORITHM.
+C         RFORT   IS A FAST FOURIER TRANSFORM ROUTINE DUE TO
+C                 W.PROSKUROWSKI WHO REVISED A CODE WRITTEN BY J.COOLEY.
+C                 IT IS USED BY SUBROUTINE CUBE.
+C         FORT    IS A SUBROUTINE CALLED BY  RFORT.
+C
+C       LOCAL STORAGE
+C
+      COMMON /SPACE/ HX,HY,HZ,H2(3),HX2,HY2,HZ2,TWOPI,CONST,C,CHZZ,NX,NY
+     1,NZ,IP1,IP2,IP,LOG2NX,LOG2NY,QXSQ,QYSQ
+      DOUBLE PRECISION DATAN
+      DIMENSION D(3), IOR(3), IORD(3,6)
+      LOGICAL BB
+      DATA IORD(1,1)/1/
+      DATA IORD(2,1)/2/
+      DATA IORD(3,1)/3/
+      DATA IORD(1,2)/2/
+      DATA IORD(2,2)/3/
+      DATA IORD(3,2)/1/
+      DATA IORD(1,3)/3/
+      DATA IORD(2,3)/1/
+      DATA IORD(3,3)/2/
+      DATA IORD(1,4)/1/
+      DATA IORD(2,4)/3/
+      DATA IORD(3,4)/2/
+      DATA IORD(1,5)/3/
+      DATA IORD(2,5)/2/
+      DATA IORD(3,5)/1/
+      DATA IORD(1,6)/2/
+      DATA IORD(2,6)/1/
+      DATA IORD(3,6)/3/
+C
+C       INITIALIZATION
+C
+      IP=IPP1+IPP2
+      WRITE (6,270) MODE,EPS,NIT
+      IER=0
+      IF (MODE.GT.6) IER=1
+      IF (MODE.LT.1) IER=1
+      IF (IER.NE.0) RETURN
+      IF (MODE.GT.4) GO TO 170
+      IF ((MODE.GE.3).AND.(IP.GT.0)) GO TO 130
+      NX=NNX
+      NY=NNY
+      NZ=NNZ
+      IP1=IPP1
+      IP2=IPP2
+      HX=1.E0/FLOAT(NX)
+      HY=1.E0/FLOAT(NY)
+      HZ=1.E0/FLOAT(NZ-1)
+      HX2=HX*HX
+      HY2=HY*HY
+      HZ2=HZ*HZ
+      H2(1)=HX2
+      H2(2)=HY2
+      H2(3)=HZ2
+      QXSQ=(HZ/HX)**2
+      QYSQ=(HZ/HY)**2
+      TWOPI=8.D0*DATAN(1.D0)
+C
+C       CALCULATE LOG NX AND LOG NY
+C
+      N=2
+      LOG2NX=1
+      LOG2NY=1
+   10 IF (N.LT.NX) LOG2NX=LOG2NX+1
+      IF (N.LT.NY) LOG2NY=LOG2NY+1
+      N=N*2
+      IF ((NX.GT.N).OR.(NY.GT.N)) GO TO 10
+      IF (IP.GT.0) GO TO 20
+      C=CC
+      CONST=1.E0+CC*HZ2/2.E0
+      CHZZ=C*HZ2
+      CALL CUBE (GG,NXDIM,NYDIM,NZDIM,NAPDIM,AP)
+      RETURN
+C
+C       DELTAS FOR THE IPP2 POINTS ARE REORDERED IF NECESSARY.
+C       INDORD RECORDS THE ORDER OF THE ABSOLUTE VALUES OF THE
+C       DELTAS*H*H.
+C
+   20 CONTINUE
+      XIPINV=SQRT(1.E0/FLOAT(IP))
+      IF (IP2.EQ.0) GO TO 60
+      DO 50 LL=1,IP2
+      INDEXD=IP1+2*LL-1
+      DO 50 KK=1,3
+      IF (ABS(DELTA(KK,INDEXD)).LE.ABS(DELTA(KK,INDEXD+1))) GO TO 50
+      SHUFL=DELTA(KK,INDEXD)
+      DELTA(KK,INDEXD)=DELTA(KK,INDEXD+1)
+      DELTA(KK,INDEXD+1)=SHUFL
+      IF (KK.EQ.2) GO TO 30
+      IF (KK.EQ.3) GO TO 40
+      SHUFL=R(INDEXD)
+      R(INDEXD)=R(INDEXD+1)
+      R(INDEXD+1)=SHUFL
+      GO TO 50
+   30 SHUFL=P(INDEXD)
+      P(INDEXD)=P(INDEXD+1)
+      P(INDEXD+1)=SHUFL
+      GO TO 50
+   40 SHUFL=AP(INDEXD)
+      AP(INDEXD)=AP(INDEXD+1)
+      AP(INDEXD+1)=SHUFL
+   50 CONTINUE
+   60 DO 120 L=1,IP
+      IOR(1)=1
+      IOR(2)=2
+      IOR(3)=3
+      INDEXD=L
+      IF (L.GT.IP1) INDEXD=IP1+(L-IP1)*2-1
+      D(1)=ABS(DELTA(1,INDEXD))*HX2
+      D(2)=ABS(DELTA(2,INDEXD))*HY2
+      D(3)=ABS(DELTA(3,INDEXD))*HZ2
+      IF (D(1).LE.D(2)) GO TO 70
+      IOR(1)=2
+      IOR(2)=1
+   70 ISUB=IOR(1)
+      IF (D(ISUB).LE.D(3)) GO TO 80
+      IOR(3)=IOR(1)
+      IOR(1)=3
+   80 ISUB2=IOR(2)
+      ISUB3=IOR(3)
+      IF (D(ISUB2).LE.D(ISUB3)) GO TO 90
+      IS=IOR(2)
+      IOR(2)=IOR(3)
+      IOR(3)=IS
+   90 CONTINUE
+      DO 110 LL=1,6
+      DO 100 KK=1,3
+      IF (IOR(KK).NE.IORD(KK,LL)) GO TO 110
+  100 CONTINUE
+      INDORD(L)=LL
+      GO TO 120
+  110 CONTINUE
+  120 CONTINUE
+      CALL HELMCK (W,DELTA,ICOORD,IORD,INDORD,NXDIM,NYDIM,NZDIM,NIPDIM,N
+     1APDIM,IER)
+      WRITE (6,280) NNX,NNY,NNZ,IP1,IP2
+      WRITE (6,290) NXDIM,NYDIM,NZDIM,NIPDIM,NAPDIM
+      WRITE (6,310) HX,HY,HZ
+      IF (IER.NE.0) RETURN
+C
+C       SOLUTION OF THE CAPACITANCE EQUATION
+C                           T                       T
+C                    C S = U F           WHERE C = U AGV
+C       USING THE CONJUGATE GRADIENT ALGORITHM ON THE SYSTEM
+C                     T       T T
+C                    C C S = C U F.
+C        INITIALIZE S = 0 FOR MODES 1 AND 2.
+C        INITIALIZE THE RESIDUAL
+C                         T T     T
+C                    R = C U F - C C S.
+C
+  130 CONTINUE
+      C=CC
+      CONST=1.E0+CC*HZ2/2.E0
+      CHZZ=C*HZ2
+      BB=.FALSE.
+      IF ((MODE.EQ.2).OR.(MODE.EQ.4)) BB=.TRUE.
+      CALL BNDRY (R,P,AP,GG,NXDIM,NYDIM,NZDIM,NIPDIM,DELTA,ICOORD,BB)
+      IF (.NOT.BB) GO TO 150
+      CALL CUBE (GG,NXDIM,NYDIM,NZDIM,NAPDIM,AP)
+      CALL UTAMLT (GG,AP,NXDIM,NYDIM,NZDIM,NIPDIM,DELTA,ICOORD)
+      DO 140 L=1,IP
+      R(L)=R(L)-AP(L)
+  140 CONTINUE
+  150 CONTINUE
+      CALL UTATRN (R,W,NXDIM,NYDIM,NZDIM,NIPDIM,DELTA,ICOORD)
+      CALL CUBE (W,NXDIM,NYDIM,NZDIM,NAPDIM,AP)
+      CALL VTRANS (W,R,NXDIM,NYDIM,NZDIM,NIPDIM,IORD,INDORD,DELTA,ICOORD
+     1)
+      IF (MODE.LE.2) GO TO 170
+      CALL VMULT (S,W,NXDIM,NYDIM,NZDIM,NIPDIM,IORD,INDORD,DELTA,ICOORD)
+      CALL CUBE (W,NXDIM,NYDIM,NZDIM,NAPDIM,AP)
+      CALL UTAMLT (W,AP,NXDIM,NYDIM,NZDIM,NIPDIM,DELTA,ICOORD)
+      CALL UTATRN (AP,W,NXDIM,NYDIM,NZDIM,NIPDIM,DELTA,ICOORD)
+      CALL CUBE (W,NXDIM,NYDIM,NZDIM,NAPDIM,AP)
+      CALL VTRANS (W,AP,NXDIM,NYDIM,NZDIM,NIPDIM,IORD,INDORD,DELTA,ICOOR
+     1D)
+      DO 160 L=1,IP
+  160 R(L)=R(L)-AP(L)
+  170 CONTINUE
+      RR=0.E0
+      DO 180 L=1,IP
+      RR=RR+R(L)*R(L)
+      P(L)=R(L)
+      IF (MODE.LE.2) S(L)=0.E0
+  180 CONTINUE
+      RNORM=SQRT(RR)
+      WRITE (6,300) RNORM
+      IF (RNORM*XIPINV.LE.EPS) GO TO 230
+      WRITE (6,250)
+      DO 220 KIT=1,NIT
+C
+C      CALCULATE RESIDUAL INCREMENT
+C
+      CALL VMULT (P,W,NXDIM,NYDIM,NZDIM,NIPDIM,IORD,INDORD,DELTA,ICOORD)
+      CALL CUBE (W,NXDIM,NYDIM,NZDIM,NAPDIM,AP)
+      CALL UTAMLT (W,AP,NXDIM,NYDIM,NZDIM,NIPDIM,DELTA,ICOORD)
+      CALL UTATRN (AP,W,NXDIM,NYDIM,NZDIM,NIPDIM,DELTA,ICOORD)
+      CALL CUBE (W,NXDIM,NYDIM,NZDIM,NAPDIM,AP)
+      CALL VTRANS (W,AP,NXDIM,NYDIM,NZDIM,NIPDIM,IORD,INDORD,DELTA,ICOOR
+     1D)
+C
+C        CALCULATE STEP LENGTH
+C
+      PAP=0.E0
+      DO 190 L=1,IP
+  190 PAP=PAP+P(L)*AP(L)
+      ALPHA=RR/PAP
+C
+C       CALCULATE NEW ITERATE AND RESIDUAL AND RESIDUAL NORM.
+C
+      RROLD=RR
+      RR=0.E0
+      DO 200 L=1,IP
+      S(L)=S(L)+ALPHA*P(L)
+      R(L)=R(L)-ALPHA*AP(L)
+      RR=RR+R(L)*R(L)
+  200 CONTINUE
+      BETA=RR/RROLD
+C
+C        TERMINATE IF ANSWER SUFFICIENTLY ACCURATE.
+C
+      RNORM=SQRT(RR)
+      WRITE (6,260) KIT,ALPHA,BETA,RNORM
+      IF (RNORM*XIPINV.LT.EPS) GO TO 230
+C
+C        CALCULATE NEW STEP DIRECTION.
+C
+      DO 210 L=1,IP
+  210 P(L)=R(L)+BETA*P(L)
+  220 CONTINUE
+      IER=3
+C
+  230 CONTINUE
+C
+C       CALCULATE FINAL ANSWER
+C
+      CALL VMULT (S,W,NXDIM,NYDIM,NZDIM,NIPDIM,IORD,INDORD,DELTA,ICOORD)
+      CALL CUBE (W,NXDIM,NYDIM,NZDIM,NAPDIM,AP)
+      IF (.NOT.BB) RETURN
+      DO 240 K=1,NZ
+      DO 240 J=1,NY
+      DO 240 I=1,NX
+  240 W(I,J,K)=W(I,J,K)+GG(I,J,K)
+      RETURN
+C
+C
+C
+  250 FORMAT (31H CONJUGATE GRADIENT ITERATION  //1X,10HITERATION ,2X,6H
+     1ALPHA ,5X,5HBETA ,7X,14HRESIDUAL NORM )
+  260 FORMAT (I10,2E10.3,7X,E10.3)
+  270 FORMAT (28H0HELM3D CALLED WITH MODE =  ,I5/6H EPS =,E20.5/57H MAXI
+     1MUM NUMBER OF CONJUGATE GRADIENT ITERATIONS (NIT) = ,I7)
+  280 FORMAT (8H NNX =  ,I7,8H NNY =  ,I7,8H NNZ =  ,I7/44H NUMBER OF IR
+     1REGULAR POINTS WITH AT MOST 1  ,57HEXTERIOR NEIGHBOR ALONG ANY COO
+     2RDINATE DIRECTION (IPP1) =,I7/43H NUMBER OF OTHER IRREGULAR POINTS
+     3 (IPP2) = ,I7)
+  290 FORMAT (45H THE THREE DIMENSIONAL ARRAY HAS DIMENSIONS  ,27H NXDIM
+     1, NYDIM, AND NZDIM = ,3I7/43H THE OTHER ARRAYS HAVE DIMENSION NIPD
+     2IM =  ,I7,12H,  NAPDIM=  ,I7)
+  300 FORMAT (20H INITIAL RESIDUAL = ,8X,E20.5)
+  310 FORMAT (41H THE MESH SPACINGS WERE CALCULATED TO BE ,F20.8,21H IN
+     1THE X DIRECTION, ,/41X,F20.8,25H IN THE Y DIRECTION, AND ,/41X,F20
+     2.8,22H IN THE Z DIRECTION.  )
+      END
+      SUBROUTINE BNDRY (BCX,BCY,BCZ,G,NXDIM,NYDIM,NZDIM,NIPDIM,DELTA,ICO  G   1
+     1ORD,BB)
+      COMMON /SPACE/ HX,HY,HZ,H2(3),HX2,HY2,HZ2,TWOPI,CONST,C,CHZZ,NX,NY
+     1,NZ,IP1,IP2,IP,LOG2NX,LOG2NY,QXSQ,QYSQ
+      DIMENSION BCX(NIPDIM), BCY(NIPDIM), BCZ(NIPDIM), DELTA(3,NIPDIM),
+     1ICOORD(3,NIPDIM), D1(3), D2(3), G(NXDIM,NYDIM,NZDIM)
+      LOGICAL BB
+C
+C                                       T
+C       THIS SUBROUTINE COMPUTES BCX = U F
+C       USING BOUNDARY DATA STORED IN BCX, BCY, AND BCZ,
+C       AND THE DATA IN G.
+C       THIS IS THE RIGHT HAND SIDE FOR THE CAPACITANCE MATRIX
+C       EQUATION.
+C       THE RESULT IS DETERMINED BY APPLYING THE SHORTLEY-
+C       WELLER APPROXIMATION OF -LAP+CC  AT AN IRREGULAR
+C       POINT AND DIVIDING BY THE SCALE FACTOR USED IN UTAMLT
+C       AND UTATRN.
+C
+      DO 110 LKT=1,IP
+C
+C       GET COORDINATES AND DISTANCES FOR THIS IRREGULAR POINT.
+C
+      L=LKT
+      I=ICOORD(1,L)
+      J=ICOORD(2,L)
+      K=ICOORD(3,L)
+      IF (L.GT.IP1) L=IP1+(L-IP1)*2-1
+      D1(1)=ABS(DELTA(1,L))
+      D1(2)=ABS(DELTA(2,L))
+      D1(3)=ABS(DELTA(3,L))
+      IF (L.LE.IP1) GO TO 10
+      D2(1)=ABS(DELTA(1,L+1))
+      D2(2)=ABS(DELTA(2,L+1))
+      D2(3)=ABS(DELTA(3,L+1))
+   10 CONTINUE
+      TERM1=0.E0
+      TERM2=0.E0
+C
+C      X INCREMENTS
+C
+      IF (D1(1).GT.1.E0) GO TO 30
+      IF (L.LE.IP1) GO TO 20
+      IF (D2(1).GT.1.E0) GO TO 20
+C
+C       BOUNDARY CUTS TWICE BETWEEN THIS POINT AND ITS X NEIGHBORS
+C
+      DIAG=2.E0*QXSQ/(D1(1)*D2(1))
+      TERM1=2.E0/((D1(1)+D2(1))*D1(1))
+      TERM2=2.E0/((D1(1)+D2(1))*D2(1))
+      GO TO 40
+C
+C       BOUNDARY CUTS ONCE BETWEEN THIS POINT AND ITS X NEIGHBORS.
+C
+   20 CONTINUE
+      DIAG=2.E0*QXSQ/D1(1)
+      TERM1=2.E0/((1.E0+D1(1))*D1(1))
+      GO TO 40
+C
+C      BOUNDARY DOES NOT CUT
+C
+   30 DIAG=2.E0*QXSQ
+   40 SUM=-TERM1*QXSQ*BCX(L)
+      IF (TERM2.NE.0.E0) SUM=SUM-TERM2*QXSQ*BCX(L+1)
+      TERM1=0.E0
+      TERM2=0.E0
+C
+C      Y INCREMENTS
+C
+      IF (D1(2).GT.1.E0) GO TO 60
+      IF (L.LE.IP1) GO TO 50
+      IF (D2(2).GT.1.E0) GO TO 50
+C
+C       BOUNDARY CUTS TWICE BETWEEN THIS POINT AND ITS Y NEIGHBORS
+C
+      DIAG=DIAG+2.E0*QYSQ/(D1(2)*D2(2))
+      TERM1=2.E0/((D1(2)+D2(2))*D1(2))
+      TERM2=2.E0/((D1(2)+D2(2))*D2(2))
+      GO TO 70
+C
+C      BOUNDARY CUTS ONCE BETWEEN THIS POINT AND ITS Y NEIGHBORS
+C
+   50 CONTINUE
+      DIAG=DIAG+2.E0*QYSQ/D1(2)
+      TERM1=2.E0/((1.E0+D1(2))*D1(2))
+      GO TO 70
+C
+C
+C       BOUNDARY DOES NOT CUT
+C
+   60 DIAG=DIAG+2.E0*QYSQ
+   70 SUM=SUM-TERM1*QYSQ*BCY(L)
+      IF (TERM2.NE.0.E0) SUM=SUM-TERM2*QYSQ*BCY(L+1)
+      TERM1=0.E0
+      TERM2=0.E0
+C
+C      Z INCREMENTS
+C
+      IF (D1(3).GT.1.E0) GO TO 90
+      IF (L.LE.IP1) GO TO 80
+      IF (D2(3).GT.1.E0) GO TO 80
+C
+C       BOUNDARY CUTS TWICE BETWEEN THIS POINT AND ITS Z NEIGHBORS
+C
+      DIAG=DIAG+2.E0/(D1(3)*D2(3))
+      TERM1=2.E0/((D1(3)+D2(3))*D1(3))
+      TERM2=2.E0/((D1(3)+D2(3))*D2(3))
+      GO TO 100
+C
+C      BOUNDARY CUTS ONCE BETWEEN THIS POINT AND ITS Z NEIGHBORS
+C
+   80 CONTINUE
+      DIAG=DIAG+2.E0/D1(3)
+      TERM1=2.E0/((1.E0+D1(3))*D1(3))
+      GO TO 100
+C
+C      BOUNDARY DOES NOT CUT
+C
+   90 DIAG=DIAG+2.E0
+  100 SUM=SUM-TERM1*BCZ(L)
+      IF (TERM2.NE.0.E0) SUM=SUM-TERM2*BCZ(L+1)
+      SCALE=1.E0/(DIAG+CHZZ)
+      GTERM=0.E0
+      ISUB1=ICOORD(1,LKT)
+      ISUB2=ICOORD(2,LKT)
+      ISUB3=ICOORD(3,LKT)
+      IF (BB) GTERM=G(ISUB1,ISUB2,ISUB3)
+      BCX(LKT)=(-SUM+GTERM)*SCALE
+  110 CONTINUE
+      RETURN
+      END
+      SUBROUTINE CUBE (F,NXDIM,NYDIM,NZDIM,NAPDIM,RE)                     I   1
+      COMMON /SPACE/ HX,HY,HZ,H2(3),HX2,HY2,HZ2,TWOPI,CONST,C,CHZZ,NX,NY
+     1,NZ,IP1,IP2,IP,LOG2NX,LOG2NY,QXSQ,QYSQ
+      DIMENSION F(NXDIM,NYDIM,NZDIM), RE(NAPDIM)
+      COMMON /FFT/ S(64),IB(256)
+C
+C       THIS SUBROUTINE SOLVES THE HELMHOLTZ EQUATION OVER A CUBE:
+C
+C          -U   - U   - U   + C*U = F/(HZ*HZ)
+C            XX    YY    ZZ
+C
+C       WITH F=0 OUTSIDE THE CUBE IN THE Z DIRECTION AND U
+C       PERIODIC IN X AND Y WITH PERIODS  1.
+C       THE ANSWER IS STORED IN F.
+C       ANY REAL VALUE OF C CAN BE HANDLED BY THIS FOURIER-
+C       TOEPLITZ METHOD.
+C       RE  IS USED AS WORKSPACE TO INTERFACE WITH THE
+C       FFT  ROUTINES.  THE  DIMENSIONS OF S AND IB MUST
+C       BE .GE. N/4 AND N RESPECTIVELY,WHERE N= MAX(NX,NY).
+C
+      IFS=-2
+   10 IF (NX.EQ.1) GO TO 50
+      NZ1=NZ-1
+      CALL RFORT (RE,LOG2NX,0,NZ,NAPDIM)
+      DO 40 J=1,NY
+      L=0
+      DO 20 K=1,NZ
+      DO 20 I=1,NX
+      L=L+1
+   20 RE(L)=F(I,J,K)
+      CALL RFORT (RE,LOG2NX,IFS,NZ,NAPDIM)
+      L=0
+      DO 30 K=1,NZ
+      DO 30 I=1,NX
+      L=L+1
+   30 F(I,J,K)=RE(L)
+   40 CONTINUE
+   50 CONTINUE
+      CALL RFORT (RE,LOG2NY,0,NZ,NAPDIM)
+      DO 80 I=1,NX
+      L=0
+      DO 60 K=1,NZ
+      DO 60 J=1,NY
+      L=L+1
+   60 RE(L)=F(I,J,K)
+      CALL RFORT (RE,LOG2NY,IFS,NZ,NAPDIM)
+      L=0
+      DO 70 K=1,NZ
+      DO 70 J=1,NY
+      L=L+1
+   70 F(I,J,K)=RE(L)
+   80 CONTINUE
+C
+C      SOLVE THE TRIDIAGONAL SYSTEMS
+C
+      IF (IFS.GT.0) GO TO 220
+      NXD2=2**(LOG2NX-1)
+      NYD2=2**(LOG2NY-1)
+      DO 210 LY=1,NYD2
+      COSJ=COS(TWOPI*FLOAT(LY-1)/FLOAT(NY))
+      DO 210 KTJ=1,2
+      J=LY*2+KTJ-2
+      DO 210 LX=1,NXD2
+      COSI=COS(TWOPI*FLOAT(LX-1)/FLOAT(NX))
+      DO 210 KTI=1,2
+      I=LX*2+KTI-2
+C
+C     LX = INTEGER PART OF (I-1)/2 + 1
+C     LY = INTEGER PART OF (I-1)/2 + 1
+C
+C
+C     TRIDIAGONAL SYSTEM WITH
+C       DIAGONAL ELEMENTS T(1,1) AND T(NNZ,NNZ) = XLMBDA/2
+C                   + SQRT((XLMBDA/2)**2 - 1).
+C       THE OTHER DIAGONAL ELEMENTS = XLMBDA
+C       SUB- AND SUPER DIAGONAL ELEMENTS EQUAL  -1 .
+C       THE TRIDIAGONAL SYSTEM IS:
+C      T V = G         G(K) = F(I,J,K)  K=1,...,NZ
+C      STORE V IN F
+C
+C       COMPUTE XLMBDA
+C
+      XLMBDA=CONST
+      IF (J-2) 110,90,100
+   90 XLMBDA=XLMBDA+QYSQ*2.E0
+      GO TO 110
+  100 XLMBDA=XLMBDA+QYSQ*(1.E0-COSJ)
+  110 CONTINUE
+      IF (I-2) 140,120,130
+  120 XLMBDA=XLMBDA+QXSQ*2.E0
+      GO TO 140
+  130 XLMBDA=XLMBDA+QXSQ*(1.E0-COSI)
+  140 XLMBDA=XLMBDA*2.E0
+      DISCR2=.25E0*XLMBDA*XLMBDA-1.E0
+      IF (DISCR2.GT.0.E0) GO TO 170
+C
+C       -2 .LE. XLMBDA .LE. 2
+C
+C
+C       PHI = ARCCOS(XLMBDA / 2)
+C
+C       F(I,J,K) = V(J) = SUM(F(I,J,K) SIN(PHI*ABS(I-J)))/
+C                  (2 SIN(PHI))
+C
+C       WHERE SIN((N+1)PHI) / SIN(PHI) = UN(X) =
+C             N-TH CHEBYSHEV POLYNOMIAL
+C       AND X = XLMBDA / 2.
+C
+C        V(K+1) = XLMBDA V(K) - V(K-1) - G(K)
+C
+      UCM1=1.E0
+      UC=XLMBDA/2.E0
+      V=F(I,J,1)*UC
+      DO 150 K=2,NZ
+      UCM2=UCM1
+      UCM1=UC
+      UC=XLMBDA*UCM1-UCM2
+      V=V+UC*F(I,J,K)
+  150 CONTINUE
+      G=F(I,J,2)
+      F(I,J,2)=XLMBDA*V-F(I,J,1)
+      F(I,J,1)=V
+      DO 160 K=3,NZ
+      G2=F(I,J,K)
+      F(I,J,K)=XLMBDA*F(I,J,K-1)-F(I,J,K-2)-G
+  160 G=G2
+      GO TO 200
+C
+C        XLMBDA.GT.2 OR .LT. -2
+C
+C      SOLVE THE FACTORED SYSTEM
+C
+  170 DISCR=SQRT(DISCR2)
+      IF (XLMBDA.GT.0.E0) DISCR=-DISCR
+      BEI=.5E0*XLMBDA+DISCR
+C
+C       FORWARD SUBSTITUTION
+C
+      DO 180 KK=1,NZ1
+      K=NZ-KK
+  180 F(I,J,K)=F(I,J,K)+F(I,J,K+1)*BEI
+C
+C       BACKWARD SUBSTITUTION
+C
+      F(I,J,1)=F(I,J,1)*BEI
+      DO 190 K=2,NZ
+  190 F(I,J,K)=(F(I,J,K)+F(I,J,K-1))*BEI
+  200 CONTINUE
+  210 CONTINUE
+      IFS=-IFS
+      IF (IFS.GT.0) GO TO 10
+  220 CONTINUE
+      RETURN
+      END
+      SUBROUTINE FORT (A,M,IFS,MM,NAPDIM)                                 K   1
+      DIMENSION A(NAPDIM)
+      DOUBLE PRECISION DATAN
+      COMMON /FFT/ S(64),IB(256)
+C
+C       THIS IS AN AUGUST 1978 VERSION,A SLIGHT REVISION OF
+C       A PROGRAM OBTAINED FROM W.PROSKUROWSKI.HIS CODE IS
+C       BASED ON A CODE DUE TO J.COOLEY.
+C
+C       THE COMPLEX FFT OR THE INVERSE COMPLEX FFT OR A SINE
+C       TABLE IS COMPUTED.SEE FURTHER THE COMMENTS OF
+C       SUBROUTINE RFORT.
+C
+      N=2**M
+      IF (IFS.NE.0) GO TO 90
+      THETA=DATAN(1.D0)
+      NT=N/4
+      MT=M-2
+      IF (MT.LE.0) GO TO 80
+      JSTEP=NT
+      JDIF=NT/2
+      S(JDIF)=SIN(THETA)
+      IF (MT.LT.2) GO TO 30
+      DO 20 L=2,MT
+      THETA=THETA*0.5
+      JSTEP2=JSTEP
+      JSTEP=JDIF
+      JDIF=JDIF/2
+      S(JDIF)=SIN(THETA)
+      JC1=NT-JDIF
+      S(JC1)=COS(THETA)
+      JLAST=NT-JSTEP2
+      IF (JLAST.LT.JSTEP) GO TO 20
+      DO 10 J=JSTEP,JLAST,JSTEP
+      JC=NT-J
+      JD=J+JDIF
+   10 S(JD)=S(J)*S(JC1)+S(JDIF)*S(JC)
+   20 CONTINUE
+   30 CONTINUE
+      DO 40 I=1,N
+   40 IB(I)=0
+      N2=N/2
+      J=2
+      NM2=N-2
+      DO 70 I=2,NM2,2
+      IF (I.GE.J) GO TO 50
+      IB(I)=J
+   50 K=N2
+   60 IF (K.GE.J) GO TO 70
+      J=J-K
+      K=K/2
+      GO TO 60
+   70 J=J+K
+   80 CONTINUE
+      RETURN
+   90 CONTINUE
+      N2=2*N
+      NT=N/2
+      MN2=MM*N2
+      DO 110 I=2,N2,2
+      IF (IB(I).EQ.0) GO TO 110
+      IR=0
+      DO 100 L=1,MM
+      J=IB(I)+IR
+      K=I+IR
+      T=A(K)
+      A(K)=A(J)
+      A(J)=T
+      T=A(K-1)
+      A(K-1)=A(J-1)
+      A(J-1)=T
+      IR=IR+N2
+  100 CONTINUE
+  110 CONTINUE
+      IF (IFS.GT.0) GO TO 130
+      FN=N
+      FN=1.0/FN
+      DO 120 I=2,MN2,2
+      A(I-1)=A(I-1)*FN
+  120 A(I)=-A(I)*FN
+  130 DO 140 I=2,MN2,4
+      T=A(I-1)
+      A(I-1)=T+A(I+1)
+      A(I+1)=T-A(I+1)
+      T=A(I)
+      A(I)=T+A(I+2)
+  140 A(I+2)=T-A(I+2)
+      LEXP1=2
+      LEXP=8
+      NPL=2**(M-1)
+      DO 200 L=2,M
+      DO 150 I=2,MN2,LEXP
+      I1=I+LEXP1
+      I2=I1+LEXP1
+      I3=I2+LEXP1
+      T=A(I-1)
+      A(I-1)=T+A(I2-1)
+      A(I2-1)=T-A(I2-1)
+      T=A(I)
+      A(I)=T+A(I2)
+      A(I2)=T-A(I2)
+      T=-A(I3)
+      TI=A(I3-1)
+      A(I3-1)=A(I1-1)-T
+      A(I3)=A(I1)-TI
+      A(I1-1)=A(I1-1)+T
+  150 A(I1)=A(I1)+TI
+      IF (L.EQ.2) GO TO 190
+      JMAX=LEXP1
+      DO 180 JMIN=4,MN2,N2
+      KLAST=N2-LEXP
+      JJ=NPL
+      DO 170 J=JMIN,JMAX,2
+      NPJJ=NT-JJ
+      UR=S(NPJJ)
+      UI=S(JJ)
+      ILAST=J+KLAST
+      DO 160 I=J,ILAST,LEXP
+      I1=I+LEXP1
+      I2=I1+LEXP1
+      I3=I2+LEXP1
+      T=A(I2-1)*UR-A(I2)*UI
+      TI=A(I2-1)*UI+A(I2)*UR
+      A(I2-1)=A(I-1)-T
+      A(I2)=A(I)-TI
+      A(I-1)=A(I-1)+T
+      A(I)=A(I)+TI
+      T=-A(I3-1)*UI-A(I3)*UR
+      TI=A(I3-1)*UR-A(I3)*UI
+      A(I3-1)=A(I1-1)-T
+      A(I3)=A(I1)-TI
+      A(I1-1)=A(I1-1)+T
+  160 A(I1)=A(I1)+TI
+  170 JJ=JJ+NPL
+      JMAX=JMAX+N2
+  180 CONTINUE
+  190 LEXP1=2*LEXP1
+      LEXP=2*LEXP
+  200 NPL=NPL/2
+      IF (IFS.GT.0) RETURN
+      DO 210 I=2,MN2,2
+  210 A(I)=-A(I)
+      RETURN
+      END
+      SUBROUTINE HELMCK (W,DELTA,ICOORD,IORD,INDORD,NXDIM,NYDIM,NZDIM,NI  C   1
+     1PDIM,NAPDIM,IER)
+      COMMON /SPACE/ HX,HY,HZ,H2(3),HX2,HY2,HZ2,TWOPI,CONST,C,CHZZ,NX,NY
+     1,NZ,IP1,IP2,IP,LOG2NX,LOG2NY,QXSQ,QYSQ
+      DIMENSION W(NXDIM,NYDIM,NZDIM), DELTA(3,NIPDIM), ICOORD(3,NIPDIM),
+     1 IORD(3,6), INDORD(NIPDIM)
+      DIMENSION INEI(3), ISTEP(3)
+      DIMENSION IC(3)
+      LOGICAL IN
+C
+C       THIS SUBROUTINE CHECKS THAT:
+C           1.   NNX,NNY .GE. 8 AND .LE. 256  AND ARE POWERS OF 2
+C           2.   NIPDIM .GE. IP1+2*IP2,
+C                NAPDIM .GE. MAX (IP1+2*IP2, NX*NZ, NY*NZ )
+C           3.   NXDIM .GE. NX, NYDIM .GE. NY, NZDIM .GE. NZ
+C           4.   INDICES OF IRREGULAR POINTS ARE WITHIN RANGE
+C           5.   DIRECTION TO BOUNDARY FROM EACH IRREGULAR POINT
+C                POINTS OUTSIDE THE REGION
+C           6.   THE LIST OF IRREGULAR POINTS IS COMPLETE.
+C
+      IER=0
+C
+C       PART 1
+C
+      IF (NX.LT.8) IER=1
+      IF (NY.LT.8) IER=1
+      IF (2**LOG2NX.NE.NX) IER=1
+      IF (2**LOG2NY.NE.NY) IER=1
+      IF (NX.GT.256) IER=1
+      IF (NY.GT.256) IER=1
+C
+C       PART 2
+C
+      ND1=IP1+2*IP2
+      IF (NIPDIM.LT.ND1) IER=1
+      IF (NAPDIM.LT.MAX0(ND1,NX*NZ,NY*NZ)) IER=1
+C
+C       PART 3
+C
+      IF (NXDIM.LT.NX) IER=1
+      IF (NYDIM.LT.NY) IER=1
+      IF (NZDIM.LT.NZ) IER=1
+      IF (IER.EQ.1) GO TO 180
+C
+C       PART 4 AND PART 5
+C
+C       WE SET  W = 0  IF THE POINT IS OUTSIDE THE REGION
+C                      OR ON THE BOUNDARY
+C                   1  IF THE POINT IS AN IRREGULAR POINT
+C                   2  IF THE POINT IS INSIDE THE REGION.
+C      TO CHECK THE REGION
+C        1  INITIALIZE ALL W'S TO 3.
+C        2  CHECK EACH IRREGULAR POINT (1 TO IP).  IF ITS W HAS
+C           ALREADY BEEN SET TO 0 OR 1 WE HAVE AN ERROR
+C              IF IT IS 0 WE HAVE RECEIVED CONFLICTING DELTAS.
+C              IF IT IS 1 WE HAVE TWO SETS OF DATA FOR THE SAME POINT.
+C           SET THE W OF THE BOUNDARY POINT TO 1 AND THE SIX NEIGHBOR
+C           W'S TO 0 OR 2,DEPENDING ON THE VALUE OF THE DELTAS.
+C           THE VALUE AT A NEIGHBOR IS CHANGED ONLY IF IT IS A 3.  IF
+C           IT IS ALREADY 0, 1, OR 2, THE VALUE IS CHECKED FOR
+C           CONSISTENCY. 1'S  ARE CONSISTENT WITH 2'S.
+C        3  NOW REPLACE THE W'S WHICH REMAIN EQUAL TO 3. EACH NEW
+C           ROW OF POINTS IN THE CUBE BEGINS OUTSIDE THE REGION.
+C           WE MARCH ACROSS, REPLACING 3'S BY 0'S UNTIL WE HIT A 1 OR 2.
+C           THEN WE MARCH ACROSS REPLACING 3'S BY 2'S UNTIL WE ENCOUNTER
+C           A 0, AT WHICH POINT WE ARE OUTSIDE AGAIN.  THE PROCEDURE
+C           CONTINUES UNTIL EVERY POINT HAS BEEN SET TO A VALUE 0, 1, OR
+C           2.
+C        4  CHECK THAT DIPOLES POINT OUT OF THE REGION.
+C        5  FINALLY, CHECK THAT NO INTERIOR POINT HAS AN EXTERIOR
+C           NEIGHBOR, I.E., NO 0 HAS A 2 AS A NEIGHBOR.
+C
+C      IF ALL OF THESE TESTS ARE PASSED, THE REGION IS OK.
+C
+      DO 10 K=1,NZ
+      DO 10 J=1,NY
+      DO 10 I=1,NX
+   10 W(I,J,K)=3.E0
+      NX1=NX-1
+      NY1=NY-1
+      NZ1=NZ-1
+      DELTMN=1.E0
+C
+C       SET W NEAR BOUNDARY.
+C
+      DO 100 LKT=1,IP
+      L=LKT
+      IF (L.GT.IP1) L=IP1+(L-IP1)*2-1
+      DO 20 KK=1,3
+      IC(KK)=ICOORD(KK,LKT)
+      ISTEP(KK)=1
+      IF (ABS(DELTA(KK,L)).LT.DELTMN) DELTMN=ABS(DELTA(KK,L))
+   20 IF (DELTA(KK,L).LT.0.E0) ISTEP(KK)=-1
+      IF ((IC(1).LT.2).OR.(IC(1).GT.NX1)) GO TO 70
+      IF ((IC(2).LT.2).OR.(IC(2).GT.NY1)) GO TO 70
+      IF ((IC(3).LT.2).OR.(IC(3).GT.NZ1)) GO TO 70
+      ISUB1=IC(1)
+      ISUB2=IC(2)
+      ISUB3=IC(3)
+      IF ((W(ISUB1,ISUB2,ISUB3).NE.3.E0).AND.(W(ISUB1,ISUB2,ISUB3).NE.2.
+     1E0)) GO TO 80
+      W(ISUB1,ISUB2,ISUB3)=1.E0
+      DO 60 KK=1,3
+      INEI(1)=IC(1)
+      INEI(2)=IC(2)
+      INEI(3)=IC(3)
+      IF (ABS(DELTA(KK,L)).GT.1.E0) GO TO 40
+      IF (L.LE.IP1) GO TO 30
+      IF (ABS(DELTA(KK,L+1)).GT.1.E0) GO TO 30
+C
+C       TWO EXTERIOR NEIGHBORS IN KK-TH DIRECTION
+C
+      INEI(KK)=IC(KK)+ISTEP(KK)
+      ISUB1=INEI(1)
+      ISUB2=INEI(2)
+      ISUB3=INEI(3)
+      IF ((W(ISUB1,ISUB2,ISUB3).EQ.1.E0).OR.(W(ISUB1,ISUB2,ISUB3).EQ.2.E
+     10)) GO TO 50
+      W(ISUB1,ISUB2,ISUB3)=0.E0
+      INEI(KK)=IC(KK)-ISTEP(KK)
+      ISUB1=INEI(1)
+      ISUB2=INEI(2)
+      ISUB3=INEI(3)
+      IF ((W(ISUB1,ISUB2,ISUB3).EQ.1.E0).OR.(W(ISUB1,ISUB2,ISUB3).EQ.2.E
+     10)) GO TO 50
+      W(ISUB1,ISUB2,ISUB3)=0.E0
+      GO TO 60
+C
+C       ONE DELTA .LE. 1   ONE EXTERIOR AND ONE INTERIOR NEIGHBOR
+C
+   30 INEI(KK)=IC(KK)+ISTEP(KK)
+      ISUB1=INEI(1)
+      ISUB2=INEI(2)
+      ISUB3=INEI(3)
+      IF ((W(ISUB1,ISUB2,ISUB3).EQ.1.E0).OR.(W(ISUB1,ISUB2,ISUB3).EQ.2.E
+     10)) GO TO 50
+      W(ISUB1,ISUB2,ISUB3)=0.E0
+      INEI(KK)=IC(KK)-ISTEP(KK)
+      ISUB1=INEI(1)
+      ISUB2=INEI(2)
+      ISUB3=INEI(3)
+      IF (W(ISUB1,ISUB2,ISUB3).EQ.0.E0) GO TO 50
+      IF (W(ISUB1,ISUB2,ISUB3).EQ.3.E0) W(ISUB1,ISUB2,ISUB3)=2.E0
+      GO TO 60
+C
+C       BOTH NEIGHBORS INTERIOR
+C
+   40 INEI(KK)=IC(KK)+ISTEP(KK)
+      ISUB1=INEI(1)
+      ISUB2=INEI(2)
+      ISUB3=INEI(3)
+      IF (W(ISUB1,ISUB2,ISUB3).EQ.0.E0) GO TO 50
+      IF (W(ISUB1,ISUB2,ISUB3).EQ.3.E0) W(ISUB1,ISUB2,ISUB3)=2.E0
+      INEI(KK)=IC(KK)-ISTEP(KK)
+      ISUB1=INEI(1)
+      ISUB2=INEI(2)
+      ISUB3=INEI(3)
+      IF (W(ISUB1,ISUB2,ISUB3).EQ.0.E0) GO TO 50
+      IF (W(ISUB1,ISUB2,ISUB3).EQ.3.E0) W(ISUB1,ISUB2,ISUB3)=2.E0
+      GO TO 60
+   50 WRITE (6,220) INEI(1),INEI(2),INEI(3),L,IC(1),IC(2),IC(3)
+      IER=2
+   60 CONTINUE
+      GO TO 100
+   70 WRITE (6,200) L,IC(1),IC(2),IC(3)
+      GO TO 90
+   80 WRITE (6,210) L,IC(1),IC(2),IC(3)
+   90 IER=2
+  100 CONTINUE
+      IF (IER.NE.0) RETURN
+C
+C       SET THE OTHER VALUES OF W
+C
+      DO 120 K=1,NZ
+      DO 120 J=1,NY
+      IN=.FALSE.
+      DO 120 I=1,NX
+      IF (IN) GO TO 110
+C
+C       OUTSIDE REGION
+C
+      IF ((W(I,J,K).EQ.1.E0).OR.(W(I,J,K).EQ.2.E0)) IN=.TRUE.
+      IF (W(I,J,K).EQ.3.E0) W(I,J,K)=0.E0
+      GO TO 120
+C
+C       INSIDE REGION
+C
+  110 IF (W(I,J,K).EQ.0.E0) IN=.FALSE.
+      IF (W(I,J,K).EQ.3.E0) W(I,J,K)=2.E0
+  120 CONTINUE
+C
+C       DIPOLE CHECK
+C
+      DO 150 L=1,IP
+      INDEXD=L
+      IF (L.GT.IP1) INDEXD=IP1+(L-IP1)*2-1
+      DO 130 KK=1,3
+      IC(KK)=ICOORD(KK,L)
+      ISTEP(KK)=1
+  130 IF (DELTA(KK,INDEXD).LT.0.0) ISTEP(KK)=-1
+      ISUB=INDORD(L)
+      I1=IORD(1,ISUB)
+      I2=IORD(2,ISUB)
+      I3=IORD(3,ISUB)
+      IC(I1)=IC(I1)+ISTEP(I1)
+      ISUB1=IC(1)
+      ISUB2=IC(2)
+      ISUB3=IC(3)
+      IF (W(ISUB1,ISUB2,ISUB3).GT.1.E0) GO TO 140
+      IC(I2)=IC(I2)+ISTEP(I2)
+      ISUB1=IC(1)
+      ISUB2=IC(2)
+      ISUB3=IC(3)
+      IF (W(ISUB1,ISUB2,ISUB3).GT.1.E0) GO TO 140
+      IC(I3)=IC(I3)+ISTEP(I3)
+      ISUB1=IC(1)
+      ISUB2=IC(2)
+      ISUB3=IC(3)
+      IF (W(ISUB1,ISUB2,ISUB3).GT.1.E0) GO TO 140
+      GO TO 150
+  140 WRITE (6,230) L,ICOORD(1,L),ICOORD(2,L),ICOORD(3,L),(DELTA(KK,INDE
+     1XD),KK=1,3)
+      IER=2
+  150 CONTINUE
+C
+C       PART 6
+C
+      ISIZE=IP1+IP2
+      DO 170 I=1,NX
+      DO 170 J=1,NY
+      DO 170 K=1,NZ
+      IF (W(I,J,K).NE.2.E0) GO TO 170
+      ISIZE=ISIZE+1
+      IF (W(I,J,K-1).EQ.0.E0) GO TO 160
+      IF (W(I,J,K+1).EQ.0.E0) GO TO 160
+      IF (W(I,J-1,K).EQ.0.E0) GO TO 160
+      IF (W(I,J+1,K).EQ.0.E0) GO TO 160
+      IF (W(I-1,J,K).EQ.0.E0) GO TO 160
+      IF (W(I+1,J,K).EQ.0.E0) GO TO 160
+      GO TO 170
+  160 WRITE (6,240) I,J,K,W(I,J,K-1),W(I,J,K+1),W(I,J-1,K),W(I,J+1,K),W(
+     1I-1,J,K),W(I+1,J,K)
+      IER=2
+  170 CONTINUE
+      WRITE (6,190) ISIZE,DELTMN
+      RETURN
+C
+C
+  180 WRITE (6,250) NX,NY,NZ,NIPDIM,NAPDIM,IP,NXDIM,NYDIM,NZDIM
+      WRITE (6,260)
+      RETURN
+C
+C
+C
+  190 FORMAT (30H NUMBER OF POINTS IN REGION = ,I8/19H SMALLEST DELTA =
+     1 ,E20.7)
+  200 FORMAT (45H ***ERROR***  COORDINATES OF IRREGULAR POINT ,I7,36H AR
+     1E OUT OF RANGE.  COORDINATES ARE ,3I8)
+  210 FORMAT (50H ***ERROR***  CONFLICTING BOUNDARY INFORMATION.   ,/13X
+     1,18H IRREGULAR POINT  ,I8,75H IS LISTED TWICE OR LISTED AS AN EXTE
+     2RIOR NEIGHBOR OF SOME IRREGULAR POINT./13X,21H THE COORDINATES ARE
+     3 ,3I8)
+  220 FORMAT (47H ***ERROR***  CONFLICTING BOUNDARY INFORMATION.,/12X,30
+     1H  THE POINT WITH COORDINATES  ,3I8,46H IS  BOTH AN EXTERIOR AND A
+     2N INTERIOR POINT.  ,/13X,66H ERROR DETECTED WHEN PROCESSING INFORM
+     3ATION FOR IRREGULAR POINT   ,I7,19H WITH COORDINATES  ,3I8)
+  230 FORMAT (43H ***ERROR***  DIPOLE RESTRICTION VIOLATED. ,36H SEE DOC
+     1UMENTATION FOR EXPLANATION. /13X,20H IRREGULAR POINT    ,I7,14H CO
+     2ORDINATES  ,3I8/13X,7H DELTA ,3E10.3)
+  240 FORMAT (41H ***ERROR***  THE POINT WITH COORDINATES ,3I8,31H SHOUL
+     1D BE LISTED AS IRREGULAR./12X,27H  NEIGHBORS IN Z DIRECTION ,44H (
+     20 IF OUTSIDE, 1 IF IRREGULAR, 2 IF INSIDE),2F4.0,/13X,27H, NEIGHBO
+     3RS IN Y DIRECTION ,2F4.0,27H, NEIGHBORS IN X DIRECTION ,2F4.0)
+  250 FORMAT (19H ***ERROR***  NNX= ,I7,6H NNY= ,I7,6H NNZ= ,I7,9H NIPDI
+     1M= ,I7,9H NAPDIM= ,I7,/1X,6H IPP= ,I7,8H NXDIM= ,I7,8H NYDIM= ,I7,
+     28H NZDIM= ,I7)
+  260 FORMAT (/14X,37HNEED NNX, NNY .GE. 8 AND POWERS OF 2.,/13X,27H
+     1  NNX AND NNY .LE. 256.,/13X,30H      NIPDIM .GE. IPP1+2*IPP2.,/13
+     2X,48H      NAPDIM .GE. IPP1+2*IPP2, NX*NZ, AND NY*NZ.,/13X,57H
+     3  NXDIM .GE. NNX, NYDIM .GE. NNY, AND NZDIM .GE. NNZ.)
+      END
+      SUBROUTINE RFORT (A,M,IFS,MM,NAPDIM)                                J   1
+      DIMENSION A(NAPDIM)
+      COMMON /FFT/ S(64),IB(256)
+C
+C       THIS IS AN AUGUST 1978 VERSION,A SLIGHT REVISION OF
+C       A PROGRAM OBTAINED FROM W. PROSKUROWSKI.HIS CODE IS
+C       BASED ON A CODE DUE TO J.COOLEY.
+C
+C       THIS SUBROUTINE SIMULTANOUSLY COMPUTES THE REAL FFT
+C       OR THE INVERSE FFT OF MM VECTORS OF LENGTH N.HERE
+C       MM IS AN ARBITRARY POSITIVE INTEGER AND N=2**M WITH
+C       M AN INTEGER .GE. 3.THE ARRAY A IS OF LENGTH  N*MM.
+C       N*MM MUST BE .LE. NAPDIM.
+C
+C       IFS IS A PARAMETER SET BY THE USER.
+C
+C       FOR IFS=0, THE ARRAYS S AND IB ARE GENERATED .S IS
+C       A TABLE OF SINE VALUES AND IB A REPRESENTATION OF A
+C       PERMUTATION USED IN THE BINARY REORDERING OF THE DATA.
+C       THE ARRAY A IS UNAFFECTED BY THIS CALCULATION.
+C
+C       FOR IFS=-2,EACH SUBARRAY OF A,OF LENGTH N,IS REPLACED
+C       BY ITS FFT.THE COSINE COEFFICIENTS ARE STORED ,IN ORDER
+C       OF INCREASING FREQUENCY, IN POSITIONS 1,3,5,...,N-1 AND
+C       2.THE SINE COEFFICIENTS ARE IN POSITIONS 4,6,...,N.
+C
+C       FOR IFS=2,THE INVERSE FFT IS SIMILARLY OBTAINED.
+C
+C       THIS  SUBROUTINE USES A COMPLEX FFT ROUTINE FORT.
+C
+      IF (IFS.NE.0) GO TO 10
+      CALL FORT (A,M,0,MM,NAPDIM)
+      RETURN
+   10 CONTINUE
+      N=2**M
+      N2=2*N
+      NV2=N/2
+      NV2M2=NV2-2
+      MM1=M-1
+      NP=N
+      MP=M
+      KD=NP/N
+      NPV4=NP/4
+      IF (IFS.GT.0) GO TO 40
+      CALL FORT (A,MM1,-2,MM,NAPDIM)
+      KMIN=2
+      KMAX=NV2M2
+      LN=N
+      DO 30 L=1,MM
+      KT=KD
+      DO 20 K=KMIN,KMAX,2
+      J=LN-K
+      A1R=A(K+1)+A(J+1)
+      A1I=A(K+2)-A(J+2)
+      A2R=A(K+2)+A(J+2)
+      A2I=A(J+1)-A(K+1)
+      KKT=NPV4-KT
+      AWR=A2R*S(KKT)+A2I*S(KT)
+      AWI=A2I*S(KKT)-A2R*S(KT)
+      A(K+1)=(A1R+AWR)*0.25
+      A(K+2)=(A1I+AWI)*0.25
+      A(J+1)=(A1R-AWR)*0.25
+      A(J+2)=(AWI-A1I)*0.25
+   20 KT=KT+KD
+      T=A(KMIN-1)
+      A(KMIN-1)=(T+A(KMIN))*0.5
+      A(KMIN)=(T-A(KMIN))*0.5
+      NK=NV2+KMIN
+      NK1=NV2+KMIN-1
+      A(NK1)=.5*A(NK1)
+      A(NK)=-.5*A(NK)
+      KMIN=KMIN+N
+      KMAX=KMAX+N
+      LN=LN+N2
+   30 CONTINUE
+      RETURN
+   40 CONTINUE
+      KMIN=2
+      KMAX=NV2M2
+      LN=N
+      DO 60 L=1,MM
+      KT=KD
+      DO 50 K=KMIN,KMAX,2
+      J=LN-K
+      A1R=A(K+1)+A(J+1)
+      A1I=A(K+2)-A(J+2)
+      AWR=A(K+1)-A(J+1)
+      AWI=A(K+2)+A(J+2)
+      KKT=NPV4-KT
+      A2R=AWR*S(KKT)-AWI*S(KT)
+      A2I=AWR*S(KT)+AWI*S(KKT)
+      A(K+1)=A1R-A2I
+      A(K+2)=A1I+A2R
+      A(J+1)=A1R+A2I
+      A(J+2)=A2R-A1I
+   50 KT=KT+KD
+      T=A(KMIN-1)
+      Z=A(KMIN)
+      A(KMIN-1)=T+Z
+      A(KMIN)=T-Z
+      NK=NV2+KMIN
+      NK1=NV2+KMIN-1
+      A(NK1)=2.0*A(NK1)
+      A(NK)=-2.0*A(NK)
+      KMIN=KMIN+N
+      KMAX=KMAX+N
+      LN=LN+N2
+   60 CONTINUE
+      CALL FORT (A,MM1,2,MM,NAPDIM)
+      RETURN
+      END
+      SUBROUTINE UTAMLT (W,Y,NXDIM,NYDIM,NZDIM,NIPDIM,DELTA,ICOORD)       F   1
+      COMMON /SPACE/ HX,HY,HZ,H2(3),HX2,HY2,HZ2,TWOPI,CONST,C,CHZZ,NX,NY
+     1,NZ,IP1,IP2,IP,LOG2NX,LOG2NY,QXSQ,QYSQ
+      DIMENSION W(NXDIM,NYDIM,NZDIM), DELTA(3,NIPDIM), ICOORD(3,NIPDIM),
+     1 Y(NIPDIM), D1(3), D2(3)
+C
+C                                     T
+C       THIS SUBROUTINE COMPUTES Y = U A W
+C       WHERE THE MATRIX ROWS FORM THE SHORTLEY-WELLER APPROXIMATION
+C       OF -LAP+CC  USING DATA ONLY AT THE IRREGULAR POINT AND ITS
+C       INTERIOR NEIGHBORS.  THE EQUATIONS
+C       ARE SCALED SO THAT THE MAIN DIAGONAL ELEMENT OF THE MATRIX
+C       (I.E., THE COEFFICIENT FOR THE IRREGULAR POINT ITSELF) IS 1.
+C
+      DO 110 LKT=1,IP
+      L=LKT
+C
+C       GET COORDINATES AND DISTANCES FOR THIS IRREGULAR POINT.
+C
+      I=ICOORD(1,L)
+      J=ICOORD(2,L)
+      K=ICOORD(3,L)
+      IF (L.GT.IP1) L=IP1+(L-IP1)*2-1
+      INC1=1
+      INC2=1
+      INC3=1
+      IF (DELTA(1,L).LT.0.E0) INC1=-1
+      IF (DELTA(2,L).LT.0.E0) INC2=-1
+      IF (DELTA(3,L).LT.0.E0) INC3=-1
+      D1(1)=ABS(DELTA(1,L))
+      D1(2)=ABS(DELTA(2,L))
+      D1(3)=ABS(DELTA(3,L))
+      IF (L.LE.IP1) GO TO 10
+      D2(1)=ABS(DELTA(1,L+1))
+      D2(2)=ABS(DELTA(2,L+1))
+      D2(3)=ABS(DELTA(3,L+1))
+   10 CONTINUE
+C
+C      X INCREMENTS
+C
+      IF (D1(1).GT.1.E0) GO TO 30
+      IF (L.LE.IP1) GO TO 20
+      IF (D2(1).GT.1.E0) GO TO 20
+C
+C       BOUNDARY CUTS TWICE BETWEEN THIS POINT AND ITS X NEIGHBORS
+C
+      DIAG=2.E0*QXSQ/(D1(1)*D2(1))
+      TERM=0.E0
+      GO TO 40
+C
+C       BOUNDARY CUTS ONCE BETWEEN THIS POINT AND ITS X NEIGHBORS.
+C
+   20 CONTINUE
+      DIAG=2.E0*QXSQ/D1(1)
+      ISUB=I-INC1
+      TERM=W(ISUB,J,K)*2.E0/(1.E0+D1(1))
+      GO TO 40
+C
+C      BOUNDARY DOES NOT CUT
+C
+   30 DIAG=2.E0*QXSQ
+      TERM=W(I-1,J,K)+W(I+1,J,K)
+   40 SUM=-TERM*QXSQ
+C
+C      Y INCREMENTS
+C
+      IF (D1(2).GT.1.E0) GO TO 60
+      IF (L.LE.IP1) GO TO 50
+      IF (D2(2).GT.1.E0) GO TO 50
+C
+C       BOUNDARY CUTS TWICE BETWEEN THIS POINT AND ITS Y NEIGHBORS
+C
+      DIAG=DIAG+2.E0*QYSQ/(D1(2)*D2(2))
+      TERM=0.E0
+      GO TO 70
+C
+C      BOUNDARY CUTS ONCE BETWEEN THIS POINT AND ITS Y NEIGHBORS
+C
+   50 CONTINUE
+      DIAG=DIAG+2.E0*QYSQ/D1(2)
+      ISUB=J-INC2
+      TERM=W(I,ISUB,K)*2.E0/(1.E0+D1(2))
+      GO TO 70
+C
+C
+C       BOUNDARY DOES NOT CUT
+C
+   60 DIAG=DIAG+2.E0*QYSQ
+      TERM=W(I,J-1,K)+W(I,J+1,K)
+   70 SUM=SUM-TERM*QYSQ
+C
+C      Z INCREMENTS
+C
+      IF (D1(3).GT.1.E0) GO TO 90
+      IF (L.LE.IP1) GO TO 80
+      IF (D2(3).GT.1.E0) GO TO 80
+C
+C       BOUNDARY CUTS TWICE BETWEEN THIS POINT AND ITS Z NEIGHBORS
+C
+      DIAG=DIAG+2.E0/(D1(3)*D2(3))
+      TERM=0.E0
+      GO TO 100
+C
+C      BOUNDARY CUTS ONCE BETWEEN THIS POINT AND ITS Z NEIGHBORS
+C
+   80 CONTINUE
+      DIAG=DIAG+2.E0/D1(3)
+      ISUB=K-INC3
+      TERM=W(I,J,ISUB)*2.E0/(1.E0+D1(3))
+      GO TO 100
+C
+C      BOUNDARY DOES NOT CUT
+C
+   90 DIAG=DIAG+2.E0
+      TERM=W(I,J,K-1)+W(I,J,K+1)
+  100 SUM=SUM-TERM
+      SCALE=1.E0/(DIAG+CHZZ)
+      Y(LKT)=W(I,J,K)+SUM*SCALE
+  110 CONTINUE
+      RETURN
+      END
+      SUBROUTINE UTATRN (Y,W,NXDIM,NYDIM,NZDIM,NIPDIM,DELTA,ICOORD)       H   1
+      COMMON /SPACE/ HX,HY,HZ,H2(3),HX2,HY2,HZ2,TWOPI,CONST,C,CHZZ,NX,NY
+     1,NZ,IP1,IP2,IP,LOG2NX,LOG2NY,QXSQ,QYSQ
+      DIMENSION W(NXDIM,NYDIM,NZDIM), D1(3), D2(3), DELTA(3,NIPDIM), ICO
+     1ORD(3,NIPDIM), Y(NIPDIM)
+      DIMENSION WINC(7)
+C
+C                                      T  T
+C       THIS SUBROUTINE COMPUTES W = (U A) Y.
+C       W IS INITIALIZED TO 0 AND THEN THE WEIGHTS DETERMINED IN
+C       UTAMLT ARE USED TO DISTRIBUTE Y.
+C
+      DO 10 K=1,NZ
+      DO 10 J=1,NY
+      DO 10 I=1,NX
+   10 W(I,J,K)=0.E0
+      DO 130 LKT=1,IP
+C
+C       GET COORDINATES AND DISTANCES FOR THIS IRREGULAR POINT.
+C
+      L=LKT
+      I=ICOORD(1,L)
+      J=ICOORD(2,L)
+      K=ICOORD(3,L)
+      IF (L.GT.IP1) L=IP1+(L-IP1)*2-1
+      D1(1)=ABS(DELTA(1,L))
+      D1(2)=ABS(DELTA(2,L))
+      D1(3)=ABS(DELTA(3,L))
+      IF (L.LE.IP1) GO TO 20
+      D2(1)=ABS(DELTA(1,L+1))
+      D2(2)=ABS(DELTA(2,L+1))
+      D2(3)=ABS(DELTA(3,L+1))
+   20 CONTINUE
+      INC1=1
+      INC2=1
+      INC3=1
+      IF (DELTA(1,L).LT.0.E0) INC1=-1
+      IF (DELTA(2,L).LT.0.E0) INC2=-1
+      IF (DELTA(3,L).LT.0.E0) INC3=-1
+      DO 30 KK=1,7
+   30 WINC(KK)=0.E0
+C
+C
+C      X CONTRIBUTIONS
+C
+      IF (D1(1).GT.1.E0) GO TO 50
+      IF (L.LE.IP1) GO TO 40
+      IF (D2(1).GT.1.E0) GO TO 40
+C
+C       BOUNDARY CUTS TWICE BETWEEN THIS POINT AND ITS X NEIGHBORS
+C
+      DIAG=2.E0*QXSQ/(D1(1)*D2(1))
+      GO TO 60
+C
+C      BOUNDARY CUTS ONCE BETWEEN THIS POINT AND ITS X NEIGHBORS.
+C
+   40 CONTINUE
+      DIAG=2.E0*QXSQ/D1(1)
+      ISUB=2-INC1
+      WINC(ISUB)=-QXSQ*2.E0/(1.E0+D1(1))
+      GO TO 60
+C
+C      BOUNDARY DOES NOT CUT
+C
+   50 DIAG=2.E0*QXSQ
+      WINC(1)=-QXSQ
+      WINC(3)=-QXSQ
+C
+C      Y CONTRIBUTIONS
+C
+   60 IF (D1(2).GT.1.E0) GO TO 80
+      IF (L.LE.IP1) GO TO 70
+      IF (D2(2).GT.1.E0) GO TO 70
+C
+C       BOUNDARY CUTS TWICE BETWEEN THIS POINT AND ITS Y NEIGHBORS
+C
+      DIAG=DIAG+2.E0*QYSQ/(D1(2)*D2(2))
+      GO TO 90
+C
+C      BOUNDARY CUTS ONCE BETWEEN THIS POINT AND ITS Y NEIGHBORS
+C
+   70 CONTINUE
+      DIAG=DIAG+2.E0*QYSQ/D1(2)
+      ISUB=3-INC2
+      WINC(ISUB)=-QYSQ*2.E0/(1.E0+D1(2))
+      GO TO 90
+C
+C      BOUNDARY DOES NOT CUT
+C
+   80 DIAG=DIAG+2.E0*QYSQ
+      WINC(2)=-QYSQ
+      WINC(4)=-QYSQ
+C
+C      Z CONTRIBUTIONS
+C
+   90 IF (D1(3).GT.1.E0) GO TO 110
+      IF (L.LE.IP1) GO TO 100
+      IF (D2(3).GT.1.E0) GO TO 100
+C
+C       BOUNDARY CUTS TWICE BETWEEN THIS POINT AND ITS Z NEIGHBORS
+C
+      DIAG=DIAG+2.E0/(D1(3)*D2(3))
+      GO TO 120
+C
+C      BOUNDARY CUTS ONCE BETWEEN THIS POINT AND ITS Z NEIGHBORS
+C
+  100 CONTINUE
+      DIAG=DIAG+2.E0/D1(3)
+      ISUB=6-INC3
+      WINC(ISUB)=-2.E0/(1.E0+D1(3))
+      GO TO 120
+C
+C       BOUNDARY DOES NOT CUT
+C
+  110 DIAG=DIAG+2.E0
+      WINC(5)=-1.E0
+      WINC(7)=-1.E0
+  120 CONTINUE
+      FACT=Y(LKT)/(DIAG+CHZZ)
+      W(I,J,K)=W(I,J,K)+Y(LKT)
+      W(I-1,J,K)=W(I-1,J,K)+FACT*WINC(1)
+      W(I,J-1,K)=W(I,J-1,K)+FACT*WINC(2)
+      W(I+1,J,K)=W(I+1,J,K)+FACT*WINC(3)
+      W(I,J+1,K)=W(I,J+1,K)+FACT*WINC(4)
+      W(I,J,K-1)=W(I,J,K-1)+FACT*WINC(5)
+      W(I,J,K+1)=W(I,J,K+1)+FACT*WINC(7)
+  130 CONTINUE
+      RETURN
+      END
+      SUBROUTINE VMULT (Y,W,NXDIM,NYDIM,NZDIM,NIPDIM,IORD,INDORD,DELTA,I  D   1
+     1COORD)
+      COMMON /SPACE/ HX,HY,HZ,H2(3),HX2,HY2,HZ2,TWOPI,CONST,C,CHZZ,NX,NY
+     1,NZ,IP1,IP2,IP,LOG2NX,LOG2NY,QXSQ,QYSQ
+      DIMENSION W(NXDIM,NYDIM,NZDIM), Y(NIPDIM), DELTA(3,NIPDIM), ICOORD
+     1(3,NIPDIM), INDORD(NIPDIM)
+      DIMENSION IC(3), ISTEP(3), IORD(3,6)
+C
+C      THIS SUBROUTINE COMPUTES W = V Y
+C       SETTING W TO 0 AND THEN SETTING UP THE DIPOLES.
+C
+      DO 10 K=1,NZ
+      DO 10 J=1,NY
+      DO 10 I=1,NX
+   10 W(I,J,K)=0.E0
+      DO 30 LKT=1,IP
+      INDEXD=LKT
+      IF (LKT.GT.IP1) INDEXD=IP1+(LKT-IP1)*2-1
+C
+C       FOR EACH IRREGULAR POINT,
+C       OBTAIN COORDINATES OF IRREGULAR POINT.
+C       PUT THE DIPOLE IN PLACE.
+C
+      ISUB=INDORD(LKT)
+      I1=IORD(1,ISUB)
+      I2=IORD(2,ISUB)
+      I3=IORD(3,ISUB)
+      DO 20 KK=1,3
+      IC(KK)=ICOORD(KK,LKT)
+      ISTEP(KK)=1
+   20 IF (DELTA(KK,INDEXD).LT.0.E0) ISTEP(KK)=-1
+      RAT12=ABS((H2(I1)*DELTA(I1,INDEXD))/(H2(I2)*DELTA(I2,INDEXD)))
+      RAT13=ABS((H2(I1)*DELTA(I1,INDEXD))/(H2(I3)*DELTA(I3,INDEXD)))
+      WT=Y(LKT)
+      ISUB1=IC(1)
+      ISUB2=IC(2)
+      ISUB3=IC(3)
+      W(ISUB1,ISUB2,ISUB3)=W(ISUB1,ISUB2,ISUB3)+WT
+      IC(I1)=IC(I1)+ISTEP(I1)
+      ISUB1=IC(1)
+      ISUB2=IC(2)
+      ISUB3=IC(3)
+      W(ISUB1,ISUB2,ISUB3)=W(ISUB1,ISUB2,ISUB3)-WT*(1.E0-RAT12)
+      IC(I2)=IC(I2)+ISTEP(I2)
+      ISUB1=IC(1)
+      ISUB2=IC(2)
+      ISUB3=IC(3)
+      W(ISUB1,ISUB2,ISUB3)=W(ISUB1,ISUB2,ISUB3)-WT*(RAT12-RAT13)
+      IC(I3)=IC(I3)+ISTEP(I3)
+      ISUB1=IC(1)
+      ISUB2=IC(2)
+      ISUB3=IC(3)
+      W(ISUB1,ISUB2,ISUB3)=W(ISUB1,ISUB2,ISUB3)-WT*RAT13
+   30 CONTINUE
+      RETURN
+      END
+      SUBROUTINE VTRANS (W,Y,NXDIM,NYDIM,NZDIM,NIPDIM,IORD,INDORD,DELTA,  E   1
+     1ICOORD)
+      COMMON /SPACE/ HX,HY,HZ,H2(3),HX2,HY2,HZ2,TWOPI,CONST,C,CHZZ,NX,NY
+     1,NZ,IP1,IP2,IP,LOG2NX,LOG2NY,QXSQ,QYSQ
+      DIMENSION W(NXDIM,NYDIM,NZDIM), Y(NIPDIM), DELTA(3,NIPDIM), ICOORD
+     1(3,NIPDIM), INDORD(NIPDIM), IORD(3,6)
+      DIMENSION IC(3), ISTEP(3)
+C
+C                                     T
+C       THIS SUBROUTINE COMPUTES Y = V W.
+C       USING UNDIVIDED DIFFERENCE FORMULAS DETERMINED BY THE DIPOLE
+C       WEIGHTS.
+C
+      DO 20 LKT=1,IP
+      INDEXD=LKT
+      IF (LKT.GT.IP1) INDEXD=IP1+(LKT-IP1)*2-1
+      ISUB=INDORD(LKT)
+      I1=IORD(1,ISUB)
+      I2=IORD(2,ISUB)
+      I3=IORD(3,ISUB)
+      DO 10 KK=1,3
+      IC(KK)=ICOORD(KK,LKT)
+      ISTEP(KK)=1
+   10 IF (DELTA(KK,INDEXD).LT.0.0) ISTEP(KK)=-1
+      RAT12=ABS((H2(I1)*DELTA(I1,INDEXD))/(H2(I2)*DELTA(I2,INDEXD)))
+      RAT13=ABS((H2(I1)*DELTA(I1,INDEXD))/(H2(I3)*DELTA(I3,INDEXD)))
+      ISUB1=IC(1)
+      ISUB2=IC(2)
+      ISUB3=IC(3)
+      WT=W(ISUB1,ISUB2,ISUB3)
+      IC(I1)=IC(I1)+ISTEP(I1)
+      ISUB1=IC(1)
+      ISUB2=IC(2)
+      ISUB3=IC(3)
+      SUM=(RAT12-1.E0)*W(ISUB1,ISUB2,ISUB3)
+      IC(I2)=IC(I2)+ISTEP(I2)
+      ISUB1=IC(1)
+      ISUB2=IC(2)
+      ISUB3=IC(3)
+      SUM=SUM+(RAT13-RAT12)*W(ISUB1,ISUB2,ISUB3)
+      IC(I3)=IC(I3)+ISTEP(I3)
+      ISUB1=IC(1)
+      ISUB2=IC(2)
+      ISUB3=IC(3)
+      SUM=SUM-RAT13*W(ISUB1,ISUB2,ISUB3)
+      Y(LKT)=SUM+WT
+   20 CONTINUE
+      RETURN
+      END

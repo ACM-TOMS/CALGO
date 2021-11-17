@@ -1,0 +1,1917 @@
+C      ALGORITHM 743, COLLECTED ALGORITHMS FROM ACM.
+C      THIS WORK PUBLISHED IN TRANSACTIONS ON MATHEMATICAL SOFTWARE,
+C      VOL. 21, NO. 2, JUNE, 1995, P. 172-181
+C
+C
+C     Testing the W function approximations.
+C     ______________________________________
+C
+C     This is the single precision version.
+C
+C     This file contains (i) a driver to test the W function
+C     approximations; (ii) BISECT, a function which determines values of
+C     W(x) using the bisection method; and (iii) WAPR, the W function
+C     approximation.
+C
+C     The driver is used to test the W function approximations by
+C     comparison with (i) a set of test values of W(x); or (ii) a
+C     bisection method solution. For the latter case, the user is
+C     prompted to give the range of x values over which the test is to
+C     be performed, as well as the number of W values to be calculated
+C     in that range. The appropriate branch must be requested if the
+C     desired range is <= 0: 0 for the upper branch (Wp) and nonzero
+C     for the lower branch (Wm).
+C
+C     The magnitude of the manitssa length of the host machine is an
+C     integral part of the operation of WAPR. However, it need only be
+C     caluclated once. More precisely, WAPR uses the number of bits
+C     (less 1) of the mantissa of the floating point number
+C     representation of the host machine. This number is assigned to
+C     NBITS. Most single precision mantissas are 24 bits (NBITS = 23),
+C     while double precision ranges from 53 to 56.
+C
+C     Note: if too large a value for NBITS is used, then the bisection
+C     routine, BISECT, will return the error code: NER = 1 (no
+C     convergence), although the bisection method result and the WAPR
+C     result may agree. This situation will not occur if NBITS is
+C     calculated using the code as supplied.
+C
+C     Users of WAPR will usually want to calculate W(x) for specified
+C     values of x. However, if W(x) is to be evaluated near x = -exp(-1)
+C     there is a difficulty in specifying x due to roundoff. For
+C     example, if WAPR is being used in single precision (usually a
+C     7-digit mantissa) and W(-exp(-1)+1/10**10) is to be evaluated then
+C     it is not possible to enter the required x value. However, Wp(x),
+C     for example, will be affected because Wp ~ -1 +
+C     (2*exp(1)/10**10)**(1/2). Thus, the 1/10**10 increment to x at x =
+C     -exp(-1) increments W by about 2/10**5. For this reason WAPR is
+C     used in either of two ways. First, x is specified and W(x) is
+C     returned. Alternatively, x is specified by its offset (delta x)
+C     from -exp(-1), i.e., delta x = x + exp(-1). In this case
+C     W(-exp(-1)+delta x) is returned. Note that in the latter case it
+C     is not necessary for delta x to be small.
+C
+C     __________________________________________________________________
+C
+C     Start of the driver (testing) program
+C     _____________________________________
+C
+C     NN is the output device number
+C     NI is the input device number
+C
+      IMPLICIT REAL (A-H,O-Z)
+      SAVE
+      DIMENSION DX1(68),WP1(68),X2(20),WP2(40),X3(10),WP3(10),WM1(68),
+     &          WM2(68)
+      PARAMETER(NN=6,NI=5)
+      COMMON/WAPCOM/NBITS
+      CHARACTER*1 A
+C
+C     Exact results for Wp(x)
+C     _______________________
+C
+C     x close to -exp(-1)
+C
+      DATA DX1/
+     &     1.E-40,2.E-40,3.E-40,4.E-40,5.E-40,6.E-40,7.E-40,8.E-40,
+     &     9.E-40,1.E-39,1.E-30,2.E-30,3.E-30,4.E-30,5.E-30,6.E-30,
+     &     7.E-30,8.E-30,9.E-30,1.E-29,1.E-20,2.E-20,3.E-20,4.E-20,
+     &     5.E-20,6.E-20,7.E-20,8.E-20,9.E-20,1.E-19,1.E-10,2.E-10,
+     &     3.E-10,4.E-10,5.E-10,6.E-10,7.E-10,8.E-10,9.E-10,1.E-9,1.E-5,
+     &     2.E-5,3.E-5,4.E-5,5.E-5,6.E-5,7.E-5,8.E-5,9.E-5,1.E-4,2.E-4,
+     &     3.E-4,4.E-4,5.E-4,6.E-4,7.E-4,8.E-4,9.E-4,1.E-3,2.E-3,3.E-3,
+     &     4.E-3,5.E-3,6.E-3,7.E-3,8.E-3,9.E-3,1.E-2/
+      DATA (WP1(I),I=1,10)/
+     &     -.9999999999999999999766835601840287579665E0,
+     &     -.9999999999999999999670255745859974370634E0,
+     &     -.9999999999999999999596147415871158855702E0,
+     &     -.9999999999999999999533671203680575159335E0,
+     &     -.9999999999999999999478628555782056161596E0,
+     &     -.9999999999999999999428866198325571498809E0,
+     &     -.9999999999999999999383104987875354650364E0,
+     &     -.9999999999999999999340511491719948741275E0,
+     &     -.9999999999999999999300506805520862739007E0,
+     &     -.9999999999999999999262669432552936235556E0/
+      DATA (WP1(I),I=11,20)/
+     &     -.9999999999999976683560184028776088243496E0,
+     &     -.9999999999999967025574585997473306784697E0,
+     &     -.9999999999999959614741587115939935280812E0,
+     &     -.9999999999999953367120368057588420244704E0,
+     &     -.9999999999999947862855578205706768098859E0,
+     &     -.9999999999999942886619832557258611080314E0,
+     &     -.9999999999999938310498787535591888253966E0,
+     &     -.999999999999993405114917199501910108482E0,
+     &     -.9999999999999930050680552086436996003626E0,
+     &     -.9999999999999926266943255293804772564852E0/
+      DATA (WP1(I),I=21,30)/
+     &     -.9999999997668356018584094585181033975713E0,
+     &     -.9999999996702557458962181283375794922681E0,
+     &     -.9999999995961474159255244922555603070484E0,
+     &     -.9999999995336712037530626747373742782638E0,
+     &     -.9999999994786285558726655558473617503914E0,
+     &     -.9999999994288661984343027719079710168757E0,
+     &     -.9999999993831049880022078023099082447845E0,
+     &     -.9999999993405114918649237720678678043098E0,
+     &     -.9999999993005068056839596486461928553989E0,
+     &     -.9999999992626694327341550240404575805522E0/
+      DATA (WP1(I),I=31,40)/
+     &     -.9999766837414008807143234266407434345965E0,
+     &     -.9999670259370180970391011806287847685011E0,
+     &     -.9999596152852334187587360603177913882165E0,
+     &     -.9999533678452277190993205651165793258207E0,
+     &     -.9999478637616504968301143759542621752943E0,
+     &     -.9999428877071168268324462680980110604599E0,
+     &     -.999938311767283189655618359697592754013E0,
+     &     -.999934052598878483932035240348113191731E0,
+     &     -.9999300523114688962155368933174163936848E0,
+     &     -.9999262687553819399632780281900349826094E0/
+      DATA (WP1(I),I=41,50)/
+     &     -.9926447551971221136721993073029112268763E0,
+     &     -.9896086425917686478635208903220735023288E0,
+     &     -.9872831094708759013315476674998231771112E0,
+     &     -.9853253899681719161468126266199947992874E0,
+     &     -.9836027178149637071691226667555243369797E0,
+     &     -.9820470029764667038452666345865058694192E0,
+     &     -.9806177971936827573257045283891513709368E0,
+     &     -.97928874641099293421931043027104578327E0,
+     &     -.9780415451927629881943028498821429186059E0,
+     &     -.9768628655744219140604871252425961901255E0/
+      DATA (WP1(I),I=51,59)/
+     &     -.967382626983074241885253344632666448927E0,
+     &     -.9601485420712594199373375259293860324633E0,
+     &     -.9540768694875733222057908617314370634111E0,
+     &     -.9487478690765183543410579996573536771348E0,
+     &     -.9439462911219380338176477772712853402016E0,
+     &     -.9395442782590063946376623684916441100361E0,
+     &     -.9354585313336439336066341889767099608018E0,
+     &     -.9316311953818583253420613278986500351794E0,
+     &     -.9280201500545670487600430252549212247489E0/
+      DATA (WP1(I),I=60,68)/
+     &     -.8991857663963733198571950343133631348347E0,
+     &     -.8774287170665477623395641312875506084256E0,
+     &     -.8593275036837387237312746018678000939451E0,
+     &     -.8435580020488052057849697812109882706542E0,
+     &     -.8294416857114015557682843481727604063558E0,
+     &     -.8165758053803078481644781849709953302847E0,
+     &     -.8046981564792468915744561969751509934994E0,
+     &     -.7936267540949175059651534957734689407879E0,
+     &     -.7832291989812967764330746819464532478021E0/
+C
+C     x close to 0
+C
+      DATA X2/
+     &     1.E-9,2.E-9,3.E-9,4.E-9,5.E-9,6.E-9,7.E-9,8.E-9,9.E-9,1.E-8,
+     &     1.E-2,2.E-2,3.E-2,4.E-2,5.E-2,6.E-2,7.E-2,8.E-2,9.E-2,1.E-1/
+      DATA (WP2(I),I=1,10)/
+     &     9.999999990000000014999999973333333385417E-10,
+     &     1.9999999960000000119999999573333335E-9,
+     &     2.999999991000000040499999784000001265625E-9,
+     &     3.999999984000000095999999317333338666667E-9,
+     &     4.999999975000000187499998333333349609375E-9,
+     &     5.999999964000000323999996544000040499999E-9,
+     &     6.99999995100000051449999359733342086979E-9,
+     &     7.999999936000000767999989077333503999997E-9,
+     &     8.999999919000001093499982504000307546869E-9,
+     &     9.999999900000001499999973333333854166656E-9/
+      DATA (WP2(I),I=11,20)/
+     &     9.901473843595011885336326816570107953628E-3,
+     &     1.961158933740562729168248268298370977812E-2,
+     &     2.913845916787001265458568152535395243296E-2,
+     &     3.848966594197856933287598180923987047561E-2,
+     &     4.767230860012937472638890051416087074706E-2,
+     &     5.669304377414432493107872588796066666126E-2,
+     &     6.555812274442272075701853672870305774479E-2,
+     &     7.427342455278083997072135190143718509109E-2,
+     &     8.284448574644162210327285639805993759142E-2,
+     &     9.127652716086226429989572142317956865312E-2/
+      DATA (WP2(I),I=21,30)/
+     &     -1.000000001000000001500000002666666671875E-9,
+     &     -2.000000004000000012000000042666666833333E-9,
+     &     -3.000000009000000040500000216000001265625E-9,
+     &     -4.000000016000000096000000682666672E-9,
+     &     -5.000000025000000187500001666666682942709E-9,
+     &     -6.000000036000000324000003456000040500001E-9,
+     &     -7.000000049000000514500006402666754203126E-9,
+     &     -8.000000064000000768000010922666837333336E-9,
+     &     -9.000000081000001093500017496000307546881E-9,
+     &     -1.000000010000000150000002666666718750001E-8/
+      DATA (WP2(I),I=31,40)/
+     &     -1.010152719853875327292018767138623973671E-2,
+     &     -2.041244405580766725973605390749548004159E-2,
+     &     -3.094279498284817939791038065611524917276E-2,
+     &     -4.170340843648447389872733812553976786256E-2,
+     &     -5.270598355154634795995650617915721289428E-2,
+     &     -6.396318935617251019529498180168867456393E-2,
+     &     -7.548877886579220591933915955796681153525E-2,
+     &     -8.729772086157992404091975866027313992649E-2,
+     &     -9.940635280454481474353567186786621057821E-2,
+     &     -1.118325591589629648335694568202658422726E-1/
+C
+C     Other Wp results
+C
+      DATA X3/1.E1,1.E2,1.E3,1.E4,1.E5,1.E6,1.E7,1.E8,1.E9,1.E10/
+      DATA WP3/
+     &     1.745528002740699383074301264875389911535E0,
+     &     3.385630140290050184888244364529726867492E0,
+     &     5.249602852401596227126056319697306282521E0,
+     &     7.231846038093372706475618500141253883968E0,
+     &     9.284571428622108983205132234759581939317E0,
+     &     11.38335808614005262200015678158500428903E0,
+     &     13.5143440103060912090067238511621580283E0,
+     &     15.66899671545096218719628189389457073619E0,
+     &     17.84172596742146918254060066535711011039E0,
+     &     20.02868541330495078123430607181488729749E0/
+C
+C     Exact results for Wm(x)
+C     _______________________
+C
+C     x close to -exp(-1)
+C
+      DATA (WM1(I),I=1,10)/
+     &     -1.000000000000000000023316439815971242034E0,
+     &     -1.000000000000000000032974425414002562937E0,
+     &     -1.000000000000000000040385258412884114431E0,
+     &     -1.000000000000000000046632879631942484068E0,
+     &     -1.000000000000000000052137144421794383842E0,
+     &     -1.000000000000000000057113380167442850121E0,
+     &     -1.000000000000000000061689501212464534966E0,
+     &     -1.000000000000000000065948850828005125875E0,
+     &     -1.000000000000000000069949319447913726103E0,
+     &     -1.000000000000000000073733056744706376448E0/
+      DATA (WM1(I),I=11,20)/
+     &     -1.000000000000002331643981597126015551422E0,
+     &     -1.000000000000003297442541400259918073073E0,
+     &     -1.000000000000004038525841288416879599233E0,
+     &     -1.000000000000004663287963194255655478615E0,
+     &     -1.00000000000000521371444217944744506897E0,
+     &     -1.000000000000005711338016744295885146596E0,
+     &     -1.000000000000006168950121246466181805002E0,
+     &     -1.000000000000006594885082800527084897688E0,
+     &     -1.000000000000006994931944791388919781579E0,
+     &     -1.000000000000007373305674470655766501228E0/
+      DATA (WM1(I),I=21,30)/
+     &     -1.000000000233164398177834299194683872234E0,
+     &     -1.000000000329744254176269387087995047343E0,
+     &     -1.00000000040385258418320678088280150237E0,
+     &     -1.000000000466328796391912356113774800963E0,
+     &     -1.000000000521371444308553232716574598644E0,
+     &     -1.00000000057113380178315977436875260197E0,
+     &     -1.000000000616895012251498501679602643872E0,
+     &     -1.000000000659488508425026289634430354159E0,
+     &     -1.000000000699493194642234170768892572882E0,
+     &     -1.000000000737330567628282553087415117543E0/
+      DATA (WM1(I),I=31,40)/
+     &     -1.000023316621036696460620295453277856456E0,
+     &     -1.000032974787857057404928311684626421503E0,
+     &     -1.000040385802079313048521250390482335902E0,
+     &     -1.00004663360452259016530661221213359488E0,
+     &     -1.0000521380505373899860247162705706318E0,
+     &     -1.000057114467508637629346787348726350223E0,
+     &     -1.000061690769779852545970707346938004879E0,
+     &     -1.000065950300622136103491886720203687457E0,
+     &     -1.00006995095046930174807034225078340539E0,
+     &     -1.000073734868993836022551364404248563489E0/
+      DATA (WM1(I),I=41,50)/
+     &     -1.007391489031309264813153180819941418531E0,
+     &     -1.010463846806564696239430620915659099361E0,
+     &     -1.012825626038880105597738761474228363542E0,
+     &     -1.014819592594577564927398399257428492725E0,
+     &     -1.016578512742400177512255407989807698099E0,
+     &     -1.018170476517182636083407324035097024753E0,
+     &     -1.019635932177973215702948823070039007361E0,
+     &     -1.021001233780440980009663527189756124983E0,
+     &     -1.022284686760270309618528459224732558767E0,
+     &     -1.023499619082082348038906498637836105447E0/
+      DATA (WM1(I),I=51,59)/
+     &     -1.033342436522109918536891072083243897233E0,
+     &     -1.040939194524944844012076988438386306843E0,
+     &     -1.047373634492196231421755878017895964061E0,
+     &     -1.053065496629607111615572634090884988897E0,
+     &     -1.058230030703619902820337106917657189605E0,
+     &     -1.06299509412938704964298950857825124135E0,
+     &     -1.067443986111355120560366087010834293872E0,
+     &     -1.071634561663924136735470389832541413862E0,
+     &     -1.07560894118662498941494486924522316597E0/
+      DATA (WM1(I),I=60,68)/
+     &     -1.108081880631165502564629660944418191031E0,
+     &     -1.133487001006868638317076487349933855181E0,
+     &     -1.155245851821528613609784258821055266176E0,
+     &     -1.174682608817289477552149783867901714817E0,
+     &     -1.192475850408615960644596781702366026321E0,
+     &     -1.209028378276581220769059281765172085749E0,
+     &     -1.224602449817731587352403997390766826335E0,
+     &     -1.239380103200799714836392811991400433357E0,
+     &     -1.253493791367214516100457405907304877145E0/
+C
+C     x close to 0
+C
+      DATA (WM2(I),I=1,10)/
+     &     -96.67475603368003636615083422832414231073E0,
+     &     -95.97433737593292677679699834708774152264E0,
+     &     -95.56459382507349364043974513871359837914E0,
+     &     -95.27386489130628866261760496192716897551E0,
+     &     -95.0483515329550645558378163981346085731E0,
+     &     -94.86408948075132603599669916724611501067E0,
+     &     -94.70829516116125928735505687861553800851E0,
+     &     -94.57333777268864473984718625104978190798E0,
+     &     -94.45429521137271454134108055166168787618E0,
+     &     -94.34780665137385269060032461028588648619E0/
+      DATA (WM2(I),I=11,20)/
+     &     -73.37311031382297679706747875812087452918E0,
+     &     -72.67033891766978907253811160121558649554E0,
+     &     -72.25920015786413889986246462168541066725E0,
+     &     -71.9674726772681844325410195162521230103E0,
+     &     -71.74117979478106456261839111929684980709E0,
+     &     -71.55627755942675731851469544735603279342E0,
+     &     -71.39993966508440988906136771384270319452E0,
+     &     -71.26450969134836299738230265916604879247E0,
+     &     -71.14504894849287026061378869987876478469E0,
+     &     -71.03818524971357411174259539994036186653E0/
+      DATA (WM2(I),I=21,30)/
+     &     -49.96298427667447244531514297262540669957E0,
+     &     -49.25557728489066973476436802404294348267E0,
+     &     -48.84167348449764278180827692232244878061E0,
+     &     -48.54795966722336777861228992424053274064E0,
+     &     -48.32011181512544381639923088992262632623E0,
+     &     -48.13392971864323755677656581326964166718E0,
+     &     -47.97650308277095858785998266172487372203E0,
+     &     -47.84012504158555569017852884133421231303E0,
+     &     -47.71982419568730714141619502661365943996E0,
+     &     -47.61220592218922310708330388890925734186E0/
+      DATA (WM2(I),I=31,40)/
+     &     -26.29523881924692569411012882185491823773E0,
+     &     -25.57429135222126159950976461862116397347E0,
+     &     -25.15218334705420805339928870686463192335E0,
+     &     -24.85251554543232259250342343156454440592E0,
+     &     -24.61997095867949438248843689371454503831E0,
+     &     -24.42989922074834124324823589226341161866E0,
+     &     -24.26914663885402405126372567664280388966E0,
+     &     -24.12985944288624210229238972590881794092E0,
+     &     -24.00697058168597098928369714836882130512E0,
+     &     -23.8970195845316574350263109196222825525E0/
+      DATA (WM2(I),I=41,50)/
+     &     -14.16360081581018300910955630361089957762E0,
+     &     -13.41624453595298662833544556875899262976E0,
+     &     -12.97753279184081358418630625949303360266E0,
+     &     -12.66551396826200331850774017793451747947E0,
+     &     -12.42304039760186078066171146072124458063E0,
+     &     -12.22461776385387453853455424320739669321E0,
+     &     -12.05663003490708840623665404674007291018E0,
+     &     -11.91094134143842011964821167497982287763E0,
+     &     -11.78229922740701885487699061601349928173E0,
+     &     -11.66711453256635441837882744697047370583E0/
+      DATA (WM2(I),I=51,59)/
+     &     -10.90655739570090676132157335673785028979E0,
+     &     -10.45921112040100393534625826514848865968E0,
+     &     -10.14059243262036578763968437893562720385E0,
+     &     -9.892699522704254067620287857665824159861E0,
+     &     -9.689637966382397752838283301312347921626E0,
+     &     -9.517569762038614935107630230444563521109E0,
+     &     -9.368222172408836799233763466046500781388E0,
+     &     -9.236251966692597369166416348621131600216E0,
+     &     -9.11800647040274012125833718204681427427E0/
+      DATA (WM2(I),I=60,68)/
+     &     -8.335081377982507150789361715143483020265E0,
+     &     -7.872521380098708883395239767904984410792E0,
+     &     -7.541940416432904084217222998374802941589E0,
+     &     -7.283997135099081646930521042317118095276E0,
+     &     -7.072162048994701667487346245044653243434E0,
+     &     -6.892241486671583156187212318718730022068E0,
+     &     -6.735741661607793269808533725369490789074E0,
+     &     -6.597171733627119347342347717832724288261E0,
+     &     -6.472775124394004694741057892724488037104E0/
+C
+C     End of exact results
+C     ____________________
+C
+C     Compare the approximations of WAPR with the given exact values?
+C
+      WRITE(NN,90)
+      READ(NI,100)A
+      IF(A.EQ.'y'.OR.A.EQ.'Y') THEN
+C
+C        Wp results for x near -exp(-1)
+C
+         WRITE(NN,110)
+         DO 10 I = 1,68
+C
+C           Check whether underflow occurs
+C
+            IF(DX1(I).EQ.0.E0) THEN
+               EM=-EXP(-1.E0)
+               W=WAPR(EM,0,NERROR,0,0)
+            ELSE
+               W=WAPR(DX1(I),0,NERROR,1,0)
+            ENDIF
+            IF(W.EQ.WP1(I))THEN
+               ND=ALOG10(2.E0**NBITS)+.5E0
+            ELSE
+               ND=ALOG10(ABS(WP1(I)/(W-WP1(I))))+.5E0
+            ENDIF
+            WRITE(NN,120)DX1(I),W,WP1(I),ND
+10       CONTINUE
+C
+C        Wp results for x near 0
+C
+         WRITE(NN,130)
+         DO 20 I=1,20
+            W=WAPR(X2(I),0,NERROR,0,0)
+            IF(W.EQ.WP2(I))THEN
+               ND=ALOG10(2.E0**NBITS)+.5E0
+            ELSE
+               ND=ALOG10(ABS(WP2(I)/(W-WP2(I))))+.5E0
+            ENDIF
+            WRITE(NN,120)X2(I),W,WP2(I),ND
+20       CONTINUE
+         DO 30 I=1,20
+            W=WAPR(-X2(I),0,NERROR,0,0)
+            IF(W.EQ.WP2(20+I))THEN
+               ND=ALOG10(2.E0**NBITS)+.5E0
+            ELSE
+               ND=ALOG10(ABS(WP2(20+I)/(W-WP2(20+I))))+.5E0
+            ENDIF
+            WRITE(NN,120)-X2(I),W,WP2(20+I),ND
+30       CONTINUE
+C
+C        Other Wp results
+C
+         WRITE(NN,140)
+         DO 40 I=1,10
+            W=WAPR(X3(I),0,NERROR,0,0)
+            IF(W.EQ.WP3(I))THEN
+               ND=ALOG10(2.E0**NBITS)+.5E0
+            ELSE
+               ND=ALOG10(ABS(WP3(I)/(W-WP3(I))))+.5E0
+            ENDIF
+            WRITE(NN,120)X3(I),W,WP3(I),ND
+40       CONTINUE
+C
+C        Wm results for x near -exp(-1)
+C
+         WRITE(NN,150)
+         DO 50 I = 1,68
+            W=WAPR(DX1(I),1,NERROR,1,0)
+            IF(W.EQ.WM1(I))THEN
+               ND=ALOG10(2.E0**NBITS)+.5E0
+            ELSE
+               ND=ALOG10(ABS(WM1(I)/(W-WM1(I))))+.5E0
+            ENDIF
+            WRITE(NN,120)DX1(I),W,WM1(I),ND
+50       CONTINUE
+C
+C        Wm results for x near 0
+C
+         WRITE(NN,160)
+         DO 60 I=1,68
+C
+C           Check for underflow
+C
+            IF(DX1(I).GT.0.E0) THEN
+               W=WAPR(-DX1(I),1,NERROR,0,0)
+               IF(W.EQ.WM2(I))THEN
+                  ND=ALOG10(2.E0**NBITS)+.5E0
+               ELSE
+                  ND=ALOG10(ABS(WM2(I)/(W-WM2(I))))+.5E0
+               ENDIF
+               WRITE(NN,120)-DX1(I),W,WM2(I),ND
+            ENDIF
+60       CONTINUE
+         WRITE(NN,170)
+         STOP
+      ENDIF
+C
+C     Input the range of x, the number of values of W within the range
+C     to be calculated, and the branch of the W function to be used.
+C
+      WRITE(NN,180)
+      READ(NI,100)A
+      IF(A.EQ.'y'.OR.A.EQ.'Y') THEN
+C
+C        x is to be entered as an offset from -exp(-1).
+C
+         L=1
+         IFMT=0
+         WRITE(NN,190)
+         READ(NI,200)DX
+         WRITE(NN,210)
+         READ(NI,*)N
+         XMAX=N*DX-EXP(-1.E0)
+         XMIN=0.E0
+      ELSE
+C
+C        x itself is to be entered.
+C
+         IFMT=1
+         WRITE(NN,220)
+         READ(NI,*)XMIN,XMAX
+         IF(XMAX.LT.XMIN) THEN
+            TEMP=XMIN
+            XMIN=XMAX
+            XMAX=TEMP
+         ENDIF
+         WRITE(NN,230)
+         READ(NI,*)N
+         DX=(XMAX-XMIN)/N
+         XMIN=XMIN-DX
+      ENDIF
+      IF(XMAX.LE.0.E0) THEN
+         IW=1
+         WRITE(NN,240)
+      ELSE
+         IW=0
+         WRITE(NN,250)
+      ENDIF
+      WRITE(NN,260)
+      IF(IFMT.EQ.0) THEN
+         WRITE(NN,310)
+      ELSE
+         WRITE(NN,270)
+      ENDIF
+      DO 70 I=1,N+1
+         X=XMIN+I*DX
+         W=WAPR(X,0,NERROR,L,0)
+            IF(NERROR.EQ.1) THEN
+               WRITE(NN,280)X
+               GO TO 70
+            ENDIF
+            WE=BISECT(X,0,NER,L)
+            IF(NER.EQ.1) WRITE(NN,290)X
+         IF(W.EQ.WE)THEN
+            ND=ALOG10(2.E0**NBITS)+.5E0
+         ELSE
+            ND=ALOG10(ABS(WE/(W-WE)))+.5E0
+         ENDIF
+         WRITE(NN,120)X,W,WE,ND
+70    CONTINUE
+      WRITE(NN,170)
+      IF(IW.EQ.1) THEN
+         WRITE(NN,300)
+         IF(IFMT.EQ.0) THEN
+            WRITE(NN,310)
+         ELSE
+            WRITE(NN,270)
+         ENDIF
+         DO 80 I=1,N+1
+            X=XMIN+I*DX
+            W=WAPR(X,1,NERROR,L,0)
+               IF(NERROR.EQ.1) THEN
+                  WRITE(NN,280)X
+                  GO TO 80
+               ENDIF
+               WE=BISECT(X,1,NER,L)
+               IF(NER.EQ.1) WRITE(NN,290)X
+            IF(W.EQ.WE)THEN
+               ND=ALOG10(2.E0**NBITS)+.5E0
+            ELSE
+               ND=ALOG10(ABS(WE/(W-WE)))+.5E0
+            ENDIF
+            WRITE(NN,120)X,W,WE,ND
+80       CONTINUE
+         WRITE(NN,170)
+      ENDIF
+      STOP
+90    FORMAT(/,' Compare WAPR with the given exact W function ',
+     &       'results (Y or N)?')
+100   FORMAT(A1)
+110   FORMAT(/,' Wp results for x near -exp(-1)',/,
+     &       ' ______________________________',/,/,7X,'Offset x',8X,
+     &       'W(x) (WAPR)',5X,'W(x) (EXACT)',3X,'Digits Correct')
+120   FORMAT(1X,3(1P1E17.8),6X,I3)
+130   FORMAT(/,' Wp results for x near 0',/,' _______________________',
+     &       /,/,10X,'x',12X,'W(x) (WAPR)',5X,'W(x) (EXACT)',3X,
+     &       'Digits Correct')
+140   FORMAT(/,' Other Wp results',/,' ________________',/,/,10X,'x',
+     &       12X,'W(x) (WAPR)',5X,'W(x) (EXACT)',3X,'Digits Correct')
+150   FORMAT(/,' Wm results for x near -exp(-1)',/,
+     &       ' ______________________________',/,/,7X,'Offset x',8X,
+     &       'W(x) (WAPR)',5X,'W(x) (EXACT)',3X,'Digits Correct')
+160   FORMAT(/,' Wm results for x near 0',/,' _______________________',
+     &       /,/,10X,'x',12X,'W(x) (WAPR)',5X,'W(x) (EXACT)',3X,
+     &       'Digits Correct')
+170   FORMAT(/)
+180   FORMAT(/,' Is x to be specified as an offset from -exp(-1)',
+     &       ' (Y or N)?')
+190   FORMAT(/,' What is the offset?')
+200   FORMAT(E16.8)
+210   FORMAT(/,' How many values to be calculated?')
+220   FORMAT(/,' Input the minimum and maximum x.')
+230   FORMAT(/,' How many values to be calculated in this range?')
+240   FORMAT(/,' Both branches of the W function will be checked.')
+250   FORMAT(/,' Wp has been selected (maximum x is > 0)')
+260   FORMAT(/,' Results for Wp(x)')
+270   FORMAT(/,9X,'x',13X,'W(x) (WAPR)',5X,'W(x) (BISECT)',
+     &       2X,'Digits Correct')
+280   FORMAT(/,' The value of x:',1X,E16.8,1X,'is out of range.')
+290   FORMAT(/,' BISECT did not converge for x =',1X,E16.8,'.',/,
+     &       ' Try reducing NBITS in WAPR.')
+300   FORMAT(/,' Results for Wm(x)')
+310   FORMAT(/,7X,'Offset x',8X,'W(x) (WAPR)',5X,'W(x) (BISECT)',2X,
+     &       'Digits Correct')
+      END
+C
+C     _________________________________________________________________
+C
+C     Solution using bisection
+C     ________________________
+C
+      REAL FUNCTION BISECT(XX,NB,NER,L)
+C
+C     XX is the argument, W(XX)
+C     NB is the branch of the W function needed:
+C        NB = 0 - upper branch
+C        NB <> 0 - lower branch
+C
+C     NER is the error condition for the bisection routine
+C        NER = 0 - routine completed successfully
+C        NER = 1 - routine did not converge (indicates NBITS should be
+C                  reduced)
+C
+C     L - indicates if XX is offset from -exp(-1)
+C        L = 1, Yes, it is offset
+C        L <> 1, No, true XX is entered
+C
+C     The parameter TOL, which determines the accuracy of the bisection
+C     method, is calculated using NBITS (assuming the final bit is lost
+C     due to rounding error).
+C
+C     N0 is the maximum number of iterations used in the bisection
+C     method.
+C
+C     For XX close to 0 for Wp, the exponential approximation is used.
+C     The approximation is exact to O(XX**8) so, depending on the value
+C     of NBITS, the range of application of this formula varies. Outside
+C     this range, the usual bisection method is used.
+C
+      IMPLICIT REAL (A-H,O-Z)
+      SAVE
+      COMMON/WAPCOM/NBITS
+      PARAMETER(N0=500)
+      NER=0
+      IF(L.EQ.1) THEN
+         X=XX-EXP(-1.E0)
+      ELSE
+         X=XX
+      ENDIF
+      IF(NB.EQ.0) THEN
+         IF(ABS(X).LT.1.E0/(2.E0**NBITS)**(1.E0/7.E0)) THEN
+            BISECT=X*EXP(-X*EXP(-X*EXP(-X*EXP(-X*EXP(-X*
+     &             EXP(-X))))))
+            RETURN
+         ELSE
+            U=CRUDE(X,NB)+1.E-3
+            TOL=ABS(U)/2.E0**NBITS
+            D=MAX(U-2.E-3,-1.E0)
+            DO 10 I=1,N0
+               R=.5E0*(U-D)
+               BISECT=D+R
+               IF(X.LT.EXP(1.E0))THEN
+C
+C                 Find root using w*exp(w)-x to avoid ln(0) error.
+C
+                  F=BISECT*EXP(BISECT)-X
+                  FD=D*EXP(D)-X
+               ELSE
+C
+C                 Find root using ln(w/x)+w to avoid overflow error.
+C
+                  F=ALOG(BISECT/X)+BISECT
+                  FD=ALOG(D/X)+D
+               ENDIF
+               IF(F.EQ.0.E0.OR.ABS(R).LE.TOL)RETURN
+               IF(FD*F.GT.0.E0)THEN
+                  D=BISECT
+               ELSE
+                  U=BISECT
+               ENDIF
+10          CONTINUE
+         ENDIF
+      ELSE
+         D=CRUDE(X,NB)-1.E-3
+         U=MIN(D+2.E-3,-1.E0)
+         TOL=ABS(U)/2.E0**NBITS
+         DO 20 I=1,N0
+            R=.5E0*(U-D)
+            BISECT=D+R
+            F=BISECT*EXP(BISECT)-X
+            IF(F.EQ.0.E0.OR.ABS(R).LE.TOL) RETURN
+            FD=D*EXP(D)-X
+            IF(FD*F.GT.0.E0)THEN
+               D=BISECT
+            ELSE
+               U=BISECT
+            ENDIF
+20       CONTINUE
+      ENDIF
+      NER=1
+      RETURN
+      END
+C
+C     __________________________________________________________________
+C
+C     Crude approximations for the W function (used by BISECT)
+C     ________________________________________________________
+C
+      REAL FUNCTION CRUDE(XX,NB)
+      IMPLICIT REAL (A-H,O-Z)
+      COMMON/WAPCOM/NBITS
+      DATA INIT/0/
+C
+      IF(INIT.EQ.0) THEN
+         INIT=1
+C
+C        Various mathematical constants
+C
+         EM=-EXP(-1.E0)
+         EM9=-EXP(-9.E0)
+         C13=1.E0/3.E0
+         EM2=2.E0/EM
+         S2=SQRT(2.E0)
+         S21=2.E0*S2-3.E0
+         S22=4.E0-3.E0*S2
+         S23=S2-2.E0
+      ENDIF
+      IF(NB.EQ.0) THEN
+C
+C        Calculations for crude Wp
+C
+         IF(XX.LE.2.E1) THEN
+            RETA=S2*SQRT(1.E0-XX/EM)
+            AN2=4.612634277343749E0*SQRT(SQRT(RETA+
+     &          1.09556884765625E0))
+            CRUDE=RETA/(1.E0+RETA/(3.E0+(S21*AN2+S22)*RETA/
+     &            (S23*(AN2+RETA))))-1.E0
+         ELSE
+            ZL=ALOG(XX)
+            CRUDE=ALOG(XX/ALOG(XX/ZL**EXP(-1.124491989777808E0/
+     &            (.4225028202459761E0+ZL))))
+         ENDIF
+      ELSE
+C
+C        Calculations for crude Wm
+C
+         IF(XX.LE.EM9) THEN
+            ZL=ALOG(-XX)
+            T=-1.E0-ZL
+            TS=SQRT(T)
+            CRUDE=ZL-(2.E0*TS)/(S2+(C13-T/(2.7E2+
+     &            TS*127.0471381349219E0))*TS)
+         ELSE
+            ZL=ALOG(-XX)
+            ETA=2.E0-EM2*XX
+            CRUDE=ALOG(XX/ALOG(-XX/((1.E0-.5043921323068457E0*
+     &            (ZL+1.E0))*(SQRT(ETA)+ETA/3.E0)+1.E0)))
+         ENDIF
+      ENDIF
+      RETURN
+      END
+C
+C     __________________________________________________________________
+C
+C     Approximating the W function
+C     ____________________________
+C
+      REAL FUNCTION WAPR(X,NB,NERROR,L,M)
+C
+C     WAPR - output
+C     X - argument of W(X)
+C     NB is the branch of the W function needed:
+C        NB = 0 - upper branch
+C        NB <> 0 - lower branch
+C
+C     NERROR is the output error flag:
+C        NERROR = 0 -> routine completed successfully
+C        NERROR = 1 -> X is out of range
+C
+C     Range: -exp(-1) <= X for the upper branch of the W function
+C            -exp(-1) < X < 0 for the lower branch of the W function
+C
+C     L - determines how WAPR is to treat the argument X
+C        L = 1 -> X is the offset from -exp(-1), so compute
+C                 W(X-exp(-1))
+C        L <> 1 -> X is the desired X, so compute W(X)
+C
+C     M - print messages from WAPR?
+C         M = 1 -> Yes
+C         M <> 1 -> No
+C
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+C
+C     NN is the output device number
+C
+C     NBITS is the number of bits (less 1) in the mantissa of the
+C        floating point number number representation of your machine.
+C        It is used to determine the level of accuracy to which the W
+C        function should be calculated.
+C
+C        Most machines use a 24-bit matissa for single precision and
+C        53-56 bits for double precision. The IEEE standard is 53
+C        bits. The Fujitsu VP2200 uses 56 bits. Long word length
+C        machines vary, e.g., the Cray X/MP has a 48-bit mantissa for
+C        single precision.
+C
+      IMPLICIT REAL (A-H,O-Z)
+      SAVE
+      PARAMETER(NN=6)
+C
+C     The following COMMON statement is needed only when testing this
+C     function using BISECT, otherwise it can be removed.
+C
+      COMMON/WAPCOM/NBITS
+      DATA INIT,NITER/0,1/
+C     DATA NBITS/23/
+C
+      IF(INIT.EQ.0) THEN
+         INIT=1
+C
+C        Code to calculate NBITS for the host machine. NBITS is the
+C        mantissa length less one. This value is chosen to allow for
+C        rounding error in the final bit. This need only be run once on
+C        any particular machine. It can then be included in the above
+C        DATA statement.
+C
+         DO 10 I=1,2000
+            B=2.E0**(-I)
+            V=1.E0+B
+            IF(V.EQ.1.E0)THEN
+               NBITS=I-1
+               J=-ALOG10(B)
+               IF(M.EQ.1) WRITE(NN,40)NBITS,J
+               GO TO 20
+            ENDIF
+10       CONTINUE
+C
+C        Remove to here after NBITS has been calculated once
+C
+C        The case of large NBITS
+C
+20       IF(NBITS.GE.56) NITER=2
+C
+C        Various mathematical constants
+C
+         EM=-EXP(-1.E0)
+         EM9=-EXP(-9.E0)
+         C13=1.E0/3.E0
+         C23=2.E0*C13
+         EM2=2.E0/EM
+         E12=-EM2
+         TB=.5E0**NBITS
+         TB2=SQRT(TB)
+         X0=TB**(1.E0/6.E0)*.5E0
+         X1=(1.E0-17.E0*TB**(2.E0/7.E0))*EM
+         AN22=3.6E2/83.E0
+         AN11=135./83.E0
+         AN3=8.E0/3.E0
+         AN4=135.E0/83.E0
+         AN5=166.E0/39.E0
+         AN6=3167.E0/3549.E0
+         S2=SQRT(2.E0)
+         S21=2.E0*S2-3.E0
+         S22=4.E0-3.E0*S2
+         S23=S2-2.E0
+      ENDIF
+      NERROR=0
+      IF(L.EQ.1) THEN
+         DELX=X
+         IF(DELX.LT.0.E0) THEN
+            IF(M.EQ.1) WRITE(NN,50)
+            NERROR=1
+            RETURN
+         ENDIF
+         XX=X+EM
+         IF(E12*DELX.LT.TB**2.AND.M.EQ.1) WRITE(NN,60)DELX
+      ELSE
+         IF(X.LT.EM) THEN
+            NERROR=1
+            RETURN
+         ELSE IF(X.EQ.EM) THEN
+            WAPR=-1.E0
+            RETURN
+         ENDIF
+         XX=X
+         DELX=XX-EM
+         IF(DELX.LT.TB2.AND.M.EQ.1) WRITE(NN,70)XX
+      ENDIF
+      IF(NB.EQ.0) THEN
+C
+C        Calculations for Wp
+C
+         IF(ABS(XX).LE.X0) THEN
+            WAPR=XX/(1.E0+XX/(1.E0+XX/(2.E0+XX/(.6E0+.34E0*XX))))
+            RETURN
+         ELSE IF(XX.LE.X1) THEN
+            RETA=SQRT(E12*DELX)
+            WAPR=RETA/(1.E0+RETA/(3.E0+RETA/(RETA/(AN4+RETA/(RETA*
+     &           AN6+AN5))+AN3)))-1.E0
+            RETURN
+         ELSE IF(XX.LE.2.E1) THEN
+            RETA=S2*SQRT(1.E0-XX/EM)
+            AN2=4.612634277343749E0*SQRT(SQRT(RETA+
+     &          1.09556884765625E0))
+            WAPR=RETA/(1.E0+RETA/(3.E0+(S21*AN2+S22)*RETA/
+     &           (S23*(AN2+RETA))))-1.E0
+         ELSE
+            ZL=ALOG(XX)
+            WAPR=ALOG(XX/ALOG(XX/ZL**EXP(-1.124491989777808E0/
+     &          (.4225028202459761E0+ZL))))
+         ENDIF
+      ELSE
+C
+C        Calculations for Wm
+C
+         IF(XX.GE.0.E0) THEN
+            NERROR=1
+            RETURN
+         ELSE IF(XX.LE.X1) THEN
+            RETA=SQRT(E12*DELX)
+            WAPR=RETA/(RETA/(3.E0+RETA/(RETA/(AN4+RETA/(RETA*
+     &           AN6-AN5))-AN3))-1.E0)-1.E0
+            RETURN
+         ELSE IF(XX.LE.EM9) THEN
+            ZL=ALOG(-XX)
+            T=-1.E0-ZL
+            TS=SQRT(T)
+            WAPR=ZL-(2.E0*TS)/(S2+(C13-T/(2.7E2+
+     &           TS*127.0471381349219E0))*TS)
+         ELSE
+            ZL=ALOG(-XX)
+            ETA=2.E0-EM2*XX
+            WAPR=ALOG(XX/ALOG(-XX/((1.E0-.5043921323068457E0*
+     &           (ZL+1.E0))*(SQRT(ETA)+ETA/3.E0)+1.E0)))
+         ENDIF
+      ENDIF
+      DO 30 I=1,NITER
+         ZN=ALOG(XX/WAPR)-WAPR
+         TEMP=1.E0+WAPR
+         TEMP2=TEMP+C23*ZN
+         TEMP2=2.E0*TEMP*TEMP2
+         WAPR=WAPR*(1.E0+(ZN/TEMP)*(TEMP2-ZN)/(TEMP2-2.E0*ZN))
+30    CONTINUE
+      RETURN
+40    FORMAT(/,' NBITS is',I4,'.',/,' Expect',I4,
+     &       ' significant digits from WAPR.')
+50    FORMAT(/,' Warning: the offset x is negative (it must be > 0)')
+60    FORMAT(' Warning: For this offset (',E16.8,'),',/,
+     &       ' W is negligibly different from -1')
+70    FORMAT(' Warning: x (= ',E16.8,') is close to -exp(-1).',/,
+     &       ' Enter x as an offset to -exp(-1) for greater accuracy')
+      END
+C
+C     END of WAPR
+C     __________________________________________________________________
+C
+C************************************************************************
+C
+C     Testing the W function approximations.
+C     ______________________________________
+C
+C     This is the double precision version.
+C
+C     This file contains (i) a driver to test the W function
+C     approximations; (ii) BISECT, a function which determines values of
+C     W(x) using the bisection method; and (iii) WAPR, the W function
+C     approximation.
+C
+C     The driver is used to test the W function approximations by
+C     comparison with (i) a set of test values of W(x); or (ii) a
+C     bisection method solution. For the latter case, the user is
+C     prompted to give the range of x values over which the test is to
+C     be performed, as well as the number of W values to be calculated
+C     in that range. The appropriate branch must be requested if the
+C     desired range is <= 0: 0 for the upper branch (Wp) and nonzero
+C     for the lower branch (Wm).
+C
+C     The magnitude of the manitssa length of the host machine is an
+C     integral part of the operation of WAPR. However, it need only be
+C     caluclated once. More precisely, WAPR uses the number of bits
+C     (less 1) of the mantissa of the floating point number
+C     representation of the host machine. This number is assigned to
+C     NBITS. Most single precision mantissas are 24 bits (NBITS = 23),
+C     while double precision ranges from 53 to 56.
+C
+C     Note: if too large a value for NBITS is used, then the bisection
+C     routine, BISECT, will return the error code: NER = 1 (no
+C     convergence), although the bisection method result and the WAPR
+C     result may agree. This situation will not occur if NBITS is
+C     calculated using the code as supplied.
+C
+C     Users of WAPR will usually want to calculate W(x) for specified
+C     values of x. However, if W(x) is to be evaluated near x = -exp(-1)
+C     there is a difficulty in specifying x due to roundoff. For
+C     example, if WAPR is being used in single precision (usually a
+C     7-digit mantissa) and W(-exp(-1)+1/10**10) is to be evaluated then
+C     it is not possible to enter the required x value. However, Wp(x),
+C     for example, will be affected because Wp ~ -1 +
+C     (2*exp(1)/10**10)**(1/2). Thus, the 1/10**10 increment to x at x =
+C     -exp(-1) increments W by about 2/10**5. For this reason WAPR is
+C     used in either of two ways. First, x is specified and W(x) is
+C     returned. Alternatively, x is specified by its offset (delta x)
+C     from -exp(-1), i.e., delta x = x + exp(-1). In this case
+C     W(-exp(-1)+delta x) is returned. Note that in the latter case it
+C     is not necessary for delta x to be small.
+C
+C     __________________________________________________________________
+C
+C     Start of the driver (testing) program
+C     _____________________________________
+C
+C     NN is the output device number
+C     NI is the input device number
+C
+      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
+      SAVE
+      DIMENSION DX1(68),WP1(68),X2(20),WP2(40),X3(10),WP3(10),WM1(68),
+     &          WM2(68)
+      PARAMETER(NN=6,NI=5)
+      COMMON/WAPCOM/NBITS
+      CHARACTER*1 A
+C
+C     Exact results for Wp(x)
+C     _______________________
+C
+C     x close to -exp(-1)
+C
+      DATA DX1/
+     &     1.D-40,2.D-40,3.D-40,4.D-40,5.D-40,6.D-40,7.D-40,8.D-40,
+     &     9.D-40,1.D-39,1.D-30,2.D-30,3.D-30,4.D-30,5.D-30,6.D-30,
+     &     7.D-30,8.D-30,9.D-30,1.D-29,1.D-20,2.D-20,3.D-20,4.D-20,
+     &     5.D-20,6.D-20,7.D-20,8.D-20,9.D-20,1.D-19,1.D-10,2.D-10,
+     &     3.D-10,4.D-10,5.D-10,6.D-10,7.D-10,8.D-10,9.D-10,1.D-9,1.D-5,
+     &     2.D-5,3.D-5,4.D-5,5.D-5,6.D-5,7.D-5,8.D-5,9.D-5,1.D-4,2.D-4,
+     &     3.D-4,4.D-4,5.D-4,6.D-4,7.D-4,8.D-4,9.D-4,1.D-3,2.D-3,3.D-3,
+     &     4.D-3,5.D-3,6.D-3,7.D-3,8.D-3,9.D-3,1.D-2/
+      DATA (WP1(I),I=1,10)/
+     &     -.9999999999999999999766835601840287579665D0,
+     &     -.9999999999999999999670255745859974370634D0,
+     &     -.9999999999999999999596147415871158855702D0,
+     &     -.9999999999999999999533671203680575159335D0,
+     &     -.9999999999999999999478628555782056161596D0,
+     &     -.9999999999999999999428866198325571498809D0,
+     &     -.9999999999999999999383104987875354650364D0,
+     &     -.9999999999999999999340511491719948741275D0,
+     &     -.9999999999999999999300506805520862739007D0,
+     &     -.9999999999999999999262669432552936235556D0/
+      DATA (WP1(I),I=11,20)/
+     &     -.9999999999999976683560184028776088243496D0,
+     &     -.9999999999999967025574585997473306784697D0,
+     &     -.9999999999999959614741587115939935280812D0,
+     &     -.9999999999999953367120368057588420244704D0,
+     &     -.9999999999999947862855578205706768098859D0,
+     &     -.9999999999999942886619832557258611080314D0,
+     &     -.9999999999999938310498787535591888253966D0,
+     &     -.999999999999993405114917199501910108482D0,
+     &     -.9999999999999930050680552086436996003626D0,
+     &     -.9999999999999926266943255293804772564852D0/
+      DATA (WP1(I),I=21,30)/
+     &     -.9999999997668356018584094585181033975713D0,
+     &     -.9999999996702557458962181283375794922681D0,
+     &     -.9999999995961474159255244922555603070484D0,
+     &     -.9999999995336712037530626747373742782638D0,
+     &     -.9999999994786285558726655558473617503914D0,
+     &     -.9999999994288661984343027719079710168757D0,
+     &     -.9999999993831049880022078023099082447845D0,
+     &     -.9999999993405114918649237720678678043098D0,
+     &     -.9999999993005068056839596486461928553989D0,
+     &     -.9999999992626694327341550240404575805522D0/
+      DATA (WP1(I),I=31,40)/
+     &     -.9999766837414008807143234266407434345965D0,
+     &     -.9999670259370180970391011806287847685011D0,
+     &     -.9999596152852334187587360603177913882165D0,
+     &     -.9999533678452277190993205651165793258207D0,
+     &     -.9999478637616504968301143759542621752943D0,
+     &     -.9999428877071168268324462680980110604599D0,
+     &     -.999938311767283189655618359697592754013D0,
+     &     -.999934052598878483932035240348113191731D0,
+     &     -.9999300523114688962155368933174163936848D0,
+     &     -.9999262687553819399632780281900349826094D0/
+      DATA (WP1(I),I=41,50)/
+     &     -.9926447551971221136721993073029112268763D0,
+     &     -.9896086425917686478635208903220735023288D0,
+     &     -.9872831094708759013315476674998231771112D0,
+     &     -.9853253899681719161468126266199947992874D0,
+     &     -.9836027178149637071691226667555243369797D0,
+     &     -.9820470029764667038452666345865058694192D0,
+     &     -.9806177971936827573257045283891513709368D0,
+     &     -.97928874641099293421931043027104578327D0,
+     &     -.9780415451927629881943028498821429186059D0,
+     &     -.9768628655744219140604871252425961901255D0/
+      DATA (WP1(I),I=51,59)/
+     &     -.967382626983074241885253344632666448927D0,
+     &     -.9601485420712594199373375259293860324633D0,
+     &     -.9540768694875733222057908617314370634111D0,
+     &     -.9487478690765183543410579996573536771348D0,
+     &     -.9439462911219380338176477772712853402016D0,
+     &     -.9395442782590063946376623684916441100361D0,
+     &     -.9354585313336439336066341889767099608018D0,
+     &     -.9316311953818583253420613278986500351794D0,
+     &     -.9280201500545670487600430252549212247489D0/
+      DATA (WP1(I),I=60,68)/
+     &     -.8991857663963733198571950343133631348347D0,
+     &     -.8774287170665477623395641312875506084256D0,
+     &     -.8593275036837387237312746018678000939451D0,
+     &     -.8435580020488052057849697812109882706542D0,
+     &     -.8294416857114015557682843481727604063558D0,
+     &     -.8165758053803078481644781849709953302847D0,
+     &     -.8046981564792468915744561969751509934994D0,
+     &     -.7936267540949175059651534957734689407879D0,
+     &     -.7832291989812967764330746819464532478021D0/
+C
+C     x close to 0
+C
+      DATA X2/
+     &     1.D-9,2.D-9,3.D-9,4.D-9,5.D-9,6.D-9,7.D-9,8.D-9,9.D-9,1.D-8,
+     &     1.D-2,2.D-2,3.D-2,4.D-2,5.D-2,6.D-2,7.D-2,8.D-2,9.D-2,1.D-1/
+      DATA (WP2(I),I=1,10)/
+     &     9.999999990000000014999999973333333385417D-10,
+     &     1.9999999960000000119999999573333335D-9,
+     &     2.999999991000000040499999784000001265625D-9,
+     &     3.999999984000000095999999317333338666667D-9,
+     &     4.999999975000000187499998333333349609375D-9,
+     &     5.999999964000000323999996544000040499999D-9,
+     &     6.99999995100000051449999359733342086979D-9,
+     &     7.999999936000000767999989077333503999997D-9,
+     &     8.999999919000001093499982504000307546869D-9,
+     &     9.999999900000001499999973333333854166656D-9/
+      DATA (WP2(I),I=11,20)/
+     &     9.901473843595011885336326816570107953628D-3,
+     &     1.961158933740562729168248268298370977812D-2,
+     &     2.913845916787001265458568152535395243296D-2,
+     &     3.848966594197856933287598180923987047561D-2,
+     &     4.767230860012937472638890051416087074706D-2,
+     &     5.669304377414432493107872588796066666126D-2,
+     &     6.555812274442272075701853672870305774479D-2,
+     &     7.427342455278083997072135190143718509109D-2,
+     &     8.284448574644162210327285639805993759142D-2,
+     &     9.127652716086226429989572142317956865312D-2/
+      DATA (WP2(I),I=21,30)/
+     &     -1.000000001000000001500000002666666671875D-9,
+     &     -2.000000004000000012000000042666666833333D-9,
+     &     -3.000000009000000040500000216000001265625D-9,
+     &     -4.000000016000000096000000682666672D-9,
+     &     -5.000000025000000187500001666666682942709D-9,
+     &     -6.000000036000000324000003456000040500001D-9,
+     &     -7.000000049000000514500006402666754203126D-9,
+     &     -8.000000064000000768000010922666837333336D-9,
+     &     -9.000000081000001093500017496000307546881D-9,
+     &     -1.000000010000000150000002666666718750001D-8/
+      DATA (WP2(I),I=31,40)/
+     &     -1.010152719853875327292018767138623973671D-2,
+     &     -2.041244405580766725973605390749548004159D-2,
+     &     -3.094279498284817939791038065611524917276D-2,
+     &     -4.170340843648447389872733812553976786256D-2,
+     &     -5.270598355154634795995650617915721289428D-2,
+     &     -6.396318935617251019529498180168867456393D-2,
+     &     -7.548877886579220591933915955796681153525D-2,
+     &     -8.729772086157992404091975866027313992649D-2,
+     &     -9.940635280454481474353567186786621057821D-2,
+     &     -1.118325591589629648335694568202658422726D-1/
+C
+C     Other Wp results
+C
+      DATA X3/1.D1,1.D2,1.D3,1.D4,1.D5,1.D6,1.D7,1.D8,1.D9,1.D10/
+      DATA WP3/
+     &     1.745528002740699383074301264875389911535D0,
+     &     3.385630140290050184888244364529726867492D0,
+     &     5.249602852401596227126056319697306282521D0,
+     &     7.231846038093372706475618500141253883968D0,
+     &     9.284571428622108983205132234759581939317D0,
+     &     11.38335808614005262200015678158500428903D0,
+     &     13.5143440103060912090067238511621580283D0,
+     &     15.66899671545096218719628189389457073619D0,
+     &     17.84172596742146918254060066535711011039D0,
+     &     20.02868541330495078123430607181488729749D0/
+C
+C     Exact results for Wm(x)
+C     _______________________
+C
+C     x close to -exp(-1)
+C
+      DATA (WM1(I),I=1,10)/
+     &     -1.000000000000000000023316439815971242034D0,
+     &     -1.000000000000000000032974425414002562937D0,
+     &     -1.000000000000000000040385258412884114431D0,
+     &     -1.000000000000000000046632879631942484068D0,
+     &     -1.000000000000000000052137144421794383842D0,
+     &     -1.000000000000000000057113380167442850121D0,
+     &     -1.000000000000000000061689501212464534966D0,
+     &     -1.000000000000000000065948850828005125875D0,
+     &     -1.000000000000000000069949319447913726103D0,
+     &     -1.000000000000000000073733056744706376448D0/
+      DATA (WM1(I),I=11,20)/
+     &     -1.000000000000002331643981597126015551422D0,
+     &     -1.000000000000003297442541400259918073073D0,
+     &     -1.000000000000004038525841288416879599233D0,
+     &     -1.000000000000004663287963194255655478615D0,
+     &     -1.00000000000000521371444217944744506897D0,
+     &     -1.000000000000005711338016744295885146596D0,
+     &     -1.000000000000006168950121246466181805002D0,
+     &     -1.000000000000006594885082800527084897688D0,
+     &     -1.000000000000006994931944791388919781579D0,
+     &     -1.000000000000007373305674470655766501228D0/
+      DATA (WM1(I),I=21,30)/
+     &     -1.000000000233164398177834299194683872234D0,
+     &     -1.000000000329744254176269387087995047343D0,
+     &     -1.00000000040385258418320678088280150237D0,
+     &     -1.000000000466328796391912356113774800963D0,
+     &     -1.000000000521371444308553232716574598644D0,
+     &     -1.00000000057113380178315977436875260197D0,
+     &     -1.000000000616895012251498501679602643872D0,
+     &     -1.000000000659488508425026289634430354159D0,
+     &     -1.000000000699493194642234170768892572882D0,
+     &     -1.000000000737330567628282553087415117543D0/
+      DATA (WM1(I),I=31,40)/
+     &     -1.000023316621036696460620295453277856456D0,
+     &     -1.000032974787857057404928311684626421503D0,
+     &     -1.000040385802079313048521250390482335902D0,
+     &     -1.00004663360452259016530661221213359488D0,
+     &     -1.0000521380505373899860247162705706318D0,
+     &     -1.000057114467508637629346787348726350223D0,
+     &     -1.000061690769779852545970707346938004879D0,
+     &     -1.000065950300622136103491886720203687457D0,
+     &     -1.00006995095046930174807034225078340539D0,
+     &     -1.000073734868993836022551364404248563489D0/
+      DATA (WM1(I),I=41,50)/
+     &     -1.007391489031309264813153180819941418531D0,
+     &     -1.010463846806564696239430620915659099361D0,
+     &     -1.012825626038880105597738761474228363542D0,
+     &     -1.014819592594577564927398399257428492725D0,
+     &     -1.016578512742400177512255407989807698099D0,
+     &     -1.018170476517182636083407324035097024753D0,
+     &     -1.019635932177973215702948823070039007361D0,
+     &     -1.021001233780440980009663527189756124983D0,
+     &     -1.022284686760270309618528459224732558767D0,
+     &     -1.023499619082082348038906498637836105447D0/
+      DATA (WM1(I),I=51,59)/
+     &     -1.033342436522109918536891072083243897233D0,
+     &     -1.040939194524944844012076988438386306843D0,
+     &     -1.047373634492196231421755878017895964061D0,
+     &     -1.053065496629607111615572634090884988897D0,
+     &     -1.058230030703619902820337106917657189605D0,
+     &     -1.06299509412938704964298950857825124135D0,
+     &     -1.067443986111355120560366087010834293872D0,
+     &     -1.071634561663924136735470389832541413862D0,
+     &     -1.07560894118662498941494486924522316597D0/
+      DATA (WM1(I),I=60,68)/
+     &     -1.108081880631165502564629660944418191031D0,
+     &     -1.133487001006868638317076487349933855181D0,
+     &     -1.155245851821528613609784258821055266176D0,
+     &     -1.174682608817289477552149783867901714817D0,
+     &     -1.192475850408615960644596781702366026321D0,
+     &     -1.209028378276581220769059281765172085749D0,
+     &     -1.224602449817731587352403997390766826335D0,
+     &     -1.239380103200799714836392811991400433357D0,
+     &     -1.253493791367214516100457405907304877145D0/
+C
+C     x close to 0
+C
+      DATA (WM2(I),I=1,10)/
+     &     -96.67475603368003636615083422832414231073D0,
+     &     -95.97433737593292677679699834708774152264D0,
+     &     -95.56459382507349364043974513871359837914D0,
+     &     -95.27386489130628866261760496192716897551D0,
+     &     -95.0483515329550645558378163981346085731D0,
+     &     -94.86408948075132603599669916724611501067D0,
+     &     -94.70829516116125928735505687861553800851D0,
+     &     -94.57333777268864473984718625104978190798D0,
+     &     -94.45429521137271454134108055166168787618D0,
+     &     -94.34780665137385269060032461028588648619D0/
+      DATA (WM2(I),I=11,20)/
+     &     -73.37311031382297679706747875812087452918D0,
+     &     -72.67033891766978907253811160121558649554D0,
+     &     -72.25920015786413889986246462168541066725D0,
+     &     -71.9674726772681844325410195162521230103D0,
+     &     -71.74117979478106456261839111929684980709D0,
+     &     -71.55627755942675731851469544735603279342D0,
+     &     -71.39993966508440988906136771384270319452D0,
+     &     -71.26450969134836299738230265916604879247D0,
+     &     -71.14504894849287026061378869987876478469D0,
+     &     -71.03818524971357411174259539994036186653D0/
+      DATA (WM2(I),I=21,30)/
+     &     -49.96298427667447244531514297262540669957D0,
+     &     -49.25557728489066973476436802404294348267D0,
+     &     -48.84167348449764278180827692232244878061D0,
+     &     -48.54795966722336777861228992424053274064D0,
+     &     -48.32011181512544381639923088992262632623D0,
+     &     -48.13392971864323755677656581326964166718D0,
+     &     -47.97650308277095858785998266172487372203D0,
+     &     -47.84012504158555569017852884133421231303D0,
+     &     -47.71982419568730714141619502661365943996D0,
+     &     -47.61220592218922310708330388890925734186D0/
+      DATA (WM2(I),I=31,40)/
+     &     -26.29523881924692569411012882185491823773D0,
+     &     -25.57429135222126159950976461862116397347D0,
+     &     -25.15218334705420805339928870686463192335D0,
+     &     -24.85251554543232259250342343156454440592D0,
+     &     -24.61997095867949438248843689371454503831D0,
+     &     -24.42989922074834124324823589226341161866D0,
+     &     -24.26914663885402405126372567664280388966D0,
+     &     -24.12985944288624210229238972590881794092D0,
+     &     -24.00697058168597098928369714836882130512D0,
+     &     -23.8970195845316574350263109196222825525D0/
+      DATA (WM2(I),I=41,50)/
+     &     -14.16360081581018300910955630361089957762D0,
+     &     -13.41624453595298662833544556875899262976D0,
+     &     -12.97753279184081358418630625949303360266D0,
+     &     -12.66551396826200331850774017793451747947D0,
+     &     -12.42304039760186078066171146072124458063D0,
+     &     -12.22461776385387453853455424320739669321D0,
+     &     -12.05663003490708840623665404674007291018D0,
+     &     -11.91094134143842011964821167497982287763D0,
+     &     -11.78229922740701885487699061601349928173D0,
+     &     -11.66711453256635441837882744697047370583D0/
+      DATA (WM2(I),I=51,59)/
+     &     -10.90655739570090676132157335673785028979D0,
+     &     -10.45921112040100393534625826514848865968D0,
+     &     -10.14059243262036578763968437893562720385D0,
+     &     -9.892699522704254067620287857665824159861D0,
+     &     -9.689637966382397752838283301312347921626D0,
+     &     -9.517569762038614935107630230444563521109D0,
+     &     -9.368222172408836799233763466046500781388D0,
+     &     -9.236251966692597369166416348621131600216D0,
+     &     -9.11800647040274012125833718204681427427D0/
+      DATA (WM2(I),I=60,68)/
+     &     -8.335081377982507150789361715143483020265D0,
+     &     -7.872521380098708883395239767904984410792D0,
+     &     -7.541940416432904084217222998374802941589D0,
+     &     -7.283997135099081646930521042317118095276D0,
+     &     -7.072162048994701667487346245044653243434D0,
+     &     -6.892241486671583156187212318718730022068D0,
+     &     -6.735741661607793269808533725369490789074D0,
+     &     -6.597171733627119347342347717832724288261D0,
+     &     -6.472775124394004694741057892724488037104D0/
+C
+C     End of exact results
+C     ____________________
+C
+C     Compare the approximations of WAPR with the given exact values?
+C
+      WRITE(NN,90)
+      READ(NI,100)A
+      IF(A.EQ.'y'.OR.A.EQ.'Y') THEN
+C
+C        Wp results for x near -exp(-1)
+C
+         WRITE(NN,110)
+         DO 10 I = 1,68
+C
+C           Check whether underflow occurs
+C
+            IF(DX1(I).EQ.0.D0) THEN
+               EM=-DEXP(-1.D0)
+               W=WAPR(EM,0,NERROR,0,0)
+            ELSE
+               W=WAPR(DX1(I),0,NERROR,1,0)
+            ENDIF
+            IF(W.EQ.WP1(I))THEN
+               ND=DLOG10(2.D0**NBITS)+.5D0
+            ELSE
+               ND=DLOG10(DABS(WP1(I)/(W-WP1(I))))+.5D0
+            ENDIF
+            WRITE(NN,120)DX1(I),W,WP1(I),ND
+10       CONTINUE
+C
+C        Wp results for x near 0
+C
+         WRITE(NN,130)
+         DO 20 I=1,20
+            W=WAPR(X2(I),0,NERROR,0,0)
+            IF(W.EQ.WP2(I))THEN
+               ND=DLOG10(2.D0**NBITS)+.5D0
+            ELSE
+               ND=DLOG10(DABS(WP2(I)/(W-WP2(I))))+.5D0
+            ENDIF
+            WRITE(NN,120)X2(I),W,WP2(I),ND
+20       CONTINUE
+         DO 30 I=1,20
+            W=WAPR(-X2(I),0,NERROR,0,0)
+            IF(W.EQ.WP2(20+I))THEN
+               ND=DLOG10(2.D0**NBITS)+.5D0
+            ELSE
+               ND=DLOG10(DABS(WP2(20+I)/(W-WP2(20+I))))+.5D0
+            ENDIF
+            WRITE(NN,120)-X2(I),W,WP2(20+I),ND
+30       CONTINUE
+C
+C        Other Wp results
+C
+         WRITE(NN,140)
+         DO 40 I=1,10
+            W=WAPR(X3(I),0,NERROR,0,0)
+            IF(W.EQ.WP3(I))THEN
+               ND=DLOG10(2.D0**NBITS)+.5D0
+            ELSE
+               ND=DLOG10(DABS(WP3(I)/(W-WP3(I))))+.5D0
+            ENDIF
+            WRITE(NN,120)X3(I),W,WP3(I),ND
+40       CONTINUE
+C
+C        Wm results for x near -exp(-1)
+C
+         WRITE(NN,160)
+         DO 50 I = 1,68
+            W=WAPR(DX1(I),1,NERROR,1,0)
+            IF(W.EQ.WM1(I))THEN
+               ND=DLOG10(2.D0**NBITS)+.5D0
+            ELSE
+               ND=DLOG10(DABS(WM1(I)/(W-WM1(I))))+.5D0
+            ENDIF
+            WRITE(NN,120)DX1(I),W,WM1(I),ND
+50       CONTINUE
+C
+C        Wm results for x near 0
+C
+         WRITE(NN,150)
+         DO 60 I=1,68
+C
+C           Check for underflow
+C
+            IF(DX1(I).GT.0.D0) THEN
+               W=WAPR(-DX1(I),1,NERROR,0,0)
+               IF(W.EQ.WM2(I))THEN
+                  ND=DLOG10(2.D0**NBITS)+.5D0
+               ELSE
+                  ND=DLOG10(DABS(WM2(I)/(W-WM2(I))))+.5D0
+               ENDIF
+               WRITE(NN,120)-DX1(I),W,WM2(I),ND
+            ENDIF
+60       CONTINUE
+         WRITE(NN,170)
+         STOP
+      ENDIF
+C
+C     Input the range of x, the number of values of W within the range
+C     to be calculated, and the branch of the W function to be used.
+C
+      WRITE(NN,180)
+      READ(NI,100)A
+      IF(A.EQ.'y'.OR.A.EQ.'Y') THEN
+C
+C        x is to be entered as an offset from -exp(-1).
+C
+         L=1
+         IFMT=0
+         WRITE(NN,190)
+         READ(NI,200)DX
+         WRITE(NN,210)
+         READ(NI,*)N
+         XMAX=N*DX-DEXP(-1.D0)
+         XMIN=0.D0
+      ELSE
+C
+C        x itself is to be entered.
+C
+         IFMT=1
+         WRITE(NN,220)
+         READ(NI,*)XMIN,XMAX
+         IF(XMAX.LT.XMIN) THEN
+            TEMP=XMIN
+            XMIN=XMAX
+            XMAX=TEMP
+         ENDIF
+         WRITE(NN,230)
+         READ(NI,*)N
+         DX=(XMAX-XMIN)/N
+         XMIN=XMIN-DX
+      ENDIF
+      IF(XMAX.LE.0.D0) THEN
+         IW=1
+         WRITE(NN,240)
+      ELSE
+         IW=0
+         WRITE(NN,250)
+      ENDIF
+      WRITE(NN,260)
+      IF(IFMT.EQ.0) THEN
+         WRITE(NN,310)
+      ELSE
+         WRITE(NN,270)
+      ENDIF
+      DO 70 I=1,N+1
+         X=XMIN+I*DX
+         W=WAPR(X,0,NERROR,L,0)
+            IF(NERROR.EQ.1) THEN
+               WRITE(NN,280)X
+               GO TO 70
+            ENDIF
+            WE=BISECT(X,0,NER,L)
+            IF(NER.EQ.1) WRITE(NN,290)X
+         IF(W.EQ.WE)THEN
+            ND=DLOG10(2.D0**NBITS)+.5D0
+         ELSE
+            ND=DLOG10(DABS(WE/(W-WE)))+.5D0
+         ENDIF
+         WRITE(NN,120)X,W,WE,ND
+70    CONTINUE
+      WRITE(NN,170)
+      IF(IW.EQ.1) THEN
+         WRITE(NN,300)
+         IF(IFMT.EQ.0) THEN
+            WRITE(NN,310)
+         ELSE
+            WRITE(NN,270)
+         ENDIF
+         DO 80 I=1,N+1
+            X=XMIN+I*DX
+            W=WAPR(X,1,NERROR,L,0)
+               IF(NERROR.EQ.1) THEN
+                  WRITE(NN,280)X
+                  GO TO 80
+               ENDIF
+               WE=BISECT(X,1,NER,L)
+               IF(NER.EQ.1) WRITE(NN,290)X
+            IF(W.EQ.WE)THEN
+               ND=DLOG10(2.D0**NBITS)+.5D0
+            ELSE
+               ND=DLOG10(DABS(WE/(W-WE)))+.5D0
+            ENDIF
+            WRITE(NN,120)X,W,WE,ND
+80       CONTINUE
+         WRITE(NN,170)
+      ENDIF
+      STOP
+90    FORMAT(/,' Compare WAPR with the given exact W function ',
+     &       'results (Y or N)?')
+100   FORMAT(A1)
+110   FORMAT(/,' Wp results for x near -exp(-1)',/,
+     &       ' ______________________________',/,/,7X,'Offset x',8X,
+     &       'W(x) (WAPR)',5X,'W(x) (EXACT)',3X,'Digits Correct')
+120   FORMAT(1X,3(1P1D17.8),6X,I3)
+130   FORMAT(/,' Wp results for x near 0',/,' _______________________',
+     &       /,/,10X,'x',12X,'W(x) (WAPR)',5X,'W(x) (EXACT)',3X,
+     &       'Digits Correct')
+140   FORMAT(/,' Other Wp results',/,' ________________',/,/,10X,'x',
+     &       12X,'W(x) (WAPR)',5X,'W(x) (EXACT)',3X,'Digits Correct')
+150   FORMAT(/,' Wm results for x near -exp(-1)',/,
+     &       ' ______________________________',/,/,7X,'Offset x',8X,
+     &       'W(x) (WAPR)',5X,'W(x) (EXACT)',3X,'Digits Correct')
+160   FORMAT(/,' Wm results for x near 0',/,' _______________________',
+     &       /,/,10X,'x',12X,'W(x) (WAPR)',5X,'W(x) (EXACT)',3X,
+     &       'Digits Correct')
+170   FORMAT(/)
+180   FORMAT(/,' Is x to be specified as an offset from -exp(-1)',
+     &       ' (Y or N)?')
+190   FORMAT(/,' What is the offset?')
+200   FORMAT(D16.8)
+210   FORMAT(/,' How many values to be calculated?')
+220   FORMAT(/,' Input the minimum and maximum x.')
+230   FORMAT(/,' How many values to be calculated in this range?')
+240   FORMAT(/,' Both branches of the W function will be checked.')
+250   FORMAT(/,' Wp has been selected (maximum x is > 0)')
+260   FORMAT(/,' Results for Wp(x)')
+270   FORMAT(/,9X,'x',13X,'W(x) (WAPR)',5X,'W(x) (BISECT)',
+     &       2X,'Digits Correct')
+280   FORMAT(/,' The value of x:',1X,D16.8,1X,'is out of range.')
+290   FORMAT(/,' BISECT did not converge for x =',1X,D16.8,'.',/,
+     &       ' Try reducing NBITS in WAPR.')
+300   FORMAT(/,' Results for Wm(x)')
+310   FORMAT(/,7X,'Offset x',8X,'W(x) (WAPR)',5X,'W(x) (BISECT)',2X,
+     &       'Digits Correct')
+      END
+C
+C     _________________________________________________________________
+C
+C     Solution using bisection
+C     ________________________
+C
+      DOUBLE PRECISION FUNCTION BISECT(XX,NB,NER,L)
+C
+C     XX is the argument, W(XX)
+C     NB is the branch of the W function needed:
+C        NB = 0 - upper branch
+C        NB <> 0 - lower branch
+C
+C     NER is the error condition for the bisection routine
+C        NER = 0 - routine completed successfully
+C        NER = 1 - routine did not converge (indicates NBITS should be
+C               reduced)
+C
+C     L - indicates if XX is offset from -exp(-1)
+C        L = 1, Yes, it is offset
+C        L <> 1, No, true XX is entered
+C
+C     The parameter TOL, which determines the accuracy of the bisection
+C     method, is calculated using NBITS (assuming the final bit is lost
+C     due to rounding error).
+C
+C     N0 is the maximum number of iterations used in the bisection
+C     method.
+C
+C     For XX close to 0 for Wp, the exponential approximation is used.
+C     The approximation is exact to O(XX**8) so, depending on the value
+C     of NBITS, the range of application of this formula varies. Outside
+C     this range, the usual bisection method is used.
+C
+      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
+      SAVE
+      COMMON/WAPCOM/NBITS
+      PARAMETER(N0=500)
+      NER=0
+      IF(L.EQ.1) THEN
+         X=XX-DEXP(-1.D0)
+      ELSE
+         X=XX
+      ENDIF
+      IF(NB.EQ.0) THEN
+         IF(DABS(X).LT.1.D0/(2.D0**NBITS)**(1.D0/7.D0)) THEN
+            BISECT=X*DEXP(-X*DEXP(-X*DEXP(-X*DEXP(-X*DEXP(-X*
+     &             DEXP(-X))))))
+            RETURN
+         ELSE
+            U=CRUDE(X,NB)+1.D-3
+            TOL=DABS(U)/2.D0**NBITS
+            D=MAX(U-2.D-3,-1.D0)
+            DO 10 I=1,N0
+               R=.5D0*(U-D)
+               BISECT=D+R
+               IF(X.LT.DEXP(1.D0))THEN
+C
+C                 Find root using w*exp(w)-x to avoid ln(0) error.
+C
+                  F=BISECT*DEXP(BISECT)-X
+                  FD=D*DEXP(D)-X
+               ELSE
+C
+C                 Find root using ln(w/x)+w to avoid overflow error.
+C
+                  F=DLOG(BISECT/X)+BISECT
+                  FD=DLOG(D/X)+D
+               ENDIF
+               IF(F.EQ.0.D0.OR.DABS(R).LE.TOL)RETURN
+               IF(FD*F.GT.0.D0)THEN
+                  D=BISECT
+               ELSE
+                  U=BISECT
+               ENDIF
+10          CONTINUE
+         ENDIF
+      ELSE
+         D=CRUDE(X,NB)-1.D-3
+         U=MIN(D+2.D-3,-1.D0)
+         TOL=DABS(U)/2.D0**NBITS
+         DO 20 I=1,N0
+            R=.5D0*(U-D)
+            BISECT=D+R
+            F=BISECT*DEXP(BISECT)-X
+            IF(F.EQ.0.D0.OR.DABS(R).LE.TOL) RETURN
+            FD=D*DEXP(D)-X
+            IF(FD*F.GT.0.D0)THEN
+               D=BISECT
+            ELSE
+               U=BISECT
+            ENDIF
+20       CONTINUE
+      ENDIF
+      NER=1
+      RETURN
+      END
+C
+C     __________________________________________________________________
+C
+C     Crude approximations for the W function (used by BISECT)
+C     ________________________________________________________
+C
+      DOUBLE PRECISION FUNCTION CRUDE(XX,NB)
+      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
+      COMMON/WAPCOM/NBITS
+      DATA INIT/0/
+C
+      IF(INIT.EQ.0) THEN
+         INIT=1
+C
+C        Various mathematical constants
+C
+         EM=-DEXP(-1.D0)
+         EM9=-DEXP(-9.D0)
+         C13=1.D0/3.D0
+         EM2=2.D0/EM
+         S2=DSQRT(2.D0)
+         S21=2.D0*S2-3.D0
+         S22=4.D0-3.D0*S2
+         S23=S2-2.D0
+      ENDIF
+      IF(NB.EQ.0) THEN
+C
+C        Calculations for crude Wp
+C
+         IF(XX.LE.2.D1) THEN
+            RETA=S2*DSQRT(1.D0-XX/EM)
+            AN2=4.612634277343749D0*DSQRT(DSQRT(RETA+
+     &          1.09556884765625D0))
+            CRUDE=RETA/(1.D0+RETA/(3.D0+(S21*AN2+S22)*RETA/
+     &            (S23*(AN2+RETA))))-1.D0
+         ELSE
+            ZL=DLOG(XX)
+            CRUDE=DLOG(XX/DLOG(XX/ZL**DEXP(-1.124491989777808D0/
+     &            (.4225028202459761D0+ZL))))
+         ENDIF
+      ELSE
+C
+C        Calculations for crude Wm
+C
+         IF(XX.LE.EM9) THEN
+            ZL=DLOG(-XX)
+            T=-1.D0-ZL
+            TS=DSQRT(T)
+            CRUDE=ZL-(2.D0*TS)/(S2+(C13-T/(2.7D2+
+     &            TS*127.0471381349219D0))*TS)
+         ELSE
+            ZL=DLOG(-XX)
+            ETA=2.D0-EM2*XX
+            CRUDE=DLOG(XX/DLOG(-XX/((1.D0-.5043921323068457D0*
+     &            (ZL+1.D0))*(DSQRT(ETA)+ETA/3.D0)+1.D0)))
+         ENDIF
+      ENDIF
+      RETURN
+      END
+C
+C     __________________________________________________________________
+C
+C     Approximating the W function
+C     ____________________________
+C
+      DOUBLE PRECISION FUNCTION WAPR(X,NB,NERROR,L,M)
+C
+C     WAPR - output
+C     X - argument of W(X)
+C     NB is the branch of the W function needed:
+C        NB = 0 - upper branch
+C        NB <> 0 - lower branch
+C
+C     NERROR is the output error flag:
+C        NERROR = 0 -> routine completed successfully
+C        NERROR = 1 -> X is out of range
+C
+C     Range: -exp(-1) <= X for the upper branch of the W function
+C            -exp(-1) < X < 0 for the lower branch of the W function
+C
+C     L - determines how WAPR is to treat the argument X
+C        L = 1 -> X is the offset from -exp(-1), so compute
+C                 W(X-exp(-1))
+C        L <> 1 -> X is desired X, so compute W(X)
+C
+C     M - print messages from WAPR?
+C         M = 1 -> Yes
+C         M <> 1 -> No
+C
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+C
+C     NN is the output device number
+C
+C     NBITS is the number of bits (less 1) in the mantissa of the
+C        floating point number number representation of your machine.
+C        It is used to determine the level of accuracy to which the W
+C        function should be calculated.
+C
+C        Most machines use a 24-bit matissa for single precision and
+C        53-56 bits for double precision. The IEEE standard is 53
+C        bits. The Fujitsu VP2200 uses 56 bits. Long word length
+C        machines vary, e.g., the Cray X/MP has a 48-bit mantissa for
+C        single precision.
+C
+      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
+      SAVE
+      PARAMETER(NN=6)
+C
+C     The following COMMON statement is needed only when testing this
+C     function using BISECT, otherwise it can be removed.
+C
+      COMMON/WAPCOM/NBITS
+      DATA INIT,NITER/0,1/
+C     DATA NBITS/52/
+C
+      IF(INIT.EQ.0) THEN
+         INIT=1
+C
+C        Code to calculate NBITS for the host machine. NBITS is the
+C        mantissa length less one. This value is chosen to allow for
+C        rounding error in the final bit. This need only be run once on
+C        any particular machine. It can then be included in the above
+C        DATA statement.
+C
+         DO 10 I=1,2000
+            B=2.D0**(-I)
+            V=1.D0+B
+            IF(V.EQ.1.D0)THEN
+               NBITS=I-1
+               J=-DLOG10(B)
+               IF(M.EQ.1) WRITE(NN,40)NBITS,J
+               GO TO 20
+            ENDIF
+10       CONTINUE
+C
+C        Remove to here after NBITS has been calculated once
+C
+C        The case of large NBITS
+C
+20       IF(NBITS.GE.56) NITER=2
+C
+C        Various mathematical constants
+C
+         EM=-DEXP(-1.D0)
+         EM9=-DEXP(-9.D0)
+         C13=1.D0/3.D0
+         C23=2.D0*C13
+         EM2=2.D0/EM
+         D12=-EM2
+         TB=.5D0**NBITS
+         TB2=DSQRT(TB)
+         X0=TB**(1.D0/6.D0)*.5D0
+         X1=(1.D0-17.D0*TB**(2.D0/7.D0))*EM
+         AN3=8.D0/3.D0
+         AN4=135.D0/83.D0
+         AN5=166.D0/39.D0
+         AN6=3167.D0/3549.D0
+         S2=DSQRT(2.D0)
+         S21=2.D0*S2-3.D0
+         S22=4.D0-3.D0*S2
+         S23=S2-2.D0
+      ENDIF
+      NERROR=0
+      IF(L.EQ.1) THEN
+         DELX=X
+         IF(DELX.LT.0.D0) THEN
+            IF(M.EQ.1) WRITE(NN,50)
+            NERROR=1
+            RETURN
+         ENDIF
+         XX=X+EM
+         IF(D12*DELX.LT.TB**2.AND.M.EQ.1) WRITE(NN,60)DELX
+      ELSE
+         IF(X.LT.EM) THEN
+            NERROR=1
+            RETURN
+         ELSE IF(X.EQ.EM) THEN
+            WAPR=-1.D0
+            RETURN
+         ENDIF
+         XX=X
+         DELX=XX-EM
+         IF(DELX.LT.TB2.AND.M.EQ.1) WRITE(NN,70)XX
+      ENDIF
+      IF(NB.EQ.0) THEN
+C
+C        Calculations for Wp
+C
+         IF(DABS(XX).LE.X0) THEN
+            WAPR=XX/(1.D0+XX/(1.D0+XX/(2.D0+XX/(.6D0+.34D0*XX))))
+            RETURN
+         ELSE IF(XX.LE.X1) THEN
+            RETA=DSQRT(D12*DELX)
+            WAPR=RETA/(1.D0+RETA/(3.D0+RETA/(RETA/(AN4+RETA/(RETA*
+     &           AN6+AN5))+AN3)))-1.D0
+            RETURN
+         ELSE IF(XX.LE.2.D1) THEN
+            RETA=S2*DSQRT(1.D0-XX/EM)
+            AN2=4.612634277343749D0*DSQRT(DSQRT(RETA+
+     &          1.09556884765625D0))
+            WAPR=RETA/(1.D0+RETA/(3.D0+(S21*AN2+S22)*RETA/
+     &           (S23*(AN2+RETA))))-1.D0
+         ELSE
+            ZL=DLOG(XX)
+            WAPR=DLOG(XX/DLOG(XX/ZL**DEXP(-1.124491989777808D0/
+     &          (.4225028202459761D0+ZL))))
+         ENDIF
+      ELSE
+C
+C        Calculations for Wm
+C
+         IF(XX.GE.0.D0) THEN
+            NERROR=1
+            RETURN
+         ELSE IF(XX.LE.X1) THEN
+            RETA=DSQRT(D12*DELX)
+            WAPR=RETA/(RETA/(3.D0+RETA/(RETA/(AN4+RETA/(RETA*
+     &           AN6-AN5))-AN3))-1.D0)-1.D0
+            RETURN
+         ELSE IF(XX.LE.EM9) THEN
+            ZL=DLOG(-XX)
+            T=-1.D0-ZL
+            TS=DSQRT(T)
+            WAPR=ZL-(2.D0*TS)/(S2+(C13-T/(2.7D2+
+     &           TS*127.0471381349219D0))*TS)
+         ELSE
+            ZL=DLOG(-XX)
+            ETA=2.D0-EM2*XX
+            WAPR=DLOG(XX/DLOG(-XX/((1.D0-.5043921323068457D0*
+     &           (ZL+1.D0))*(DSQRT(ETA)+ETA/3.D0)+1.D0)))
+         ENDIF
+      ENDIF
+      DO 30 I=1,NITER
+         ZN=DLOG(XX/WAPR)-WAPR
+         TEMP=1.D0+WAPR
+         TEMP2=TEMP+C23*ZN
+         TEMP2=2.D0*TEMP*TEMP2
+         WAPR=WAPR*(1.D0+(ZN/TEMP)*(TEMP2-ZN)/(TEMP2-2.D0*ZN))
+30    CONTINUE
+      RETURN
+40    FORMAT(/,' NBITS is',I4,'.',/,' Expect',I4,
+     &       ' significant digits from WAPR.')
+50    FORMAT(/,' Warning: the offset x is negative (it must be > 0)')
+60    FORMAT(' Warning: For this offset (',D16.8,'),',/,
+     &       ' W is negligibly different from -1')
+70    FORMAT(' Warning: x (= ',D16.8,') is close to -exp(-1).',/,
+     &       ' Enter x as an offset to -exp(-1) for greater accuracy')
+      END
+C
+C     END of WAPR
+C     __________________________________________________________________
+C

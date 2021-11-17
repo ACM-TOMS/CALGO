@@ -1,0 +1,648 @@
+C PURPOSE                                                                     10
+C   TO CALCULATE MASS PROPERTIES OF GENERAL THREE                             20
+C   DIMENSIONAL SOLIDS.                                                       30
+C                                                                             40
+C DESCRIPTION                                                                 50
+C   THE SOLID IS DESCRIBED BY A SET OF SURFACES WHICH ARE                     60
+C   TRIANGULATED, AND A FOUR POINT GAUSSIAN QUADRATURE OVER                   70
+C   THE TRIANGLES IS USED IN CALCULATING SURFACE AREA,                        80
+C   VOLUME, AND MASS PROPERTIES.                                              90
+C                                                                            100
+C                                                                            110
+      COMMON      MAXS,MAXV,                                                 120
+     .            AREA,WEIGHT,VOL,DENS,                                      130
+     .            CG(3),IO(3),ICG(3),PR(3),PRCG(3),                          140
+     .            ERROR,NERR,                                                150
+     .            HED(80),IN,OT,KT,                                          160
+     .            N8,MAXKV                                                   170
+      LOGICAL ERROR                                                          180
+      INTEGER OT                                                             190
+      INTEGER TITLE,END,HED                                                  200
+      DIMENSION A(10000),KA(6000)                                            210
+      REAL IO,ICG                                                            220
+      DATA TITLE,END /1HM,1HE/                                               230
+C                                                                            240
+C THE FOLLOWING TWO STATEMENTS SET STORAGE LIMITS.                           250
+C     DIMENSION A(10000),KA(6000)                                            260
+      MAXKV=6000                                                             270
+      IN=5                                                                   280
+      OT=6                                                                   290
+C                                                                            300
+C TITLE AND CONTROL CARDS ARE READ  FOR CURRENT CASE.                        310
+C                                                                            320
+    1 READ (IN,4) HED                                                        330
+        IF (HED(1) .EQ. TITLE) GO TO 2                                       340
+        IF (HED(1) .NE. END  ) GO TO 1                                       350
+C END OF JOB                                                                 360
+      STOP                                                                   370
+C                                                                            380
+C ARRAY POINTERS ARE DETERMINED.                                             390
+C CORRESPONDENCE                                                             400
+C   POINTER   N1   N2   N3   N4   N5   N6   N7   N8                          410
+C     ARRAY   VX   VY   VZ   KFA  AX   AY   AZ   KV                          420
+C                                                                            430
+    2 ERROR=.FALSE.                                                          440
+      READ (IN,7) MAXV,MAXS,DENS                                             450
+      WRITE (OT,6) HED,MAXV,MAXS,DENS                                        460
+      N1=1                                                                   470
+      N2=N1+MAXV                                                             480
+      N3=N2+MAXV                                                             490
+      N4=1                                                                   500
+      N5=N3+MAXV                                                             510
+      N6=N5+MAXS                                                             520
+      N7=N6+MAXS                                                             530
+      N8=N4+MAXS                                                             540
+C                                                                            550
+C VERTEX COORDINATES AND FACE LISTS ARE INPUT                                560
+C                                                                            570
+C     CALL FACES ( KV,   KFA,  VX,   VY,   VZ  )                             580
+      CALL FACES (KA(N8),KA(N4),A(N1),A(N2),A(N3))                           590
+        IF (ERROR) GO TO 3                                                   600
+C                                                                            610
+C MASS PROPERTIES ARE CALCULATED                                             620
+C                                                                            630
+C     CALL PROPS (  KV,  KFA,  AX,   AY,   AZ,                               640
+C    .             VX,   VY,   VZ  )                                         650
+      CALL PROPS (KA(N8),KA(N4),A(N5),A(N6),A(N7),                           660
+     .            A(N1),A(N2),A(N3))                                         670
+        IF (ERROR) GO TO 3                                                   680
+C                                                                            690
+C AND PRINTED OUT.                                                           700
+C                                                                            710
+      CALL MASSPR                                                            720
+      GO TO 1                                                                730
+C                                                                            740
+C ERROR ENCOUNTERED.  ERROR CODE PRINTED OUT.                                750
+C                                                                            760
+    3 WRITE (OT,5) HED,NERR                                                  770
+      GO TO 1                                                                780
+C                                                                            790
+C FORMAT STATEMENTS                                                          800
+C                                                                            810
+    4 FORMAT (80A1)                                                          820
+    5 FORMAT (1H1,80A1///27H ERROR ENCOUNTERED, CODE = ,I1)                  830
+    6 FORMAT (1H1,80A1/// 7H MAXV =,I3/                                      840
+     .                    7H MAXS =,I3/                                      850
+     .                    7H DENS =,F10.3)                                   860
+    7 FORMAT (2I5,F10.10)                                                    870
+      END                                                                    880
+      SUBROUTINE FACES (KF,KFA,VX,VY,VZ)                                     890
+C
+C PURPOSE
+C   TO READ VERTEX COORDINATES AND FACE LIST DATA AND SETUP
+C   DATA IN GLOBAL STORAGE.
+C
+C DESCRIPTION
+C   A FACE BOUNDARY IS MADE UP OF A CLOSED SET OF NUMBERED
+C   POINTS (VERTICES) CONNECTED BY STRAIGHT LINES.
+C   A FACE LIST, ENUMERATING THE VERTICES OF THE FACE TAKEN
+C   IN SUCCESSION AROUND THE BOUNDARY, IS THE DATA
+C   REPRESENTATION OF THE FACE.
+C   A SURFACE OF THE SOLID MAY BE COMPOSED OF MORE THAN ONE
+C   FACE, AN INITIAL FACE AND SECONDARY FACE(S).  THEY ARE
+C   LINKED TOGETHER IN STORAGE BY A POINTER FROM ONE FACE
+C   TO ANOTHER.
+C   THERE ARE NO PRACTICAL RESTRICTIONS ON THE NUMBER OF
+C   VERTICES PER FACE.  THE MAXIMUM NUMBER OF SURFACES IS
+C   CONTROLLED BY THE EXTENT OF AVAILABLE COMPUTER STORAGE
+C   AND IS ALSO DEPENDENT ON THE TOTAL NUMBER OF VERTICES.
+C
+      COMMON      MAXS,MAXV,
+     .            AREA,WEIGHT,VOL,DENS,
+     .            CG(3),IO(3),ICG(3),PR(3),PRCG(3),
+     .            ERROR,NERR,
+     .            HED(80),IN,OT,KT,
+     .            N8,MAXKV
+      INTEGER HED
+      DIMENSION KF(1),KFA(1),VX(1),VY(1),VZ(1)
+      LOGICAL ERROR
+      INTEGER OT
+C
+C
+C VERTEX COORDINATES ARE READ IN AND PRINTED.
+C
+      KT=50
+    1 READ (IN,14) IEND,NV,X,Y,Z
+        CALL COORDS (NV,X,Y,Z)
+        IF (NV .LE. 0 .OR. NV .GT. MAXV) GO TO 9
+        VX(NV)=X
+        VY(NV)=Y
+        VZ(NV)=Z
+        IF (IEND .EQ. 0) GO TO 1
+C
+C FACE POINTER ARRAY IS CLEARED.
+C
+      DO 2 I=1,MAXS
+    2   KFA(I)=0
+      KT=50
+      M1=1
+    3 M2=M1+2
+      M3=M1+16
+C
+C SURFACE ELEMENT DEFINITIONS ARE INPUT AND STORED.
+C
+      READ (IN,15) IEND,KF(M1),(KF(M),M=M2,M3)
+        NF=KF(M1)
+        K=KFA(NF)
+        KF(M1+1)=0
+        IF (K .NE. 0) GO TO 4
+C INITIAL (OR ONLY) FACE DEFINITION.
+        KFA(NF)=M1
+        GO TO 5
+C SECONDARY FACE POINTER IS STORED.
+    4   KK=K
+        K=KF(KK+1)
+        IF (K .NE. 0) GO TO 4
+        K=KF(KK+1)
+        IF (K .NE. 0) GO TO 4
+        KF(KK+1)=M1
+C
+C CHECK IS MADE TO SEE IF DEFINITION IS COMPLETE.
+C
+    5   KV1=KF(M2)
+        M2=M2+1
+    6   DO  7 I=M2,M3
+          KV=KF(I)
+          IF (KV .EQ. KV1) GO TO 8
+          IF (KV .LE. 0 .OR. KV .GT. MAXV) GO TO 8
+    7     CONTINUE
+C
+C DEFINITION CONTINUED.
+C
+        M2=M3+1
+        M3=M3+16
+        READ (IN,15) IEND,(KF(M),M=M2,M3)
+        GO TO 6
+C
+C GETTING SET FOR NEXT SURFACE, PRINT CURRENT SET OF VERTICES.
+C
+    8 M2=M1+2
+      M3=I
+      CALL FACVRT(NF,KF,M2,M3)
+          IF (KV .LE. 0 .OR. KV .GT. MAXV) GO TO 11
+      M1=I+1
+      IF (M1+N8 .GT. MAXKV) GO TO 12
+      IF (IEND .EQ. 0) GO TO 3
+      RETURN
+C
+C ERROR RETURN.
+C
+C  VERTEX NUMBER OUT OF RANGE
+    9 NERR=1
+        GO TO 13
+C  INPUT FACE NUMBER OUT OF RANGE
+   10 NERR=2
+        GO TO 13
+C  ILLEGAL VERTEX NUMBER.
+   11 NERR=3
+        GO TO 13
+C  STORAGE EXCEEDED.
+   12 NERR=4
+   13 ERROR=.TRUE.
+      RETURN
+C
+C FORMAT STATEMENTS
+C
+   14 FORMAT (I1,I4,5X,3F10.0)
+   15 FORMAT (I1,I4,15I5)
+      END
+      SUBROUTINE COORDS (NV,X,Y,Z)                                          2090
+C
+C PURPOSE
+C   PRINTS VERTEX COORDINATES, WITH PAGE CONTROL.
+C
+C
+      COMMON      MAXS,MAXV,
+     .            AREA,WEIGHT,VOL,DENS,
+     .            CG(3),IO(3),ICG(3),PR(3),PRCG(3),
+     .            ERROR,NERR,
+     .            HED(80),IN,OT,KT
+      INTEGER OT
+      INTEGER HED
+C
+C
+      IF (KT .LT. 50) GO TO 1
+C TITLE AND HEADING.
+      WRITE (OT,2) HED
+      KT=0
+      WRITE (OT,3)
+C VERTEX COORDINATES
+    1 KT=KT+1
+      WRITE (OT,4) NV,X,Y,Z
+      RETURN
+C
+C FORMAT STATEMENTS.
+C
+    2 FORMAT (1H1,80A1///)
+    3 FORMAT (7H VERTEX,9X,1HX,12X,1HY,12X,1HZ /)
+    4 FORMAT (I6,3F13.2)
+      END
+      SUBROUTINE FACVRT (NF,KV,M2,M3)                                       2400
+C
+C PURPOSE
+C   PRINT FACE VERTICES, WITH PAGE CONTROL.
+C
+C
+      COMMON      MAXS,MAXV,
+     .            AREA,WEIGHT,VOL,DENS,
+     .            CG(3),IO(3),ICG(3),PR(3),PRCG(3),
+     .            ERROR,NERR,
+     .            HED(80),IN,OT,KT
+      DIMENSION KV(1)
+      INTEGER HED
+      INTEGER OT
+C
+C
+      IF (KT .LT. 50 ) GO TO 1
+C TITLE AND HEADING.
+      WRITE (OT,2) HED
+      WRITE (OT,3)
+      KT=0
+C
+C FACE VERTICES.
+C
+    1 KT=KT+1
+      M4=MIN0(M3,M2+9)
+      WRITE (OT,4) NF,(KV(M),M=M2,M4)
+      IF (M4 .EQ. M3) RETURN
+      M4=M2+10
+      WRITE (OT,5)    (KV(M),M=M4,M3)
+      RETURN
+C
+C FORMAT STATEMENTS.
+C
+    2 FORMAT (1H1,80A1///)
+    3 FORMAT (25H FACE     VERTICES  . . . /)
+    4 FORMAT (/I5,5H  -  ,10I5)
+    5 FORMAT (10X,10I5)
+      END
+      SUBROUTINE MASSPR                                                     2790
+C
+C PURPOSE
+C   PRINT MASS PROPERTIES OF A SOLID.
+C
+C DESCRIPTION
+C   PRINTS
+C   DENSITY,AREA,VOLUME,WEIGHT
+C   CENTER OF GRAVITY COORDINATES
+C   COORDINATES OF MASS MOMENTS OF INERTIA W/R TO ORIGIN
+C   COORDINATES OF MASS MOMENTS OF INERTIA W/R TO CG
+C   COORDINATES OF PROD MOMENTS OF INERTIA W/R TO ORIGIN
+C   COORDINATES OF PROD MOMENTS OF INERTIA W/R TO CG
+C
+      COMMON      MAXS,MAXV,
+     .            AREA,WEIGHT,VOL,DENS,
+     .            CG(3),IO(3),ICG(3),PR(3),PRCG(3),
+     .            ERROR,NERR,
+     .            HED(80),IN,OT,KT
+      INTEGER HED
+      INTEGER OT
+      REAL IO,ICG
+C
+C
+      WRITE (OT,1) HED
+      WRITE (OT,2) DENS,AREA,VOL,WEIGHT
+      WRITE (OT,3)
+      WRITE (OT,4) CG
+      WRITE (OT,5) IO
+      WRITE (OT,6) ICG
+      WRITE (OT,8)
+      WRITE (OT,7) PR
+      WRITE (OT,6) PRCG
+      RETURN
+C
+C FORMAT STATEMENTS.
+C
+    1 FORMAT (1H1,80A1///)
+    2 FORMAT (10X,7HDENSITY,9X,4HAREA,10X,6HVOLUME,9X,
+     .            6HWEIGHT//2X,4F15.5///)
+    3 FORMAT (13X,4HAXES,8X,6HX-COMP,9X,6HY-COMP,9X,
+     .                      6HZ-COMP /)
+    4 FORMAT (1X,16H  CG       COORD,3F15.5/)
+    5 FORMAT (1X,16HMOMENT     COORD,3F15.5 )
+    6 FORMAT (1X,16H              CG,3F15.5/)
+    7 FORMAT (1X,16HPROD MOM   COORD,3F15.5)
+    8 FORMAT (//13X,4HAXES,8X,7HXY-COMP,8X,7HYZ-COMP,8X,
+     .7HZX-COMP/)
+      END
+C SOLID POLYHEDRON MEASURES                                                 3280
+C -------------------------                                                 3290
+C                                                                           3300
+C                                                                           3310
+C PURPOSE                                                                   3320
+C   TO CALCULATE MASS PROPERTIES OF THREE DIMENSIONAL SOLIDS                3330
+C   BY A SURFACE INTEGRATION TECHNIQUE USING FOUR-POINT                     3340
+C   GUASSIAN QUADRATURE OVER TRIANGLES.                                     3350
+C                                                                           3360
+C SOLID                                                                     3370
+C   DEFINED BY A SET OF SURFACES, WHERE EACH SURFACE IS                     3380
+C   COMPOSED OF ONE OR MORE COPLANAR CLOSED POLYGONAL                       3390
+C   PATCHES CALLED FACES.  DISCONNECTED FACES AND FACES WITH                3400
+C   ONE OR MORE HOLES IN THEM MAY BE USED, IF NECESSARY,                    3410
+C   TO REPRESENT THE SOLID.                                                 3420
+C                                                                           3430
+C FACE                                                                      3440
+C   A FACE IS REPRESENTED BY THE SET OF VERTEX POINTS OF THE                3450
+C   POLYGONAL SURFACE PATCH, ORDERED BY STARTING WITH AN                    3460
+C   ARBITRARY VERTEX, AND PROCEEDING POINT BY POINT AROUND                  3470
+C   THE BOUNDARY UNTIL THE FIRST POINT IS REACHED.                          3480
+C                                                                           3490
+C FACE LIST                                                                 3500
+C   THE LIST OF THE SET OF VERTEX NUMBERS, ORDERED AS ABOVE                 3510
+C   FOR A FACE, IS CALLED A FACE LIST, WHICH IS THE DATA                    3520
+C   REPRESENTATION OF A FACE.  A FACE LIST HAS THE FORM                     3530
+C        NSF,NA,NB,NC,...,NI,...,NA                                         3540
+C   WHERE NSF IS THE SURFACE NUMBER AND NA,NB,NC,NI ARE                     3550
+C   VERTEX NUMBERS.  NOTE THAT THE FACE LIST IS A CLOSED                    3560
+C   LIST, STARTING AND ENDING WITH THE FIRST POINT SELECTED.                3570
+C   FOR ANY SURFACE WITH ONE OR MORE HOLES IN                               3580
+C   IT, ANY INTERIOR BOUNDARY (HOLE) IS REPRESENTED BY A                    3590
+C   FACE LIST WITH VERTICES ENUMERATED IN A SEQUENCE                        3600
+C   OPPOSITE TO THAT GIVEN FOR AN EXTERIOR BOUNDARY.                        3610
+C                                                                           3620
+C INITIAL, SECONDARY FACE LISTS                                             3630
+C   WHEN MULTIPLE FACE LISTS ARE NEEDED TO DEFINE A SURFACE,                3640
+C   (IE, A SURFACE WITH A HOLE OR ONE WITH DISCONNECTED BUT                 3650
+C   COPLANAR PARTS), THE FIRST LIST TO APPEAR IN THE DATA IS                3660
+C   CALLED THE INITIAL FACE LIST, AND ANY OTHER IS CALLED A                 3670
+C   SECONDARY FACE LIST.  THESE LISTS WILL HAVE A COMMON                    3680
+C   SURFACE NUMBER AND WILL BE LINKED TOGETHER IN STORAGE BY                3690
+C   THE DATA ENTRY ROUTINE.                                                 3700
+C                                                                           3710
+C GLOBAL DATA ARRAYS                                                        3720
+C   FACE LIST DATA IS STORED COMPACTLY IN A LARGE OPEN-ENDED                3730
+C   DATA ARRAY KV.                                                          3740
+C   A LINKAGE ARRAY, KFA, SETUP BY THE DATA ENTRY ROUTINE,                  3750
+C   CONTAINS POINTERS TO THE INITIAL FACE LIST (IN KV) FOR                  3760
+C   EACH SURFACE, ORDERED BY SURFACE NUMBER.  IF L1, L2, L3                 3770
+C   ARE LOCATIONS IN KV OF FACE LISTS FOR SURFACES 1, 2, 3,                 3780
+C   THEN THE PROGRAM WOULD SET                                              3790
+C        KFA(1)=L1                                                          3800
+C        KFA(2)=L2                                                          3810
+C        KFA(3)=L3                                                          3820
+C   A POINTER VALUE OF ZERO (KFA(I)=0) INDICATES SURFACE I                  3830
+C   WAS NOT UTILIZED IN DEFINING THE SOLID.  HENCE GAPS MAY                 3840
+C   OCCUR IN THE SURFACE NUMBERS.  ALSO, THE ORDER OF DATA                  3850
+C   ENTRY OF THE FACE LISTS CAN BE ENTIRELY ARBITRARY,                      3860
+C   BECAUSE OF THE AFORE-MENTIONED LINKAGE MECHANISM.                       3870
+C                                                                           3880
+C LINKAGE TO SECONDARY FACE LISTS                                           3890
+C   A FACE LIST IN THE ARRAY KV HAS THE FORM                                3900
+C        NSF,LSI,NA,NB,NC,...,NI,NJ,NK,...,NA                               3910
+C   WHERE NSF IC THE SURFACE NUMBER, NA,NB,... ARE VERTEX                   3920
+C   NUMBERS, AND LSI IS A LINK TO A SECONDARY FACE LIST.                    3930
+C   LSI=0 INDICATES THIS IS THE LAST FACE LIST FOR A SURFACE.               3940
+C   NOTE, IT MAY BE THE ONLY LIST.                                          3950
+C                                                                           3960
+C INTEGRATION TECHNIQUE                                                     3970
+C   THE ALGORITHM IS PERFORMED BY TWO SUBROUTINES, PROPS AND                3980
+C   SRFINT.                                                                 3990
+C   SURFACES ARE PROCESSED ONE AT A TIME AND THE MASS                       4000
+C   PROPERTY CALCULATIONS ARE ACCUMULATED DURING THE                        4010
+C   PROCESSING.                                                             4020
+C   SURFACE PROCESSING INVOLVES STARTING WITH THE INITIAL                   4030
+C   FACE, AND PROCEDING THROUGH THE SECONDARY FACES, IF ANY.                4040
+C   SURFACE AREA VECTOR COMPONENTS ARE SUMMED FOR EACH FACE                 4050
+C   OF THE SURFACE.  THE AREA VECTOR, WHOSE MAGNITUDE IS THE                4060
+C   AREA OF THE SURFACE, IS THEN COMPUTED FROM THE                          4070
+C   COMPONENTS AND IS ACCUMULATED IN THE TOTAL SURFACE                      4080
+C   AREA OF THE SOLID.                                                      4090
+C   IN THE FACE PROCESSING, FACES ARE DIVIDED INTO ALL                      4100
+C   UNIQUE TRIANGLES HAVING AS VERTICES THE THE FIRST ONE OF                4110
+C   THE LIST AND ANY OTHER TWO ADJACENT VERTICES OF THE FACE                4120
+C   POLYGON.  FOUR-POINT GAUSSIAN QUADRATURE IS APPLIED TO                  4130
+C   EACH TRIANGLE, AND THE RESULTS ARE ACCUMULATED IN THE                   4140
+C   TOTAL MASS PROPERTIES.  THUS EACH TRIANGLE OF EACH FACE                 4150
+C   OF EACH SURFACE HAS A CONTRIBUTION IN THE FINAL RESULTS.                4160
+C                                                                           4170
+C GLOBAL NOMENCLATURE                                                       4180
+C   AREA   = SURFACE AREA OF SOLID                                          4190
+C   AX,AY,                                                                  4200
+C      AZ  = SURFACE AREA VECTOR  COMPONENTS ARRAYS                         4210
+C   CG     = CENTER OF GRAVITY COORDINATE ARRAY                             4220
+C   DENS   = MASS DENSITY OF SOLID                                          4230
+C   ERROR  = LOGICAL ERROR INDICATOR                                        4240
+C   ICG    = COORDS OF MASS MOMENTS, WITH RESPECT TO CG                     4250
+C   IO     = COORDS OF MASS MOMENTS, WITH RESPECT TO ORIGIN                 4260
+C   KFA    = POINTER ARRAY.  KFA(I) POINTS TO LOCATION IN KV                4270
+C            OF INITIAL FACE LIST FOR SURFACE I.                            4280
+C   KV     = FACE LISTS STORAGE ARRAY                                       4290
+C   MAXS   = NUMBER OF SURFACES ON SOLID                                    4300
+C   MAXV   = NUMBER OF VERTEX POINTS USED IN DEFINING SOLID                 4310
+C   NERR   = ERROR CODE                                                     4320
+C   NS     = CURRENT SURFACE NUMBER                                         4330
+C   PR     = COORDS OF PROD MOMENTS, WITH RESPECT TO ORIGIN                 4340
+C   PRCG   = COORDS OF PROD MOMENTS, WITH RESPECT TO CG                     4350
+C   VOL    = VOLUME OF SOLID                                                4360
+C   VX,VY,                                                                  4370
+C      VZ  = VERTEX COORDINATE ARRAYS                                       4380
+C   WEIGHT = WEIGHT OF SOLID                                                4390
+C                                                                           4400
+      SUBROUTINE PROPS (KV,KFA,AX,AY,AZ,VX,VY,VZ)                           4410
+C
+C PURPOSE
+C   CALCULATES MASS PROPERTIES OF A GENERAL THREE
+C   DIMENSIONAL SOLID USING FOUR POINT GAUSSIAN QUADRATURE
+C   OVER TRIANGLES.
+C
+C DESCRIPTION
+C   CALCULATES CONTRIBUTION OF EACH SURFACE TO MASS
+C   PROPERTIES INTEGRALS.  INTEGRATION IS PERFORMED IN
+C   SUBROUTINE SRFINT.  MASS PROPERTIES CALCULATIONS ARE
+C   THEN COMPLETED IN THIS ROUTINE.  DATA IS ASSUMED TO HAVE
+C   BEEN PREVIOUSLY SETUP IN STORAGE BY A DATA ENTRY ROUTINE.
+C
+C LOCAL NOMENCLATURE
+C   NS     = CURRENT SURFACE BEING PROCESSED
+C   LA     = POINTER TO FACE LIST (INITIAL OR SECONDARY) DATA
+C
+      COMMON      MAXS,MAXV,
+     .            AREA,WEIGHT,VOL,DENS,
+     .            CG(3),IO(3),ICG(3),PR(3),PRCG(3),
+     .            ERROR,NERR
+      DIMENSION KV(1),KFA(1),VX(1),VY(1),VZ(1)
+      DIMENSION AX(1),AY(1),AZ(1)
+      LOGICAL ERROR
+      REAL IO,ICG
+C
+C CLEARING OF ACCUMULATION PARAMETERS.
+C
+      AREA=0.
+      VOL=0.
+      DO 1 J=1,MAXS
+        AX(J)=0.
+        AY(J)=0.
+    1   AZ(J)=0.
+      DO 2 J=1,3
+        CG(J)=0.
+        IO(J)=0.
+    2   PR(J)=0.
+C
+C EACH SURFACE IS PROCESSED.
+C
+      DO 4 NS=1,MAXS
+C LA IS A POINTER TO THE FACE LIST DATA
+        LA=KFA(NS)
+        IF (LA .EQ. 0) GO TO 4
+C CONTRIBUTION OF EACH FACE OF CURRENT SURFACE IS CALCULATED
+    3   IF (KV(LA) .NE. NS) GO TO 5
+        CALL SRFINT (KV(LA+2),AX,AY,AZ,VX,VY,VZ,NS)
+C CHECK IS MADE FOR SECONDARY FACE LIST.
+        LA=KV(LA+1)
+        IF (LA .NE. 0) GO TO 3
+C AREA SUMMATION.
+        AREA=AREA+SQRT(AX(NS)**2+AY(NS)**2+AZ(NS)**2)
+    4   CONTINUE
+C
+C MASS PROPERTY CALCULATIONS ARE COMPLETED.
+C
+      VOL=VOL/3.0
+      WEIGHT=VOL*DENS
+      VOL2=VOL*2.
+      VOL3=VOL/3.0
+      DENS2=DENS/2.0
+      DENS3=DENS/3.0
+      CG(1)=CG(1)/VOL2
+      CG(2)=CG(2)/VOL2
+      CG(3)=CG(3)/VOL2
+      IO(1)=IO(1)*DENS3
+      IO(2)=IO(2)*DENS3
+      IO(3)=IO(3)*DENS3
+      ICG(1)=IO(1)-(CG(2)**2+CG(3)**2)*WEIGHT
+      ICG(2)=IO(2)-(CG(1)**2+CG(3)**2)*WEIGHT
+      ICG(3)=IO(3)-(CG(1)**2+CG(2)**2)*WEIGHT
+      PR(1)=PR(1)*DENS2
+      PR(2)=PR(2)*DENS2
+      PR(3)=PR(3)*DENS2
+      PRCG(1)=PR(1)-CG(1)*CG(2)*WEIGHT
+      PRCG(2)=PR(2)-CG(2)*CG(3)*WEIGHT
+      PRCG(3)=PR(3)-CG(3)*CG(1)*WEIGHT
+      RETURN
+C
+C ERROR RETURN, DATA REDUNDANCY CHECK FAILED.
+C
+    5 ERROR=.TRUE.
+      NERR=5
+      RETURN
+      END
+      SUBROUTINE SRFINT (KV,AX,AY,AZ,VX,VY,VZ,NS)                           5280
+C
+C PURPOSE
+C   TO CALCULATE SURFACE INTEGRALS OVER A FACE OF A SOLID.
+C
+C DESCRIPTION
+C   DIVIDES FACE INTO TRIANGLES HAVING AS VERTICES THE
+C   FIRST VERTEX OF THE POLYGON AND TWO ADJACENT VERTICES
+C   OF THE POLYGON.  NUMERICAL INTEGRATION IS PERFORMED
+C   USING FOUR-POINT GAUSSIAN QUADRATURE OVER THE TRIANGLES.
+C   RESULTS ARE ACCUMULATED TO GET TOTALS.
+C
+C LOCAL NOMENCLATURE
+C   ANX,
+C    ANY,
+C     ANZ  = AREA VECTOR COMPONENTS FOR SINGLE TRIANGLE
+C   CX,CY,
+C       CZ = 1ST,2ND OR 3RD POWERS OF QUADRATURE COORDS,
+C            WEIGHTED AND AREA NORMALIZED
+C   PX,PY,
+C       PZ = QUADRATURE POINTS COORDINATE ARRAYS
+C   W      = WEIGHTING FACTORS ARRAY
+C   X,Y,Z  = FACE TRIANGLE COORDINATE ARRAYS
+C
+      COMMON      MAXS,MAXV,
+     .            AREA,WEIGHT,VOL,DENS,
+     .            CG(3),IO(3),ICG(3),PR(3),PRCG(3)
+      DIMENSION KV(1),AX(1),AY(1),AZ(1),VX(1),VY(1),VZ(1)
+      DIMENSION X(3),Y(3),Z(3),PX(4),PY(4),PZ(4),W(4)
+      REAL IO,ICG
+C
+C W(I) ARE WEIGHING FACTORS FOR 4-POINT GAUSSIAN QUADRATURE
+C OVER TRIANGLES.
+C
+      W(1)=-.5625
+      W(2)=.5208333333333333
+      W(3)=.5208333333333333
+      W(4)=.5208333333333333
+C
+C THE POLYGON IS SEGMENTED INTO TRIANGLES, EACH HAVING THE
+C FIRST VERTEX OF THE POLYGON AS THE FIRST POINT OF THE
+C TRIANGLE.
+C
+      K=KV(1)
+      X(1)=VX(K)
+      Y(1)=VY(K)
+      Z(1)=VZ(K)
+      DO 3 L=2,1000
+        K=KV(L+1)
+C TESTING FOR END OF DEFINITION.
+        IF (K .EQ. KV(1)) GO TO 4
+        X(3)=VX(K)
+        Y(3)=VY(K)
+        Z(3)=VZ(K)
+        K=KV(L)
+        X(2)=VX(K)
+        Y(2)=VY(K)
+        Z(2)=VZ(K)
+C
+C DATA IS NOW IN TERMS OF A SINGLE TRIANGLE.
+C
+        PX(1)=(X(1)+X(2)+X(3))/3.
+        PY(1)=(Y(1)+Y(2)+Y(3))/3.
+        PZ(1)=(Z(1)+Z(2)+Z(3))/3.
+        DX=.6*PX(1)
+        DY=.6*PY(1)
+        DZ=.6*PZ(1)
+        DO 1 I=1,3
+          K=I+1
+          PX(K)=DX+.4*X(I)
+          PY(K)=DY+.4*Y(I)
+          PZ(K)=DZ+.4*Z(I)
+    1     CONTINUE
+C
+C AREA VECTORS CALCULATED.
+C
+        ANX=.5*(Z(1)*(Y(2)-Y(3))+Z(2)*(Y(3)-Y(1))
+     .         +Z(3)*(Y(1)-Y(2)))
+        ANY=.5*(X(1)*(Z(2)-Z(3))+X(2)*(Z(3)-Z(1))
+     .         +X(3)*(Z(1)-Z(2)))
+        ANZ=.5*(Y(1)*(X(2)-X(3))+Y(2)*(X(3)-X(1))
+     .         +Y(3)*(X(1)-X(2)))
+        AX(NS)=AX(NS)+ANX
+        AY(NS)=AY(NS)+ANY
+        AZ(NS)=AZ(NS)+ANZ
+C
+C CALCULATION OF MASS PROPERTIES
+C
+        DO  2 I=1,4
+C 1ST POWER OF INTEGRATION COORDINATES
+          CX=ANX*PX(I)*W(I)
+          CY=ANY*PY(I)*W(I)
+          CZ=ANZ*PZ(I)*W(I)
+          VOL=VOL+(CX+CY+CZ)
+C 2ND POWER OF INTEGRATION COORDINATES
+          CX=CX*PX(I)
+          CY=CY*PY(I)
+          CZ=CZ*PZ(I)
+          CG(1)=CG(1)+CX
+          CG(2)=CG(2)+CY
+          CG(3)=CG(3)+CZ
+          PR(1)=PR(1)+CX*PY(I)
+          PR(2)=PR(2)+CY*PZ(I)
+          PR(3)=PR(3)+CZ*PX(I)
+C 3RD POWER OF INTEGRATION COORDINATES
+          CX=CX*PX(I)
+          CY=CY*PY(I)
+          CZ=CZ*PZ(I)
+          IO(1)=IO(1)+CY+CZ
+          IO(2)=IO(2)+CZ+CX
+          IO(3)=IO(3)+CX+CY
+    2     CONTINUE
+    3   CONTINUE
+C
+    4 CONTINUE
+      RETURN
+      END
+ 
+ 
+ 
+ 

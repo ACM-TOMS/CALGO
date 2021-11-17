@@ -1,0 +1,147 @@
+This is the readme file for the C implementation of the BEDFix algorithm.
+The function "fp" executes the algorithm and returns a fixed point approximation
+given two bivariate functions.  The function "fp" and the functions and
+definitions that come before it in the source file may be copied into other
+software modules; the remainder of the code is for testing purposes.
+The function "testall" performs the tests described in the BEDFix paper.
+The commands used to compile this module and run the tests are (using GNU C):
+
+gcc -lm fp.c -o fp
+./fp 1
+  for the large test
+./fp 2
+  for the small (quick) test
+./fp
+  to be prompted for which test to run
+
+where fp.c is the name of the source file.
+
+The large test performs all of the tests described in the paper.
+The small test executes BEDFix on all the test functions,
+and does not perform any BEFix or SI tests.
+
+The tests were executed successfully on a 1.4GHz Pentium III system
+running Red Hat Linux 7.2.
+When running the large test on this platform
+the deep cuts tests required less than a minute of CPU time,
+while the simple iteration tests required 40 minutes.
+The small test completes in less than 5 seconds.
+
+
+Given tolerance epsilon and bivariate functions f1 and f2,
+"fp" returns in *fx, *fy a fixed point approximation satisfying
+the residual criterion
+|f1(*fx,*fy)-*fx| <= epsilon and |f2(*fx,*fy)-*fy| <= epsilon.
+f1, f2 have domain [0, 1] X [0, 1], range [0, 1], and are
+Lipschitz continuous with constant q<=1 w.r.t. infinity norm.
+"fp" sets *total to the number of evaluations of f = (f1, f2).
+"fp" sets *absolute to true if the method is able to determine
+that the solution also satisfies the absolute error
+criterion.  (There may be cases where the solution
+satisfies the absolute criterion but *absolute is
+returned false.)
+The return code from "fp" is 0 if success, otherwise an error
+has occurred.
+To guarantee that the solution satisfies the absolute
+criterion |*fx-x| <= epsilon and |*fy-y| <= epsilon,
+pass in epsilon(1-q) for the epsilon parameter,
+where q<1 is the Lipschitz constant of f.
+
+
+Example 1:
+
+Define f = (f1,f2) on [0,1]^2 where
+f1(x,y) = y*y / 2.0, f2(x,y) = (x+y) / 2.0.
+To compute fx, fy satisfying |f1(fx,fy)-fx| <= epsilon
+and |f2(fx,fy)-fy| <= epsilon (here epsilon = 0.0001),
+first remove the testing code from the provided fp.c,
+then add the following code, and finally compile and
+run fp as described above.
+
+double f1(double x, double y)
+{
+  return y*y / 2.0;
+}
+
+double f2(double x, double y)
+{
+  return (x+y) / 2.0;
+}
+
+main()
+{
+double fx, fy;
+ulong total;
+int absolute;
+...
+result = fp(0.0001,f1,f2,&fx,&fy,&total,&absolute);
+/* the answer is in fx, fy */
+...
+}
+
+Example 2:
+
+Define q = 0.999.
+Define f = (f1,f2) on [0,1]^2 where
+f1(x,y) = q*y*y / 2.0, f2(x,y) = q*(x+y) / 2.0.
+The fact that f is Lipschitz continuous with
+constant q < 1 guarantees that f has exactly
+one fixed point.
+To compute fx, fy satisfying |fx-px| <= epsilon
+and |fy-py| <= epsilon where (px,py) is the unique
+fixed point of f (here epsilon has been assigned
+elsewhere), first remove the testing code from the
+provided fp.c, then add the following code, and
+finally compile and run fp as described above.
+
+double f1(double x, double y)
+{
+  return q*y*y / 2.0;
+}
+
+double f2(double x, double y)
+{
+  return q*(x+y) / 2.0;
+}
+
+main()
+{
+double fx, fy;
+ulong total;
+int absolute;
+...
+result = fp(epsilon*(1-q),f1,f2,&fx,&fy,&total,&absolute);
+/* the answer is in fx, fy */
+...
+}
+
+Other Domains
+
+You may want to approximate a fixed point of a function f = (f1,f2),
+Lipschitz continuous with constant 1 with respect to the infinity
+norm, which maps a domain D other than [0,1]^2 to itself.
+There are two ways to modify the problem so that BEDFix may be
+applied.
+
+  1. If D is a rectangle [a1,b1]X[a2,b2], then use the mapping
+function P(x,y) = ((x-a1)/(b1-a1),(y-a2)/(b2-a2)) to map
+[a1,b1]X[a2,b2] to [0,1]^2.  The inverse of P, which maps
+[0,1]^2 to [a1,b1]X[a2,b2], is P*(x,y) = (a1+(b1-a1)x,a2+(b2-a2)x).
+Apply BEDFix to the function P(f1(P*(x,y)),f2(P*(x,y))),
+which obviously has the required Lipschitz continuity property.
+If max(b1-a1,b2-a2) > 1, then you must use epsilon divided by
+max(b1-a1,b2-a2) as the tolerance parameter to BEDFix.
+This ensures that P*(fx,fy) satisfies the error criterion
+with tolerance epsilon, where (fx,fy) is the approximation
+returned from BEDFix.
+
+  2. If D is a more complicated domain than a rectangle, find the
+smallest rectangle R that encloses D.  Extend f to a function f*
+that maps from R to D, and equals f on D.  The shape of D
+determines how to extend f to f*.  You must ensure that f* has the
+required Lipschitz continuity property, and provide a function Q
+mapping R to D satisfying the following: Q(x,y) = (x,y) for all
+(x,y) in D, and if (x,y) in R-D is an epsilon-approximation
+for f* then so is Q(x,y) for f.  Then Q(fx,fy)
+is an epsilon-approximation for f, where (fx,fy) is the
+return value from applying BEDFix to f*.

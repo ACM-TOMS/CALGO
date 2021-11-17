@@ -1,0 +1,328 @@
+      SUBROUTINE CHARMA(KIND, S, L, NMAX, VAL, SUD, IA)                 00000010
+C SUBROUTINE CHARMA CALCULATES THE CHARACTERISTIC VALUES OF
+C MATHIEU-S DIFFERENTIAL EQUATION FOR ODD OR EVEN SOLUTIONS
+C WITH PERIODICITY PI OR 2*PI.
+C A LIBRARY SUBROUTINE HAS TO BE ATTACHED TO CALCULATE THE
+C EIGENVALUES OF A REAL SYMMETRIC TRIDIAGONAL MATRIX. IN THE
+C PRESENTED FORM, THIS IS THE EISPACK ROUTINE IMTQL1.
+C INPUT..
+C   KIND AN INTEGER CHARACTERIZING THE KIND OF CH. V.
+C        IF KIND=1, THE CH. V. BO 1, BO 3,... FOR ODD SOLUTIONS
+C           WITH PERIODICITY 2*PI ARE CALCULATED
+C        IF KIND=2, THE CH. V. BE 1, BE 3,... FOR EVEN SOLUTIONS
+C           WITH PERIODICITY 2*PI ARE CALCULATED
+C        IF KIND=3, THE CH. V. BO 2, BO 4,... FOR ODD SOLUTIONS
+C           WITH PERIODICITY PI ARE CALCULATED
+C        IF KIND=4, THE CH. V. BE 0, BE 2,... FOR EVEN SOLUTIONS
+C           WITH PERIODICITY PI ARE CALCULATED
+C        CHARMA DOES NOT DESTROY KIND
+C   S    REAL NON-NEGATIVE VARIABLE, THE PARAMETER OF THE
+C        DIFFERENTIAL EQUATION. FOR S UP TO 1000 AN ACCURACY OF
+C        9 DECIMAL PLACES IS GUARANTEED FOR THE CHARACTERISTIC
+C        VALUES IF THE NUMBER OF THE CH. V. IS NOT TOO HIGH.
+C        (SEE FIG. 1 OF DESCRIPTION)
+C   L    INTEGER VARIABLE, THE NUMBER OF CHARACTERISTIC VALUES
+C        TO BE CALCULATED.  IT CAN BE NO LARGER THAN NMAX.
+C   NMAX INTEGER VARIABLE, MAXIMUM DIMENSION OF THE MATRIX USED
+C        FOR THE CALCULATION. TO MAKE USE OF THE FULL TESTED
+C        DOMAIN WITH AN ACCURACY OF 9 DECIMAL PLACES, IT SHOULD
+C        BE AT LEAST 24.
+C OUTPUT..
+C   VAL  REAL ONE-DIMENSIONAL ARRAY OF DIMENSION (NMAX).
+C        INITIALLY IT CONTAINS THE DIAGONAL ELEMENTS OF THE
+C        COEFFICIENT MATRIX.  ON EXIT, ITS FIRST L ELEMENTS WILL
+C        CONTAIN THE CH. V.
+C   IA   INTEGER VARIABLE USED AS A FAILURE INDICATOR. IF, ON
+C        EXIT, IA=0, NO FAILURE WAS DETECTED. IF IA=1, S WAS
+C        NEGATIVE.  IF IA=2, L WAS CHOSEN TOO BIG, REQUIRING A
+C        LARGER NMAX.  IF IA=3, THE LIBRARY SUBROUTINE IMTQL1
+C        DID NOT FIND ALL EIGENVALUES.  FOR IA=1, 2, OR 3, NO
+C        CHARACTERISTIC VALUES WERE CALCULATED.  IF IA=4,
+C        S .GT. 1000.  IF IA=5, L WAS TOO LARGE (FOR THE GIVEN
+C        S), REQUIRING AN ORDER N OF THE COEFFICIENT MATRIX
+C        WHICH EXCEEDS THE TESTED DOMAIN (N .LE. 24).  FOR IA=4
+C        OR 5 THE CALCULATION WAS EXECUTED, BUT ACCURACY OF THE
+C        CHARACTERISTIC VALUES TO NINE DECIMAL PLACES IS NOT
+C        GUARANTEED.  IN THESE CASES, ACCURACY MAY BE CHECKED AS
+C        FOLLOWS.  IF L=L1 PRODUCES IA=4 OR 5, TAKE A VALUE L=L2,
+C        L2=L1+1, COMPUTE VAL (IA WILL AGAIN BE 4 OR 5) AND COMPUTE
+C        THE DIFFERENCE OF THE FIRST L1 MEMBERS OF BOTH SEQUENCES.
+C        IF THE ERROR TEST IS PASSED, ACCEPT THE ANSWER, IF NOT TAKE
+C        A VALUE L=L3=L2+1, ETC...
+C OTHER PARAMETERS..
+C  SUD   A ONE-DIMENSIONAL REAL ARRAY OF DIMENSION (NMAX),
+C        INITIALLY CONTAINING IN ITS POSITIONS (2), (3),..., (N)
+C        THE SUBDIAGONAL ELEMENTS OF THE COEFFICIENT MATRIX .
+C    N   INTEGER VARIABLE, THE ORDER OF THE COEFFICIENT MATRIX
+C   IB   AN INTEGER VARIABLE TO TEST THE SUCCESS OF IMTQL1. IF,
+C        ON EXIT, IB=0, IMTQL1 HAS DETERMINED ALL EIGENVALUES
+C        WITHIN 30 ITERATIONS.
+      REAL FL, S, SUD, VAL
+      INTEGER I, IA, IB, IOUT, KIND, L, N, NMAX
+      DIMENSION VAL(NMAX), SUD(NMAX)
+      IA = 0
+C TEST FOR NEGATIVE S
+      IF (S.GE.0.0E0) GO TO 10
+      IA = 1
+      RETURN
+C TEST FOR S GREATER 1000. IF TRUE, CALCULATION IS CONTINUED
+C BUT ACCURACY OF THE CHARACTERSTIC VALUES TO NINE DECIMAL
+C PLACES CANNOT BE GUARANTEED.  SEE THE PROGRAM DESCRIPTION
+C FOR IMPROVEMENT.
+   10 IF (S.LE.1000.0E0) GO TO 20
+      IA = 4
+C DETERMINE NECESSARY ORDER OF MATRIX TO ACHIEVE AN ACCURACY
+C OF 9 DECIMAL PLACES FOR THE CHARACTERISTIC VALUES.
+   20 FL = FLOAT(L)
+      N = INT((0.17E0+2.1E0*EXP(-0.24E0*FL))*S**(0.77E0-5.0E0/
+     * (9.5E0+FL))+FL+2.8E0)
+C TEST FOR SUFFICIENT LARGE NMAX
+      IF (N.LE.NMAX) GO TO 30
+      IA = 2
+      RETURN
+C TEST WHETHER N IS WITHIN TESTED DOMAIN FOR WHICH ACCURACY TO 9
+C DECIMAL PLACES IS GUARANTEED. IF NOT, CALCULATION IS CONTINUED
+C BUT ACCURACY OF THE CHARACTERSTIC VALUES TO NINE DECIMAL
+C PLACES CANNOT BE GUARANTEED.  SEE THE PROGRAM DESCRIPTION
+C FOR IMPROVEMENT.
+   30 IF (N.LE.24) GO TO 40
+      IA = 5
+C BRANCH ACCORDING TO DESIRED SOLUTION:
+C IF KIND=1, USE MATRIX CALLED A IN THE DESCRIPTION
+C IF KIND=2, USE MATRIX CALLED B IN THE DESCRIPTION
+C IF KIND=3, USE MATRIX CALLED C IN THE DESCRIPTION
+C IF KIND=4, USE MATRIX CALLED D IN THE DESCRIPTION
+   40 GO TO (50, 60, 90, 110), KIND
+C STORE DIAGONAL ELEMENTS OF THE COEFFICIENT MATRIX IN VAL AND
+C SUBDIAGONAL ELEMENTS IN SUD(2), SUD(3),..., SUD(N).
+   50 VAL(1) = 1.0E0 - S/4.0E0
+      GO TO 70
+   60 VAL(1) = 1.0E0 + S/4.0E0
+   70 DO 80 I=2,N
+        VAL(I) = FLOAT((2*I-1)**2)
+        SUD(I) = S/4.0E0
+   80 CONTINUE
+      GO TO 130
+   90 VAL(1) = 4.0E0
+      DO 100 I=2,N
+        VAL(I) = FLOAT((2*I)**2)
+        SUD(I) = S/4.0E0
+  100 CONTINUE
+      GO TO 130
+  110 VAL(1) = 0.0E0
+      VAL(2) = 4.0E0
+      SUD(2) = S/SQRT(8.0E0)
+      DO 120 I=3,N
+        VAL(I) = FLOAT((2*(I-1))**2)
+        SUD(I) = S/4.0E0
+  120 CONTINUE
+  130 CALL IMTQL1(N, VAL, SUD, IB)
+C TEST FOR SUCCESSFUL IMTQL1
+      IF (IB.EQ.0) GO TO 140
+      IA = 3
+      RETURN
+C ADD S/2 TO THE EIGENVALUES OF THE MATRIX TO GET THE CH. V.
+  140 DO 150 I=1,L
+        VAL(I) = VAL(I) + S/2.0E0
+  150 CONTINUE
+      RETURN
+      END
+C      PROGRAM TECHV (INPUT,OUTPUT,TAPE5=INPUT,TAPE6=OUTPUT)            00001300
+C THIS IS A PROGRAM TO TEST THE SUBROUTINE CHARMA WHICH CALCULATES THE  00001310
+C CHARACTERISTIC VALUES OF MATHIEU'S DIFFERENTIAL EQUATION FOR ODD OR   00001320
+C EVEN SOLUTIONS WITH PERIODICITY PI OR 2*PI.                           00001330
+C INPUT..                                                               00001340
+C   S     A REAL VARIABLE, THE PARAMETER OF THE DIFFERENTIAL EQUATION   00001350
+C   L     AN INTEGER, THE NUMBER OF CHARACTERISTIC VALUES TO BE         00001360
+C         CALCULATED                                                    00001370
+C OUTPUT..                                                              00001380
+C   IA    AN INTEGER USED AS A FAILURE INDICATOR. IF, ON EXIT, IA=0, NO 00001390
+C         FAILURE WAS DETECTED. IF IA=1 OR IA=2 OR IA=3, A FAILURE WAS  00001400
+C         REGISTERED AND NO CHARACTERISTIC VALUES WERE CALCULATED.      00001410
+C   VAL   A ONE-DIMENSIONAL ARRAY USED BY CHARMA AND BY A LIBRARY       00001420
+C         SUBROUTINE. THE DIMENSION OF VAL SHOULD BE EQUAL OR GREATER   00001430
+C         THAN 24 TO ACHIEVE FULL ACCURACY OVER THE WHOLE TESTED DOMAINE00001440
+C         OF CHARMA. ON EXIT, VAL CONTAINS THE CHARACTERISTIC VALUES.   00001450
+C INDE    INTEGER VARIABLE, THE INDEX OF THE CHARACTERISTIC VALUES      00001460
+C KIND    AN INTEGER CHARACTERIZING THE KIND OF CHARACTERISTIC VALUE    00001470
+C         TO BE CALCULATED                                              00001480
+C SUD     A ONE-DIMENSIONAL ARRAY USED BY CHARMA AND BY A LIBRARY       00001490
+C         SUBROUTINE. THE DIMENSION OF SUD SHOULD BE EQUAL OR GREATER   00001500
+C         THAN 24 TO ACHIEVE FULL ACCURACY OVER THE WHOLE TESTED DOMAINE00001510
+C         OF CHARMA.                                                    00001520
+C THE FOLLOWING DATA CARDS HAVE BEEN USED FOR THIS TEST PROGRAM (S=-1.  00001530
+C SIGNALS END OF DATA)                                                  00001540
+C   2.    15                                                            00001550
+C1001.     4                                                            00001560
+C   0.01  25                                                            00001570
+C  10.    27                                                            00001580
+C  -6.     3                                                            00001590
+C  -1.                                                                  00001600
+      DIMENSION VAL(28), SUD(28)                                        00001610
+   10 READ (5,99999) S, L                                               00001620
+      IF (S.EQ.-1.) GO TO 80                                            00001630
+C TEST SUBROUTINE FOR ALL FOUR KIND OF SOLUTIONS                        00001640
+      DO 70 KIND=1,4                                                    00001650
+        CALL CHARMA(KIND, S, L, 28, VAL, SUD, IA)                       00001660
+        IF (IA.GT.0) WRITE (6,99993) S, L, IA                           00001670
+        IF ((IA.GT.0) .AND. (IA.LT.4)) GO TO 10                         00001680
+        WRITE (6,99998) S                                               00001690
+C PRINT THE FIRST L ELEMENTS OF VAL, WHICH ARE THE CHARACTERISTIC VALUES00001700
+        DO 60 I=1,L                                                     00001710
+C GIVE NAMES AND INDICES OF CH. V. ACCORDING KIND OF SOLUTION           00001720
+          GO TO (20, 30, 40, 50), KIND                                  00001730
+   20     INDE = 2*I - 1                                                00001740
+          WRITE (6,99997) INDE, VAL(I)                                  00001750
+          GO TO 60                                                      00001760
+   30     INDE = 2*I - 1                                                00001770
+          WRITE (6,99996) INDE, VAL(I)                                  00001780
+          GO TO 60                                                      00001790
+   40     INDE = 2*I                                                    00001800
+          WRITE (6,99995) INDE, VAL(I)                                  00001810
+          GO TO 60                                                      00001820
+   50     INDE = 2*I - 2                                                00001830
+          WRITE (6,99994) INDE, VAL(I)                                  00001840
+   60   CONTINUE                                                        00001850
+   70 CONTINUE                                                          00001860
+      GO TO 10                                                          00001870
+   80 CONTINUE                                                          00001880
+      STOP                                                              00001890
+99999 FORMAT (F8.2, 2X, I2)                                             00001900
+99998 FORMAT (1H0, 17X, 3HS =, F8.2, 2X, 19HCHARACTERISTIC VALU,        00001910
+     * 2HES/)                                                           00001920
+99997 FORMAT (31X, 2HBO, I2, 2H =, F14.9)                               00001930
+99996 FORMAT (31X, 2HBE, I2, 2H =, F14.9)                               00001940
+99995 FORMAT (31X, 2HBO, I2, 2H =, F14.9)                               00001950
+99994 FORMAT (31X, 2HBE, I2, 2H =, F14.9)                               00001960
+99993 FORMAT (1H0, 30X, 10HDATA - S =, F8.2/38X, 3HL =,                 00001970
+     * I3//26X, 15HERROR FLAG IA =, I3//)                               00001980
+      END                                                               00001990
+C                                                                       00002000
+C     ------------------------------------------------------------------00002010
+C                                                                       00002020
+      SUBROUTINE IMTQL1(N,D,E,IERR)                                     00002030
+C
+      INTEGER I,J,L,M,N,II,MML,IERR
+      REAL D(N),E(N)
+      REAL B,C,F,G,P,R,S,MACHEP
+C     REAL SQRT,ABS,SIGN
+C
+C     THIS SUBROUTINE IS A TRANSLATION OF THE ALGOL PROCEDURE IMTQL1,
+C     NUM. MATH. 12, 377-383(1968) BY MARTIN AND WILKINSON,
+C     AS MODIFIED IN NUM. MATH. 15, 450(1970) BY DUBRULLE.
+C     HANDBOOK FOR AUTO. COMP., VOL.II-LINEAR ALGEBRA, 241-248(1971).
+C
+C     THIS SUBROUTINE FINDS THE EIGENVALUES OF A SYMMETRIC
+C     TRIDIAGONAL MATRIX BY THE IMPLICIT QL METHOD.
+C
+C     ON INPUT-
+C
+C        N IS THE ORDER OF THE MATRIX,
+C
+C        D CONTAINS THE DIAGONAL ELEMENTS OF THE INPUT MATRIX,
+C
+C        E CONTAINS THE SUBDIAGONAL ELEMENTS OF THE INPUT MATRIX
+C          IN ITS LAST N-1 POSITIONS.  E(1) IS ARBITRARY.
+C
+C      ON OUTPUT-
+C
+C        D CONTAINS THE EIGENVALUES IN ASCENDING ORDER.  IF AN
+C          ERROR EXIT IS MADE, THE EIGENVALUES ARE CORRECT AND
+C          ORDERED FOR INDICES 1,2,...IERR-1, BUT MAY NOT BE
+C          THE SMALLEST EIGENVALUES,
+C
+C        E HAS BEEN DESTROYED,
+C
+C        IERR IS SET TO
+C          ZERO       FOR NORMAL RETURN,
+C          J          IF THE J-TH EIGENVALUE HAS NOT BEEN
+C                     DETERMINED AFTER 30 ITERATIONS.
+C
+C     QUESTIONS AND COMMENTS SHOULD BE DIRECTED TO B. S. GARBOW,
+C     APPLIED MATHEMATICS DIVISION, ARGONNE NATIONAL LABORATORY
+C
+C     ------------------------------------------------------------------
+C
+C     ********** MACHEP IS A MACHINE DEPENDENT PARAMETER SPECIFYING
+C                THE RELATIVE PRECISION OF FLOATING POINT ARITHMETIC.
+C
+C                **********
+      MACHEP = 2.**(-26)
+C
+      IERR = 0
+      IF (N .EQ. 1) GO TO 1001
+C
+      DO 100 I = 2, N
+  100 E(I-1) = E(I)
+C
+      E(N) = 0.0
+C
+      DO 290 L = 1, N
+         J = 0
+C     ********** LOOK FOR SMALL SUB-DIAGONAL ELEMENT **********
+  105    DO 110 M = L, N
+            IF (M .EQ. N) GO TO 120
+            IF (ABS(E(M)) .LE. MACHEP * (ABS(D(M)) + ABS(D(M+1))))
+     X         GO TO 120
+  110    CONTINUE
+C
+  120    P = D(L)
+         IF (M .EQ. L) GO TO 215
+         IF (J .EQ. 30) GO TO 1000
+         J = J + 1
+C     ********** FORM SHIFT **********
+         G = (D(L+1) - P) / (2.0 * E(L))
+         R = SQRT(G*G+1.0)
+         G = D(M) - P + E(L) / (G + SIGN(R,G))
+         S = 1.0
+         C = 1.0
+         P = 0.0
+         MML = M - L
+C     ********** FOR I=M-1 STEP -1 UNTIL L DO -- **********
+         DO 200 II = 1, MML
+            I = M - II
+            F = S * E(I)
+            B = C * E(I)
+            IF (ABS(F) .LT. ABS(G)) GO TO 150
+            C = G / F
+            R = SQRT(C*C+1.0)
+            E(I+1) = F * R
+            S = 1.0 / R
+            C = C * S
+            GO TO 160
+  150       S = F / G
+            R = SQRT(S*S+1.0)
+            E(I+1) = G * R
+            C = 1.0 / R
+            S = S * C
+  160       G = D(I+1) - P
+            R = (D(I) - G) * S + 2.0 * C * B
+            P = S * R
+            D(I+1) = G + P
+            G = C * R - B
+  200    CONTINUE
+C
+         D(L) = D(L) - P
+         E(L) = G
+         E(M) = 0.0
+         GO TO 105
+C     ********** ORDER EIGENVALUES **********
+  215    IF (L .EQ. 1) GO TO 250
+C     ********** FOR I=L STEP -1 UNTIL 2 DO -- **********
+         DO 230 II = 2, L
+            I = L + 2 - II
+            IF (P .GE. D(I-1)) GO TO 270
+            D(I) = D(I-1)
+  230    CONTINUE
+C
+  250    I = 1
+  270    D(I) = P
+  290 CONTINUE
+C
+      GO TO 1001
+C     ********** SET ERROR -- NO CONVERGENCE TO AN
+C                EIGENVALUE AFTER 30 ITERATIONS **********
+ 1000 IERR = L
+ 1001 RETURN
+C     ********** LAST CARD OF IMTQL1 **********
+      END

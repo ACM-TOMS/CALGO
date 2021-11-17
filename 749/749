@@ -1,0 +1,1272 @@
+C      ALGORITHM 749, COLLECTED ALGORITHMS FROM ACM.
+C      THIS WORK PUBLISHED IN TRANSACTIONS ON MATHEMATICAL SOFTWARE,
+C      VOL. 21, NO. 4, December, 1995, P.  372--378.
+C
+C This file contains 4 files separated by lines of the form
+C         C*** filename
+C
+C The filenames in this file are:
+C
+C driver.f             driverd.f            fct.f               
+C fctd.f                                                        
+C
+C*** driver.f
+C**********************************************************************
+C     DRIVER PROGRAM FOR TESTING FAST DISCRETE COSINE TRANSFORM
+C
+C     Allows the user to specify the length of transform desired,
+C     and to perform a forward and inverse transform on one of two
+C     possible data sequences: 
+C        (i) random numbers between 0 and 1, or
+C        (ii)a sequence representing one cycle of a sinusoid of
+C            amplitude 10.
+C     If the calls to FCT and IFCT are both successful, the ms error
+C     between original and recovered data is printed out, and the actual
+C     data is printed out if so desired.
+C***********************************************************************
+C
+C     INTERNAL VARIABLES:
+C       C         Array of cosine coefficients passed to FCT and IFCT.
+C       DCTSAV    Array to save the DCT coefficients so that they can be
+C                 printed out later.
+C       I         DO loop counter used to address each array element in 
+C                 turn.
+C       ICH       When user is prompted to choose between different
+C                 options, ICH holds his/her choice.
+C       IFAULT    Fault indicator set by subroutines FCT and IFCT.
+C       IX,IY,IZ  The three seeds for the random number generator.
+C       F         Data array passed to subroutines FCT and IFCT.       
+C       FSAVE     Array to save the original data so that it can be
+C                 compared to the recovered data.
+C       MAXN      Dimension of the arrays F, C, FSAVE and DCTSAV. Can be
+C                 adjusted to suit the amount of memory available on the
+C                 computer being used.
+C       MAXPOW    Base 2 logarithm of maximum DCT length (see comments 
+C                 to subroutine INIFCT.
+C       N         Transform length.
+C       PI        The constant 3.1415926...
+C       SUM       Temporary variable to hold running sum during ms error
+C                 calculation.
+C       TEMP      Temporary variable used during ms error calculation to
+C                 hold error between original and recovered data point.
+C       TMSERR    Mean square error between original and recovered data.
+C
+C***********************************************************************
+      PARAMETER(MAXPOW=20)
+      PARAMETER(MAXN=10000)
+      PARAMETER(PI=3.14159 26535 89793 23846)
+      DIMENSION F(MAXN), C(MAXN), FSAVE(MAXN), DCTSAV(MAXN)
+C
+C     INITIALISE SEEDS FOR RANDOM NUMBER GENERATOR
+C
+      IX=1234
+      IY=42
+      IZ=1000
+C
+10    PRINT *
+      PRINT *,'Enter N, the transform length:'
+      READ *,N
+      PRINT *,'N=',N
+      IF(N.GT.MAXN) THEN
+        PRINT *,'This N is larger than the dimension of the arrays used'
+        PRINT *,'by DRIVER program.'
+        GOTO 10
+      ENDIF
+C
+20    PRINT *
+      PRINT *,'1. Random test data'
+      PRINT *,'2. Sinusoidal test data'
+      PRINT *,'ENTER CHOICE:'
+      READ *,ICH
+      IF((ICH.GT.2).OR.(ICH.LT.1))GOTO 20
+C
+C     INITIALISE DATA AND SAVE IT FOR LATER
+C
+      DO 30 I=1,N
+        IF(ICH.EQ.1)THEN
+          F(I)=RANDOM(IX,IY,IZ)
+        ELSEIF(ICH.EQ.2)THEN
+          F(I)=10.0*SIN(2.0*PI*I/FLOAT(N))
+        ENDIF
+        FSAVE(I)=F(I)
+30    CONTINUE
+C
+C     PERFORM THE FORWARD COSINE TRANSFORM
+C
+      PRINT *,'CALLING FCT...'
+      CALL FCT(F,C,N,IFAULT)
+C
+C     SAVE TRANSFORMED DATA FOR LATER
+C
+      DO 40 I=1,N
+        DCTSAV(I)=F(I)
+40    CONTINUE
+      PRINT *,'FCT has set IFAULT=',IFAULT
+      IF(IFAULT.EQ.0)THEN
+        PRINT *,'Successful completion of FCT'
+      ELSEIF(IFAULT.EQ.1)THEN
+        PRINT *,'ERROR -- N is <=1.'
+        GOTO 10
+      ELSEIF(IFAULT.EQ.2)THEN
+        PRINT *,'ERROR -- N=',N,' is greater than 2**MAXPOW=',2**MAXPOW
+        GOTO 10
+      ELSEIF (IFAULT.EQ.3)THEN
+        PRINT *,'ERROR -- N is not a power of two.'
+        GOTO 10
+      ELSE
+        PRINT *,'ERROR -- Invalid IFAULT value (should never occur)'
+        GOTO 10
+      ENDIF
+C
+C     PERFORM THE INVERSE COSINE TRANSFORM
+C
+      PRINT *,'CALLING IFCT...'
+      CALL IFCT(F,C,N,IFAULT)
+      PRINT *,'IFCT has set IFAULT=',IFAULT
+      IF(IFAULT.EQ.0)THEN
+        PRINT *,'Successful completion of FCT'
+      ELSEIF(IFAULT.EQ.1)THEN
+        PRINT *,'ERROR -- N is <=1.'
+        GOTO 10
+      ELSEIF(IFAULT.EQ.2)THEN
+        PRINT *,'ERROR -- N=',N,' is greater than 2**MAXPOW=',2**MAXPOW
+        GOTO 10
+      ELSEIF (IFAULT.EQ.3)THEN
+        PRINT *,'ERROR -- N is not a power of two.'
+        GOTO 10
+      ELSE
+        PRINT *, 'ERROR -- Invalid IFAULT value (should never occur)'
+        GOTO 10
+      ENDIF
+C
+C     CALCULATE MEAN-SQUARE ERROR BETWEEN ORIGINAL AND RECOVERED DATA
+C
+      SUM=0.0
+      DO 50 I=1,N
+        TEMP = F(I) - FSAVE(I)
+        SUM=SUM+TEMP*TEMP
+50    CONTINUE
+      TMSERR=SUM/FLOAT(N)
+      PRINT *
+      PRINT *,'Mean square error=',TMSERR
+C
+      PRINT *
+60    PRINT *,'0. Print out data'
+      PRINT *,'1. Don''t print out data'
+      PRINT *,'ENTER CHOICE'
+      READ *,ICH
+      IF((ICH.LT.0).OR.(ICH.GT.1)) GOTO 60
+      IF (ICH.EQ.0)THEN
+        PRINT *,
+     +  '    I   ORIGINAL DATA   AFTER FCT          AFTER IFCT'
+        DO 80 I=1,N
+          PRINT 70,I,FSAVE(I),DCTSAV(I),F(I)
+70        FORMAT(I6,F15.10,G20.10,F15.10)
+80      CONTINUE
+
+      PRINT *
+      PRINT *,'Mean square error=',TMSERR
+      ENDIF
+C
+      PRINT *
+90    PRINT *,'0. Terminate program'
+      PRINT *,'1. Continue'
+      PRINT *,'ENTER CHOICE'
+      READ *, ICH
+      IF((ICH.LT.0).OR.(ICH.GT.1)) GOTO 90
+      IF(ICH.EQ.1) GOTO 10
+C
+      STOP
+      END
+
+
+
+
+      FUNCTION RANDOM(IX,IY,IZ)
+C
+C     THIS IS THE WICHMANN & HILL RANDOM NUMBER GENERATOR
+C     ALGORITHM AS-183, APPLIED STATISTICS VOL 31 NO 2, PP 188-190
+C
+      IX = 171 * MOD(IX, 177) - 2  * (IX /177)
+      IY = 172 * MOD(IY, 176) - 35 * (IY/176)
+      IZ = 170 * MOD(IZ, 178) - 63 * (IZ/178)
+C
+      IF(IX .LT. 0) IX = IX + 30269
+      IF(IY .LT. 0) IY = IY + 30307
+      IF(IZ .LT. 0) IZ = IZ + 30323
+C
+      RANDOM = AMOD(FLOAT(IX) / 30269.0 + FLOAT(IY) / 30307.0 +
+     *              FLOAT(IZ) / 30323.0, 1.0)
+      RETURN
+      END
+
+C*** driverd.f
+C**********************************************************************
+C     DRIVER PROGRAM FOR TESTING FAST DISCRETE COSINE TRANSFORM
+C
+C     Allows the user to specify the length of transform desired,
+C     and to perform a forward and inverse transform on one of two
+C     possible data sequences: 
+C        (i) random numbers between 0 and 1, or
+C        (ii)a sequence representing one cycle of a sinusoid of
+C            amplitude 10.
+C     If the calls to FCT and IFCT are both successful, the ms error
+C     between original and recovered data is printed out, and the actual
+C     data is printed out if so desired.
+C***********************************************************************
+C
+C     INTERNAL VARIABLES:
+C       C         Array of cosine coefficients passed to FCT and IFCT.
+C       DCTSAV    Array to save the DCT coefficients so that they can be
+C                 printed out later.
+C       I         DO loop counter used to address each array element in 
+C                 turn.
+C       ICH       When user is prompted to choose between different
+C                 options, ICH holds his/her choice.
+C       IFAULT    Fault indicator set by subroutines FCT and IFCT.
+C       IX,IY,IZ  The three seeds for the random number generator.
+C       F         Data array passed to subroutines FCT and IFCT.       
+C       FSAVE     Array to save the original data so that it can be
+C                 compared to the recovered data.
+C       MAXN      Dimension of the arrays F, C, FSAVE and DCTSAV. Can be
+C                 adjusted to suit the amount of memory available on the
+C                 computer being used.
+C       MAXPOW    Base 2 logarithm of maximum DCT length (see comments 
+C                 to subroutine INIFCT.
+C       N         Transform length.
+C       PI        The constant 3.1415926...
+C       SUM       Temporary variable to hold running sum during ms error
+C                 calculation.
+C       TEMP      Temporary variable used during ms error calculation to
+C                 hold error between original and recovered data point.
+C       TMSERR    Mean square error between original and recovered data.
+C
+C***********************************************************************
+      PARAMETER(MAXPOW=20)
+      PARAMETER(MAXN=10000)
+      DOUBLE PRECISION PI
+      PARAMETER(PI=3.14159 26535 89793 23846D0)
+      DOUBLE PRECISION F(MAXN), C(MAXN), FSAVE(MAXN), DCTSAV(MAXN)
+      DOUBLE PRECISION TEMP, SUM, TMSERR
+C
+C     INITIALISE SEEDS FOR RANDOM NUMBER GENERATOR
+C
+      IX=1234
+      IY=42
+      IZ=1000
+C
+10     PRINT *
+      PRINT *,'Enter N, the transform length:'
+      READ *,N
+      PRINT *,'N=',N
+      IF(N.GT.MAXN) THEN
+        PRINT *,'This N is larger than the dimension of the arrays used'
+        PRINT *,'by DRIVER program.'
+        GOTO 10
+      ENDIF
+C
+20    PRINT *
+      PRINT *,'1. Random test data'
+      PRINT *,'2. Sinusoidal test data'
+      PRINT *,'ENTER CHOICE:'
+      READ *,ICH
+      IF((ICH.GT.2).OR.(ICH.LT.1))GOTO 20
+C
+C     INITIALISE DATA AND SAVE IT FOR LATER
+C
+      DO 30 I=1,N
+        IF(ICH.EQ.1)THEN
+          F(I)=DBLE(RANDOM(IX,IY,IZ))
+        ELSEIF(ICH.EQ.2)THEN
+          F(I)=10.0D0*DSIN(2.0D0*PI*I/DBLE(N))
+        ENDIF
+        FSAVE(I)=F(I)
+30    CONTINUE
+C
+C     PERFORM THE FORWARD COSINE TRANSFORM
+C
+      PRINT *,'CALLING FCT...'
+      CALL FCT(F,C,N,IFAULT)
+C
+C     SAVE TRANSFORMED DATA FOR LATER
+C
+      DO 40 I=1,N
+        DCTSAV(I)=F(I)
+40    CONTINUE
+      PRINT *,'FCT has set IFAULT=',IFAULT
+      IF(IFAULT.EQ.0)THEN
+        PRINT *,'Successful completion of FCT'
+      ELSEIF(IFAULT.EQ.1)THEN
+        PRINT *,'ERROR -- N is <=1.'
+        GOTO 10
+      ELSEIF(IFAULT.EQ.2)THEN
+        PRINT *,'ERROR -- N=',N,' is greater than 2**MAXPOW=',2**MAXPOW
+        GOTO 10
+      ELSEIF (IFAULT.EQ.3)THEN
+        PRINT *,'ERROR -- N is not a power of two.'
+        GOTO 10
+      ELSE
+        PRINT *,'ERROR -- Invalid IFAULT value (should never occur)'
+        GOTO 10
+      ENDIF
+C
+C     PERFORM THE INVERSE COSINE TRANSFORM
+C
+      PRINT *,'CALLING IFCT...'
+      CALL IFCT(F,C,N,IFAULT)
+      PRINT *,'IFCT has set IFAULT=',IFAULT
+      IF(IFAULT.EQ.0)THEN
+        PRINT *,'Successful completion of FCT'
+      ELSEIF(IFAULT.EQ.1)THEN
+        PRINT *,'ERROR -- N is <=1.'
+        GOTO 10
+      ELSEIF(IFAULT.EQ.2)THEN
+        PRINT *,'ERROR -- N=',N,' is greater than 2**MAXPOW=',2**MAXPOW
+        GOTO 10
+      ELSEIF (IFAULT.EQ.3)THEN
+        PRINT *,'ERROR -- N is not a power of two.'
+        GOTO 10
+      ELSE
+        PRINT *, 'ERROR -- Invalid IFAULT value (should never occur)'
+        GOTO 10
+      ENDIF
+C
+C     CALCULATE MEAN-SQUARE ERROR BETWEEN ORIGINAL AND RECOVERED DATA
+C
+      SUM=0.0D0
+      DO 50 I=1,N
+        TEMP = F(I) - FSAVE(I)
+        SUM=SUM+TEMP*TEMP
+50    CONTINUE
+      TMSERR=SUM/DBLE(N)
+      PRINT *
+      PRINT *,'Mean square error=',TMSERR
+C
+      PRINT *
+60    PRINT *,'0. Print out data'
+      PRINT *,'1. Don''t print out data'
+      PRINT *,'ENTER CHOICE'
+      READ *,ICH
+      IF((ICH.LT.0).OR.(ICH.GT.1)) GOTO 60
+      IF (ICH.EQ.0)THEN
+        PRINT *,
+     +  '    I   ORIGINAL DATA       AFTER FCT             AFTER IFCT'
+        DO 80 I=1,N
+          PRINT 70,I,FSAVE(I),DCTSAV(I),F(I)
+70        FORMAT(I6,D22.14,D22.14,D22.14)
+80      CONTINUE
+C
+      PRINT *
+      PRINT *,'Mean square error=',TMSERR
+      ENDIF
+C
+      PRINT *
+90    PRINT *,'0. Terminate program'
+      PRINT *,'1. Continue'
+      PRINT *,'ENTER CHOICE'
+      READ *, ICH
+      IF((ICH.LT.0).OR.(ICH.GT.1)) GOTO 90
+      IF(ICH.EQ.1) GOTO 10
+C
+      STOP
+      END
+
+
+
+
+      FUNCTION RANDOM(IX,IY,IZ)
+C
+C     THIS IS THE WICHMANN & HILL RANDOM NUMBER GENERATOR
+C     ALGORITHM AS-183, APPLIED STATISTICS VOL 31 NO 2, PP 188-190
+C
+      IX = 171 * MOD(IX, 177) - 2  * (IX /177)
+      IY = 172 * MOD(IY, 176) - 35 * (IY/176)
+      IZ = 170 * MOD(IZ, 178) - 63 * (IZ/178)
+C
+      IF(IX .LT. 0) IX = IX + 30269
+      IF(IY .LT. 0) IY = IY + 30307
+      IF(IZ .LT. 0) IZ = IZ + 30323
+C
+      RANDOM = AMOD(FLOAT(IX) / 30269.0 + FLOAT(IY) / 30307.0 +
+     *              FLOAT(IZ) / 30323.0, 1.0)
+      RETURN
+      END
+C*** fct.f
+      SUBROUTINE BITREV(F,N)
+      REAL F(N)
+C***********************************************************************
+C
+C     Rearranges the data in the array F into bit-reverse order.
+C
+C     ARGUMENTS:
+C       F   Array containing the data to be rearranged into 
+C           bit-reversed order.
+C       N   Length of the array F. N must be a power of two.
+C
+C     INTERNAL VARIABLES:
+C       I
+C       J
+C       NV2
+C       M
+C       TEMP 
+C
+C***********************************************************************
+      IF(N.LE.2) THEN
+        RETURN
+      ENDIF
+      NV2 = N/2
+      J = 1
+      DO 20 I = 1, N
+        IF (I .LT. J) THEN
+          TEMP = F(J)
+          F(J) = F(I)
+          F(I) = TEMP
+        ENDIF
+        M = NV2
+10      IF (J .LE. M) GOTO 20
+          J = J - M
+          M = (M + 1) / 2
+        GOTO 10
+20      J = J + M
+      RETURN
+      END
+
+
+      SUBROUTINE SCRAMB(F,N)
+      REAL F(N)
+C***********************************************************************
+C
+C     Scrambles the data in the array F into ODD-EVEN order, i.e.
+C     with the odd-indexed elements in the first half of the array
+C     (in natural order), and the even elements in the second half
+C     (in reverse order).
+C
+C     ARGUMENTS:
+C       F   Array containing the data to be rearranged into ODD-EVEN
+C           order.
+C       N   Length of the array F. N must be a power of two.
+C
+C     INTERNAL VARIABLES:
+C       I       Loop counter for swaps in top half of array.
+C       II1     Index to first array element in swap.
+C       II2     Index to second array element in swap.
+C       NV2     Set equal to N/2.
+C       NV4     Set equal to N/4.
+C       TEMP    Temporary variable used while swapping array elements.
+C
+C***********************************************************************
+      NV2 = N/2
+      NV4 = N/4
+      CALL BITREV(F,N)
+      CALL BITREV(F,NV2)
+      CALL BITREV(F(NV2+1),NV2)
+C
+      II1 = N
+      II2 = NV2 + 1
+      DO 30 I = 1,NV4
+        TEMP = F(II1)
+        F(II1) = F(II2)
+        F(II2) = TEMP
+        II1 = II1-1
+        II2 = II2+1
+30    CONTINUE
+      RETURN
+      END
+
+
+      SUBROUTINE USCRAM(F,N)
+      REAL F(N)
+C***********************************************************************
+C
+C     Unscrambles the data in array F from ODD-EVEN order to natural
+C     order, i.e. preforms the inverse of the operation performed by
+C     subroutine SCRAMB.
+C
+C     ARGUMENTS:
+C       F   Array containing the data to be unscrambled.
+C       N   Length of the array F. N must be a power of two.
+C
+C     INTERNAL VARIABLES:  As for subroutine SCRAMB above.
+C
+C***********************************************************************
+      NV2 = N/2
+      NV4 = N/4
+      II1 = N
+      II2 = NV2+1
+      DO 40 I = 1,NV4
+        TEMP = F(II1)
+        F(II1) = F(II2)
+        F(II2) = TEMP
+        II1 = II1-1
+        II2 = II2+1
+40    CONTINUE
+      CALL BITREV(F,NV2)
+      CALL BITREV(F(NV2+1),NV2)
+      CALL BITREV(F,N)
+      RETURN
+      END
+
+
+      SUBROUTINE FCT(F,C,N,IFAULT)
+      REAL F(N), C(N)
+C***********************************************************************
+C
+C     FAST DISCRETE COSINE TRANSFORM
+C
+C     ARGUMENTS:
+C       F      Array containing the data to be transformed. On exit
+C              it contains the transformed sequence.
+C       C      Array containing cosine coefficients as previously 
+C              calculated by a call to INIFCT. When this is the first
+C              call to FCT or IFCT for the current value of N, this
+C              array will be initialised by a call to INIFCT.
+C
+C       N      Length of the array F. N must be a power of two.
+C       IFAULT On exit:
+C                =0,  if there are no faults.
+C                =1,  if N <= 1.
+C                =2,  if N > 2**MAXPOW. (See subroutine INIFCT below).
+C                =3,  if 2 <= N <= 2**MAXPOW but N is not a power of two.
+C
+C     INTERNAL VARIABLES:
+C       CFAC    Cosine multiplicative factor used in butterfly.
+C       IBASE   Index of base of butterfly.
+C       IBUTFY  Butterfly counter.
+C       I       Loop counter used when scaling the DCT coefficients.
+C       II1     Index to first element of butterfly.
+C       II2     Index to second element of butterfly.
+C       IGROUP  Loop counter for groups of butterflies.
+C       INCR    Index increment to move from one group of butterflies to
+C               the next.
+C       INDEX   Index to array elements during summations.
+C       ISTAGE  Counter for stages during butterfly or summation 
+C               processing.
+C       ISTEP   Counter for steps within a thread during summation
+C               processing.
+C       ISTPSZ  Size of step within a thread during summation processing.
+C       IWNGSP  Width (wingspan) od butterfly.
+C       NGRPS   Number of groups of butterflies in current stage.
+C       NSTEPS  Number of steps in currect thread during summation 
+C               processing.
+C       NTHRDS  Number of summation threads in current summation stage.
+C       NV2     Set to N/2.
+C       RT2INV  The constant 1/SQRT(2).
+C       TEMP    Temporary variable used during butterfly processing.
+C       TWO     The constane 2.0.
+C       TWOVN   Set to 2.0/N.
+C
+C     COMMON DATA:
+C       As for subroutine INIFCT below.
+C
+C***********************************************************************
+      PARAMETER (TWO=2.0, RT2INV=0.70710 67811 8655)
+      REAL TEMP,CFAC,TWOVN
+      COMMON /FCTLEN/ LENGTH,IPOW
+      SAVE /FCTLEN/
+C
+C     CHECK FOR VALID TRANSFORM SIZE
+C
+      IFAULT = 0
+      IF((N.NE.LENGTH).OR.(N.LE.1)) CALL INIFCT(C,N,IFAULT)
+      IF(IFAULT.NE.0) RETURN
+C
+      NV2 = N/2
+C
+C     SCRAMBLE THE DATA IN F INTO ODD-EVEN ORDERING
+C
+      CALL SCRAMB(F,N)
+C
+C     DO THE BUTTERFLIES
+C
+      NGRPS = 1
+      IWNGSP = NV2
+      INCR = N
+      DO 70 ISTAGE = IPOW, 1, -1
+        DO 60 IBUTFY = 1, IWNGSP
+          CFAC = C(IWNGSP + IBUTFY)
+          IBASE = 0
+          DO 50 IGROUP = 1, NGRPS
+            II1 = IBASE + IBUTFY
+            II2 = II1 + IWNGSP
+            TEMP = F(II2)
+            F(II2) = CFAC * (F(II1) - TEMP)
+            F(II1) = F(II1) + TEMP
+            IBASE = IBASE + INCR
+50        CONTINUE
+60      CONTINUE
+        INCR = INCR / 2
+        IWNGSP = IWNGSP / 2
+        NGRPS = NGRPS + NGRPS
+70    CONTINUE
+C
+C     BIT-REVERSE ORDER ARRAY F
+C
+      CALL BITREV(F,N)
+C
+C     DO THE SUMS
+C
+      NTHRDS = N/4
+      ISTPSZ = NV2
+      NSTEPS   = 2
+      DO 100 ISTAGE = IPOW-1, 1, -1
+        DO 90 THREAD = 1, NTHRDS
+          INDEX = NTHRDS + THREAD
+          DO 80 ISTEP = 1, NSTEPS-1
+            F(INDEX) = F(INDEX) + F(INDEX + ISTPSZ)
+            INDEX = INDEX + ISTPSZ
+80        CONTINUE
+90      CONTINUE      
+        NSTEPS = NSTEPS + NSTEPS
+        NTHRDS = NTHRDS / 2
+        ISTPSZ = ISTPSZ / 2
+100   CONTINUE
+C
+C     SCALE THE RESULT
+C
+      TWOVN = TWO / (FLOAT(N))
+      DO 110 I = 1, N
+110     F(I) = F(I) * TWOVN
+      F(1) = F(1) * RT2INV
+      RETURN
+      END
+
+
+      SUBROUTINE IFCT(F,C,N,IFAULT)
+      REAL F(N), C(N)
+C***********************************************************************
+C
+C     FAST INVERSE DISCRETE COSINE TRANSFORM
+C
+C     ARGUMENTS:
+C       F      Array containing the data to be inverse transformed.
+C              On exit, it contains the inverse transformed data.
+C       C,N,IFAULT  As for subroutine FCT above.
+C
+C     INTERNAL VARIABLES:
+C       As for subroutine FCT above. 
+C
+C     COMMON DATA:
+C       As for subroutine INIFCT below.
+C***********************************************************************
+      PARAMETER(RT2INV=0.70710 67811 8655)
+      REAL TEMP,CFAC
+      COMMON /FCTLEN/ LENGTH,IPOW
+      SAVE /FCTLEN/
+C
+C     CHECK TRANSFORM LENGTH AND INITIALISE IF NECESSARY
+C
+      IFAULT = 0
+      IF((N.NE.LENGTH).OR.(N.LE.1)) CALL INIFCT(C,N,IFAULT)
+      IF(IFAULT.NE.0) RETURN
+C     
+      NV2 = N/2
+C
+      F(1) = F(1) * RT2INV
+C
+C     DO THE SUMS
+C
+      NTHRDS = 1
+      ISTPSZ = 2
+      NSTEPS   = NV2
+      DO 140 ISTAGE = 1, IPOW-1
+        DO 130 THREAD = 1, NTHRDS
+          INDEX = N - THREAD + 1
+          DO 120 ISTEP = 1, NSTEPS-1
+            F(INDEX) = F(INDEX) + F(INDEX - ISTPSZ)
+            INDEX = INDEX - ISTPSZ
+120       CONTINUE
+130     CONTINUE      
+        NSTEPS = NSTEPS / 2
+        NTHRDS = NTHRDS + NTHRDS
+        ISTPSZ = ISTPSZ + ISTPSZ
+140   CONTINUE
+C
+C     BIT-REVERSE ORDER ARRAY F
+C
+      CALL BITREV(F,N)
+C
+C     DO THE BUTTERFLIES
+C
+      NGRPS = NV2
+      IWNGSP = 1
+      INCR = 2
+      DO 170 ISTAGE = 1, IPOW
+        DO 160 IBUTFY = 1, IWNGSP
+          CFAC = C(IWNGSP + IBUTFY)
+          IBASE = 0
+          DO 150 IGROUP = 1, NGRPS
+            II1 = IBASE + IBUTFY
+            II2 = II1 + IWNGSP
+            TEMP = CFAC * F(II2)
+            F(II2) = F(II1) - TEMP
+            F(II1) = F(II1) + TEMP
+            IBASE = IBASE + INCR
+150       CONTINUE
+160     CONTINUE
+        INCR = INCR + INCR
+        IWNGSP = IWNGSP + IWNGSP
+        NGRPS = NGRPS/2
+170   CONTINUE
+C
+C     UNSCRAMBLE FROM ODD-EVEN ORDERING TO NATURAL ORDERING
+C
+      CALL USCRAM(F,N)
+C
+      RETURN
+      END
+
+
+      BLOCK DATA
+      COMMON /FCTLEN/ LENGTH,IPOW
+      DATA LENGTH/0/,IPOW/0/
+      END
+
+
+      SUBROUTINE INIFCT(C,N,IFAULT)
+      REAL C(N)
+      PARAMETER(PI=3.14159 26535 89793 23846, ONE=1.0, TWO=2.0, 
+     *  MAXPOW=20)
+      REAL ZCOS
+      COMMON /FCTLEN/ LENGTH,IPOW
+      SAVE /FCTLEN/
+      ZCOS(A) = COS(A)
+C***********************************************************************
+C
+C     INITIALIZES THE ARRAY C OF COSINE COEFFICIENTS AS REQUIRED FOR 
+C     CALLS TO SUBROUTINES FCT AND IFCT. ALSO CHECKS THE VALIDITY OF
+C     THE TRANSFORM SIZE N. CALLED WHENEVER SUBROUTINES FCT OR IFCT
+C     RECEIVE A NEW TRANSFORM SIZE. NEVER CALLED EXPLICITLY BY THE
+C     USER.
+C
+C     ARGUMENTS:
+C       C      Array to hold the cosine coefficients.
+C       N      Length of the array C, i.e. size of transform desired.
+C       IFAULT As described in subroutine FCT above.
+C
+C     INTERNAL VARIABLES:
+C       I       Loop counter to index array elements while loading top
+C               half of C array, and while taking cosines of the array
+C               values.
+C       IFAC    Multiplication factor used while filling bottom half
+C               of C array.
+C       IGROUP  Loop counter for groups of C array coefficients in
+C               bottom half.
+C       II      Temporary variable to hold powers of two while the
+C               transform length is being checked.
+C       ITEM    Loop counter to count items within a group of C array
+C               coefficients.
+C       K       Loop counter counting successive powers of two during
+C               transform length checking.
+C       MAXPOW  Parameter which determines maximum transform length
+C               permitted. Maximum length = 2**MAXPOW.
+C       NITEMS  Number of items within current group of C array
+C               coefficients.
+C       NV2     Set to N/2.
+C       ONE     The constant 1.0.
+C       PI      The constant pi = 3.1415926.
+C       TWO     The constant 2.0.
+C
+C     COMMON DATA:
+C       FCTLEN  Consists of:
+C            LENGTH: The transform length for which the array C of 
+C              cosine coefficients is currently set up. Used by FCT and
+C              IFCT to determine whether transform length has changed.
+C            IPOW: The base-2 logarithm of LENGTH. Used in FCT and IFCT
+C              to determine number of stages of butterflies or 
+C              summations. 
+C
+C***********************************************************************
+C
+C     CHECK FOR VALID TRANSFORM SIZE
+C
+      PRINT *, 'INIFCT -- N=',N
+      IFAULT = 0
+      IF(N.LE.1) THEN
+        IFAULT = 1
+        RETURN
+      ENDIF
+      II = 1
+      DO 180 K = 1, MAXPOW
+        II = II + II
+        IF (II .EQ. N) GOTO 190
+        IF (II .GT. N) THEN
+          IFAULT = 3
+          RETURN
+        ENDIF
+180   CONTINUE
+      IFAULT = 2
+      RETURN
+C      
+C     IF WE REACH THIS POINT, TRANSFORM LENGTH IS VALID.
+C
+190   IPOW = K
+      LENGTH = N
+      NV2 = N/2
+C
+C     PUT VALUES INTO TOP HALF OF C ARRAY
+C
+      DO 200 I = 1, NV2
+200     C(NV2 + I) = FLOAT(4*I-3)
+C
+C     COPY SCALED VALUES FROM TOP HALF OF C ARRAY TO BOTTOM HALF
+C
+      NITEMS = 1
+      IFAC = NV2
+      DO 220 IGROUP = 1, IPOW - 1
+        DO 210 ITEM = 1, NITEMS        
+210       C(NITEMS + ITEM) = FLOAT(IFAC) * C(NV2 + ITEM)
+        NITEMS = NITEMS + NITEMS
+        IFAC = IFAC / 2
+220   CONTINUE
+C
+C     TAKE COSINE OF EACH ELEMENT OF C ARRAY
+C
+      DO 230 I = 2, N
+230     C(I) = ONE / (TWO * ZCOS ( C(I) * PI / FLOAT(N+N) ))
+C
+      RETURN
+      END
+C*** fctd.f
+      SUBROUTINE BITREV(F,N)
+      DOUBLE PRECISION F(N)
+C***********************************************************************
+C
+C     Rearranges the data in the array F into bit-reverse order.
+C
+C     ARGUMENTS:
+C       F   Array containing the data to be rearranged into 
+C           bit-reversed order.
+C       N   Length of the array F. N must be a power of two.
+C
+C     INTERNAL VARIABLES:
+C       I
+C       J
+C       NV2
+C       M
+C       TEMP 
+C
+C***********************************************************************
+      DOUBLE PRECISION TEMP
+C
+      IF(N.LE.2) THEN
+        RETURN
+      ENDIF
+      NV2 = N/2
+      J = 1
+      DO 20 I = 1, N
+        IF (I .LT. J) THEN
+          TEMP = F(J)
+          F(J) = F(I)
+          F(I) = TEMP
+        ENDIF
+        M = NV2
+10      IF (J .LE. M) GOTO 20
+          J = J - M
+          M = (M + 1) / 2
+        GOTO 10
+20      J = J + M
+      RETURN
+      END
+
+
+      SUBROUTINE SCRAMB(F,N)
+      DOUBLE PRECISION F(N)
+C***********************************************************************
+C
+C     Scrambles the data in the array F into ODD-EVEN order, i.e.
+C     with the odd-indexed elements in the first half of the array
+C     (in natural order), and the even elements in the second half
+C     (in reverse order).
+C
+C     ARGUMENTS:
+C       F   Array containing the data to be rearranged into ODD-EVEN
+C           order.
+C       N   Length of the array F. N must be a power of two.
+C
+C     INTERNAL VARIABLES:
+C       I       Loop counter for swaps in top half of array.
+C       II1     Index to first array element in swap.
+C       II2     Index to second array element in swap.
+C       NV2     Set equal to N/2.
+C       NV4     Set equal to N/4.
+C       TEMP    Temporary variable used while swapping array elements.
+C
+C***********************************************************************
+      DOUBLE PRECISION TEMP
+C
+      NV2 = N/2
+      NV4 = N/4
+      CALL BITREV(F,N)
+      CALL BITREV(F,NV2)
+      CALL BITREV(F(NV2+1),NV2)
+C
+      II1 = N
+      II2 = NV2 + 1
+      DO 30 I = 1,NV4
+        TEMP = F(II1)
+        F(II1) = F(II2)
+        F(II2) = TEMP
+        II1 = II1-1
+        II2 = II2+1
+30    CONTINUE
+      RETURN
+      END
+
+
+      SUBROUTINE USCRAM(F,N)
+      DOUBLE PRECISION F(N)
+C***********************************************************************
+C
+C     Unscrambles the data in array F from ODD-EVEN order to natural
+C     order, i.e. preforms the inverse of the operation performed by
+C     subroutine SCRAMB.
+C
+C     ARGUMENTS:
+C       F   Array containing the data to be unscrambled.
+C       N   Length of the array F. N must be a power of two.
+C
+C     INTERNAL VARIABLES:  As for subroutine SCRAMB above.
+C
+C***********************************************************************
+      DOUBLE PRECISION TEMP
+C
+      NV2 = N/2
+      NV4 = N/4
+      II1 = N
+      II2 = NV2+1
+      DO 40 I = 1,NV4
+        TEMP = F(II1)
+        F(II1) = F(II2)
+        F(II2) = TEMP
+        II1 = II1-1
+        II2 = II2+1
+40    CONTINUE
+      CALL BITREV(F,NV2)
+      CALL BITREV(F(NV2+1),NV2)
+      CALL BITREV(F,N)
+      RETURN
+      END
+
+
+      SUBROUTINE FCT(F,C,N,IFAULT)
+      DOUBLE PRECISION F(N), C(N)
+C***********************************************************************
+C
+C     FAST DISCRETE COSINE TRANSFORM
+C
+C     ARGUMENTS:
+C       F      Array containing the data to be transformed. On exit
+C              it contains the transformed sequence.
+C       C      Array containing cosine coefficients as previously 
+C              calculated by a call to INIFCT. When this is the first
+C              call to FCT or IFCT for the current value of N, this
+C              array will be initialised by a call to INIFCT.
+C
+C       N      Length of the array F. N must be a power of two.
+C       IFAULT On exit:
+C                =0,  if there are no faults.
+C                =1,  if N <= 1.
+C                =2,  if N > 2**MAXPOW. (See subroutine INIFCT below).
+C                =3,  if 2 <= N <= 2**MAXPOW but N is not a power of two.
+C
+C     INTERNAL VARIABLES:
+C       CFAC    Cosine multiplicative factor used in butterfly.
+C       IBASE   Index of base of butterfly.
+C       IBUTFY  Butterfly counter.
+C       I       Loop counter used when scaling the DCT coefficients.
+C       II1     Index to first element of butterfly.
+C       II2     Index to second element of butterfly.
+C       IGROUP  Loop counter for groups of butterflies.
+C       INCR    Index increment to move from one group of butterflies to
+C               the next.
+C       INDEX   Index to array elements during summations.
+C       ISTAGE  Counter for stages during butterfly or summation 
+C               processing.
+C       ISTEP   Counter for steps within a thread during summation
+C               processing.
+C       ISTPSZ  Size of step within a thread during summation processing.
+C       IWNGSP  Width (wingspan) od butterfly.
+C       NGRPS   Number of groups of butterflies in current stage.
+C       NSTEPS  Number of steps in currect thread during summation 
+C               processing.
+C       NTHRDS  Number of summation threads in current summation stage.
+C       NV2     Set to N/2.
+C       RT2INV  The constant 1/SQRT(2).
+C       TEMP    Temporary variable used during butterfly processing.
+C       TWO     The constane 2.0.
+C       TWOVN   Set to 2.0/N.
+C
+C     COMMON DATA:
+C       As for subroutine INIFCT below.
+C
+C***********************************************************************
+      DOUBLE PRECISION TWO, RT2INV
+      PARAMETER (TWO=2.0D0, RT2INV=0.70710 67811 8655D0)
+      DOUBLE PRECISION TEMP,CFAC,TWOVN
+      COMMON /FCTLEN/ LENGTH,IPOW
+      SAVE /FCTLEN/
+C
+C     CHECK FOR VALID TRANSFORM SIZE
+C
+      IFAULT = 0
+      IF((N.NE.LENGTH).OR.(N.LE.1)) CALL INIFCT(C,N,IFAULT)
+      IF(IFAULT.NE.0) RETURN
+C
+      NV2 = N/2
+C
+C     SCRAMBLE THE DATA IN F INTO ODD-EVEN ORDERING
+C
+      CALL SCRAMB(F,N)
+C
+C     DO THE BUTTERFLIES
+C
+      NGRPS = 1
+      IWNGSP = NV2
+      INCR = N
+      DO 70 ISTAGE = IPOW, 1, -1
+        DO 60 IBUTFY = 1, IWNGSP
+          CFAC = C(IWNGSP + IBUTFY)
+          IBASE = 0
+          DO 50 IGROUP = 1, NGRPS
+            II1 = IBASE + IBUTFY
+            II2 = II1 + IWNGSP
+            TEMP = F(II2)
+            F(II2) = CFAC * (F(II1) - TEMP)
+            F(II1) = F(II1) + TEMP
+            IBASE = IBASE + INCR
+50        CONTINUE
+60      CONTINUE
+        INCR = INCR / 2
+        IWNGSP = IWNGSP / 2
+        NGRPS = NGRPS + NGRPS
+70    CONTINUE
+C
+C     BIT-REVERSE ORDER ARRAY F
+C
+      CALL BITREV(F,N)
+C
+C     DO THE SUMS
+C
+      NTHRDS = N/4
+      ISTPSZ = NV2
+      NSTEPS   = 2
+      DO 100 ISTAGE = IPOW-1, 1, -1
+        DO 90 THREAD = 1, NTHRDS
+          INDEX = NTHRDS + THREAD
+          DO 80 ISTEP = 1, NSTEPS-1
+            F(INDEX) = F(INDEX) + F(INDEX + ISTPSZ)
+            INDEX = INDEX + ISTPSZ
+80        CONTINUE
+90      CONTINUE      
+        NSTEPS = NSTEPS + NSTEPS
+        NTHRDS = NTHRDS / 2
+        ISTPSZ = ISTPSZ / 2
+100   CONTINUE
+C
+C     SCALE THE RESULT
+C
+      TWOVN = TWO / (DBLE(N))
+      DO 110 I = 1, N
+110     F(I) = F(I) * TWOVN
+      F(1) = F(1) * RT2INV
+      RETURN
+      END
+
+
+      SUBROUTINE IFCT(F,C,N,IFAULT)
+      DOUBLE PRECISION F(N), C(N)
+C***********************************************************************
+C
+C     FAST INVERSE DISCRETE COSINE TRANSFORM
+C
+C     ARGUMENTS:
+C       F      Array containing the data to be inverse transformed.
+C              On exit, it contains the inverse transformed data.
+C       C,N,IFAULT  As for subroutine FCT above.
+C
+C     INTERNAL VARIABLES:
+C       As for subroutine FCT above. 
+C
+C     COMMON DATA:
+C       As for subroutine INIFCT below.
+C***********************************************************************
+      DOUBLE PRECISION RT2INV
+      PARAMETER(RT2INV=0.70710 67811 8655D0)
+      DOUBLE PRECISION TEMP,CFAC
+      COMMON /FCTLEN/ LENGTH,IPOW
+      SAVE /FCTLEN/
+C
+C     CHECK TRANSFORM LENGTH AND INITIALISE IF NECESSARY
+C
+      IFAULT = 0
+      IF((N.NE.LENGTH).OR.(N.LE.1)) CALL INIFCT(C,N,IFAULT)
+      IF(IFAULT.NE.0) RETURN
+C     
+      NV2 = N/2
+C
+      F(1) = F(1) * RT2INV
+C
+C     DO THE SUMS
+C
+      NTHRDS = 1
+      ISTPSZ = 2
+      NSTEPS   = NV2
+      DO 140 ISTAGE = 1, IPOW-1
+        DO 130 THREAD = 1, NTHRDS
+          INDEX = N - THREAD + 1
+          DO 120 ISTEP = 1, NSTEPS-1
+            F(INDEX) = F(INDEX) + F(INDEX - ISTPSZ)
+            INDEX = INDEX - ISTPSZ
+120       CONTINUE
+130     CONTINUE      
+        NSTEPS = NSTEPS / 2
+        NTHRDS = NTHRDS + NTHRDS
+        ISTPSZ = ISTPSZ + ISTPSZ
+140   CONTINUE
+C
+C     BIT-REVERSE ORDER ARRAY F
+C
+      CALL BITREV(F,N)
+C
+C     DO THE BUTTERFLIES
+C
+      NGRPS = NV2
+      IWNGSP = 1
+      INCR = 2
+      DO 170 ISTAGE = 1, IPOW
+        DO 160 IBUTFY = 1, IWNGSP
+          CFAC = C(IWNGSP + IBUTFY)
+          IBASE = 0
+          DO 150 IGROUP = 1, NGRPS
+            II1 = IBASE + IBUTFY
+            II2 = II1 + IWNGSP
+            TEMP = CFAC * F(II2)
+            F(II2) = F(II1) - TEMP
+            F(II1) = F(II1) + TEMP
+            IBASE = IBASE + INCR
+150       CONTINUE
+160     CONTINUE
+        INCR = INCR + INCR
+        IWNGSP = IWNGSP + IWNGSP
+        NGRPS = NGRPS/2
+170   CONTINUE
+C
+C     UNSCRAMBLE FROM ODD-EVEN ORDERING TO NATURAL ORDERING
+C
+      CALL USCRAM(F,N)
+C
+      RETURN
+      END
+
+
+      BLOCK DATA
+      COMMON /FCTLEN/ LENGTH,IPOW
+      DATA LENGTH/0/,IPOW/0/
+      END
+
+
+      SUBROUTINE INIFCT(C,N,IFAULT)
+      DOUBLE PRECISION C(N)
+      DOUBLE PRECISION PI, ONE, TWO
+      PARAMETER(PI=3.14159 26535 89793 23846D0, ONE=1.0D0, TWO=2.0D0,
+     *  MAXPOW=20)
+      DOUBLE PRECISION ZCOS, A
+      COMMON /FCTLEN/ LENGTH,IPOW
+      SAVE /FCTLEN/
+      ZCOS(A) = DCOS(A)
+C***********************************************************************
+C
+C     INITIALIZES THE ARRAY C OF COSINE COEFFICIENTS AS REQUIRED FOR 
+C     CALLS TO SUBROUTINES FCT AND IFCT. ALSO CHECKS THE VALIDITY OF
+C     THE TRANSFORM SIZE N. CALLED WHENEVER SUBROUTINES FCT OR IFCT
+C     RECEIVE A NEW TRANSFORM SIZE. NEVER CALLED EXPLICITLY BY THE
+C     USER.
+C
+C     ARGUMENTS:
+C       C      Array to hold the cosine coefficients.
+C       N      Length of the array C, i.e. size of transform desired.
+C       IFAULT As described in subroutine FCT above.
+C
+C     INTERNAL VARIABLES:
+C       I       Loop counter to index array elements while loading top
+C               half of C array, and while taking cosines of the array
+C               values.
+C       IFAC    Multiplication factor used while filling bottom half
+C               of C array.
+C       IGROUP  Loop counter for groups of C array coefficients in
+C               bottom half.
+C       II      Temporary variable to hold powers of two while the
+C               transform length is being checked.
+C       ITEM    Loop counter to count items within a group of C array
+C               coefficients.
+C       K       Loop counter counting successive powers of two during
+C               transform length checking.
+C       MAXPOW  Parameter which determines maximum transform length
+C               permitted. Maximum length = 2**MAXPOW.
+C       NITEMS  Number of items within current group of C array
+C               coefficients.
+C       NV2     Set to N/2.
+C       ONE     The constant 1.0.
+C       PI      The constant pi = 3.1415926.
+C       TWO     The constant 2.0.
+C
+C     COMMON DATA:
+C       FCTLEN  Consists of:
+C            LENGTH: The transform length for which the array C of 
+C              cosine coefficients is currently set up. Used by FCT and
+C              IFCT to determine whether transform length has changed.
+C            IPOW: The base-2 logarithm of LENGTH. Used in FCT and IFCT
+C              to determine number of stages of butterflies or 
+C              summations. 
+C
+C***********************************************************************
+C
+C     CHECK FOR VALID TRANSFORM SIZE
+C
+      PRINT *, 'INIFCT -- N=',N
+      IFAULT = 0
+      IF(N.LE.1) THEN
+        IFAULT = 1
+        RETURN
+      ENDIF
+      II = 1
+      DO 180 K = 1, MAXPOW
+        II = II + II
+        IF (II .EQ. N) GOTO 190
+        IF (II .GT. N) THEN
+          IFAULT = 3
+          RETURN
+        ENDIF
+180   CONTINUE
+      IFAULT = 2
+      RETURN
+C      
+C     IF WE REACH THIS POINT, TRANSFORM LENGTH IS VALID.
+C
+190   IPOW = K
+      LENGTH = N
+      NV2 = N/2
+C
+C     PUT VALUES INTO TOP HALF OF C ARRAY
+C
+      DO 200 I = 1, NV2
+200     C(NV2 + I) = DBLE(4*I-3)
+C
+C     COPY SCALED VALUES FROM TOP HALF OF C ARRAY TO BOTTOM HALF
+C
+      NITEMS = 1
+      IFAC = NV2
+      DO 220 IGROUP = 1, IPOW - 1
+        DO 210 ITEM = 1, NITEMS        
+210       C(NITEMS + ITEM) = DBLE(IFAC) * C(NV2 + ITEM)
+        NITEMS = NITEMS + NITEMS
+        IFAC = IFAC / 2
+220   CONTINUE
+C
+C     TAKE COSINE OF EACH ELEMENT OF C ARRAY
+C
+      DO 230 I = 2, N
+230     C(I) = ONE / (TWO * ZCOS ( C(I) * PI / DBLE(N+N) ))
+C
+      RETURN
+      END

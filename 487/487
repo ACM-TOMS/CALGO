@@ -1,0 +1,173 @@
+C     ALGORITHM 487 COLLECTED ALGORITHMS FROM ACM.
+C     ALGORITHM APPEARED IN COMM. ACM, VOL. 17, NO. 12,
+C     P. 703.
+      REAL FUNCTION PKS2(N, D)                                          PKS   10
+      INTEGER N
+C N IS THE SAMPLE SIZE USED.
+      REAL D
+C D IS THE MAXIMUM MAGNITUDE (OF THE DISCREPANCY
+C BETWEEN THE EMPIRICAL AND PROPOSED DISTRIBUTIONS)
+C IN EITHER THE POSITIVE OR NEGATIVE DIRECTION.
+C PKS2 IS THE EXACT PROBABILITY OF OBTAINING A
+C DEVIATION NO LARGER THAN D.
+C THESE FORMULAS APPEAR AS (23) AND (24) IN
+C J. DURBIN.  THE PROBABILITY THAT THE SAMPLE
+C DISTRIBUTION FUNCTION LIES BETWEEN TWO PARALLEL
+C STRAIGHT LINES. ANNALS OF MATHEMATICAL STATISTICS
+C 39, 2(APRIL 1968),398-411.
+      DOUBLE PRECISION Q(141), FACT(141), SUM, CI,
+     * FT, FU, FV
+      IF (N.EQ.1) GO TO 90
+      FN = FLOAT(N)
+      FND = FN*D
+      NDT = IFIX(2.*FND)
+      IF (NDT.LT.1) GO TO 100
+      ND = IFIX(FND)
+      NDD = MIN0(2*ND,N)
+      NDP = ND + 1
+      NDDP = NDD + 1
+      FACT(1) = 1.
+      CI = 1.
+      DO 10 I=1,N
+        FACT(I+1) = FACT(I)*CI
+        CI = CI + 1.
+   10 CONTINUE
+      Q(1) = 1.
+      IF (NDD.EQ.0) GO TO 50
+      CI = 1.
+      DO 20 I=1,NDD
+        Q(I+1) = CI**I/FACT(I+1)
+        CI = CI + 1.
+   20 CONTINUE
+      IF (NDP.GT.N) GO TO 80
+      FV = FLOAT(NDP) - FND
+      JMAX = IDINT(FV) + 1
+      DO 40 I=NDP,NDD
+        SUM = 0.
+        FT = FND
+        K = I
+        FU = FV
+        DO 30 J=1,JMAX
+          SUM = SUM + FT**(J-2)/FACT(J)*FU**K/
+     *     FACT(K+1)
+          FT = FT + 1.
+          FU = FU - 1.
+          K = K - 1
+   30   CONTINUE
+        Q(I+1) = Q(I+1) - 2.*FND*SUM
+        JMAX = JMAX + 1
+        FV = FV + 1.
+   40 CONTINUE
+      IF (NDD.EQ.N) GO TO 80
+   50 DO 70 I=NDDP,N
+        SUM = 0.
+        SIGN = 1.
+        FT = 2.*FND
+        DO 60 J=1,NDT
+          FT = FT - 1.
+          K = I - J + 1
+          SUM = SUM + SIGN*FT**J/FACT(J+1)*Q(K)
+          SIGN = -SIGN
+   60   CONTINUE
+        Q(I+1) = SUM
+   70 CONTINUE
+   80 PKS2 = Q(N+1)*FACT(N+1)/FN**N
+      RETURN
+   90 PKS2 = 2.*D - 1.
+      RETURN
+  100 PKS2 = 0.
+      RETURN
+      END
+      SUBROUTINE PRFAC                                                  PRF   10
+      DOUBLE PRECISION PF(4,40)
+      DIMENSION DXA(4)
+      COMMON DX, DXA, PF, J
+      DATA I /1/
+      DO 10 J=1,4
+        IF (DXA(J).EQ.DX) RETURN
+   10 CONTINUE
+      J = I
+      I = I + 1
+      IF (I.EQ.5) I = 1
+      DXA(J) = DX
+      PF(J,1) = 1.
+      DO 20 K=2,38
+        PF(J,K) = (PF(J,K-1)*DX)/FLOAT(K-1)
+   20 CONTINUE
+      RETURN
+      END
+      FUNCTION CEIL(X)                                                  CEI   10
+      IF (X.GE.0.) GO TO 10
+      I = -X
+      CEIL = -I
+      RETURN
+   10 I = X + .99999999
+      CEIL = I
+      RETURN
+      END
+      FUNCTION PKS(N, EPS)                                              PKS   10
+C CALCULATE THE CUMULATIVE DISTRIBUTION OF THE
+C KOLMOGOROV-SMIRNOV STATISTIC USING THE FORMULAS OF
+C JOHN POMERANZ. EXACT VALUES OF THE TWO-SIDED
+C KOLMOGOROV- SMIRNOV CUMULATIVE DISTRIBUTION FOR
+C FINITE SAMPLE SIZE. TECHNICAL REPORT NUMBER 88,
+C COMPUTER SCIENCES DEPARTMENT, PURDUE UNIVERSITY,
+C FEBRUARY 1973.
+      DOUBLE PRECISION PF(4,40), U(40), V(40)
+      DOUBLE PRECISION SUM
+      DIMENSION DXA(4)
+      COMMON DX, DXA, PF, L
+      DATA MNP /40/
+      FN = N
+      RN = 1./FN
+      K = EPS*FN + .00000001
+      FK = K
+      IF (ABS(FK-EPS*FN).GT..00000001) GO TO 10
+      K = K - 1
+      FK = K
+   10 CONTINUE
+      DEL = EPS - FK*RN
+      XUP = RN - DEL
+      XLO = DEL
+      IF (ABS(XUP-XLO).LT..00000001) XUP = XLO
+      XPREV = 0.
+      DO 20 I=1,MNP
+        U(I) = 0.
+   20 CONTINUE
+      U(K+1) = 1.
+      IMIN = -K
+   30 X = AMIN1(XUP,XLO)
+      IF (X.GT..999999) X = 1.
+      DX = X - XPREV
+      JMIN = CEIL((X-EPS)*FN-.00000001)
+      IF (ABS(FLOAT(JMIN)-(X-EPS)*FN).LT..00000001)
+     * JMIN = JMIN + 1
+      JMAX = (X+EPS)*FN + .00000001
+      IF (ABS(FLOAT(JMAX)-(X+EPS)*FN).LT..00000001)
+     * JMAX = JMAX - 1
+      JMAX = JMAX - JMIN + 1
+      CALL PRFAC
+      DO 60 J=1,MNP
+        SUM = 0.
+        IF (J.GT.JMAX) GO TO 50
+        I = 1
+   40   IP = J - I + 1 + JMIN - IMIN
+        SUM = SUM + U(I)*PF(L,IP)
+        I = I + 1
+        IF ((IMIN+I).LE.(JMIN+J)) GO TO 40
+   50   V(J) = SUM
+   60 CONTINUE
+      DO 70 I=1,MNP
+        U(I) = V(I)
+   70 CONTINUE
+      IMIN = JMIN
+      XPREV = X
+      IF (X.EQ.XUP) XUP = XUP + RN
+      IF (X.EQ.XLO) XLO = XLO + RN
+      IF (X.LT.1.) GO TO 30
+      DO 80 I=1,N
+        U(K+1) = U(K+1)*FLOAT(I)
+   80 CONTINUE
+      PKS = U(K+1)
+      RETURN
+      END

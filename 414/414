@@ -1,0 +1,654 @@
+From allegra!oliveb!hplabs!turtlevax!ken Wed Dec 31 19:00:00 1969
+Relay-Version: version B 2.10.1 6/24/83; site alice.UUCP
+Posting-Version: version B 2.10.2 9/18/84; site turtlevax.UUCP
+Path: alice!allegra!oliveb!hplabs!turtlevax!ken
+From: ken@turtlevax.UUCP (Ken Turkowski)
+Newsgroups: net.sources
+Subject: Chebyshev Approximation by the method of Remez
+Message-ID: <881@turtlevax.UUCP>
+Date: Thu, 29-Aug-85 14:41:08 EDT
+Article-I.D.: turtleva.881
+Posted: Thu Aug 29 14:41:08 1985
+Date-Received: Fri, 30-Aug-85 07:07:26 EDT
+References: <278@unccvax.UUCP>
+Reply-To: ken@turtlevax.UUCP (Ken Turkowski)
+Organization: CADLINC, Inc. @ Menlo Park, CA
+Lines: 634
+Summary:
+
+In article <278@unccvax.UUCP> dsi@unccvax.UUCP (Dataspan Inc) writes:
+>     Does anyone have source (preferably in portable 'C', Algol, or f77)
+>to the Remez Exchange algorithm for determining the coefficient taps on
+>an FIR digital filter ?
+
+I have posted a remez exchange algorithm in publication Algol to
+net.sources.  This is ACM Algorithm #414, "Chebyshev Approximation of
+Continuous Functions by a Chebyshev System of Functions", from the
+ACM's Collected Algorithms fron ACM.  No guarantee is made regarding
+typos.
+
+This algorithm is copyrighted (C) 1971 by the Association for Computing
+Machinery, Inc.  General permission to republish, but not for profit,
+an algorithm is granted, provided that reference is made to this
+publication, to its date of issue, and to the fact that reprinting
+privileges were granted by permission of the Association for Computing
+Machinery.
+
+I would appreciate any corrections or conversions to 'C'.
+
+-----------------------------------------------------------------
+
+# This is a shell archive.  Remove anything before this line, then
+# unpack it by saving it in a file and typing "sh file".  (Files
+# unpacked will be owned by you and have default permissions.)
+#
+# This archive contains:
+# remez.algol
+
+echo x - remez.algol
+cat > "remez.algol" << '//E*O*F remez.algol//'
+comment ACM Algorithm 414
+    Chebyshev Approximation of Continuous Functions by a Chebyshev System of
+    Functions. 4/11/70
+    G.H. Golub and L.B. Smith, Dept. of Computer Science, Stanford University,
+    Stanford, CA 94305;
+
+procedure remez (n, a, b, kstart, kmax, loops, f, chebyshev, eps,
+    exchange, c, emax, trouble, why);
+    value n, a, b, kstart, kmax, loops;
+    real array c;  real a, b, emax;  label trouble;
+    integer n, kstart, kmax, loops, why;
+    real procedure f, eps; procedure chebyshev, exchange;
+comment Procedure remez finds the best fit (in the minimax sense) to
+    a function f using a linear combination of functions which form a
+    Chebyshev system.  The exchange algorithm of E.L. Stiefel is used
+    to obtain starting values for the critical points and the Remez
+    algorithm is then used to find the best fit;
+begin
+    procedure quadraticmax(n, x, niter, alfa, beta, ok, a, b, c, nadded, eps);
+    	value n, niter, alfa, beta, nadded;  array x, c;
+    	integer n, niter, nadded;  real alfa, beta, a, b;
+   	Boolean ok;  real procedure eps;
+    comment Procedure quadraticmax is called to adjust the values of
+	the critical points in each iteration of the Remez algorithm.  The
+	points are adjusted by fitting a parabola to the error curve in a
+	neighborhood, or if that proves unsatisfactory a brute force de-
+	termination of the extrema is used;
+    begin
+	integer i, count1, count2, nhalf, signepsxstar, signu, signv, signw,
+	    jmax, ncrude, j, nn;
+	real u, v, w, denom, epsu, epsv, epsw, xstar, epsxstar, xxx, misse,
+	    missx, dx, emax, etmp;
+	integer array signepsx [0 : n + 1];  array epsx [0 : n + 1];
+	nn := n - nadded;
+	comment On arbitray parameter...
+	    ncrude The number of divisions used in the brute force
+		search for extrema.
+	    nhalf The parameter (alpha) which determines the size of
+		interval to be examined for an extremum is reduced by
+		half if a bad value for xstar is computed, however this
+		reduction may occur only nhalf times.
+	    misse If the value of the error curve at a new critical point
+		differs from the previous value by a relative difference of
+		more than misse then the brute force method is brought in.
+	    missx The brute force method keeps searching until it is
+		within missx of an extremum;
+	comment Set values of the constants;
+	ncrude := 10;  nhalf := 4;  misse := 1.0 -2;  missx := 1.0 -5;
+	comment Compare missx with absepsx.  They should be equal;
+	for i := 0 step 1 until n + 1 do
+	begin
+	    epsx[i] := eps(x[i],c,nn);
+	    signepsx[i] := sign(epsx[i]);
+	end
+	for i = 0 step 1 until n + 1 do
+	begin
+	    comment If the startingvalues for the critical points do not
+		alternate the sign of eps(x), then we go to the label trouble;
+	    if signepsx[i] * signepsx[i-1] != -1 then go to trouble;
+	end
+	comment First find all the interior extrema.  Then we will find
+	    the end extrema, which may occur at the ends of the interval;
+	for i := 1 step 1 until n do
+	begin
+	    count1 := 0;  count2 := 0;
+L1:
+	    u := x[i];
+	    v := u + alfa * (x[i+1] - u);  w := u + alfa *
+	       (x[i-1] - u);
+	    epsu := epsx[i];  signu := signepsx[i];
+	    epsv := eps(v,c,nn);  signv := sign(epsv);
+	    epsw := eps(w,c,nn);  signw(epsw);
+	    if ! signu == signv || ! signv == signw then go to L3;
+	    comment If the sign of eps(x) at the three points is
+	       not the same, we go to L# where alfa is reduced to
+	       make the points closer together;
+	    epsu := abs(epsu);  epsv := abs(epsv);  epsw := abs(epsw);
+L2:
+	    denom := 2.0 * ((epsv - epsu) * (w - u) + (epsw - epsu)
+	       * (u - v));
+	    if denom == 0.0  then xstar := 0.5 * (v + w) else xstar =
+	       0.5 * (v + w) + (v - w) * (epsv - epsw)/ denom;
+	    count1 := count1 + 1;
+	    comment Test xstar to be sure it is what we want.  Is it
+	       between x[i-1] and x[i+1]?  Is eps(xstar) >= eps(u,v,w)?
+	       If xstar is too bad, go to L3 and reduce alfa unless
+	       alfa has been reduced nhalf times.  Otherwise if ok,
+	       go to savexstar;
+	    if xstar == u || xstar == v || w then
+	    begin
+	       epsxstar := eps(xstar,c,nn); signepsxstar := sign
+	       (epsxstar);
+	       epsxstar := abs(epsxstar);  go to savexstar
+	    end
+	    if xstar <= x[i-1] || xstar >= x[i+1] then go to L3;
+	    epsxstar := eps(xstar,c,nn);
+	    signepsxstar := sign(epsxstar0;
+	    epsxstar := abs(epsxstar);
+	    if signepsxstar != signu || epsxstar < epsu || epsxstar <
+	       epsv || epsxstar < epsw then
+	    begin
+	       if epsu >= epsv || epsu >= epsw)
+	       begin
+		    if abs(epsxstar - epsu) > misse * epsu then go to
+		       LBL2;       			
+		    xstar := u;  epsxstar := epsu;  signepsxtar := signu
+		    go to savexstar;
+	       end
+	       if epsv >= epsu || epsv >= epsw then
+	       begin
+		    if abs(epsxstar - epsv) > misse * epsv then go to
+		       LBL2;
+		    xstar := v;  epsxstar := epsv;  signepsxstar := signv:
+		    go to savexstar
+	       end
+	       if abs(epsxstar - epsw) > misse * epsw then go to
+		    LBL2;
+	       xstar := w;  epsxstar := epsw;  signepsxstar := signw;
+	       go to savexstar;
+LBL2:
+	       jmax := 0;
+LBL1:
+	       dx := (v-w)/ncrude;  emax := 0.0;  xxx := w - dx;
+	       for j := 0 step 1 until ncrude do
+	       begin
+		    xxx := xxx + dx;  jmax := jmax + 1;
+		    etmp := eps(xxx,c,nn);
+		    if abs(etmp) > emax then
+		    begin
+		       emax := epsxstar := abs(etmp);
+		       signepsxstar := sign(etmp);
+		       u := xstar := xxx;
+		       v := u + dx;  w == u - dx;
+		    end
+	       end
+	       if dx > missx then go to LBL1;
+	       comment Make sure v and w are thein bounds;
+	       if v >= x[i+1] then go to L3;
+	       if w <= x[i-1]) go to L3;
+	       go to savexstar
+	    end
+	    if count1 > niter then go to savexstar;
+	    if epsu <= epsw then
+	    begin
+	       if epsv < epsu then
+L4:
+	       begin
+		    comment v is minimum;
+		    if xstar > u then
+		    begin
+		       v := xstar;  epsv := epsxstar;  go to L2;
+		    end
+		    if xstar > w then
+		    begin
+		       epsv := epsu;  v := u;
+		       epsu := epsxstar;  u := xstar;
+		       go to L2;
+		    end
+		    else
+		    begin
+		       v := u;  epsv := epsu;
+		       u := w;  epsu := epsw;
+		       w= xstar;  epsw := epsxstar;
+		       go to L2;
+		    end
+	       end
+	       else
+	       begin
+		    comment u is minimum;
+		    if xstar >= v then
+		    begin
+		       u := v;  epsu := epsv;
+		       v := xstar; epsv := epsxstar;
+		       go to L2;
+		    end
+		    if xstar >= w then
+		    begin
+		       u := xstar;  epsu := epsxstar;
+		       go to L2;
+		    end
+		    else
+		    begin
+		       u := w;  epsu := epsw;
+		       w := xstar; epsw := epsxstar;
+		       go to L2;
+		    end
+	       end
+	    end
+	    else
+	    begin
+	       if epsv < epsw then
+	       begin
+		   comment v is minimum;  go to L4;
+	       end
+	       else
+	       begin
+		   comment w is minimum;  if xstar >= v)
+		   begin
+		       w := u;  epsw := epsu;
+		       u := v;  epsu := epsv;
+		       v := xstar;  epsv := epsxstar;
+		       go to L2;
+		    end
+		    if xstar >= u then
+		    begin
+		       w := u;  epsw := epsu;
+		       u := xstar; epsu := epsxstar;
+		    go to L2;
+		    end
+		    else
+		    begin
+		       w := xstar;  epsw := epsxstar;
+		       go to L2;
+		    end
+	       end
+	    end
+L3:
+	    count2 := count2 + 1;
+	    if count2 > nhalf then go to trouble;
+	    alfa := 0.5 * alfa;
+	    comment The factor 0.5 used in reducing alpha is
+	       arbitrarily chosen;
+	    go to L1;
+	    comment Replace x[i] by xstar after checking alternation
+	       of signs;
+       savexstar:
+	    if i > 1 || signepsxstar * signepsx[i-1] != -1 then go to
+	       trouble;
+	    signepsx[i] := signepsxstar;
+	    x[i] := xstar;
+       end
+       comment This is the end of the loop on i which finds all interior
+	    extrema.  Now we proceed to locate the extrema at or near
+	    the two endpoints (left end, then right end);
+       comment We assume beta > alfa;
+       for i := 0 step n + 1 until n + 1 do
+       begin
+	    count1 := 0;  count2 := 0;
+L8:
+	    u := x[i];  if i == 0)
+	    begin
+	       if a < u then w := u + alfa * (a - u) else w := u +
+	       beta * (x[1] - u);
+	       v := u + alfa * (x[1] - u);
+	    end
+	    else
+	    begin
+	       if b > u then w := u + alfa * (b - u) else w := u +
+	       beta xx (x[n] - u);
+	       v := u + alfa * (x[n] - u);
+	    end
+	    epsu := epsx[i];  signu := signepsx[i];
+	    epsv := eps(v,c,nn);  signv := sign(epsv);
+	    epsw := eps(w,c,nn);  signw := sign(epsw);
+	    if signv != signu || signv != signw then go to L7;
+	    epsu := abs(epsu);  epsv := abs(epsv);  epsw := abs(epsw);
+L5:
+	    denom := 2.0 * (epsu * (v-w) + epsv * (w-u) + epsw *
+		(u-v));
+	    if denom == 0.0 then xstar := 0.5 * (w+v) else xstar =
+		0.5 * (v+w) + (v-u) * (u-w) * (epsv - epsw)/ denom;
+	    if i == 0 && (xstar < a || xstar >= x[1]) then
+	    begin
+		xstar := a;  epsxstar := eps(a,c,nn);
+		signepsxstar := sign(epsxstar);epsxstar := abs(epsxstar);
+	    end
+	    else
+	    if i == n + 1 && (xstar > b && xstar <= x[n]) then
+	    begin
+		xstar := b;  epsxstar := eps(b,c,nn);
+		signepsxstar := sign(epsxstar);epsxstar := abs (epsxstar);
+	    end
+	    else
+	    begin
+		epsxstar := eps(xstar,c,nn);
+		signepsxstar := sign(epsxstar);
+		epsxstar := abs(epsxstar);
+	    end
+	    count1 := count1 + 1;
+	    if i == 0 && xstar >= x[1] then go to L7;
+	    if i == n + 1 && xstar <= x[n] then go to L7;
+	    if xstar == u || xstar == v || xstar == w then go to L6;
+	    if signepsxstar != signu || epsxstar < epsu || epsxstar <
+		epsv || epsxstar < epsw then
+	    begin
+		if epsu >= epsv && epsu >= epsw then
+		begin
+		    xstar := u;  epsxstar := epsu;
+		    signepsxstar := signu;  go to L6;
+		end
+		if epsv >= epsu && epsv >= epsw then
+		begin
+		    xstar := v;  epsxstar := epsv;
+		    signepsxstar := signv;  go to L6;
+		end
+		xstar := w;  epsxstar := epsw;
+		signepsxstar := signw; go to L6;
+	    end
+	    if count1 > niter then go to L6;
+	    if epsu < epsw then
+	    begin
+		if epsv < epsu then
+		begin
+		    comment v is minimum;
+		    v := xstar;  epsv := epsxstar;
+		    go to L5;
+		end
+		else
+		begin
+		    comment u is minimum;
+		    u := xstar;  epsu := epsxstar;
+		    go to L5;
+		end
+	    end
+	    else
+	    begin
+		if epsv == epsw then
+		begin
+		    comment v is minimum;
+		    v := xstar; epsv := epsxstar;
+		    go to L5;
+		end
+		else
+		begin
+		    comment w is minimum; w := xstar;epsw := epsxstar;
+		    go to L5;
+		end
+	    end
+L7:
+	    count2 := count2 + 1;
+	    if count2 > nhalf then go to trouble;
+	    alfa := 0.5 * alfa;  beta := 0.5 * beta;
+	    go to L8;
+	    comment Replace x[i] by xstar after checking its sign;
+L6:
+	    if i == 0 && signepsxstar * signepsx[1] != - 1 then goto
+		trouble;
+	    if i != 0 && signepsxstar * signepsx[n] != - 1 then goto
+		trouble;
+	    signepsx[i] := signepsxstar;  x[i] := xstar;
+	end
+	goto done;
+trouble:
+	ok := false;  goto L9;
+done:
+	ok := true;
+L9:
+    end  quadraticmax;
+    comment Procedure start computes the arrays which are then in-
+	put to exchange to find the best approximation on the points
+	at hand;
+    procedure start (m,n,a,d,xi,chebyshev,f);
+	value m, n;  integer m, n;
+	array a, d, xi;
+	procedure chebyshev;  real procedure f;
+    begin
+	integer i, j;  real array t[0:n];
+	for i := 0 step 1 until n do
+	begin
+	    chebyshev (n, xi[i], t);
+	    for j := 0 step 1 until n do a[i,j] := t[j];
+	    d[i] := f(xi[i]);
+	end
+    end start;
+    comment Now the procedure remez;
+    real epsc, alfa, beta, epsx, absepsc, absepsx, rcompare, dx, maxr,
+	minr, tempr, minsep;
+    integer m, i, itemp, j, niter, nloop, k, nadded, isub, maxri, ilast,
+	signnow, jj;
+    integer signnew;  integer array refset[0 : n + 1 + n];
+    comment Assume number of points added <= n;
+    integer array ptsadd[o : n];
+    array clast[0 : n + 1], xq, xqlast[0 : n + 1 + n];
+    Boolean firsttime, ok, convx, convc, addit;
+    why := 0; k := kstart;
+    comment Come here if k gets changed;
+newk:
+    m := n + 1 + (k-1) * (n+2);
+    begin
+	array r, xi, d[0 : m], aa[0 : m, 0 : n + 1];
+	firsttime := true;  convx := false; convc := false;
+	nloop := 0;
+	comment This makes the initial points spaced according to the
+	    extrema of the Chebyshev polynomial of degree m - 1;
+	for i := 0 step 1 until m do
+	xi[i] := (a+b)/2.0 - (b-a) * cos((3.1415926359 * i)/m)/2.0;
+        comment 3.14159... is pi
+	dx := (b-a)/m;
+        comment To use equally spaced points a statement such as the
+	    following could be used. for i := 0 step 1 until m do xi[i]
+	    := a + i * dx;
+	start(m,n,aa,d,xi,chebyshev,f),
+    comment The following constants are used in testing for convergence
+	    epsc used in relative test on coefficients
+	    absepsc used in absolute test on coefficients
+	    epsx used in relative test on critical points
+	    absepsx used in absolute test on critical points
+	    rcompare used to compare relative magnitudes of max and
+	    min values of residual on the critical points;
+	epsc := 1.0 - 7; absepsc := 1.0 - 7; epsx := 1.0 -
+	    absepsx := 1.0 - 5;
+	rcompare := 1.0000005;
+	comment epsx and absepsx should be the same as missx in pro-
+	    cedure quadraticmax.  epsc and absepsc should be adjusted
+	    according to knowledge of the expected magnitudes of the
+	    coefficients (if known).  It is best to depend on the critical
+	    points and/of the max and min of the residuals for conver-
+	    gence criteria;
+        comment Now call on exchange to find the first approximation
+	    to the best approximating function;
+	exchange (aa,d,c,m,n,refset,emax,singular,r);
+        comment The subscripts of the points chosen are in array ref-
+	    set[0:n+1], the coefficients of the best approximating func-
+	    tion on the m points are in c[0:n], the residuals in r;
+        comment The reference set, the coefficients at this step, and/or
+	    the residuals may be written at this point;
+	for i := 0 step 1 until n do clast[i] := c[i];
+        comment Now we are going to look for any extrema not given
+	    by the points chosen by exchange;
+        comment Make sure critical points are algebraically ordered;
+	for i := 0 step 1 until n do for j := i + 1 step 1 until n + 1 do
+	begin
+	    if refset[j] < refset[i])
+	    begin
+		itemp := refset[j];  refset[j] := refset[i];
+		refset[i] := itemp;
+	    end
+	end
+	nadded := 0;  maxr := 0;  maxri := 0; ilast := 0;
+	signnow := sign(r[0]);
+	for i := 0 step 1 until m + 1 do
+	begin
+	    if i == m + 1 then goto LBL;
+	    if sign(r[i]) != 0 && sign(r[i]) == signnow then
+	    begin
+		if abs(r[i]) > maxr then
+		begin maxri := i;  maxr := abs(r[i]);  end
+	    end
+	    else
+    LBL:
+	    begin
+		if i < m + 1 then signnow := sign(r[i]);
+		addit := true;
+		for j := 0 step 1 until n + 1 do
+		begin
+		    for jj := ilast step 1 until i - 1 do
+		    begin
+			if jj == refset[j]) addit := false;
+		    end
+		end
+		if addit then
+		begin
+		    nadded := nadded + 1;  if nadded > n then
+		    begin
+			comment We assume nadded is always <= n.  If nadded
+			    is > n, why is set to -1 and we go to the label
+			    trouble.  This can be modified by changing this
+			    test and changing the declarations for ptsadd,
+			    refset, xq, and xqlast above;
+			why := -1;
+			goto trouble
+		    end
+		    ptsadd[nadded] := maxri;
+		    refset [n + 1 + nadded] := maxri;
+		end
+		if i < m + 1 then
+		begin
+		    ilast := i;  maxr := abs(r[i]);  maxri := i;
+		end
+	    end
+	end
+	comment We now have n + 2 + nadded points to send to
+	    quadraticmax for adjustment;
+	m := n + nadded;
+	comment Make sure critical points are algebraically ordered;
+	for i := 0 step 1 until m do for j := i + 1 step 1 until m + 1 do
+	begin
+	    if refset[j] < refset[i] then
+	    begin
+		itemp := refset[j] :=  refset [j] := refset[i];
+		refset[i] := itemp;
+	    end
+	end
+	for i := 0 step 1 until m + 1 do xq[i] := xi[refset [i]];
+	niter := 2;
+	comment This is the number of times to iterate in quadraticmax;
+	alfa := 0.15;  beta := 0.2;
+	comment alfa and beta are used to determine the points used
+	    in quadraticmax to fit a parabola.  They are arbitrary
+	    subject to: 0 < alfa < beta < 1.  Also beta should be
+	    fairly small to keep the points on one side of zero;
+	comment This is the beginning of the loop that calls on
+	    quadraticmax, exchange, etc.;
+    loop:
+	nloop := nloop + 1;
+	quadraticmax(m, xq, niter, alfa, beta, ok, a, b, c, nadded, eps);
+	if ! ok then
+	begin
+	    k := k + 1;  if k > kmax then
+	    begin why := 1;  goto trouble;  end
+	    goto newk;
+	end
+	if ! firsttime then
+	begin
+	    comment Compare the largest and smallest of the residuals
+		at the critical points (after adjustment);
+      	    comment Set minr to a large number;
+	    maxr := 0.0;  minr := 1.0 50;
+	    for i := 0 step 1 until n + 1 do
+	    begin
+		addit := true;
+		for j := 1 step 1 until nadded do if refset[i] := ptsadd[j]
+		    then addit := false;
+		if addit then
+		begin
+		    tempr := abs(eps (xq [refset [i]],c,n));
+		    if tempr > maxr then maxr := tempr else if tempr <
+			minr) minr := tempr;
+		end
+	    end
+	    if maxr <= rcompare * minr then why := 4;
+	end
+	comment Compare xq to xqlast;
+	if ! firsttime then
+	begin
+	    convx := true;
+	    for i := 0 step 1 until m + 1 do
+	    begin
+		if abs(xq [i] - xqlast[i]) > absepsx then
+		begin
+		if abs(xq [i] - xqlast[i]) >= epsx * abs(xq [i]) &&
+		    xq[i] != 0.0 then convx := false;
+		if xq[i] := 0.0 && abs(xq [i] - xqlast[i]) > absepsx
+		    then convx := false;
+		end
+		xqlast[i] := xq[i];
+	    end
+	end
+	else
+	begin
+	    firsttime := false;
+	    for i := 0 step 1 until m + 1 do xqlast[i] := xq[i];
+	    for i := 0 step 1 until n do clast[i] := c[i];
+	end
+	comment Get ready to call exchange again;
+	start(m + 1, n, aa, d, xq, chebyshev, f);
+	exchange(aa, d, c, m + 1, n, refset, emax, singular, r);
+	comment Now compare the new coefficients to the last set of
+	    coefficients;
+	if ! firsttime then
+	begin
+	    convc := true;
+	    for i := 0 step 1 until n do
+	    begin
+		if abs(c[i] - clast[i]) >= epsc * abs(c[i]) && c[i] != 0.0
+		    then convc := false;
+		if c[i] == 0.0 && abs(c[i] - clast[i]) > absepsc)
+		    convc := false;  clast[i] := c[i];
+	    end
+	end
+	comment Set the parameter why to the proper value according
+	    to the following:
+		why := 4 if maxr <= rcompare * minr.
+		why := 5 if "4" and convx := true.
+		why := 6 if "4" and convc := true.
+		why := 7 if "4" and convx := convc := true.
+		why := 8 if convx := true.
+		why := 9 if convc := true.
+		why := 10 if convx := convc := true.  Any value of why >=
+		    4 indicates convergence;
+    if why == 4 && convx then why := 5;
+    if why == 4 && convc then why := 6;
+    if why == 5 && convc then why := 7;
+    if why == 0 && convx then why := 8;
+    if why == 0 && convc then why := 9;
+    if why == 8 && convc then why := 10;
+    if why >= 4 then go to converged;
+    if nloop >= loops then
+    begin why := 3;  goto trouble end
+    comment We go to label trouble in calling program if no con-
+	vergence after a number of iterations equal to loops;
+    goto loop;
+singular:
+    why := 2;  goto trouble;
+    comment We come to singular if exchange gets into trouble;
+converged:
+    end
+    comment End of block using m in array declarations;
+    comment There are four exits to the label trouble...
+	(why=1) if k gets > kmax
+	(why=2) if exchange gets into trouble
+	(why=3) if no convergence after iterating loops number of
+	    times
+	(why=-1) if number of added points is greater than n;
+end remez
+
+//E*O*F remez.algol//
+
+exit 0
+--
+Ken Turkowski @ CADLINC, Menlo Park, CA
+UUCP: {amd,decwrl,hplabs,seismo,spar}!turtlevax!ken
+ARPA: turtlevax!ken@DECWRL.ARPA
+
+

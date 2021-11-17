@@ -1,0 +1,479 @@
+      SUBROUTINE BBLINS (ALPHA, FV, DG, VALIDF, F0, DG0, AP, FP, DGP,
+     -          WIDTH, NOUPS, LSDONE, CT, NCALLS, QUADON )
+
+C## A R G U M E N T S:
+                       LOGICAL  NOUPS, LSDONE, QUADON, VALIDF
+                       INTEGER  CT, NCALLS
+
+      REAL             FV, DG, ALPHA, F0, DG0, DGP, FP, AP, WIDTH
+C!!!! DOUBLE PRECISION FV, DG, ALPHA, F0, DG0, DGP, FP, AP, WIDTH
+
+C## S T A T U S:
+C               SINGLE/DOUBLE CONVERSION: NEEDED (SEE CONVRT).
+C
+C               IGNORE LINES BEGINNING WITH  "C!!!!" .
+C
+C               THIS VERSION IS IN   S I N G L E   PRECISION.
+C!!!!           THIS VERSION IS IN   D O U B L E   PRECISION.
+C
+C               SYSTEM  DEPENDENCE:                      NONE.
+C
+C>RCS $HEADER: LINS.F,V 1.12 91/12/16 11:25:08 BUCKLEY EXP $
+C>RCS $LOG:     LINS.F,V $
+C>RCS REVISION 1.12  91/12/16  11:25:08  BUCKLEY
+C>RCS MINOR FIX FOR TOMS.
+C>RCS
+C>RCS REVISION 1.11  91/11/22  11:29:58  BUCKLEY
+C>RCS FINAL SUBMISSION TO TOMS
+C>RCS
+C>RCS REVISION 1.10  90/07/31  10:49:45  BUCKLEY
+C>RCS ADDED REVISED BLAS.
+C>RCS
+C>RCS REVISION 1.9  89/06/30  13:27:36  BUCKLEY
+C>RCS PREPARING SUBMITTED VERSION OF MT
+C>RCS
+C>RCS REVISION 1.3.1.1  89/05/20  17:15:29  BUCKLEY
+C>RCS TEMP. TEST OF MT BEFORE SUBMITTING
+C>RCS
+C>RCS REVISION 1.3  89/05/18  12:39:18  BUCKLEY
+C>RCS FINAL TEST OF MT BEFORE SUBMITTING
+C>RCS
+C>RCS REVISION 1.2  89/05/15  14:55:26  BUCKLEY
+C>RCS INITIAL INSTALLATION OF MT INTO RCS FORM.
+C>RCS
+C>RCS REVISION 1.1  89/01/17  16:54:27  BUCKLEY
+C>RCS INITIAL REVISION
+C>RCS
+C
+C## D E S C R I P T I O N:
+C
+C     THIS ROUTINE PERFORMS ONE INTERNAL ITERATION OF THE LINE SEARCH.
+C
+C     FIRST, NOTE THAT THE EXECUTION OF THIS ROUTINE IS VERY MUCH
+C     INFLUENCED BY A NUMBER OF VARIABLES WHICH APPEAR IN THE
+C     CALLING ROUTINE  BBLNIR. FOR EACH MINIMIZATION PROBLEM,
+C     THESE VALUES ARE DETERMINED ONCE AT THE BEGINNING OF BBLNIR
+C     AND THEN DEFINED HERE BY CALLING AN ENTRY POINT BBLSST.
+C     THEY DO NOT CHANGE FOR THE SERIES OF CALLS MADE TO BBLINS
+C     FROM BBLNIR.
+C
+C     THE VARIABLES SET THROUGH THE ENTRY POINT BBLSST HAVE THE
+C     FOLLOWING MEANINGS:
+C
+C        M      THE NUMBER OF UPDATES ALLOWED.
+C        ACC    THE ACCURACY REQUIRED IN THE SOLUTION.
+C        CG     A FLAG WHICH IS TRUE WHEN A CONJUGATE GRADIENT
+C                ALGORITHM IS IN USE (WHICH INVOLVES BOTH CG
+C                AND QN STEPS) AND WHICH IS FALSE WHEN THERE IS
+C                ENOUGH STORAGE TO USE A FULL QUASI-NEWTON METHOD.
+C        USESHN THE SAME FLAG AS USESHN SET IN THE ENTRY
+C                POINT BBLSET IN BBLNIR.
+C        QUADIN THE SAME VALUE AS QUADIN SET IN THE ENTRY
+C                POINT BBLSET IN BBLNIR.
+C        LMSTQN A SPECIAL FLAG SET WHEN METH = 10000 AS DESCRIBED
+C                IN BBLNIR.
+C        FQUAD  A FLAG SET WITH REGARDS TO THE FORCING OF A QUAD-
+C                RATIC INTERPOLATION, AS DESCRIBED IN BBLNIR.
+C        TR4, TR5, TR6 THREE TRACE FLAGS DESCRIBED IN BBLNIR.
+C        TRU    THE UNIT FOR TRACE OUTPUT, AS DESCRIBED IN BBLNIR.
+C
+C     ALL THOSE QUANTITIES WHICH VARY FROM ITERATION TO ITERATION
+C     WITHIN THE LINE SEARCH ARE PASSED IN THE MAIN CALLING
+C     SEQUENCE TO BBLINS.  WHAT THESE ARE, AND WHAT THIS ROUTINE DOES,
+C     ARE THE FOLLOWING:
+C
+C        ASSUME THAT THE CURRENT SEARCH IS ALONG A DIRECTION  D  FROM
+C        A STARTING  POINT X-BEG, AND THAT THE CURRENT POINT ALONG
+C        THAT LINE IS  X.  ASSUME THAT THE PREVIOUS POINT CONSIDERED
+C        ALONG THIS LINE WAS  X-PREV; THUS, ON THE FIRST CALL FOR A
+C        LINE SEARCH ALONG A GIVEN DIRECTION  D  FROM A POINT X-BEG,
+C        X-PREV IS JUST X-BEG.  THEN, ON ENTRY TO BBLINS:
+C
+C        ALPHA  IS THE STEP LENGTH TO X (SO X  IS X-BEG + ALPHA*D).
+C        FV     IS THE FUNCTION VALUE AT X.
+C        DG     IS THE INNER PRODUCT OF D AND THE GRADIENT AT  X.
+C        VALIDF IS TRUE IF F AND DG ARE DEFINED AT ALPHA.
+C
+C        F0     IS THE FUNCTION VALUE AT  X-BEG.
+C        DG0    IS THE INNER PRODUCT OF D AND THE GRADIENT AT X-BEG.
+C
+C        AP     IS ALPHA AT X-PREV.
+C        FP     IS THE FUNCTION VALUE AT THE PREVIOUS POINT X-PREV.
+C        DGP    IS THE INNER PRODUCT OF D AND THE GRADIENT AT X-PREV.
+C
+C        NOUPS  IS A FLAG WHICH IS TRUE ONLY WHEN A CG ALGORITHM HAS
+C               BEEN CHOSEN AND WHEN NO UPDATES ARE BEING STORED.
+C
+C        NCALLS IS A COUNT OF HOW MANY TIMES THE FUNCTION HAS BEEN
+C               EVALUATED ALONG THIS DIRECTION  D, INCLUDING THE
+C               EVALUATION AT  X, BUT NOT INCLUDING THE EVALUATION
+C               AT  X-BEG.
+C
+C        QUADON IS INITIALLY FALSE, BUT IT IS SET TO TRUE WHEN A
+C               POINT IS COMPUTED VIA INTERPOLATION AND ACCEPTED AS
+C               THE NEXT TRIAL POINT. THIS IS USED TO PREVENT TERMIN-
+C               ATION WITHOUT HAVING DONE AN INTERPOLATION.
+C
+C        CT     IS THE ITERATION NUMBER OF THE CURRENT DIRECTION  D
+C               AND OF THE POINT TO BE REACHED, NAMELY  X.
+C
+C     ON EXIT FROM BBLINS, THE FOLLOWING ARE DEFINED:
+C
+C        LSDONE WILL BE RETURNED AS TRUE IF THE VALUE ALPHA INPUT
+C               TO BBLINS DEFINES A POINT AT WHICH THE LINE SEARCH CAN
+C               BE TERMINATED. OTHERWISE IT SHOULD BE RETURNED AS FALSE
+C               AND A NEW TRIAL VALUE FOR ALPHA DETERMINED.
+C
+C        WIDTH  IS THE WIDTH OF THE INTERVAL BOUNDING AN ACCEPTABLE
+C               VALUE OF ALPHA. IF NO UPPER BOUND IS KNOWN, WIDTH IS
+C               THE DISTANCE BETWEEN THE CURRENT ALPHA AND THE LOWER
+C               BOUND.
+C
+C        ALPHA  IF LSDONE IS FALSE, THIS CONTAINS THE NEXT VALUE
+C               OF ALPHA TO BE CONSIDERED. IN THIS CASE, THE VALUES
+C               FOR  AP, DGP AND FP SHOULD HAVE BEEN UPDATED.
+C
+C        AP, DGP, FP  IF LSDONE IS FALSE, AND A NEW VALUE IS
+C              DEFINED IN ALPHA, THEN THE "PREVIOUS" POINT BECOMES THE
+C              POINT JUST CALCULATED, SO FP, DGP AND AP SHOULD BE
+C              REDEFINED AS THE VALUES  F, DG AND ALPHA INPUT TO
+C              THIS ROUTINE.
+C              NOTE THAT THESE VALUES ARE *NOT* UPDATED IF THERE WERE
+C              NO VALID FUNCTION OR GRADIENT VALUES AT THE PREVIOUS
+C              POINT.
+C
+C## E N T R Y   P O I N T S: BBLINS   ... THE NATURAL ENTRY POINT.
+C                            BBSLNS   ... INITIALIZE FIXED ARGUMENTS.
+C
+C## S U B R O U T I N E S:   BBCUBC   FOR CUBIC INTERPOLATION.
+C
+C## P A R A M E T E R S:
+
+      LOGICAL     T,          F
+      PARAMETER ( T = .TRUE., F = .FALSE. )
+
+      CHARACTER*(*) TRUE,          QT,       FALSE,           QF
+      PARAMETER (   TRUE = 'TRUE', QT = 'T', FALSE = 'FALSE', QF = 'F' )
+
+      INTEGER     ITRUE,     IFALSE
+      PARAMETER ( ITRUE = 1, IFALSE = 0 )
+
+      REAL              RTRUE,        RFALSE
+C!!!! DOUBLE PRECISION  RTRUE,        RFALSE
+      PARAMETER      (  RTRUE = 1.D0, RFALSE = 0.D0 )
+      REAL              ZERO,       ONE,       TWO,       THREE
+C!!!! DOUBLE PRECISION  ZERO,       ONE,       TWO,       THREE
+      PARAMETER (       ZERO = 0D0, ONE = 1D0, TWO = 2D0, THREE = 3D0)
+
+      REAL              FOUR,       FIVE,      SIX,       SEVEN
+C!!!! DOUBLE PRECISION  FOUR,       FIVE,      SIX,       SEVEN
+      PARAMETER (       FOUR = 4D0, FIVE = 5D0,SIX = 6D0, SEVEN = 7D0)
+
+      REAL              EIGHT,         NINE,          TEN
+C!!!! DOUBLE PRECISION  EIGHT,         NINE,          TEN
+      PARAMETER (       EIGHT = 8D0,   NINE = 9D0,    TEN = 10D0     )
+
+       INTEGER     SUMFRM,     PRDFRM,     MJDFRM
+       PARAMETER ( SUMFRM = 1, PRDFRM = 2, MJDFRM = 3 )
+
+      REAL              NERLY1,      BITSML,      SMALL
+C!!!! DOUBLE PRECISION  NERLY1,      BITSML,      SMALL
+      PARAMETER (       NERLY1=.9D0, BITSML=.1D0, SMALL = .0001D0 )
+
+      REAL              EXTRAP,         INITMG,         XPNDMG
+C!!!! DOUBLE PRECISION  EXTRAP,         INITMG,         XPNDMG
+      PARAMETER (       EXTRAP = 10.D0, INITMG = .01D0, XPNDMG = 3.0D0 )
+
+      REAL              MAXMG
+C!!!! DOUBLE PRECISION  MAXMG
+      PARAMETER (       MAXMG  = .3D0 )
+
+C## L O C A L   D E C L:
+
+C-----CONTROL PARAMETERS FOR ENTRY BBSLNS.
+
+      INTEGER   M,  QUADIN,  TRU
+      INTEGER  SM,  SQUDIN, STRU
+
+      LOGICAL   CG,  USESHN,  LMSTQN,  FQUAD,   TR4,  TR5,  TR6
+      LOGICAL  SCG,  SUSEHN,  SLMTQN, SFQUAD,  STR4, STR5, STR6
+
+      REAL              ACC, SACC
+C!!!! DOUBLE PRECISION  ACC, SACC
+
+C-----GENERAL DECLARATIONS.
+
+      LOGICAL          ACCEPT, FORCEQ, QNSTEP, QDONE,  INTPT, TEST1
+      LOGICAL          FIRST,  LDATA,  UDATA,  INTERP, GOODP, TEST2
+
+      REAL             LB, FLB, DGLB, UB, TP0, AT
+C!!!! DOUBLE PRECISION LB, FLB, DGLB, UB, TP0, AT
+
+      REAL             LEFT, RIGHT, SLICE, CURRMG
+C!!!! DOUBLE PRECISION LEFT, RIGHT, SLICE, CURRMG
+
+C## S A V E:
+           SAVE     M, QUADIN, TRU, CURRMG, GOODP
+           SAVE    CG, USESHN, LMSTQN, FQUAD,  TR4, TR5, TR6
+           SAVE   ACC, LB, FLB, DGLB, LDATA, UB, UDATA
+
+C## C O M M O N:             NONE IS DEFINED.
+C## D A T A:                 NONE ARE SET.
+C##                                                E X E C U T I O N
+C##                                                E X E C U T I O N
+
+      IF ( TR6 ) WRITE (TRU,*) ' ***[LINS]*** ENTERING WITH'
+     -          // ' NOUPS, LSDONE, QUADON, CT, NCALLS-> ',
+     -               NOUPS, LSDONE, QUADON, CT, NCALLS
+      IF ( TR6 ) WRITE (TRU,*) ' [LINS] VALUES'
+     -          // ' M, QUADIN,CG,USESHN,LMSTQN,FQUAD,ACC-> ',
+     -               M, QUADIN,CG,USESHN,LMSTQN,FQUAD,ACC
+      IF ( TR6 ) WRITE (TRU,99999) VALIDF, 0.0, F0, DG0, AP, FP, DGP,
+     -                                   ALPHA, FV,  DG
+
+      FIRST = NCALLS .EQ. 1
+
+      IF ( FIRST ) THEN
+
+         LDATA = F
+         LB   = ZERO
+         FLB  = F0
+         DGLB = DG0
+
+         UDATA = F
+         UB = ZERO
+
+         GOODP  =  T
+         CURRMG = INITMG
+
+      ENDIF
+
+C        TEST WHETHER THE STEPLENGTH CRITERIA HAVE BEEN MET.
+
+      TP0   = F0 + SMALL*ALPHA*DG0
+      TEST1 = FV .LT. TP0
+      TEST2 = DG .GE. NERLY1*DG0
+
+      IF (TR5) WRITE (TRU,*) ' [LINS] TP0->',TP0
+
+      IF ( VALIDF ) THEN
+         ACCEPT = TEST1 .AND. TEST2
+      ELSE
+         ACCEPT = F
+      ENDIF
+
+      IF ( ACCEPT ) THEN
+
+         IF ( TR6 ) WRITE(TRU,*) ' [LINS] ACCEPTED.'
+
+C           THE BASIC ACCEPTANCE TEST HAS BEEN PASSED. WE MUST TEST
+C           WHETHER THE POINT MAY BE IMMEDIATELY ACCEPTED, OR IF
+C           IT IS NECESSARY TO FORCE ANOTHER STEP BECAUSE A REQUIRED
+C           INTERPOLATION STEP HAS NOT YET BEEN DONE.
+
+C           SEE IF QUADRATIC INTERPOLATION TO BE FORCED.
+
+         IF ( CG .AND. USESHN ) THEN
+
+            FORCEQ =  T
+
+         ELSE IF ( CG ) THEN
+
+              QNSTEP =          .NOT. NOUPS
+     -               .AND. ( QUADIN .GT. 0        )
+     -               .AND. (   CT   .LT. M+QUADIN )
+
+              FORCEQ = .NOT. QNSTEP .AND. QUADIN .LE. 3
+         ENDIF
+
+C           SEE IF LINE SEARCH IS DONE. FIRST TEST IF AN INTERPOLATION
+C           HAS BEEN DONE. USE THE APPROPRIATE MEANING OF AN
+C           "INTERPOLATION", I.E. ACCORDING TO FQUAD, EITHER ACTUALLY
+C           CHECK FOR A FORMAL INTERPOLATION, OR ELSE JUST DO AS SHANNO
+C           AND MAKE SURE AT LEAST 2 POINTS HAVE BEEN CONSIDERED.
+
+         QDONE = (       FQUAD .AND. QUADON        )  .OR.
+     -           ( .NOT. FQUAD .AND. .NOT. FIRST   )  .OR.
+     -           (      USESHN .AND. .NOT. FIRST   )
+
+         LSDONE =
+     -            ( .NOT. CG      )
+     -       .OR. ( QDONE         )
+     -       .OR. ( LMSTQN        )
+C     -       .OR. ( TP3  .LE. ACC )  ??? IN NEW VERSION ???
+     -       .OR. ( .NOT. FORCEQ  )
+
+         IF ( .NOT. LSDONE ) THEN
+            IF ( DG .GT. ZERO ) THEN
+               UB    = ALPHA
+               UDATA = T
+            ELSE
+               LB    = ALPHA
+               LDATA = T
+               FLB   = FV
+               DGLB  = DG
+            ENDIF
+         ENDIF
+
+      ELSE
+
+         IF ( TR6 ) THEN
+            WRITE(TRU,*) ' [LINS] NOT ACCEPTED; FV<F0-ABIT, SLOPE TEST,'
+     -                         //' UDATA-> ', TEST1, TEST2, UDATA
+            WRITE(TRU,99998) ' [LINS] REQ''D REDUCTION, F0-FV, SLOPE'
+     -                // ' LIMIT->', F0-TP0,F0-FV,NERLY1*DG0
+         ENDIF
+
+         LSDONE = F
+
+         IF ( .NOT. VALIDF ) THEN
+            UB    = ALPHA
+            UDATA = F
+         ELSE IF ( FV .GE. TP0 ) THEN
+            UB    = ALPHA
+            UDATA = VALIDF
+         ELSE
+            LB    = ALPHA
+            FLB   = FV
+            DGLB  = DG
+            LDATA = VALIDF
+         ENDIF
+
+      ENDIF
+C              ...OF "IF ACCEPTABLE".
+
+      IF ( TR4 ) WRITE(TRU,*) ' [LINS] DONE? '//
+     -         'ACCEPT,LSDONE,FORCEQ,QDONE,QNSTEP->',
+     -          ACCEPT,LSDONE,FORCEQ,QDONE,QNSTEP
+
+      IF ( .NOT. LSDONE ) THEN
+
+C        LINE SEARCH NOT DONE. A NEW POINT MUST BE TRIED. USE CUBIC
+C        INTERPOLATION TO FIND THE TRIAL POINT AT.
+
+         IF ( TR5 ) WRITE(TRU,*) ' [LINS] LB, LDATA,UB, UDATA->' ,
+     -                                    LB, LDATA,UB, UDATA
+         IF ( UB .NE. ZERO ) THEN
+
+            IF ( .NOT. UDATA .OR. .NOT. GOODP ) THEN
+               AT = LB + BITSML*(UB-LB)
+               IF (TR5) WRITE(TRU,*) ' [LINS] TAKING MIDINTERVAL'//
+     -                               ' ALPHA->', AT
+               INTERP = F
+            ELSE
+               INTERP = T
+               IF ( AP .GT. UB .AND. LDATA ) THEN
+                  AP  = LB
+                  FP  = FLB
+                  DGP = DGLB
+               ENDIF
+            ENDIF
+
+         ELSE
+
+            INTERP = F
+            LEFT   = ALPHA * (ONE+INITMG)
+            RIGHT  = EXTRAP * ALPHA
+
+            CALL BBCUBC (ALPHA,FV,DG,AP,FP,DGP,LEFT,RIGHT,AT,INTPT)
+            QUADON = INTPT
+
+            IF (TR5) WRITE(TRU,*) ' [LINS] EXTRAPOLATING IN [',LEFT,
+     -                            ',',RIGHT,'] TO GET ALPHA->',AT,
+     -                            ' WITH EXACT INTERPOLATE->',INTPT
+         ENDIF
+
+         IF ( INTERP ) THEN
+
+            IF ( GOODP ) THEN
+
+               SLICE = CURRMG * (UB-LB)
+               LEFT  = LB + SLICE
+               RIGHT = UB - SLICE
+
+               CALL BBCUBC ( ALPHA, FV, DG, AP, FP, DGP,
+     -                       LEFT, RIGHT, AT, INTPT   )
+               QUADON = INTPT
+
+               IF (TR5) WRITE(TRU,*) ' [LINS] INTERPOLATING IN [',LEFT,
+     -                            ',',RIGHT,'] TO GET ALPHA->',AT,
+     -                            ' WITH EXACT INTERPOLATE->',INTPT
+
+               IF ( INTPT ) THEN
+                  CURRMG = INITMG
+               ELSE
+                  CURRMG = MIN(MAXMG, CURRMG * XPNDMG)
+               ENDIF
+
+            ELSE
+               AT = LB + BITSML* (UB-LB)
+               IF (TR5) WRITE(TRU,*) ' [LINS] TAKING MIDINTERVAL'//
+     -                               ' ALPHA->', ALPHA
+            ENDIF
+
+         ENDIF
+
+         IF ( VALIDF ) THEN
+            AP  = ALPHA
+            FP  = FV
+            DGP = DG
+
+            ALPHA = AT
+            GOODP = VALIDF
+         ELSE
+            ALPHA = AT
+            GOODP = F
+         ENDIF
+
+         IF ( UB .NE. 0 ) THEN
+            WIDTH = UB - LB
+         ELSE
+            WIDTH = ALPHA - LB
+         ENDIF
+
+         IF (TR5) WRITE(TRU,*) ' [LINS] EXIT WITH ALPHA->',ALPHA
+         IF (TR4) WRITE(TRU,*) ' [LINS] EXIT WITH GOODP,QUADON->',
+     -                                            GOODP,QUADON
+         IF (TR5) WRITE(TRU,*) ' [LINS] EXIT WITH WIDTH->',WIDTH
+
+      ENDIF
+C           ...OF "LINE SEARCH NOT DONE"
+
+      GO TO 90000
+
+C## E N T R Y  BBSLNS:
+                       ENTRY BBSLNS ( SM, SQUDIN,   STRU,
+     -                               SCG, SUSEHN, SLMTQN, SFQUAD,
+     -                              STR4,   STR5,   STR6,
+     -                              SACC                        )
+      M      = SM
+      QUADIN = SQUDIN
+      TRU    = STRU
+
+      CG     = SCG
+      USESHN = SUSEHN
+      LMSTQN = SLMTQN
+      FQUAD  = SFQUAD
+
+      TR4    = STR4
+      TR5    = STR5
+      TR6    = STR6
+      ACC    = SACC
+      RETURN
+
+C## E X I T
+
+90000 IF (TR4 .OR. TR5 .OR. TR6) WRITE (TRU,*) ' ===[LEAVING LINS].'
+      RETURN
+
+C## F O R M A T S:
+
+99999 FORMAT ( '     (VALID DATA = ', L1,  ')        ALPHA    ',
+     -         '       F         DIR''L DERIVATIVE'/
+     -         '      FIRST   POINT ', 3G18.11 /
+     -         '      LAST    POINT ', 3G18.11 /
+     -         '      CURRENT POINT ', 3G18.11 )
+99998 FORMAT ( A, 3G11.3 )
+
+C##                 E N D         OF BBLINS.
+                    END

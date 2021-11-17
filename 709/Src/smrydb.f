@@ -1,0 +1,1008 @@
+      SUBROUTINE ZZSMRY ( WISH,   X0, SYSCC,  SUMM, WRITFL, NMWRIT,
+     -             COPY,  LL, MXCRIT, NL, RPSOUT,
+     -             TESTCH, NBASIC, SEELEV, LONGF, KEY, MAP, * )
+
+C## A R G U M E N T S:
+                       LOGICAL  SUMM,  WRITFL, LONGF,  WISH(*), COPY
+                       INTEGER  SYSCC, NBASIC, SEELEV, RPSOUT,
+     -                                   MAP(*), MXCRIT, NL
+                       DOUBLE PRECISION X0(*)
+C!!!!                  REAL             X0(*)
+
+                       CHARACTER * 1  TESTCH
+                       CHARACTER *(*) KEY, NMWRIT, LL(MXCRIT)
+
+C## S T A T U S:
+C               IGNORE LINES BEGINNING WITH  "C!!!!" .
+C
+C               SYSTEM  DEPENDENCE:                      NONE.
+C               SINGLE/DOUBLE CONVERSION: NEEDED (SEE CONVRT).
+C
+C               THIS VERSION IS IN   D O U B L E   PRECISION.
+C!!!!           THIS VERSION IS IN   S I N G L E   PRECISION.
+C
+C>RCS $HEADER: SMRY.F,V 2.3 91/11/20 10:53:05 BUCKLEY EXP $
+C>RCS $LOG:     SMRY.F,V $
+C>RCS REVISION 2.3  91/11/20  10:53:05  BUCKLEY
+C>RCS FINAL SUBMISSION TO TOMS
+C>RCS
+C>RCS REVISION 2.2  90/08/08  17:22:30  BUCKLEY
+C>RCS MINOR FIX TO END OF FILE.
+C>RCS
+C>RCS REVISION 2.1  90/08/02  16:18:19  BUCKLEY
+C>RCS FIXED DUPLICATES IN RESULT FILE.
+C>RCS
+C>RCS REVISION 2.0  90/07/31  11:33:08  BUCKLEY
+C>RCS MINOR FIX TO OUTPUT.
+C>RCS
+C>RCS REVISION 1.9  89/06/30  13:39:49  BUCKLEY
+C>RCS PREPARING SUBMITTED VERSION OF MT
+C>RCS
+C>RCS REVISION 1.3.1.1  89/05/20  16:42:56  BUCKLEY
+C>RCS TEMP. TEST OF MT BEFORE SUBMITTING
+C>RCS
+C>RCS REVISION 1.3  89/05/18  12:20:49  BUCKLEY
+C>RCS FINAL TEST OF MT BEFORE SUBMITTING
+C>RCS
+C>RCS REVISION 1.2  89/05/15  14:48:11  BUCKLEY
+C>RCS INITIAL INSTALLATION OF MT INTO RCS FORM.
+C>RCS
+C>RCS REVISION 1.1  89/01/17  16:50:12  BUCKLEY
+C>RCS INITIAL REVISION
+C>RCS
+C
+C## D E S C R I P T I O N:
+C
+C     THIS ROUTINE IS CALLED TO OUTPUT THE SUMMARY AND TO CREATE THE
+C     FORMATTED OUTPUT FILE AFTER THE EXECUTION OF A SET OF PROBLEMS.
+C     IT TAKES INPUT FROM TEMPUN AND PRODUCES OUTPUT ON WRITUN AND/OR
+C     TRMOUT.  SUMMUN IS ALSO USED AS A TEMPORARY FILE.
+C
+C     PARAMETER DESCRIPTION:  THE PARAMETERS IN THE CALLING SEQUENCE
+C              HAVE THE SAME NAMES IN ZZTEST AND ARE DESCRIBED THERE.
+C
+C     CONTROL: TEMPUN  FILE WITH DATA
+C              SUMMUN  TEMPORARY FILE TO CONSTRUCT SUMMARY
+C              WRITUN  FILE FOR MAJOR OUTPUT
+C              TRMOUT  TERMINAL OUTPUT
+C
+C              SEELEV  LEVEL OF TERMINAL OUTPUT
+C              WRITFL  GENERATE OUTPUT OF TEST INTO WRITE UNIT.
+C              SUMM    COPY SUMMARY TO WRITUN AFTER DOING MAIN OUTPUT.
+C
+C     ORGANIZATION
+C
+C-----THE FOLLOWING INFORMATION IS ASSUMED TO BE ON THE FILE TEMPUN.
+C
+C        NOTE THAT THERE IS NO WORRY ABOUT FORMATS, BECAUSE
+C        LIST-DIRECTED (I.E. FREE) FORMATTING IS USED.
+C
+C        THE DATA IS IN VARIOUS BLOCKS. THESE BLOCKS MAY HAVE USER
+C        WRITTEN DATA INTERSPERSED, AND THERE IS NO CONTROL OVER THIS.
+C
+C        THUS, IN ORDER THAT THESE LINES MAY BE EASILY LOCATED,
+C        THEY ARE PRECEDED BY THE SYSTEM "TEST CHARACTER",
+C        WHICH IS CURRENTLY SET IN ZZTEST AS ">".
+C
+C.... ON TEMPUN:
+C
+C>>BLOCK  I:  INFORMATION APPLYING TO ENTIRE PROBLEM SET, NAMELY,
+C
+C           NP, NORM, TYPE, DERV, MEMORY, SUBR, SUBNAM,
+C           CNORM, CTYPE, CDERV AND  TITLE
+C
+C>>BLOCK  II:  THEN THE FOLLOWING INFORMATION, II(A) TO II(G) IS
+C       REPEATED FOR EACH PROBLEM SOLVED (OR ATTEMPTED!)
+C
+C    BLOCK II(A):  PRNAME, PROB, FNAME, FUNC, ACC, FACTOR, USER,
+C                  N, SCALE, FARG
+C
+C
+C    BLOCK II(B):  THE STARTING POINT
+C
+C           X0(I), I=1,N (THIS MAY TAKE SEVERAL LINES)
+C
+C    BLOCK II(C):  AT THIS POINT THE  ROUTINE ZZBFOR IS CALLED.  OUTPUT
+C           APPEARING AT THIS POINT IN TEMPUN WILL HAVE BEEN PRODUCED
+C           BY CODE IN ZZBFOR, AS PLACED THERE BY THE USER, AND WILL
+C           HAVE TO BE PROCESSED BY PUTTING CODE IN THIS ROUTINE AT
+C           THE POINT BELOW MARKED AS BLOCK II(C).
+C
+C
+C    BLOCK II(D): THEN THE OUTPUT FROM THE USER'S ALGORITHM (INCLUDING
+C           THAT ISSUED THROUGH ZZPRNT) APPEARS IN THE FILE TEMPUN.  IT
+C           IS ECHOED TO WRITUN, AS IS, UNTIL A LINE BEGINNING WITH ">".
+C           NOTE THAT, IF NO ACTION IS TAKEN BY THE USER FOR BLOCK
+C           II(C) THEN IT WILL JUST BE ECHOED AS PART OF THIS OUTPUT.
+C           THIS ALSO MEANS THE SOLUTION IS READ AND PRINTED ON WRITUN.
+C
+C
+C     BLOCK II(E):  NOW THE SUMMARY DATA FOR THE PROBLEM.
+C
+C           ITCT, FUNCCT, GRADCT, F, GSQ, TMIN, TFUN, TPRINT, ERFLAG
+C
+C     BLOCK II(F):  NOW YOU GET STATS ON DERIVATIVE TESTING.
+C
+C           THIS INFORMATION APPEARS ONLY IF THE RUN WAS DONE USING
+C           DERVMD = CTEST OR CFIRST:
+C
+C           MXERR, INDEX, GCNT, DIGS
+C
+C     BLOCK II(G): FINALLY, ANY ADDITIONAL OUTPUT GENERATED THROUGH THE
+C           CALL TO ZZAFTR APPEARS.   IT MUST BE PROCESSED AS EXPLAINED
+C           FOR BLOCK II(C).
+C
+C..... SUMMUN:
+C
+C        THE FOLLOWING DATA IS WRITTEN ONTO THE FILE SUMMUN AS A
+C        TEMPORARY MEASURE; IT IS USED TO CREATE THE FINAL SUMMARY.
+C        THIS DATA IS REPEATED FOR EACH PROBLEM.
+C
+C           PRNAME, PROB, FUNC, N
+C           ITCT, FUNCCT, GRADCT, F, GSQ, TMIN, TFUN, TPRINT, ERFLAG
+C
+C           PLUS ANY USER OUTPUT GENERATED AT II(C) OR II(G).
+C
+C## E N T R Y   P O I N T S: THE NATURAL ENTRY ZZSMRY.
+C
+C## S U B R O U T I N E S:
+C                         ZZCNTR   CENTER A STRING
+C                         ZZDTTM   DATE AND TIME
+C                         ZZOPEN   TO OPEN A FILE.
+C                         ABS, LEN, MIN, REAL(DBLE)   ...INTRINSIC
+C                         RD ...A STATEMENT FUNCTION.
+C
+C## P A R A M E T E R S:
+      DOUBLE PRECISION  ZERO,       ONE,       TWO,       THREE
+C!!!! REAL              ZERO,       ONE,       TWO,       THREE
+      PARAMETER (       ZERO = 0D0, ONE = 1D0, TWO = 2D0, THREE = 3D0)
+
+      DOUBLE PRECISION  FOUR,       FIVE,      SIX,       SEVEN
+C!!!! REAL              FOUR,       FIVE,      SIX,       SEVEN
+      PARAMETER (       FOUR = 4D0, FIVE = 5D0,SIX = 6D0, SEVEN = 7D0)
+
+      DOUBLE PRECISION  EIGHT,         NINE,          TEN
+C!!!! REAL              EIGHT,         NINE,          TEN
+      PARAMETER (       EIGHT = 8D0,   NINE = 9D0,    TEN = 10D0     )
+
+      CHARACTER*(*) BLANK,        QUOTE,        HASH
+      PARAMETER (   BLANK  = ' ', QUOTE  = '"', HASH   = '#' )
+
+      CHARACTER*(*) PERIOD,       COMMA,        SEMICN
+      PARAMETER (   PERIOD = '.', COMMA  = ',', SEMICN = ';' )
+
+      CHARACTER*(*) COLON,        DASH,         EQUALS
+      PARAMETER (   COLON  = ':', DASH   = '-', EQUALS = '=' )
+
+      CHARACTER*(*) OBRACE,       CBRACE,       UNDERS
+      PARAMETER (   OBRACE = '{', CBRACE = '}', UNDERS = '_' )
+
+      CHARACTER*(*) PLUS,         MINUS,        EXCLAM
+      PARAMETER (   PLUS   = '+', MINUS  = '-', EXCLAM = '!' )
+
+      CHARACTER*(*) GTHAN,        LTHAN,        QUESMK
+      PARAMETER (   GTHAN  = '>', LTHAN  = '<', QUESMK = '?' )
+
+      CHARACTER*(*) SLASH,        BSLASH,       PERCNT
+      PARAMETER (   SLASH  = '/', BSLASH = '\\',PERCNT = '%' )
+
+      CHARACTER*(*) CARAT,        ATSIGN,       TILDE
+      PARAMETER (   CARAT  = '^', ATSIGN = '@', TILDE = '~' )
+
+      INTEGER     FNO
+      PARAMETER ( FNO = 10 )
+
+      INTEGER     NU
+      PARAMETER ( NU = 21 )
+
+      INTEGER     RECL
+      PARAMETER ( RECL = 0 )
+
+      CHARACTER*(*)  DATFIX
+      PARAMETER (    DATFIX = 'TEST BEING EXECUTED AT ' )
+
+C                       DEFINITIONS OF STRING LENGTHS
+
+      INTEGER     PNAMLN,     FNAMLN,          GNAMLN
+      PARAMETER ( PNAMLN = 8, FNAMLN = PNAMLN, GNAMLN = PNAMLN )
+
+      INTEGER     TITLEN,      PDESCL
+      PARAMETER ( TITLEN = 72, PDESCL = 72 )
+C                       DEFINITIONS OF THE I/O UNITS
+
+      INTEGER     PREPRC,     DAUF,       INPTUN
+      PARAMETER ( PREPRC = 1, DAUF =   2, INPTUN = 3 )
+
+      INTEGER     TEMPUN,     STDIN,     TRMOUT
+      PARAMETER ( TEMPUN = 4, STDIN = 5, TRMOUT = 6 )
+
+      INTEGER     WRITUN,     TRACUN,     SUMMUN
+      PARAMETER ( WRITUN = 7, TRACUN = 8, SUMMUN = 9 )
+
+      INTEGER     COPYUN,     TEXUN
+      PARAMETER ( COPYUN =10, TEXUN =11 )
+C                       TERMINATION CODES
+
+      INTEGER     NL1,     NL2,     NLINF
+      PARAMETER ( NL1 = 1, NL2 = 2, NLINF = 3 )
+
+      INTEGER     NQUITS
+      PARAMETER ( NQUITS = 4 )
+
+      INTEGER     PGRAD,     PSTEP,     PSHXG,     PFUNC
+      PARAMETER ( PGRAD = 1, PSTEP = 2, PSHXG = 3, PFUNC = 4 )
+C                       DERIVATIVE MODE CODES
+
+      INTEGER     CANAL,     CDIFF,     CTEST,     CFIRST
+      PARAMETER ( CANAL = 1, CDIFF = 2, CTEST = 3, CFIRST = 4 )
+C                       SORT CODES.
+
+      INTEGER     SPRNAM,     SPRNUM,     SASIS,     SRECNO
+      PARAMETER ( SPRNAM = 1, SPRNUM = 2, SASIS = 3, SRECNO = 4 )
+
+      INTEGER     SFNNAM,     SFNNUM,     SDIMN,     SPROLG
+      PARAMETER ( SFNNAM = 5, SFNNUM = 6, SDIMN = 7, SPROLG = 8 )
+C                       CHECK CODES.
+
+      INTEGER     CHOFF,     CHON,     CHNAM,     CHNUM
+      PARAMETER ( CHOFF = 1, CHON = 2, CHNAM = 3, CHNUM = 4 )
+C                       WISH CODES.
+
+      INTEGER     CCOLD,     CDOFLE,     CDOTRM,     NWISHS
+      PARAMETER ( CCOLD = 1, CDOFLE = 2, CDOTRM = 3, NWISHS = 3 )
+C                       TERMINAL CHARACTERISTICS AND SUMMARY LEVELS
+
+      INTEGER     CEOFAC,     CEOFIG
+      PARAMETER ( CEOFAC = 1, CEOFIG=2 )
+
+      INTEGER     CCPRSN,     CCMISS
+      PARAMETER ( CCPRSN = 1, CCMISS = 2 )
+
+      INTEGER     CNONE,     CMIN,     CMED,     CFULL
+      PARAMETER ( CNONE = 1, CMIN = 2, CMED = 3, CFULL = 4 )
+
+C## L O C A L   D E C L:
+
+C-----REMOTE BLOCKS.
+                      INTEGER  REMOT1, REMOT2, REMOT3
+                      INTEGER  RETRN1, RETRN2, RETRN3
+
+C-----OTHER DECLARATIONS.
+
+      INTEGER  NORM,   MEMORY,  SUBR, CUMITS, CUMFNS, CUMGRS, WCHG
+      INTEGER    NP,   PROB,   FUNC, SCALE, ERRCNT, BDPROB, SOLNF, BLOCK
+      INTEGER     N,   DERV,   LEND,  LENF, FUNCCT, GRADCT, GINDX
+      INTEGER     I, ERFLAG,   ITCT,    JE,     JS, FORCES, J, CRITNO
+      INTEGER  UNIT,   PRCT, FINDX,  TINDX,  INDEX,   GCNT, SOLNX
+      INTEGER  EXPENS, TRMCPY
+
+      LOGICAL  KEEPSM, FIRST, TRMSUM, RELF, RELG, ONFILE, ONTERM
+
+      CHARACTER *(NQUITS) QUITS
+      CHARACTER *(78) CHARS
+
+      CHARACTER *(TITLEN)   TITLE, DATLIN, CENTIT, CENDAT
+      CHARACTER *(PNAMLN)  PRNAME, SUBNAM
+      CHARACTER *(FNAMLN)  FNAME
+      CHARACTER * 2    EXCL,   BPLUS
+      CHARACTER * 1      CH
+
+      DOUBLE PRECISION CUMERR, AVDIGS, DF, DX
+C!!!! REAL             CUMERR, AVDIGS, DF, DX
+
+      DOUBLE PRECISION ACC, FACTOR, CUMMTM, CUMFTM, CUMPTM, RD
+C!!!! REAL             ACC, FACTOR, CUMMTM, CUMFTM, CUMPTM, RD
+
+      DOUBLE PRECISION USER(NU), FARG(FNO), MING, MAXG
+C!!!! REAL             USER(NU), FARG(FNO), MING, MAXG
+
+      DOUBLE PRECISION F, GSQ, TMIN, TFUN, TPRINT, RATIO, MXERR, DIGS
+C!!!! REAL             F, GSQ, TMIN, TFUN, TPRINT, RATIO, MXERR, DIGS
+
+      CHARACTER*10 CNORM(3), CTYPE(5), CDERV(4)
+      CHARACTER*10 VCHEC(4), VCC  (2), VSEE (4), VSORT(7)
+
+C-----                     USER DECLARATIONS.
+      INTEGER  NUPS, CNTRST
+
+C## S A V E:
+            SAVE  FIRST, REMOT1, REMOT2, REMOT3,   LEND, LENF
+            SAVE  EXCL, BPLUS, PRCT, SUBNAM, TITLE
+            SAVE  NP, NORM, QUITS, RELF, RELG,DERV, MEMORY, SUBR
+
+C## E Q U I V A L E N C E S: NONE ARE DEFINED.
+C## C O M M O N:             NONE IS DEFINED.
+C## D A T A:
+               DATA   FIRST / .TRUE. /, EXCL/ ' !' /, BPLUS/' +'/
+               DATA   CNTRST/0/, NUPS/0/, FORCES/0/
+
+
+      DATA   CNORM(NL1)  /'ABS SUM   '/, CTYPE(PGRAD)/'GRADIENT  '/
+      DATA   CNORM(NL2)  /'EUCLIDEAN '/, CTYPE(PSTEP)/'STEPSIZE  '/
+      DATA   CNORM(NLINF)/'MAXIMUM   '/, CTYPE(PSHXG)/'SHANNOXG  '/
+      DATA                               CTYPE(PFUNC)/'FUNCTION  '/
+
+      DATA   CDERV(CANAL)/'ANALYTIC  '/, VSORT(SPRNAM)/'PROB NAME '/
+      DATA   CDERV(CDIFF)/'DIFFERENCE'/, VSORT(SPRNUM)/'PROB NUMB '/
+      DATA   CDERV(CTEST)/'TESTMODE  '/, VSORT(SASIS )/'AS IS     '/
+      DATA   CDERV(CFIRST)/'FIRSTSTEP'/, VSORT(SRECNO)/'RECORD NO.'/
+      DATA                               VSORT(SFNNAM)/'FUNC NAME '/
+      DATA                               VSORT(SFNNUM)/'FUNC NUMB '/
+      DATA                               VSORT(SDIMN )/'DIMENSION '/
+
+      DATA   VCC (CCPRSN)/'PRESENT   '/  VCC  (CCMISS)/'MISSING   '/
+
+      DATA   VCHEC(CHOFF)/'OFF       '/, VSEE (CNONE )/'NONE      '/
+      DATA   VCHEC(CHON )/'ON        '/, VSEE (CMIN  )/'MINIMAL   '/
+      DATA   VCHEC(CHNAM)/'NAMES     '/, VSEE (CMED  )/'MEDIUM    '/
+      DATA   VCHEC(CHNUM)/'NUMBERS   '/, VSEE (CFULL )/'FULL      '/
+
+C##                                                 E X E C U T I O N
+C##                                                 E X E C U T I O N
+C-----                DEFINE A FUNCTION STATEMENT.
+      RD(I) = DBLE(I)
+C!!!! RD(I) = REAL(I)
+C-----                NOW EXECUTE.
+
+      TRMSUM =     SEELEV .EQ. CFULL .OR. SEELEV .EQ. CMED
+     -        .OR. SEELEV .EQ. CMIN
+      KEEPSM = TRMSUM .OR. SUMM
+
+      ONFILE =   SUMM .AND. (  WISH(CCOLD) .OR. WISH(CDOFLE))
+      ONTERM = TRMSUM .AND. (  WISH(CCOLD) .OR. WISH(CDOTRM))
+
+      IF ( SYSCC .EQ. CCMISS ) THEN
+         TINDX = 2
+      ELSE
+         TINDX = 1
+      ENDIF
+
+      IF ( FIRST ) THEN
+         ASSIGN 81000 TO REMOT1
+         ASSIGN 82000 TO REMOT2
+         ASSIGN 83000 TO REMOT3
+
+         LEND = LEN(DATLIN)
+         LENF = LEN(DATFIX) + 1
+C                                 OPEN APPROPRIATE FILES.
+         CALL ZZOPEN ( WRITUN,WRITFL .OR. SUMM,NMWRIT,*91000,RECL )
+         CALL ZZOPEN ( SUMMUN,KEEPSM,           BLANK,*91000,RECL )
+         FIRST = .FALSE.
+      ENDIF
+
+C-----                SET UP DATE.
+      DATLIN = DATFIX
+      CALL ZZDTTM ( DATLIN(LENF:LEND) )
+      CENDAT = DATLIN
+      CALL ZZCNTR ( CENDAT )
+
+C-----             REWIND FILES OF TEMPORARY DATA.
+      REWIND TEMPUN
+      REWIND SUMMUN
+
+C ==> BLOCK  I  PROCESSING.
+C-----                    READ DATA COMMON TO SET OF PROBLEMS
+ 1000 CONTINUE
+      READ ( TEMPUN, 99996, END = 90000 ) CH
+
+      IF ( CH .NE. TESTCH ) THEN
+         GOTO 1000
+      ENDIF
+
+      READ ( TEMPUN, * ) NP, NORM, CRITNO, RELF, RELG,DERV, MEMORY, SUBR
+      READ ( TEMPUN, '(A)' )  QUITS
+      READ ( TEMPUN, '( A, A )' )  SUBNAM, TITLE
+
+      IF ( NP .EQ. 0 ) THEN
+         IF ( WRITFL .OR. SUMM ) THEN
+            WRITE ( WRITUN, '(A)' ) ' NO PROBLEMS SPECIFIED.'
+         ENDIF
+
+         WRITE ( RPSOUT, '(A)' ) ' NO PROBLEMS SPECIFIED.'
+         IF ( COPY ) THEN
+            WRITE ( COPYUN, '(A)' ) ' NO PROBLEMS SPECIFIED.'
+         ENDIF
+      ELSE
+         CENTIT = TITLE
+         CALL ZZCNTR ( CENTIT )
+      ENDIF
+
+C=====                             NOW LOOP FOR EACH OUTER LOOP.
+      IF ( .NOT. WISH(CCOLD) ) THEN
+         GOTO 10000
+      ENDIF
+
+ 1200 READ ( TEMPUN, '(3E24.18)', END = 10000 ) ACC, FACTOR, USER
+      WRITE (SUMMUN, '(3E24.18)')               ACC, FACTOR, USER
+      WRITE (SUMMUN, * ) ' '
+
+C-----                             INITIALIZE CUMULATIVE COUNTS.
+      CUMITS = 0
+      CUMFNS = 0
+      CUMGRS = 0
+      ERRCNT = 0
+
+      CUMERR = ZERO
+      AVDIGS = ZERO
+      WCHG   = 0
+      GINDX  = 0
+      BDPROB = 0
+
+      CUMFTM = ZERO
+      CUMMTM = ZERO
+      CUMPTM = ZERO
+
+C=====                                   NOW LOOP FOR EACH PROBLEM.
+      PRCT = 0
+
+C ==>  BLOCK  II  PROCESSING. READ DATA PARTICULAR TO A PROBLEM.
+
+C ==> BLOCK II (A) -- BASIC DATA. EOF HERE MEANS LAST PROBLEM DONE.
+C                 ----NOT LAST PROBLEM, SO PRINT OUTPUT HEADER.
+      IF ( WRITFL ) THEN
+C                       HEADER ON WRITUN
+         UNIT = WRITUN
+         ASSIGN 1500  TO RETRN1
+                    GOTO REMOT1
+      ENDIF
+
+ 1500 CONTINUE
+      READ ( TEMPUN, '(A1,A78)', END=1520 ) CH, CHARS
+
+      IF ( CH .NE. TESTCH ) THEN
+         GOTO 1500
+      ELSE IF ( CHARS .NE. 'END OF SET' ) THEN
+         PRCT = PRCT + 1
+         GOTO 1530
+      ELSE
+         WRITE(SUMMUN,*) CUMITS,CUMFNS,CUMGRS,ERRCNT,CUMERR,
+     -                   AVDIGS,WCHG,  GINDX, BDPROB,CUMFTM,
+     -                   CUMMTM,CUMPTM
+         GOTO 1200
+      ENDIF
+
+1520  WRITE(SUMMUN,*) CUMITS,CUMFNS,CUMGRS,ERRCNT,CUMERR,
+     -                AVDIGS,WCHG,  GINDX, BDPROB,CUMFTM,
+     -                CUMMTM,CUMPTM
+
+1530  READ ( TEMPUN, '( A,A )' ) PRNAME, FNAME
+      READ ( TEMPUN, * , END=9000 ) PROB,FUNC,N,SCALE,EXPENS,FARG
+
+C ==> BLOCK II (B)  READ STARTING POINT.
+
+      READ ( TEMPUN,   * , END=9000 ) ( X0(I), I=1,N )
+
+C                       ---AND ADD SOME OF IT TO THE HEADER.
+      IF ( WRITFL ) THEN
+         WRITE ( WRITUN,   *   )
+         WRITE ( WRITUN,   *   )
+         WRITE ( WRITUN, 99901 )  BPLUS
+         WRITE ( WRITUN, 99902 )  EXCL
+         WRITE ( WRITUN, 99927 )  EXCL, PRNAME, PROB
+         WRITE ( WRITUN, 99902 )  EXCL
+         WRITE ( WRITUN, 99921 )  EXCL
+         I = 1
+ 1550    IF ( I+4 .LE. FNO ) THEN
+            WRITE ( WRITUN, 99923 )  EXCL, (FARG(J),J=I,I+4)
+            I=I+5
+            GOTO 1550
+         ENDIF
+         IF ( I .LE. FNO ) THEN
+            WRITE ( WRITUN, 99923 )  EXCL, (FARG(J),J=I,FNO)
+         ENDIF
+         WRITE ( WRITUN, 99902 )  EXCL
+         WRITE ( WRITUN, 99922 )  EXCL, SCALE
+         WRITE ( WRITUN, 99920 )  EXCL, FACTOR
+         WRITE ( WRITUN, 99902 )  EXCL
+         WRITE ( WRITUN, 99901 )  BPLUS
+      ENDIF
+
+C                             --- WRITE APPROPRIATE DATA TO SUMMUN.
+      IF ( KEEPSM ) THEN
+         WRITE ( SUMMUN, * ) ' ''',PRNAME,''' ',
+     -                      PROB, ' ''',FNAME,''' ', FUNC, N
+      ENDIF
+
+C ==>  BLOCK II (C) ----READ AND PRINT SPECIAL USER DATA ADDED AT START.
+
+                 GOTO ( 3100, 3200 ) SUBR
+ 3100 GOTO 4000
+ 3200 GOTO 4000
+
+C ==>  BLOCK II (D) ----READ AND ECHO THE DATA GENERATED DURING THE RUN.
+
+ 4000 CONTINUE
+      READ ( TEMPUN, '(A1,A78)', END=9000 ) CH, CHARS
+
+      IF ( CH .NE. TESTCH ) THEN
+         IF ( WRITFL ) THEN
+            WRITE ( WRITUN, '(A1,A78)' ) CH, CHARS
+         ENDIF
+         GOTO 4000
+      ENDIF
+
+C ==>  BLOCK II (E) ----READ STATISTICS FOR THIS PROBLEM.
+
+      READ ( TEMPUN, * , END=9000 ) ITCT, FUNCCT, GRADCT, DF, DX,
+     -   SOLNX,SOLNF, F, GSQ, MING, MAXG, TMIN,   TFUN, TPRINT, ERFLAG
+
+      TMIN = TMIN - TPRINT
+      IF ( KEEPSM ) THEN
+         WRITE ( SUMMUN, * ) ITCT, FUNCCT, GRADCT, DF, DX, SOLNX,SOLNF,
+     -       F, GSQ, MING, MAXG, TMIN,   TFUN, TPRINT, ERFLAG
+      ENDIF
+
+C ==>  BLOCK II (F) -----READ DERIVATIVE TESTING STATISTICS.
+
+      IF ( DERV .EQ. CTEST .OR. DERV .EQ. CFIRST ) THEN
+         READ ( TEMPUN, *, END = 9000 )  MXERR, INDEX, GCNT, DIGS
+         IF ( ABS(MXERR) .GT. ABS(CUMERR) ) THEN
+            CUMERR = MXERR
+            AVDIGS = DIGS
+            WCHG   = GCNT
+            GINDX  = INDEX
+            BDPROB = PROB
+         ENDIF
+      ENDIF
+
+C ==> BLOCK II (G) ----READ USER STATISTICS.
+
+      GOTO ( 6100, 6200 ) SUBR
+
+C                                          ---STATS FOR BBLNIR.
+ 6100 READ ( TEMPUN, * , END=9000 ) CNTRST, NUPS, FORCES
+
+      IF ( KEEPSM ) THEN
+         WRITE ( SUMMUN, * ) CNTRST, NUPS, FORCES
+      ENDIF
+      GOTO 7000
+
+C                                          ---STATS FOR CONMIN.
+ 6200 GOTO 7000
+
+C     ----PRINT STATISTICS OF THE RUN, INCLUDING THOSE OF THE USER.
+ 7000 IF ( WRITFL ) THEN
+
+         WRITE ( WRITUN, 99997 )
+         WRITE ( WRITUN, 99901 ) BPLUS
+         WRITE ( WRITUN, 99902 ) EXCL
+
+         IF ( ERFLAG .NE. 0 ) THEN
+            WRITE ( WRITUN, 99931 ) EXCL
+         ELSE
+            WRITE ( WRITUN, 99932 ) EXCL
+         ENDIF
+
+         WRITE ( WRITUN, 99902 ) EXCL
+         WRITE ( WRITUN, 99901 ) BPLUS
+         WRITE ( WRITUN, 99902 ) EXCL
+         WRITE ( WRITUN, 99933 ) EXCL
+         WRITE ( WRITUN, 99902 ) EXCL
+         WRITE ( WRITUN, 99934 ) EXCL
+         WRITE ( WRITUN, 99935 ) EXCL,
+     -                           PROB,   FUNC,   PRNAME, N,      ITCT,
+     -                           FUNCCT, GRADCT, F,      GSQ,    TMIN,
+     -                           TFUN,   ERFLAG, NUPS,   CNTRST, FORCES
+         WRITE ( WRITUN, 99902 ) EXCL
+         WRITE ( WRITUN, 99901 ) BPLUS
+
+         IF ( DERV .EQ. CTEST .OR. DERV .EQ. CFIRST ) THEN
+            WRITE ( WRITUN, 99902 ) EXCL
+            WRITE ( WRITUN, 99946 ) EXCL
+            WRITE ( WRITUN, 99902 ) EXCL
+            WRITE ( WRITUN, 99947 ) EXCL
+            WRITE ( WRITUN, 99948 ) EXCL,MXERR,DIGS,INDEX,GCNT
+            WRITE ( WRITUN, 99902 ) EXCL
+            WRITE ( WRITUN, 99901 ) BPLUS
+         ENDIF
+      ENDIF
+
+C                                        ----UPDATE CUMULATIVES.
+      CUMITS = CUMITS + ITCT
+      CUMFNS = CUMFNS + FUNCCT
+      CUMGRS = CUMGRS + GRADCT
+      CUMMTM = CUMMTM + TMIN
+      CUMFTM = CUMFTM + TFUN
+      CUMPTM = CUMPTM + TPRINT
+
+      IF ( ERFLAG .NE. 0 ) THEN
+         ERRCNT = ERRCNT + 1
+      ENDIF
+      GOTO 1500
+
+ 9000 IF ( WRITFL .OR. SUMM ) THEN
+         WRITE ( WRITUN, 99998 )
+      ENDIF
+
+      IF ( TRMSUM ) THEN
+         WRITE ( RPSOUT, 99998 )
+         IF ( COPY ) THEN
+             WRITE ( COPYUN, 99998 )
+         ENDIF
+      ENDIF
+      PRCT = PRCT - 1
+      GOTO 10000
+
+C================END OF PROBLEM LOOP.
+
+C-----PUT SUMMARY DATA ON WRITUN AND/OR ON TERMINAL, AS DESIRED.
+
+10000 IF ( .NOT. KEEPSM ) THEN
+         GOTO 90000
+      ENDIF
+      TRMCPY = RPSOUT
+
+10005              CONTINUE
+      REWIND SUMMUN
+      BLOCK = 0
+
+10010                   CONTINUE
+      BLOCK = BLOCK + 1
+      READ ( SUMMUN, '(3E24.18)', END = 12000 ) ACC, FACTOR, USER
+
+10012 IF ( ONFILE ) THEN
+C                       ---HEADER ON WRITUN
+         UNIT = WRITUN
+         ASSIGN 10100 TO RETRN1
+         GOTO            REMOT1
+      ENDIF
+
+C  ---SUMMARY HEADER ON TERMINAL IF DESIRED.
+
+10100 IF ( ONTERM .AND. BLOCK .EQ. 1 ) THEN
+         IF ( SEELEV .EQ. CFULL ) THEN
+            UNIT = TRMCPY
+            ASSIGN 10200 TO RETRN1
+            GOTO            REMOT1
+
+         ELSE IF ( SEELEV .EQ. CMED ) THEN
+            WRITE ( TRMCPY, 99821 ) TITLE, DATLIN, NORM, CNORM(NORM),
+     -                   (CTYPE(I),QUITS(I:I),I=1,NQUITS),RELF,RELG,
+     -                   DERV,CDERV(DERV),MEMORY, SUBR, SUBNAM,   ACC,
+     -                   FACTOR
+            WRITE ( TRMCPY, 99814)
+            DO 10150 JS=1,NU,3
+               JE = MIN ( NU, JS+2 )
+               WRITE ( TRMCPY, 99813 )
+     -          (KEY(MAP(NBASIC+I)*8-7:MAP(NBASIC+I)*8),USER(I),I=JS,JE)
+10150       CONTINUE
+         ENDIF
+      ENDIF
+
+10200 IF ( ONFILE ) THEN
+C                    ---ADD 'SUMMARY OF RUN' AND PROBLEM DESCRIPTION
+C                    ---LINE TO SUMMARY HEADER.
+         UNIT = WRITUN
+         ASSIGN 10300 TO RETRN2
+         GOTO            REMOT2
+      ENDIF
+
+C  ---DO THE SAME FOR THE TERMINAL.
+
+10300 IF ( ONTERM ) THEN
+         IF ( SEELEV .EQ. CFULL ) THEN
+            UNIT = TRMCPY
+            ASSIGN 10400 TO RETRN2
+            GOTO            REMOT2
+         ELSE IF ( SEELEV .EQ. CMED ) THEN
+            WRITE ( TRMCPY, 99841 )
+         ELSE IF ( SEELEV .EQ. CMIN ) THEN
+            IF ( .NOT. LONGF ) THEN
+               WRITE ( TRMCPY, 99741 )
+            ELSE
+               WRITE ( TRMCPY, 99747 )
+            ENDIF
+         ENDIF
+      ENDIF
+
+10400 DO 11000 I = 1, PRCT
+C                             ---READ DATA FOR EACH PROBLEM.
+
+         READ ( SUMMUN, * )   PRNAME,   PROB,   FNAME, FUNC, N,
+     -                          ITCT, FUNCCT, GRADCT, DF, DX, SOLNX,
+     -                         SOLNF,      F,    GSQ,   MING , MAXG,
+     -                          TMIN,   TFUN, TPRINT, ERFLAG
+         GOTO ( 10500, 10600 ) SUBR
+10500    READ (SUMMUN, * ) CNTRST,   NUPS, FORCES
+         GOTO 10700
+10600    GOTO 10700
+
+10700    IF ( ONFILE   ) THEN
+C                              ---WRITE PROBLEM STATISTICS ON WRITUN.
+
+            WRITE ( WRITUN, 99935 ) EXCL(1:2),
+     -                              PROB, FUNC, PRNAME, N, ITCT,
+     -                              FUNCCT, GRADCT, F, GSQ, TMIN,
+     -                              TFUN, ERFLAG, NUPS, CNTRST,FORCES
+         ENDIF
+
+         IF ( ONTERM ) THEN
+            IF ( SEELEV .EQ. CFULL ) THEN
+               WRITE ( TRMCPY, 99935 ) EXCL(TINDX:2),
+     -                              PROB, FUNC, PRNAME, N, ITCT,
+     -                              FUNCCT, GRADCT, F, GSQ, TMIN,
+     -                              TFUN, ERFLAG, NUPS, CNTRST,FORCES
+            ELSE IF ( SEELEV .EQ. CMED ) THEN
+               WRITE ( TRMCPY, 99842 ) PROB, FUNC, PRNAME, N, ITCT,
+     -                              FUNCCT, GRADCT, F, GSQ, TMIN,
+     -                              TFUN, ERFLAG, NUPS, CNTRST,FORCES
+            ELSE IF ( SEELEV .EQ. CMIN ) THEN
+               IF ( .NOT. LONGF ) THEN
+                  WRITE ( TRMCPY, 99742 ) PROB,  ITCT,
+     -                              FUNCCT, GRADCT, F, GSQ, ERFLAG
+               ELSE
+                  WRITE ( TRMCPY, 99746 ) PRNAME,  ITCT, FUNCCT, F,
+     -                           GSQ, MING, DX, SOLNX, ERFLAG
+               ENDIF
+            ENDIF
+         ENDIF
+
+11000 CONTINUE
+
+      READ (SUMMUN,*) CUMITS,CUMFNS,CUMGRS,ERRCNT,CUMERR,
+     -                AVDIGS,WCHG,  GINDX, BDPROB,CUMFTM,
+     -                CUMMTM,CUMPTM
+      IF ( CUMITS .NE. 0 ) THEN
+         RATIO = (RD(CUMFNS)-1) / RD(CUMITS)
+      ELSE
+         RATIO = ZERO
+      ENDIF
+
+      IF ( ONFILE ) THEN
+C     ---WRITE CUMULATIVE STATISTICS ON WRITUN.
+         UNIT = WRITUN
+         ASSIGN 11200 TO RETRN3
+                    GOTO REMOT3
+      ENDIF
+
+11200 IF ( ONTERM ) THEN
+         IF ( SEELEV .EQ. CFULL ) THEN
+            UNIT = TRMCPY
+            ASSIGN 11300 TO RETRN3
+                       GOTO REMOT3
+
+         ELSE IF ( SEELEV .EQ. CMED ) THEN
+            WRITE ( TRMCPY, 99844 ) CUMITS, CUMFNS, CUMGRS, RATIO,
+     -                           CUMMTM, CUMFTM
+            IF ( DERV .EQ. CTEST .OR. DERV .EQ. CFIRST ) THEN
+               WRITE ( TRMCPY, 99845 ) CUMERR,AVDIGS,BDPROB,GINDX,WCHG
+            ENDIF
+            WRITE ( TRMCPY, 99843 ) ERRCNT
+
+         ELSE IF ( SEELEV .EQ. CMIN ) THEN
+            WRITE ( TRMCPY, 99744 ) CUMITS,CUMFNS,CUMGRS,RATIO,PRCT
+            IF ( DERV .EQ. CTEST .OR. DERV .EQ. CFIRST ) THEN
+               WRITE ( TRMCPY, 99745 ) CUMERR,AVDIGS,BDPROB,GINDX,WCHG
+            ENDIF
+            WRITE ( TRMCPY, 99743 ) ERRCNT
+         ENDIF
+      ENDIF
+
+11300                                      CONTINUE
+      GOTO 10010
+
+12000 IF ( COPY .AND. TRMCPY .EQ. TRMOUT ) THEN
+          TRMCPY = COPYUN
+          ONFILE = .FALSE.
+          GOTO 10005
+      ENDIF
+      GOTO 90000
+
+C## R E M O T E   B L O C K   1:
+C                              WRITE COMPLETE DESCRIPTION OF A RUN
+C                              IN FULL FORMAT.
+
+81000 IF ( UNIT .EQ. TRMOUT .AND. SYSCC .EQ. CCMISS ) THEN
+         FINDX = 2
+         WRITE ( UNIT, ' (///)' )
+      ELSE
+         FINDX = 1
+         WRITE ( UNIT, ' (''1'')' )
+      ENDIF
+
+         WRITE ( UNIT, 99901 ) BPLUS(FINDX:2)
+         WRITE ( UNIT, 99902 ) EXCL(FINDX:2)
+         WRITE ( UNIT, 99903 ) EXCL(FINDX:2), CENTIT
+         WRITE ( UNIT, 99902 ) EXCL(FINDX:2)
+         WRITE ( UNIT, 99903 ) EXCL(FINDX:2), CENDAT
+         WRITE ( UNIT, 99902 ) EXCL(FINDX:2)
+         WRITE ( UNIT, 99901 ) BPLUS(FINDX:2)
+         WRITE ( UNIT, 99902 ) EXCL(FINDX:2)
+         WRITE ( UNIT, 99904 ) EXCL(FINDX:2), NORM, CNORM(NORM)
+         WRITE ( UNIT, 99905 ) EXCL(FINDX:2),    CTYPE(1),QUITS(1:1)
+         DO 81100 I = 2,NQUITS
+           WRITE ( UNIT, 99911 ) EXCL(FINDX:2),  CTYPE(I),QUITS(I:I)
+81100    CONTINUE
+         WRITE ( UNIT, 99912 ) EXCL(FINDX:2), 'F', RELF
+         WRITE ( UNIT, 99912 ) EXCL(FINDX:2), 'G', RELG
+         WRITE ( UNIT, 99906 ) EXCL(FINDX:2), DERV, CDERV(DERV)
+         WRITE ( UNIT, 99907 ) EXCL(FINDX:2), MEMORY
+         WRITE ( UNIT, 99908 ) EXCL(FINDX:2), SUBR, SUBNAM
+         WRITE ( UNIT, 99902 ) EXCL(FINDX:2)
+         WRITE ( UNIT, 99902 ) EXCL(FINDX:2)
+         WRITE ( UNIT, 99909 ) EXCL(FINDX:2), ACC
+         WRITE ( UNIT, 99902 ) EXCL(FINDX:2)
+         WRITE ( UNIT, 99914 ) EXCL(FINDX:2), FACTOR
+         WRITE ( UNIT, 99902 ) EXCL(FINDX:2)
+
+C        ---WRITE USER PARAMETER ARRAY.
+
+         WRITE ( UNIT, 99925 )  EXCL(FINDX:2)
+         DO 1600 JS=1,NU,3
+            JE = MIN ( NU, JS+2 )
+            WRITE ( UNIT, 99926 ) EXCL(FINDX:2),
+     -       ( KEY (MAP(NBASIC+I)*8-7:MAP(NBASIC+I)*8),USER(I),I=JS,JE )
+ 1600    CONTINUE
+         WRITE ( UNIT, 99902 )  EXCL(FINDX:2)
+         WRITE ( UNIT, 99901 ) BPLUS(FINDX:2)
+
+      GOTO RETRN1
+
+C## R E M O T E   B L O C K   2:
+C                              WRITE HEADER FOR ALL PROBLEMS IN RUN
+C                              SECTION, TO BE FOLLOWED BY EACH PROBELM,
+C                              IN FULL FORMAT.
+
+82000 IF ( UNIT .EQ. TRMOUT .AND. SYSCC .EQ. CCMISS ) THEN
+         FINDX = 2
+      ELSE
+         FINDX = 1
+      ENDIF
+
+      WRITE ( UNIT, 99902 ) EXCL(FINDX:2)
+      WRITE ( UNIT, 99941 ) EXCL(FINDX:2)
+      WRITE ( UNIT, 99902 ) EXCL(FINDX:2)
+      WRITE ( UNIT, 99901 ) BPLUS(FINDX:2)
+      WRITE ( UNIT, 99902 ) EXCL(FINDX:2)
+      WRITE ( UNIT, 99934 ) EXCL(FINDX:2)
+      GOTO RETRN2
+
+C## R E M O T E   B L O C K   3:
+C  WRITE CUMULATIVE STATISTICS IN FULL FORMAT.
+
+83000 IF ( UNIT .EQ. TRMOUT .AND. SYSCC .EQ. CCMISS ) THEN
+         FINDX = 2
+      ELSE
+         FINDX = 1
+      ENDIF
+
+      WRITE ( UNIT, 99902 ) EXCL(FINDX:2)
+      WRITE ( UNIT, 99942 ) EXCL(FINDX:2)
+      WRITE ( UNIT, 99945 ) EXCL(FINDX:2),
+     -              CUMITS, CUMFNS, CUMGRS, RATIO, CUMMTM, CUMFTM
+      WRITE ( UNIT, 99902 ) EXCL(FINDX:2)
+
+      IF ( ERRCNT .EQ. 0 ) THEN
+         WRITE ( UNIT, 99943 ) EXCL(FINDX:2)
+      ELSE
+         WRITE ( UNIT, 99944 ) EXCL(FINDX:2), ERRCNT
+      ENDIF
+
+      WRITE ( UNIT, 99902 ) EXCL(FINDX:2)
+      WRITE ( UNIT, 99901 ) BPLUS(FINDX:2)
+
+      IF ( DERV .EQ. CTEST .OR. DERV .EQ. CFIRST ) THEN
+         WRITE ( UNIT, 99902 ) EXCL(FINDX:2)
+         WRITE ( UNIT, 99946 ) EXCL(FINDX:2)
+         WRITE ( UNIT, 99902 ) EXCL(FINDX:2)
+         WRITE ( UNIT, 99949 ) EXCL(FINDX:2)
+         WRITE ( UNIT, 99950 ) EXCL(FINDX:2), CUMERR, AVDIGS,
+     -                                        BDPROB, GINDX,  WCHG
+         WRITE ( UNIT, 99902 ) EXCL(FINDX:2)
+         WRITE ( UNIT, 99901 ) BPLUS(FINDX:2)
+      ENDIF
+      GOTO RETRN3
+
+C## E X I T
+90000       CONTINUE
+      RETURN
+
+91000 RETURN 1
+
+C## F O R M A T S:
+
+C-----FORMATS FOR MINIMUM TERMINAL SUMMARY.
+
+99741 FORMAT ( ' PROB    #_IT #_FNC #_GRD  FUNCTION  GRADIENT ER' )
+99742 FORMAT (  I5, 2X, 3I6, 2E10.2, I3 )
+99743 FORMAT ( / I3, ' ERRORS' )
+99744 FORMAT (  ' TOTALS:', I5, 2I6, '; RATIO=', F4.2,'; #PRBS=',I3 )
+99745 FORMAT ( ' GRAD TEST: ', E10.3, F6.3, 3I6 )
+99746 FORMAT (   1X, A8, 2I4, G24.17, 3G9.2, I3, I3 )
+99747 FORMAT ( '   NAME   #IT #FN',6X,'FUNCTION',1X,
+     -         ' (GRADIENT->NORM      MIN )    DX    #X ER')
+
+C-----FORMATS FOR MEDIUM TERMINAL SUMMARY.
+
+99813 FORMAT (  1X, 3 ( A8, ' =', D10.3, 3X ) )
+99814 FORMAT ( ' USER PARAMETER VALUES:'  )
+99821 FORMAT (  1X, A70 / 1X, A70 /
+     -       ' NORM= ', I2, 1X,'(', A10,')' /
+     -       ' TERMINATION TESTS ON: ',/
+     -        3X, 4(A10,'->',A1,'; ')/
+     -       ' RELATIVE TEST ON F IS ',L1,'; RELATIVE TEST ON G IS ',L1/
+     -       ' DERV= ', I2, 1X, '(', A10,')' /
+     -       ' MEMORY:', I6, ' D.P. VALUES;',
+C!!!!-       ' MEMORY:', I6, ' REAL VALUES;',
+     -       ' SUBROUTINE: ',I2,' (',A8,' ); ACCURACY = ',E10.3/
+     -       ' FACTOR:     ', G12.5 )
+99841 FORMAT ( / ' RUN SUMMARY' /
+     -       ' PR# FN#  NAME  DIM ITS FNS GRS   FVALUE ',
+     -        '  GVALUE  MSECS  FSECS ER NUP RST FRC'    )
+99842 FORMAT ( 1X,I3,I3,1X,A8,I3,I4,2I4,E9.2,E9.2,2F7.3,I3, 3I4)
+99843 FORMAT ( / 1X, I3, ' PROBLEMS WERE FLAGGED WITH ERRORS.' )
+99844 FORMAT ( '        TOTALS:',4X,3I4,' (RATIO ',F6.2,')',2X,2F7.3 )
+99845 FORMAT ( ' GRADIENT TEST: CUMERR AVDIGS BADPROB CMP INDX' /
+     -               12X, E10.3, F7.3, 2X, I3, 2X, I4, 1X, I4   )
+
+C-----FORMATS FOR THE FULL (FANCY) OUTPUT.
+
+99901 FORMAT ( A, 76('-'), '+' )
+99902 FORMAT ( A , 76 X,  '!' )
+99903 FORMAT ( A ,  A69 , 7X, '!' )
+99904 FORMAT ( A,  18X, 'TERMINATION NORM = ', I2,
+     -                          ' (',A10, ')', 24X, '!' )
+99905 FORMAT ( A,  30X, 'TESTS: ',  A10, '->',A1,26X, '!' )
+99906 FORMAT ( A,  18X, 'DERIVATIVE MODE  = ', I2,
+     -                          ' (',A10, ')', 24X, '!' )
+99907 FORMAT ( A,  18X, 'STORAGE USE IS ', I6,
+     -                  ' DOUBLE PRECISION REALS.', 13X, '!' )
+C!!!!-                  ' SINGLE PRECISION REALS.', 13X, '!' )
+99908 FORMAT ( A,  18X, 'SUBROUTINE IN USE IS ', I2,
+     -                         ' (', A8, ')', 24X, '!' )
+99909 FORMAT ( A,  3X, 'ACCURACY REQUIRED IS ', E13.3, 39X, '!' )
+99910 FORMAT ( A,  7 ( A8, 2X ), A8,  '!' )
+99911 FORMAT ( A,  37X,             A10, '->',A1,26X, '!' )
+99912 FORMAT ( A, 29X, 'RELATIVE TEST ON ',A1,'->',L1,26X,'!' )
+99913 FORMAT ( A,
+     -               E9.3, 7 ( D10.3  ), E9.3,  '!' )
+C!!!!-               E9.3, 6 ( E10.3  ), E9.3,  '!' )
+99914 FORMAT ( A,  3X, 'EXPENSE FACTOR USED  ', E13.3, 39X, '!' )
+
+99920 FORMAT ( A,  1X,'STARTING POINT FACTOR ', E13.3, 40X, '!' )
+99921 FORMAT ( A,3X,'FUNCTION ARGUMENTS ARE ', 50X,'!')
+99922 FORMAT ( A,3X,'FUNCTION SCALING IS NUMBER ',I5, 41X, '!' )
+99923 FORMAT ( A,3X,'           ',5E12.3, 2X, '!' )
+99925 FORMAT ( A, 3X, 'USER PARAMETERS :', 56X, '!' )
+99926 FORMAT ( A, 6X, 3 ( A8, ' =', D10.3, 3X ), 1X, '!' )
+99927 FORMAT ( A,3X,'PROBLEM NAME ( NUMBER ) :',A12,'(',I3,' )',30X,'!')
+99931 FORMAT ( A, 16X, 'CAUTION: AN ERROR WAS FLAGGED ',
+     -         'DURING THIS RUN', 15X, '!' )
+99932 FORMAT ( A, 16X, 'A CORRECT SOLUTION APPEARS TO ',
+     -         'HAVE BEEN FOUND', 15X, '!' )
+99933 FORMAT ( A, 17X, 'S U M M A R Y   O F   T H E   ',
+     -         'P R O B L E M', 16X, '!' )
+99934 FORMAT (A, 'PR# FN#  NAME  DIM ITS FNS GRS  ',
+     -       'FVALUE  GVALUE  MSECS  FSECS  ER NUP RST FRC',  '!' )
+99935 FORMAT ( A, I3, I3, 1X, A8, I3, I4, I4, I4,
+     -    D9.2, D9.2, F7.3, F7.3, I2, I4, I4 , I4, '!' )
+C!!!!-    E9.2, E8.2, F7.3, F7.3, I2, I4, I4 , I4, '!' )
+99941 FORMAT ( A, 15X, 'S U M M A R Y   O F   T H E   ',
+     -         'E N T I R E   R U N', 12X, '!' )
+99942 FORMAT ( A, 18X, 'ITERS FUNCS GRADS RATIO', 12X,
+     -         'MSECS  FSECS', 11X, '!' )
+99943 FORMAT ( A, 16X, 'NONE OF THE PROBLEMS WERE ',
+     -         'FLAGGED WITH ERRORS.', 14X, '!' )
+99944 FORMAT ( A, 17X, 'THERE WERE ', I3, ' PROBLEMS ',
+     -         'FLAGGED WITH ERRORS.', 15X, '!' )
+99945 FORMAT (A, ' TOTALS', 11X, I5, I6, I6, F6.2, 9X,
+     -                                    F8.3, F7.3  , 11X, '!' )
+99946 FORMAT ( A,  23X, 'G R A D I E N T ',
+     -            '  T E S T I N G' , 22X, '!' )
+99947 FORMAT ( A,  16X, 'WORST ERROR  AVERAGE DIGITS',
+     -       '  COMPONENT   COUNT', 14X, '!' )
+99948 FORMAT ( A,  16X,  E9.2,      5X,    F9.2,
+     -         6X, I5,   5X, I5 ,   16X, '!' )
+99949 FORMAT ( A,  16X, 'WORST ERROR  AVERAGE DIGITS',
+     -       ' PROBLEM  COMPONENT  COUNT', 7X, '!' )
+99950 FORMAT ( A,  16X,     E9.2,   5X,    F9.2,
+     -        5X, I5, 4X,  I5,   4X, I5,  9X, '!' )
+
+C-----            FORMATS FOR READING AND PAGE FEEDS.
+99996 FORMAT ( A1 )
+99997 FORMAT ( ' ' )
+99998 FORMAT ( ' UNEXPECTED END OF FILE WITHIN PROBLEM.' )
+99999 FORMAT ( ' END OF FILE MARKS END OF PROBLEMS' )
+
+C##                 E N D OF ZZSMRY.
+                    END

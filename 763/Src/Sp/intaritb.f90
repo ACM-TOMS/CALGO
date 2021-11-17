@@ -1,0 +1,1581 @@
+! This Fortran 90 module provides support for overloading operators
+! using INTLIB.
+
+MODULE INTERVAL_ARITHMETIC
+
+   USE IVL_DEF
+   IMPLICIT NONE
+
+      TYPE(INTERVAL), PARAMETER:: REAL_LINE=INTERVAL(-HUGE(1D0),HUGE(1D0))
+      DOUBLE PRECISION, PARAMETER :: ZERO = 0D0, ONE=1D0
+
+ !Interface to the basic operations
+
+      INTERFACE OPERATOR(+)
+         MODULE PROCEDURE ADD_F90,&
+                          REAL_PLUS_IVL_F90,&
+                          IVL_PLUS_REAL_F90,&
+                          IVL_PLUS_INTEGER_F90,&
+                          INTEGER_PLUS_IVL_F90
+      END INTERFACE
+
+      INTERFACE OPERATOR(-)
+         MODULE PROCEDURE SUB_F90,&
+                          REAL_MINUS_IVL_F90,&
+                          IVL_MINUS_REAL_F90,&
+                          INTEGER_MINUS_IVL_F90,&
+                          IVL_MINUS_INTEGER_F90
+      END INTERFACE
+
+      INTERFACE OPERATOR(-)
+         MODULE PROCEDURE INEG_F90
+      END INTERFACE
+
+      INTERFACE OPERATOR(*)
+         MODULE PROCEDURE MULT_F90,&
+                          REAL_TIMES_IVL_F90,&
+                          IVL_TIMES_REAL_F90,&
+                          INTEGER_TIMES_IVL_F90,&
+                          IVL_TIMES_INTEGER_F90
+      END INTERFACE
+
+      INTERFACE OPERATOR(/)
+         MODULE PROCEDURE DIV_F90,&
+                          REAL_OVER_IVL_F90,&
+                          IVL_OVER_REAL_F90,&
+                          INTEGER_OVER_IVL_F90,&
+                          IVL_OVER_INTEGER_F90
+      END INTERFACE
+
+ !Interface to the elementary functions
+
+      INTERFACE OPERATOR(**)
+         MODULE PROCEDURE POWER_F90, IIPOWR_F90,&
+                          REAL_TO_IVL_F90, IVL_TO_REAL_F90, &
+                          IGR_TO_IVL_F90
+      END INTERFACE
+
+      INTERFACE ACOS
+         MODULE PROCEDURE IACOS_F90
+      END INTERFACE
+
+      INTERFACE ACOT
+         MODULE PROCEDURE IACOT_F90
+      END INTERFACE
+
+      INTERFACE ASIN
+         MODULE PROCEDURE IASIN_F90
+      END INTERFACE
+
+      INTERFACE ATAN
+         MODULE PROCEDURE IATAN_F90
+      END INTERFACE
+
+      INTERFACE COS
+         MODULE PROCEDURE ICOS_F90
+      END INTERFACE
+
+      INTERFACE COT
+         MODULE PROCEDURE ICOT_F90
+      END INTERFACE
+
+      INTERFACE EXP
+         MODULE PROCEDURE IEXP_F90
+      END INTERFACE
+
+      INTERFACE LOG
+         MODULE PROCEDURE ILOG_F90
+      END INTERFACE
+
+      INTERFACE SIN
+         MODULE PROCEDURE ISIN_F90
+      END INTERFACE
+
+      INTERFACE SINH
+         MODULE PROCEDURE ISINH_F90
+      END INTERFACE
+
+      INTERFACE SQRT
+         MODULE PROCEDURE ISQRT_F90
+      END INTERFACE
+
+       INTERFACE TAN
+         MODULE PROCEDURE ITAN_F90
+      END INTERFACE
+
+!Interface to utility operations
+
+      INTERFACE OPERATOR(.IS.)
+         MODULE PROCEDURE ICAP_F90
+      END INTERFACE
+
+      INTERFACE OPERATOR(.CH.)
+         MODULE PROCEDURE IHULL_F90, IHULL_R_I, IHULL_I_R, IHULL_R_R, &
+                          IHULL_N_N, IHULL_I_N, IHULL_N_I, &
+                          IHULL_N_R, IHULL_R_N
+      END INTERFACE
+
+      INTERFACE OPERATOR(.SB.)
+         MODULE PROCEDURE IILEI_F90
+      END INTERFACE
+
+      INTERFACE OPERATOR(.SP.)
+         MODULE PROCEDURE IIGEI_F90
+      END INTERFACE
+
+      INTERFACE OPERATOR(.DJ.)
+         MODULE PROCEDURE IDISJ_F90
+      END INTERFACE
+
+      INTERFACE OPERATOR(.IN.)
+         MODULE PROCEDURE IRLEI_F90, IRILEI, IIILEI
+      END INTERFACE
+
+      INTERFACE OPERATOR(.LT.)
+         MODULE PROCEDURE INTINTLT_F90, REALINTLT_F90, INTREALLT_F90,&
+                                        IGRINTLT_F90,  INTIGRLT_F90
+      END INTERFACE
+
+      INTERFACE OPERATOR(.GT.)
+         MODULE PROCEDURE INTINTGT_F90, REALINTGT_F90, INTREALGT_F90,&
+                                        IGRINTGT_F90,  INTIGRGT_F90
+      END INTERFACE
+
+      INTERFACE OPERATOR(.LE.)
+         MODULE PROCEDURE INTINTLE_F90, REALINTLE_F90, INTREALLE_F90,&
+                                        IGRINTLE_F90,  INTIGRLE_F90
+      END INTERFACE
+
+      INTERFACE OPERATOR(.GE.)
+         MODULE PROCEDURE INTINTGE_F90, REALINTGE_F90, INTREALGE_F90,&
+                                        IGRINTGE_F90,  INTIGRGE_F90
+      END INTERFACE
+
+      INTERFACE OPERATOR(.NE.)
+         MODULE PROCEDURE INTINTNE, REALINTNE, INTREALNE, IGRINTNE, &
+                          INTIGRNE
+      END INTERFACE
+      
+      INTERFACE OPERATOR(.EQ.)
+         MODULE PROCEDURE INTINTEQ, REALINTEQ, INTREALEQ, IGRINTEQ, &
+                          INTIGREQ
+      END INTERFACE
+
+      INTERFACE ABS
+         MODULE PROCEDURE IVLABS_F90
+      END INTERFACE
+
+      INTERFACE IWID
+         MODULE PROCEDURE IWID_F90
+      END INTERFACE
+
+      INTERFACE WID
+         MODULE PROCEDURE IWID_F90
+      END INTERFACE
+
+      INTERFACE MAG
+         MODULE PROCEDURE INTABS_F90
+      END INTERFACE
+
+      INTERFACE MAX
+         MODULE PROCEDURE IVLMAX_F90, IVRMAX, RIVMAX, IVIMAX, IIVMAX
+      END INTERFACE
+
+      INTERFACE MIN
+         MODULE PROCEDURE IVLMIN_F90, IVRMIN, RIVMIN, IVIMIN, IIVMIN
+      END INTERFACE
+
+      INTERFACE MIG
+         MODULE PROCEDURE IMIG_F90
+      END INTERFACE
+
+      INTERFACE IMID
+         MODULE PROCEDURE IMID_F90
+      END INTERFACE
+
+      INTERFACE MID
+         MODULE PROCEDURE IMID_F90
+      END INTERFACE
+
+ ! Overloading assignment
+
+      INTERFACE ASSIGNMENT (=)
+         MODULE PROCEDURE INTEGER_TO_INTERVAL,&
+                          DOUBLE_TO_INTERVAL
+      END INTERFACE
+
+ ! Type conversions
+
+      INTERFACE IVL
+         MODULE PROCEDURE IVL1_F90, IVL2_F90, IVL1I_F90, IVL2I_F90,&
+                          IVL2DI_F90, IVL2ID_F90, IVL_IVL
+      END INTERFACE
+
+   ! Explicit conversion functions (mostly used internally for
+   ! conversion to and from INTLIB argument lists).
+
+   ! Double prec. array to interval     IDBLA
+   ! Interval to double prec. array     DBLA
+   ! Double to double array             DBLAD
+   ! Integer to double array            DBLAN
+
+ ! Additional functions, compatible with Fortran-SC
+
+      INTERFACE SUP
+         MODULE PROCEDURE SUP_F90
+      END INTERFACE
+
+      INTERFACE INF
+         MODULE PROCEDURE INF_F90
+      END INTERFACE
+
+CONTAINS
+
+ ! Fortran 90 version of the INTLIB routine RNDOUT, for efficiency
+ ! (The elementary operations in INTLIB are redefined here, too,
+ ! for efficiency.)
+ 
+      SUBROUTINE RNDOUT_F90(X,RNDDWN,RNDUP) 
+         IMPLICIT NONE
+         TYPE(INTERVAL) :: X
+         LOGICAL RNDDWN, RNDUP
+         
+         DOUBLE PRECISION MXULP, TTINY2, TOL0
+         COMMON /MACH1/ MXULP, TTINY2, TOL0
+ 
+         DOUBLE PRECISION TINY, TEST
+         COMMON /MACH2/ TINY, TEST
+         
+         IF (RNDDWN) THEN
+            IF (X%LOWER.GE.TEST) THEN
+               X%LOWER = (1.D0 - MXULP ) * X%LOWER
+            ELSE IF (X%LOWER.LE.-TEST) THEN
+               X%LOWER = (1D0 + MXULP ) * X%LOWER
+            ELSE IF (X%LOWER.LE.0.D0) THEN
+               X%LOWER = -TEST
+            ELSE
+               X%LOWER = 0.D0
+            END IF
+         END IF
+
+         IF (RNDUP) THEN
+            IF (X%UPPER.GE.TEST) THEN
+               X%UPPER = (1.D0 + MXULP )* X%UPPER
+            ELSE IF (X%UPPER.LE.-TEST) THEN
+               X%UPPER = (1.D0 - MXULP ) * X%UPPER
+            ELSE IF(X%UPPER.GE.0D0) THEN
+               X%UPPER = TEST
+            ELSE
+               X%UPPER = 0.D0
+            ENDIF
+        END IF
+     END SUBROUTINE RNDOUT_F90
+        
+ ! Basic operation Fortran 77 calls
+
+      FUNCTION ADD_F90(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL) :: ADD_F90
+         TYPE(INTERVAL), INTENT(IN) :: A, B
+         
+         ADD_F90%LOWER = A%LOWER + B%LOWER
+         ADD_F90%UPPER = A%UPPER + B%UPPER
+
+         CALL RNDOUT_F90(ADD_F90, &
+                         (A%LOWER.NE.0D0).AND.(B%LOWER.NE.0D0), &
+                         (A%UPPER.NE.0D0).AND.(B%UPPER.NE.0D0) )
+      END FUNCTION ADD_F90
+
+      FUNCTION REAL_PLUS_IVL_F90(A, B)
+         IMPLICIT NONE
+         DOUBLE PRECISION, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         TYPE(INTERVAL) :: REAL_PLUS_IVL_F90
+ 
+         REAL_PLUS_IVL_F90%LOWER = A + B%LOWER
+         REAL_PLUS_IVL_F90%UPPER = A + B%UPPER
+
+         CALL RNDOUT_F90(REAL_PLUS_IVL_F90, &
+                         (A.NE.0D0).AND.(B%LOWER.NE.0D0), &
+                         (A.NE.0D0).AND.(B%UPPER.NE.0D0) )
+      END FUNCTION REAL_PLUS_IVL_F90
+
+      FUNCTION IVL_PLUS_REAL_F90(A, B)
+         IMPLICIT NONE
+         DOUBLE PRECISION, INTENT(IN) :: B
+         TYPE(INTERVAL), INTENT(IN) :: A
+         TYPE(INTERVAL) :: IVL_PLUS_REAL_F90
+         
+         IVL_PLUS_REAL_F90%LOWER = B + A%LOWER
+         IVL_PLUS_REAL_F90%UPPER = B + A%UPPER
+
+         CALL RNDOUT_F90(IVL_PLUS_REAL_F90, &
+                         (B.NE.0D0).AND.(A%LOWER.NE.0D0), &
+                         (B.NE.0D0).AND.(A%UPPER.NE.0D0) )       
+      END FUNCTION IVL_PLUS_REAL_F90
+
+      FUNCTION INTEGER_PLUS_IVL_F90(A, B)
+         IMPLICIT NONE
+         INTEGER, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         TYPE(INTERVAL) :: INTEGER_PLUS_IVL_F90
+         DOUBLE PRECISION T
+         
+         T = DBLE(A)
+         INTEGER_PLUS_IVL_F90%LOWER = T + B%LOWER
+         INTEGER_PLUS_IVL_F90%UPPER = T + B%UPPER
+
+         CALL RNDOUT_F90(INTEGER_PLUS_IVL_F90, &
+                         (T.NE.0D0).AND.(B%LOWER.NE.0D0), &
+                         (T.NE.0D0).AND.(B%UPPER.NE.0D0) )
+      END FUNCTION INTEGER_PLUS_IVL_F90
+
+      FUNCTION IVL_PLUS_INTEGER_F90(A, B)
+         IMPLICIT NONE
+         INTEGER, INTENT(IN) :: B
+         TYPE(INTERVAL), INTENT(IN) :: A
+         TYPE(INTERVAL) :: IVL_PLUS_INTEGER_F90
+         DOUBLE PRECISION T
+
+         T = DBLE(B)
+         IVL_PLUS_INTEGER_F90%LOWER = T + A%LOWER
+         IVL_PLUS_INTEGER_F90%UPPER = T + A%UPPER
+          
+         CALL RNDOUT_F90(IVL_PLUS_INTEGER_F90, &
+                         (T.NE.0D0).AND.(A%LOWER.NE.0D0), &
+                         (T.NE.0D0).AND.(A%UPPER.NE.0D0) )           
+      END FUNCTION IVL_PLUS_INTEGER_F90
+
+      FUNCTION SUB_F90(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL) :: SUB_F90
+         TYPE(INTERVAL), INTENT(IN) :: A, B
+         DOUBLE PRECISION TA1, TA2, TB1, TB2
+         
+         TA1 = A%LOWER;  TA2 = A%UPPER
+         TB1 = B%LOWER;  TB2 = B%UPPER
+
+         SUB_F90%LOWER = TA1 - TB2
+         SUB_F90%UPPER = TA2 - TB1
+
+         CALL RNDOUT_F90(SUB_F90, (TB2.NE.0D0), (TB1.NE.0D0) )
+      END FUNCTION SUB_F90
+
+      FUNCTION REAL_MINUS_IVL_F90(A,B)
+         IMPLICIT NONE
+         DOUBLE PRECISION, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         TYPE(INTERVAL):: REAL_MINUS_IVL_F90
+         REAL_MINUS_IVL_F90 = SUB_F90(INTERVAL(A,A),B)
+      END FUNCTION REAL_MINUS_IVL_F90
+
+      FUNCTION IVL_MINUS_REAL_F90(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL), INTENT(IN) :: A
+         DOUBLE PRECISION, INTENT(IN) :: B
+         TYPE(INTERVAL):: IVL_MINUS_REAL_F90
+         IVL_MINUS_REAL_F90 = SUB_F90(A,INTERVAL(B,B))
+      END FUNCTION IVL_MINUS_REAL_F90
+
+      FUNCTION INTEGER_MINUS_IVL_F90(A,B)
+         IMPLICIT NONE
+         INTEGER, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         TYPE(INTERVAL):: INTEGER_MINUS_IVL_F90
+         INTEGER_MINUS_IVL_F90 = SUB_F90(INTERVAL(A,A),B)
+      END FUNCTION INTEGER_MINUS_IVL_F90
+
+      FUNCTION IVL_MINUS_INTEGER_F90(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL), INTENT(IN) :: A
+         INTEGER, INTENT(IN) :: B
+         TYPE(INTERVAL):: IVL_MINUS_INTEGER_F90
+         IVL_MINUS_INTEGER_F90 = SUB_F90(A,INTERVAL(B,B))
+      END FUNCTION IVL_MINUS_INTEGER_F90
+
+      FUNCTION INEG_F90(A)
+         IMPLICIT NONE
+         TYPE(INTERVAL) INEG_F90
+         TYPE(INTERVAL), INTENT(IN) :: A
+         TYPE(INTERVAL) :: T
+
+         T%LOWER = A%LOWER
+         T%UPPER = A%UPPER
+         INEG_F90%LOWER = -T%UPPER
+         INEG_F90%UPPER = -T%LOWER
+         CALL RNDOUT_F90 (INEG_F90, .TRUE.,.TRUE.)
+      END FUNCTION INEG_F90
+
+      FUNCTION MULT_F90(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL) MULT_F90
+         TYPE(INTERVAL), INTENT(IN) :: A, B
+         DOUBLE PRECISION TEMP, A1, B1
+         TYPE(INTERVAL) :: AA, BB
+        !  Pictures for cases.
+         IF ((ZERO .LE. A%LOWER) .AND. (ZERO .LE. B%LOWER)) THEN
+        !  Case 1   ---------------- 0 -----------------
+        !        A:                    [==========]
+        !        B:                         [===========]
+            MULT_F90%LOWER = A%LOWER * B%LOWER
+            MULT_F90%UPPER = A%UPPER * B%UPPER
+         ELSE IF ((A%LOWER .LT. ZERO) .AND. (ZERO .LT. A%UPPER) &
+                                .AND. (ZERO .LE. B%LOWER)) THEN
+        !  Case 2   ---------------- 0 -----------------
+        !        A:            [==================]
+        !        B:                         [===========]
+            MULT_F90%LOWER = A%LOWER * B%UPPER
+            MULT_F90%UPPER = A%UPPER * B%UPPER
+         ELSE IF ((A%UPPER .LE. ZERO) .AND. (ZERO .LE. B%LOWER)) THEN
+        !  Case 3   ---------------- 0 -----------------
+        !        A:    [==========]
+        !        B:                         [===========]
+            B1 = B%LOWER
+            MULT_F90%LOWER = A%LOWER * B%UPPER
+            MULT_F90%UPPER = A%UPPER * B1
+         ELSE IF ((ZERO .LE. A%LOWER) .AND. (B%LOWER .LT. ZERO) &
+                                .AND. (ZERO .LT. B%UPPER)) THEN
+        !  Case 4   ---------------- 0 -----------------
+        !        A:                     [==========]
+        !        B:               [===========]
+            MULT_F90%LOWER = A%UPPER * B%LOWER
+            MULT_F90%UPPER = A%UPPER * B%UPPER
+         ELSE IF ((A%UPPER .LE. ZERO) .AND. (B%LOWER .LT. ZERO) &
+                                .AND. (ZERO .LT. B%UPPER)) THEN
+        !  Case 5   ---------------- 0 -----------------
+        !        A:    [==========]
+        !        B           [===========]
+            A1 = A%LOWER
+            B1 = B%LOWER
+            MULT_F90%LOWER = A%LOWER * B%UPPER
+            MULT_F90%UPPER = A1 * B1
+         ELSE IF ((ZERO .LE. A%LOWER) .AND. (B%UPPER .LE. ZERO)) THEN
+        !  Case 6   ---------------- 0 -----------------
+        !        A:                    [==========]
+        !        B:  [===========]
+            A1 = A%LOWER
+            MULT_F90%LOWER = A%UPPER * B%LOWER
+            MULT_F90%UPPER = A1 * B%UPPER
+         ELSE IF ((A%LOWER .LT. ZERO) .AND. (ZERO .LT. A%UPPER) &
+                                .AND. (B%UPPER .LE. ZERO)) THEN
+        !  Case 7   ---------------- 0 -----------------
+        !        A:              [==========]
+        !        B:  [===========]
+            A1 = A%LOWER
+            B1 = B%LOWER
+            MULT_F90%LOWER = A%UPPER * B%LOWER
+            MULT_F90%UPPER = A1 * B1
+         ELSE IF ((A%UPPER .LE. ZERO) .AND. (B%UPPER .LE. ZERO)) THEN
+        !  Case 8   ---------------- 0 -----------------
+        !        A:    [==========]
+        !        B:   [===========]
+            A1 = A%LOWER
+            B1 = B%LOWER
+            MULT_F90%LOWER = A%UPPER * B%UPPER
+            MULT_F90%UPPER = A1 * B1
+         ELSE
+        !  Case 9   ---------------- 0 -----------------
+        !        A:              [==========]
+        !        B:              [===========]
+        !  Must check two cases.
+            AA%LOWER = A%LOWER
+            AA%UPPER = A%UPPER
+            BB%LOWER = B%LOWER
+            BB%UPPER = B%UPPER
+            MULT_F90%LOWER = AA%LOWER * BB%UPPER
+            TEMP = AA%UPPER * BB%LOWER
+            IF (TEMP .LT. MULT_F90%LOWER) THEN
+               MULT_F90%LOWER = TEMP
+            ELSE
+            END IF
+            MULT_F90%UPPER = AA%LOWER * BB%LOWER
+            TEMP = AA%UPPER * BB%UPPER
+            IF (TEMP .GT. MULT_F90%UPPER) THEN
+              MULT_F90%UPPER = TEMP
+            ELSE
+            END IF
+         END IF
+         CALL RNDOUT_F90(MULT_F90,.TRUE.,.TRUE.)  
+      END FUNCTION MULT_F90
+
+      FUNCTION REAL_TIMES_IVL_F90(R, B)
+         IMPLICIT NONE
+         DOUBLE PRECISION, INTENT(IN) :: R
+         TYPE(INTERVAL), INTENT(IN) :: B
+         TYPE(INTERVAL) :: REAL_TIMES_IVL_F90
+         DOUBLE PRECISION T1, T2
+         LOGICAL RNDDWN, RNDUP
+         IF ((R.EQ.0D0).OR.((B%LOWER.EQ.0D0).AND.& 
+                            (B%UPPER.EQ.0D0))) THEN
+            REAL_TIMES_IVL_F90%LOWER = 0D0
+            REAL_TIMES_IVL_F90%UPPER = 0D0
+            RETURN
+         END IF
+         T1 = B%LOWER
+         T2 = B%UPPER
+         RNDDWN = .TRUE.
+         RNDUP = .TRUE.
+         IF (T1.EQ.0D0) THEN
+            IF (R.LT.0D0) THEN
+               REAL_TIMES_IVL_F90%LOWER = R * T2
+               REAL_TIMES_IVL_F90%UPPER = 0D0
+               RNDUP = .FALSE.
+            ELSE
+               REAL_TIMES_IVL_F90%LOWER = 0D0
+               REAL_TIMES_IVL_F90%UPPER = R * T2
+               RNDDWN = .FALSE.
+            END IF
+         ELSE IF (T2.EQ.0D0) THEN
+            IF (R.LT.0D0) THEN
+               REAL_TIMES_IVL_F90%LOWER = 0D0
+               REAL_TIMES_IVL_F90%UPPER = R * T1
+               RNDDWN = .FALSE.
+            ELSE
+               REAL_TIMES_IVL_F90%LOWER = R * T1
+               REAL_TIMES_IVL_F90%UPPER = 0D0
+               RNDUP = .FALSE.
+            END IF
+         ELSE IF (R.GT.0D0) THEN
+            REAL_TIMES_IVL_F90%LOWER = R * T1
+            REAL_TIMES_IVL_F90%UPPER = R * T2
+         ELSE
+            REAL_TIMES_IVL_F90%LOWER = R * T2
+            REAL_TIMES_IVL_F90%UPPER = R * T1
+         END IF
+         CALL RNDOUT_F90(REAL_TIMES_IVL_F90,RNDDWN,RNDUP)
+      END FUNCTION REAL_TIMES_IVL_F90
+
+      FUNCTION IVL_TIMES_REAL_F90(A, B)
+         IMPLICIT NONE
+         DOUBLE PRECISION, INTENT(IN) :: B
+         TYPE(INTERVAL), INTENT(IN) :: A
+         TYPE(INTERVAL) :: IVL_TIMES_REAL_F90
+         IVL_TIMES_REAL_F90 = REAL_TIMES_IVL_F90(B,A)
+      END FUNCTION IVL_TIMES_REAL_F90
+
+      FUNCTION INTEGER_TIMES_IVL_F90(A, B)
+         IMPLICIT NONE
+         INTEGER, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         TYPE(INTERVAL) :: INTEGER_TIMES_IVL_F90
+         INTEGER_TIMES_IVL_F90 = REAL_TIMES_IVL_F90(DBLE(A),B)
+      END FUNCTION INTEGER_TIMES_IVL_F90
+
+      FUNCTION IVL_TIMES_INTEGER_F90(A, B)
+         IMPLICIT NONE
+         INTEGER, INTENT(IN) ::  B
+         TYPE(INTERVAL), INTENT(IN) :: A
+         TYPE(INTERVAL) :: IVL_TIMES_INTEGER_F90
+         IVL_TIMES_INTEGER_F90 = REAL_TIMES_IVL_F90(DBLE(B),A)
+      END FUNCTION IVL_TIMES_INTEGER_F90
+
+      FUNCTION DIV_F90(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL) :: DIV_F90
+         TYPE(INTERVAL), INTENT(IN) :: A, B
+         DOUBLE PRECISION, DIMENSION(2) :: X
+         INTERFACE
+            SUBROUTINE ERRTST(X)
+               DOUBLE PRECISION, DIMENSION(2) :: X
+            END SUBROUTINE ERRTST
+         END INTERFACE
+         TYPE(INTERVAL) :: C
+
+         INTEGER ISIG, IERR, IROUT, IPRTCL, ISEVER, IERPUN
+         COMMON /ERFLGS/ ISIG, IERR, IROUT, IPRTCL, ISEVER, IERPUN
+       
+       ! Identifying code for this routine --
+         IROUT = 3
+         IERR = 0
+         
+       ! Do usual interval division if zero is not in the denominator
+         IF (B%LOWER.GT.ZERO) THEN
+            C%LOWER = ONE/B%UPPER
+            C%UPPER = ONE/B%LOWER
+            CALL RNDOUT_F90(C,.TRUE.,.TRUE.)
+            DIV_F90 =  MULT_F90(A,C)
+         ELSE IF (B%UPPER.LT.ZERO) THEN
+            C%LOWER = ONE/B%UPPER
+            C%UPPER = ONE/B%LOWER
+            CALL RNDOUT_F90(C,.TRUE.,.TRUE.)
+            DIV_F90 = MULT_F90(A,C)
+         ELSE
+            IERR = 6
+            X = DBLAI(B)
+            CALL ERRTST(X)
+            DIV_F90 = REAL_LINE
+         END IF
+      END FUNCTION DIV_F90
+
+      FUNCTION REAL_OVER_IVL_F90(A,B)
+         IMPLICIT NONE
+         DOUBLE PRECISION, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         TYPE(INTERVAL) :: REAL_OVER_IVL_F90
+         REAL_OVER_IVL_F90 = DIV_F90(INTERVAL(A,A),B)
+      END FUNCTION REAL_OVER_IVL_F90
+
+      FUNCTION IVL_OVER_REAL_F90(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL), INTENT(IN) :: A
+         DOUBLE PRECISION, INTENT(IN) :: B
+         TYPE(INTERVAL) :: IVL_OVER_REAL_F90
+         IVL_OVER_REAL_F90 = DIV_F90(A,INTERVAL(B,B))
+      END FUNCTION IVL_OVER_REAL_F90
+
+      FUNCTION INTEGER_OVER_IVL_F90(A,B)
+         IMPLICIT NONE
+         INTEGER, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         TYPE(INTERVAL) :: INTEGER_OVER_IVL_F90
+         INTEGER_OVER_IVL_F90 = DIV_F90(INTERVAL(A,A),B)
+      END FUNCTION INTEGER_OVER_IVL_F90
+
+      FUNCTION IVL_OVER_INTEGER_F90(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL), INTENT(IN) :: A
+         INTEGER, INTENT(IN) :: B
+         TYPE(INTERVAL):: IVL_OVER_INTEGER_F90
+         IVL_OVER_INTEGER_F90 = DIV_F90(A,INTERVAL(B,B))
+      END FUNCTION IVL_OVER_INTEGER_F90
+
+ ! Elementary function Fortran 77 calls (interfaces to INTLIB)
+
+      FUNCTION POWER_F90(A,N)
+         IMPLICIT NONE
+         TYPE(INTERVAL) POWER_F90
+         TYPE(INTERVAL), INTENT(IN):: A
+         INTEGER, INTENT(IN):: N
+         INTERFACE
+            SUBROUTINE POWER(A,N,VALUE)
+               DOUBLE PRECISION, DIMENSION(2) :: A
+               INTEGER N
+               DOUBLE PRECISION, DIMENSION(2) :: VALUE
+            END SUBROUTINE POWER
+         END INTERFACE
+         DOUBLE PRECISION, DIMENSION(2) :: TMP
+         CALL POWER (DBLAI(A),N,TMP)
+         POWER_F90 = IDBLA(TMP)
+      END FUNCTION POWER_F90
+
+      FUNCTION IIPOWR_F90(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL) IIPOWR_F90
+         TYPE(INTERVAL), INTENT(IN) :: A, B
+         INTERFACE
+            SUBROUTINE IIPOWR(A,B,VALUE)
+               DOUBLE PRECISION, DIMENSION(2) :: A, B, VALUE
+            END SUBROUTINE IIPOWR
+         END INTERFACE
+         DOUBLE PRECISION, DIMENSION(2) :: TMP
+         CALL IIPOWR (DBLAI(A),DBLAI(B),TMP)
+         IIPOWR_F90 = IDBLA(TMP)
+      END FUNCTION IIPOWR_F90
+
+      FUNCTION REAL_TO_IVL_F90(A,B)
+         IMPLICIT NONE
+         DOUBLE PRECISION, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         INTERFACE
+            SUBROUTINE IIPOWR(A,B,VALUE)
+               DOUBLE PRECISION, DIMENSION(2) :: A, B, VALUE
+            END SUBROUTINE IIPOWR
+         END INTERFACE
+         DOUBLE PRECISION, DIMENSION(2) :: TMP
+         TYPE(INTERVAL):: REAL_TO_IVL_F90
+         CALL IIPOWR(DBLAD(A),DBLAI(B),TMP)
+         REAL_TO_IVL_F90 = IDBLA(TMP)
+      END FUNCTION REAL_TO_IVL_F90
+
+      FUNCTION IVL_TO_REAL_F90(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL), INTENT(IN) :: A
+         DOUBLE PRECISION, INTENT(IN) :: B
+         TYPE(INTERVAL):: IVL_TO_REAL_F90
+         INTERFACE
+            SUBROUTINE IIPOWR(A,B,VALUE)
+               DOUBLE PRECISION, DIMENSION(2) :: A, B, VALUE
+            END SUBROUTINE IIPOWR
+         END INTERFACE
+         DOUBLE PRECISION, DIMENSION(2) :: TMP
+         CALL IIPOWR(DBLAI(A),DBLAD(B),TMP)
+         IVL_TO_REAL_F90 = IDBLA(TMP)
+      END FUNCTION IVL_TO_REAL_F90
+
+      FUNCTION IGR_TO_IVL_F90(A,B)
+         IMPLICIT NONE
+         INTEGER, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         TYPE(INTERVAL):: IGR_TO_IVL_F90
+         INTERFACE
+            SUBROUTINE IIPOWR(A,B,VALUE)
+               DOUBLE PRECISION, DIMENSION(2) :: A, B, VALUE
+            END SUBROUTINE IIPOWR
+         END INTERFACE
+         DOUBLE PRECISION, DIMENSION(2) :: TMP
+         CALL IIPOWR(DBLAN(A),DBLAI(B),TMP)
+         IGR_TO_IVL_F90 = IDBLA(TMP)
+      END FUNCTION IGR_TO_IVL_F90
+
+      FUNCTION ICOS_F90(A)
+         IMPLICIT NONE
+         TYPE(INTERVAL) ICOS_F90
+         TYPE(INTERVAL), INTENT(IN):: A
+         INTERFACE
+            SUBROUTINE ICOS(A,VALUE)
+               DOUBLE PRECISION, DIMENSION(2) :: A, VALUE
+            END SUBROUTINE ICOS
+         END INTERFACE
+         DOUBLE PRECISION, DIMENSION(2) :: TMP
+         CALL ICOS (DBLAI(A),TMP)
+         ICOS_F90 = IDBLA(TMP)
+      END FUNCTION ICOS_F90
+
+      FUNCTION IEXP_F90(A)
+        IMPLICIT NONE
+        TYPE(INTERVAL) IEXP_F90
+         TYPE(INTERVAL), INTENT(IN):: A
+         INTERFACE
+            SUBROUTINE IEXP(A,VALUE)
+               DOUBLE PRECISION, DIMENSION(2) :: A, VALUE
+            END SUBROUTINE IEXP
+         END INTERFACE
+         DOUBLE PRECISION, DIMENSION(2) :: TMP
+         CALL IEXP (DBLAI(A),TMP)
+         IEXP_F90 = IDBLA(TMP)
+      END FUNCTION IEXP_F90
+
+      FUNCTION ILOG_F90(A)
+         IMPLICIT NONE
+         TYPE(INTERVAL) ILOG_F90
+         TYPE(INTERVAL), INTENT(IN):: A
+         INTERFACE
+            SUBROUTINE ILOG(A,VALUE)
+               DOUBLE PRECISION, DIMENSION(2) :: A, VALUE
+            END SUBROUTINE ILOG
+         END INTERFACE
+         DOUBLE PRECISION, DIMENSION(2) :: TMP
+         CALL ILOG (DBLAI(A),TMP)
+         ILOG_F90 = IDBLA(TMP)
+      END FUNCTION ILOG_F90
+
+      FUNCTION ISIN_F90(A)
+         IMPLICIT NONE
+         TYPE(INTERVAL) ISIN_F90
+         TYPE(INTERVAL), INTENT(IN):: A
+         INTERFACE
+            SUBROUTINE ISIN(A,VALUE)
+               DOUBLE PRECISION, DIMENSION(2) :: A, VALUE
+            END SUBROUTINE ISIN
+         END INTERFACE
+         DOUBLE PRECISION, DIMENSION(2) :: TMP
+         CALL ISIN (DBLAI(A),TMP)
+         ISIN_F90 = IDBLA(TMP)
+      END FUNCTION ISIN_F90
+
+      FUNCTION ITAN_F90(A)
+         IMPLICIT NONE
+         TYPE(INTERVAL) ITAN_F90
+         TYPE(INTERVAL), INTENT(IN) :: A
+         INTERFACE
+            SUBROUTINE ISIN(A,VALUE)
+               DOUBLE PRECISION, DIMENSION(2) :: A, VALUE
+            END SUBROUTINE ISIN
+            SUBROUTINE ICOS(A,VALUE)
+               DOUBLE PRECISION, DIMENSION(2) :: A, VALUE
+            END SUBROUTINE ICOS
+            SUBROUTINE IDIV(A,B,C)
+               DOUBLE PRECISION, DIMENSION(2) :: A, B, C
+            END SUBROUTINE IDIV
+         END INTERFACE
+         DOUBLE PRECISION, DIMENSION(2) :: TMP1, TMP2
+         TMP2 = DBLAI(A)
+         CALL ISIN (TMP2, TMP1)
+         CALL ICOS (TMP2, TMP2)
+         CALL IDIV (TMP1, TMP2, TMP1)
+         ITAN_F90 = IDBLA(TMP1)
+      END FUNCTION ITAN_F90
+
+      FUNCTION ICOT_F90(A)
+         IMPLICIT NONE
+         TYPE(INTERVAL) ICOT_F90
+         TYPE(INTERVAL), INTENT(IN) :: A
+         INTERFACE
+            SUBROUTINE ISIN(A,VALUE)
+               DOUBLE PRECISION, DIMENSION(2) :: A, VALUE
+            END SUBROUTINE ISIN
+            SUBROUTINE ICOS(A,VALUE)
+               DOUBLE PRECISION, DIMENSION(2) :: A, VALUE
+            END SUBROUTINE ICOS
+            SUBROUTINE IDIV(A,B,C)
+               DOUBLE PRECISION, DIMENSION(2) :: A, B, C
+            END SUBROUTINE IDIV
+         END INTERFACE
+         DOUBLE PRECISION, DIMENSION(2) :: TMP1, TMP2
+         TMP2 = DBLAI(A)
+         CALL ISIN (TMP2, TMP1)
+         CALL ICOS (TMP2, TMP2)
+         CALL IDIV (TMP2, TMP1, TMP1)
+         ICOT_F90 = IDBLA(TMP1)
+      END FUNCTION ICOT_F90
+
+      FUNCTION ISQRT_F90(A)
+         IMPLICIT NONE
+         TYPE(INTERVAL) ISQRT_F90
+         TYPE(INTERVAL), INTENT(IN) :: A
+         INTERFACE
+            SUBROUTINE ISQRT(A,VALUE)
+               DOUBLE PRECISION, DIMENSION(2) :: A, VALUE
+            END SUBROUTINE ISQRT
+         END INTERFACE
+         DOUBLE PRECISION, DIMENSION(2) :: TMP
+         CALL ISQRT (DBLAI(A),TMP)
+         ISQRT_F90 = IDBLA(TMP)
+      END FUNCTION ISQRT_F90
+
+      FUNCTION IATAN_F90(A)
+         IMPLICIT NONE
+         TYPE(INTERVAL) IATAN_F90
+         TYPE(INTERVAL), INTENT(IN) :: A
+         INTERFACE
+            SUBROUTINE IATAN(A,VALUE)
+               DOUBLE PRECISION, DIMENSION(2) :: A, VALUE
+            END SUBROUTINE IATAN
+         END INTERFACE
+         DOUBLE PRECISION, DIMENSION(2) :: TMP
+         CALL IATAN (DBLAI(A),TMP)
+         IATAN_F90 = IDBLA(TMP)
+      END FUNCTION IATAN_F90
+
+      FUNCTION IACOT_F90(A)
+         IMPLICIT NONE
+         TYPE(INTERVAL) IACOT_F90
+         TYPE(INTERVAL), INTENT(IN) :: A
+         INTERFACE
+            SUBROUTINE IACOT(A,VALUE)
+               DOUBLE PRECISION, DIMENSION(2) :: A, VALUE
+            END SUBROUTINE IACOT
+         END INTERFACE
+         DOUBLE PRECISION, DIMENSION(2) :: TMP
+         CALL IACOT (DBLAI(A),TMP)
+         IACOT_F90 = IDBLA(TMP)
+      END FUNCTION IACOT_F90
+
+      FUNCTION IASIN_F90(A)
+         IMPLICIT NONE
+         TYPE(INTERVAL) IASIN_F90
+         TYPE(INTERVAL), INTENT(IN) :: A
+         INTERFACE
+            SUBROUTINE IASIN(A,VALUE)
+               DOUBLE PRECISION, DIMENSION(2) :: A, VALUE
+            END SUBROUTINE IASIN
+         END INTERFACE
+         DOUBLE PRECISION, DIMENSION(2) :: TMP
+         CALL IASIN (DBLAI(A),TMP)
+         IASIN_F90 = IDBLA(TMP)
+      END FUNCTION IASIN_F90
+
+      FUNCTION IACOS_F90(A)
+         IMPLICIT NONE
+         TYPE(INTERVAL) IACOS_F90
+         TYPE(INTERVAL), INTENT(IN) :: A
+         INTERFACE
+            SUBROUTINE IACOS(A,VALUE)
+               DOUBLE PRECISION, DIMENSION(2) :: A, VALUE
+            END SUBROUTINE IACOS
+         END INTERFACE
+         DOUBLE PRECISION, DIMENSION(2) :: TMP
+         CALL IACOS (DBLAI(A),TMP)
+         IACOS_F90 = IDBLA(TMP)
+      END FUNCTION IACOS_F90
+
+      FUNCTION ISINH_F90(A)
+         IMPLICIT NONE
+         TYPE(INTERVAL) ISINH_F90
+         TYPE(INTERVAL), INTENT(IN) :: A
+         INTERFACE
+            SUBROUTINE ISINH(A,VALUE)
+               DOUBLE PRECISION, DIMENSION(2) :: A, VALUE
+            END SUBROUTINE ISINH
+         END INTERFACE
+         DOUBLE PRECISION, DIMENSION(2) :: TMP
+         CALL ISINH (DBLAI(A),TMP)
+         ISINH_F90 = IDBLA(TMP)
+      END FUNCTION ISINH_F90
+
+ ! Utility function Fortran 77 calls
+
+      FUNCTION ICAP_F90(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL) ICAP_F90
+         TYPE(INTERVAL), INTENT(IN) :: A, B
+         TYPE(INTERVAL) :: T
+         DOUBLE PRECISION, DIMENSION(2) :: X
+         INTEGER ISIG, IERR, IROUT, IPRTCL, ISEVER, IERPUN
+         COMMON /ERFLGS/ ISIG, IERR, IROUT, IPRTCL, ISEVER, IERPUN
+         IROUT = 13
+         IERR = 0
+         T%LOWER = MAX (A%LOWER, B%LOWER)
+         T%UPPER = MIN (A%UPPER, B%UPPER)
+         ICAP_F90 = T
+         IF (ICAP_F90%LOWER.GT.ICAP_F90%UPPER) THEN
+            IERR=13
+            X = DBLAI(ICAP_F90)
+            CALL ERRTST(X)
+            ICAP_F90 = IDBLA(X)
+         END IF
+      END FUNCTION ICAP_F90
+
+      FUNCTION IHULL_F90(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL) IHULL_F90
+         TYPE(INTERVAL), INTENT(IN) :: A, B
+         TYPE(INTERVAL) :: T
+         IF ( A%LOWER.GT.A%UPPER ) THEN
+            IF (B%LOWER.GT.B%UPPER) THEN
+               T=INTERVAL(MAX(A%UPPER,B%UPPER),MIN(A%LOWER,B%UPPER))
+            ELSE
+               T = B
+            END IF
+         ELSE IF ( B%LOWER.GT.B%UPPER ) THEN
+            T = A
+         ELSE
+            T=INTERVAL(MIN(A%LOWER,B%LOWER),MAX(A%UPPER,B%UPPER))
+         END IF
+         IHULL_F90 = T
+      END FUNCTION IHULL_F90
+
+      FUNCTION IHULL_R_I(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL) IHULL_R_I
+         DOUBLE PRECISION, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         IHULL_R_I = IHULL_F90(INTERVAL(A,A),B)
+      END FUNCTION IHULL_R_I
+
+      FUNCTION IHULL_I_R(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL) IHULL_I_R
+         TYPE(INTERVAL), INTENT(IN) :: A
+         DOUBLE PRECISION, INTENT(IN) :: B
+         IHULL_I_R = IHULL_F90(A,INTERVAL(B,B))
+      END FUNCTION IHULL_I_R
+
+      FUNCTION IHULL_R_R(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL) IHULL_R_R
+         DOUBLE PRECISION, INTENT(IN) :: A, B
+         IHULL_R_R = IHULL_F90(INTERVAL(A,A),INTERVAL(B,B))
+      END FUNCTION IHULL_R_R
+
+      FUNCTION IHULL_N_I(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL) IHULL_N_I
+         INTEGER, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         IHULL_N_I = IHULL_F90(INTERVAL(A,A),B)
+      END FUNCTION IHULL_N_I
+
+      FUNCTION IHULL_I_N(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL) IHULL_I_N
+         TYPE(INTERVAL), INTENT(IN) :: A
+         INTEGER, INTENT(IN) :: B
+         IHULL_I_N = IHULL_F90(A,INTERVAL(B,B))
+      END FUNCTION IHULL_I_N
+
+      FUNCTION IHULL_N_N(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL) IHULL_N_N
+         INTEGER, INTENT(IN) :: A, B
+         IHULL_N_N = IHULL_F90(INTERVAL(A,A),INTERVAL(B,B))
+      END FUNCTION IHULL_N_N
+
+      FUNCTION IHULL_N_R(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL) IHULL_N_R
+         INTEGER, INTENT(IN) :: A
+         DOUBLE PRECISION, INTENT(IN) :: B
+         IHULL_N_R = IHULL_F90(INTERVAL(A,A),INTERVAL(B,B))
+      END FUNCTION IHULL_N_R
+
+      FUNCTION IHULL_R_N(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL) IHULL_R_N
+         DOUBLE PRECISION, INTENT(IN) :: A
+         INTEGER, INTENT(IN) :: B
+         IHULL_R_N = IHULL_F90(INTERVAL(A,A),INTERVAL(B,B))
+      END FUNCTION IHULL_R_N
+
+      FUNCTION IILEI_F90(A,B) RESULT(L)
+         IMPLICIT NONE
+         TYPE(INTERVAL), INTENT(IN):: A, B
+         LOGICAL:: L
+         L = (A%LOWER.GE.B%LOWER) .AND. (A%UPPER.LE.B%UPPER)
+      END FUNCTION IILEI_F90
+
+      FUNCTION IIGEI_F90(A,B)
+         IMPLICIT NONE
+         LOGICAL IIGEI_F90
+         TYPE(INTERVAL), INTENT(IN) :: A, B
+         IIGEI_F90 = IILEI_F90(B,A)
+      END FUNCTION IIGEI_F90
+
+      LOGICAL FUNCTION IRILEI(A,B)
+         IMPLICIT NONE
+         INTEGER, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         IRILEI = IILEI_F90(INTERVAL(A,A),B)
+      END FUNCTION IRILEI
+
+      LOGICAL FUNCTION IIILEI(A,B)
+         TYPE(INTERVAL), INTENT(IN) :: A, B
+         IIILEI = A%LOWER.GT.B%LOWER .AND. A%UPPER.LT.B%UPPER
+      END FUNCTION IIILEI
+
+      FUNCTION IRLEI_F90(A,B) RESULT(L)
+         IMPLICIT NONE
+         DOUBLE PRECISION, INTENT(IN):: A
+         TYPE(INTERVAL), INTENT(IN):: B
+         LOGICAL:: L
+         L = (A .GE. B%LOWER) .AND. (A .LE. B%UPPER)
+      END FUNCTION IRLEI_F90
+
+      FUNCTION IDISJ_F90(A,B) RESULT(L)
+         IMPLICIT NONE
+         TYPE(INTERVAL), INTENT(IN):: A, B
+         LOGICAL:: L
+         L = (A%UPPER .LT. B%LOWER) .OR. (B%UPPER .LT. A%LOWER)
+      END FUNCTION IDISJ_F90
+      
+ ! Interval-valued absolute value
+ 
+      FUNCTION IVLABS_F90(A) RESULT(R)
+         IMPLICIT NONE
+         TYPE(INTERVAL), INTENT(IN) :: A
+         TYPE(INTERVAL) :: R
+         TYPE(INTERVAL) :: TA, TMP
+         TA = A
+         TMP%LOWER = ABS(TA%LOWER)
+         TMP%UPPER = ABS(TA%UPPER)
+         IF (TMP%LOWER.LE.TMP%UPPER) THEN
+            R = TMP
+         ELSE
+            R%LOWER = TMP%UPPER
+            R%UPPER = TMP%LOWER
+         END IF
+         CALL RNDOUT_F90(R,.TRUE.,.TRUE.)
+         IF ( ( TA%LOWER.LE.ZERO .AND. TA%UPPER.GE.ZERO ) .OR. &
+                R%LOWER.LT. ZERO)  R%LOWER = ZERO
+      END FUNCTION IVLABS_F90
+
+ ! Not in INTLIB
+
+      FUNCTION IVLMAX_F90(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL), INTENT(IN) :: A, B
+         TYPE(INTERVAL) :: IVLMAX_F90
+         IVLMAX_F90%LOWER = MAX(A%LOWER,B%LOWER)
+         IVLMAX_F90%UPPER = MAX(A%UPPER,B%UPPER)
+      END FUNCTION IVLMAX_F90
+
+      FUNCTION IVRMAX(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL), INTENT(IN) :: A
+         DOUBLE PRECISION, INTENT(IN) :: B
+         TYPE(INTERVAL) :: IVRMAX
+         IVRMAX%LOWER = MAX(A%LOWER,B)
+         IVRMAX%UPPER = MAX(A%UPPER,B)
+      END FUNCTION IVRMAX
+
+      FUNCTION RIVMAX(A,B)
+         IMPLICIT NONE
+         DOUBLE PRECISION, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         TYPE(INTERVAL) :: RIVMAX
+         RIVMAX%LOWER = MAX(B%LOWER,A)
+         RIVMAX%UPPER = MAX(B%UPPER,A)
+      END FUNCTION RIVMAX
+
+      FUNCTION IVIMAX(A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL), INTENT(IN) :: A
+         INTEGER, INTENT(IN) :: B
+         TYPE(INTERVAL) :: IVIMAX
+         IVIMAX%LOWER = MAX(A%LOWER,DBLE(B))
+         IVIMAX%UPPER = MAX(A%UPPER,DBLE(B))
+      END FUNCTION IVIMAX
+
+      FUNCTION IIVMAX(A,B)
+         IMPLICIT NONE
+         INTEGER, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         TYPE(INTERVAL) :: IIVMAX
+         IIVMAX%LOWER = MAX(B%LOWER,DBLE(A))
+         IIVMAX%UPPER = MAX(B%UPPER,DBLE(A))
+      END FUNCTION IIVMAX
+
+  ! .LT.
+
+      FUNCTION INTINTLT_F90(A,B)
+         IMPLICIT NONE
+         LOGICAL INTINTLT_F90
+         TYPE(INTERVAL), INTENT(IN) :: A, B
+         INTINTLT_F90 = A%UPPER.LT.B%LOWER
+      END FUNCTION INTINTLT_F90
+
+      FUNCTION REALINTLT_F90(A,B)
+         IMPLICIT NONE
+         LOGICAL REALINTLT_F90
+         DOUBLE PRECISION, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         REALINTLT_F90 = A.LT.B%LOWER
+      END FUNCTION REALINTLT_F90
+
+      FUNCTION INTREALLT_F90(A,B)
+         IMPLICIT NONE
+         LOGICAL INTREALLT_F90
+         TYPE(INTERVAL), INTENT(IN) :: A
+         DOUBLE PRECISION, INTENT(IN) :: B
+         INTREALLT_F90 = A%UPPER.LT.B
+      END FUNCTION INTREALLT_F90
+
+      FUNCTION IGRINTLT_F90(A,B)
+         IMPLICIT NONE
+         LOGICAL IGRINTLT_F90
+         INTEGER, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         IGRINTLT_F90 = A.LT.B%LOWER
+      END FUNCTION IGRINTLT_F90
+
+      FUNCTION INTIGRLT_F90(A,B)
+         IMPLICIT NONE
+         LOGICAL INTIGRLT_F90
+         TYPE(INTERVAL), INTENT(IN) :: A
+         INTEGER, INTENT(IN) :: B
+         INTIGRLT_F90 = A%UPPER.LT.B
+      END FUNCTION INTIGRLT_F90
+
+      FUNCTION IVLMIN_F90(A,B)
+         TYPE(INTERVAL), INTENT(IN) :: A, B
+         TYPE(INTERVAL) :: IVLMIN_F90
+         IVLMIN_F90%LOWER = MIN(A%LOWER,B%LOWER)
+         IVLMIN_F90%UPPER = MIN(A%UPPER,B%UPPER)
+      END FUNCTION IVLMIN_F90
+
+      FUNCTION IVRMIN(A,B)
+         TYPE(INTERVAL), INTENT(IN) :: A
+         DOUBLE PRECISION, INTENT(IN) :: B
+         TYPE(INTERVAL) :: IVRMIN
+         IVRMIN%LOWER = MIN(A%LOWER,B)
+         IVRMIN%UPPER = MIN(A%UPPER,B)
+      END FUNCTION IVRMIN
+
+      FUNCTION RIVMIN(A,B)
+         DOUBLE PRECISION, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         TYPE(INTERVAL) :: RIVMIN
+         RIVMIN%LOWER = MIN(B%LOWER,A)
+         RIVMIN%UPPER = MIN(B%UPPER,A)
+      END FUNCTION RIVMIN
+
+      FUNCTION IVIMIN(A,B)
+         TYPE(INTERVAL), INTENT(IN) :: A
+         INTEGER, INTENT(IN) :: B
+         TYPE(INTERVAL) :: IVIMIN
+         IVIMIN%LOWER = MIN(A%LOWER,DBLE(B))
+         IVIMIN%UPPER = MIN(A%UPPER,DBLE(B))
+      END FUNCTION IVIMIN
+
+      FUNCTION IIVMIN(A,B)
+         INTEGER, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         TYPE(INTERVAL) :: IIVMIN
+         IIVMIN%LOWER = MIN(B%LOWER,DBLE(A))
+         IIVMIN%UPPER = MIN(B%UPPER,DBLE(A))
+      END FUNCTION IIVMIN
+
+  ! .GT.
+
+      FUNCTION INTINTGT_F90(A,B)
+         IMPLICIT NONE
+         LOGICAL INTINTGT_F90
+         TYPE(INTERVAL), INTENT(IN) :: A, B
+         INTINTGT_F90 = A%LOWER.GT.B%UPPER
+      END FUNCTION INTINTGT_F90
+
+      FUNCTION REALINTGT_F90(A,B)
+         IMPLICIT NONE
+         LOGICAL REALINTGT_F90
+         DOUBLE PRECISION, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         REALINTGT_F90 = A.GT.B%UPPER
+      END FUNCTION REALINTGT_F90
+
+      FUNCTION INTREALGT_F90(A,B)
+         IMPLICIT NONE
+         LOGICAL INTREALGT_F90
+         TYPE(INTERVAL), INTENT(IN) :: A
+         DOUBLE PRECISION, INTENT(IN) :: B
+         INTREALGT_F90 = A%LOWER.GT.B
+      END FUNCTION INTREALGT_F90
+
+      FUNCTION IGRINTGT_F90(A,B)
+         IMPLICIT NONE
+         LOGICAL IGRINTGT_F90
+         INTEGER, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         IGRINTGT_F90 = A.GT.B%UPPER
+      END FUNCTION IGRINTGT_F90
+
+      FUNCTION INTIGRGT_F90(A,B)
+         IMPLICIT NONE
+         LOGICAL INTIGRGT_F90
+         TYPE(INTERVAL), INTENT(IN) :: A
+         INTEGER, INTENT(IN) :: B
+         INTIGRGT_F90 = A%LOWER.GT.B
+      END FUNCTION INTIGRGT_F90
+
+  ! .LE.
+
+      FUNCTION INTINTLE_F90(A,B)
+         IMPLICIT NONE
+         LOGICAL INTINTLE_F90
+         TYPE(INTERVAL), INTENT(IN) :: A, B
+         INTINTLE_F90 = A%UPPER.LE.B%LOWER
+      END FUNCTION INTINTLE_F90
+
+      FUNCTION REALINTLE_F90(A,B)
+         IMPLICIT NONE
+         LOGICAL REALINTLE_F90
+         DOUBLE PRECISION, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         REALINTLE_F90 = A.LE.B%LOWER
+      END FUNCTION REALINTLE_F90
+
+      FUNCTION INTREALLE_F90(A,B)
+         IMPLICIT NONE
+         LOGICAL INTREALLE_F90
+         TYPE(INTERVAL), INTENT(IN) :: A
+         DOUBLE PRECISION, INTENT(IN) :: B
+         INTREALLE_F90 = A%UPPER.LE.B
+      END FUNCTION INTREALLE_F90
+
+      FUNCTION IGRINTLE_F90(A,B)
+         IMPLICIT NONE
+         LOGICAL IGRINTLE_F90
+         INTEGER, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         IGRINTLE_F90 = A.LE.B%LOWER
+      END FUNCTION IGRINTLE_F90
+
+      FUNCTION INTIGRLE_F90(A,B)
+         IMPLICIT NONE
+         LOGICAL INTIGRLE_F90
+         TYPE(INTERVAL), INTENT(IN) :: A
+         INTEGER, INTENT(IN) :: B
+         INTIGRLE_F90 = A%UPPER.LE.B
+      END FUNCTION INTIGRLE_F90
+
+  ! .GE.
+
+      FUNCTION INTINTGE_F90(A,B)
+         IMPLICIT NONE
+         LOGICAL INTINTGE_F90
+         TYPE(INTERVAL), INTENT(IN) :: A, B
+         INTINTGE_F90 = A%LOWER.GE.B%UPPER
+      END FUNCTION INTINTGE_F90
+
+      FUNCTION REALINTGE_F90(A,B)
+         IMPLICIT NONE
+         LOGICAL REALINTGE_F90
+         DOUBLE PRECISION, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         REALINTGE_F90 = A.GE.B%UPPER
+      END FUNCTION REALINTGE_F90
+
+      FUNCTION INTREALGE_F90(A,B)
+         IMPLICIT NONE
+         LOGICAL INTREALGE_F90
+         TYPE(INTERVAL), INTENT(IN) :: A
+         DOUBLE PRECISION, INTENT(IN) :: B
+         INTREALGE_F90 = A%LOWER.GE.B
+      END FUNCTION INTREALGE_F90
+
+      FUNCTION IGRINTGE_F90(A,B)
+         IMPLICIT NONE
+         LOGICAL IGRINTGE_F90
+         INTEGER, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         IGRINTGE_F90 = A.GE.B%UPPER
+      END FUNCTION IGRINTGE_F90
+
+      FUNCTION INTIGRGE_F90(A,B)
+         IMPLICIT NONE
+         LOGICAL INTIGRGE_F90
+         TYPE(INTERVAL), INTENT(IN) :: A
+         INTEGER, INTENT(IN) :: B
+         INTIGRGE_F90 = A%LOWER.GE.B
+      END FUNCTION INTIGRGE_F90
+
+  ! .NE.
+
+      FUNCTION INTINTNE(A,B)
+         IMPLICIT NONE
+         LOGICAL INTINTNE
+         TYPE(INTERVAL), INTENT(IN) :: A, B
+         INTINTNE = (A%LOWER.NE.B%LOWER) .OR. (A%UPPER.NE.B%UPPER)
+      END FUNCTION INTINTNE
+
+      FUNCTION REALINTNE(A,B)
+         IMPLICIT NONE
+         LOGICAL REALINTNE
+         DOUBLE PRECISION, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         REALINTNE = (A.NE.B%LOWER) .OR. (A.NE.B%UPPER)
+      END FUNCTION REALINTNE
+
+      FUNCTION INTREALNE(A,B)
+         IMPLICIT NONE
+         LOGICAL INTREALNE
+         TYPE(INTERVAL), INTENT(IN) :: A
+         DOUBLE PRECISION, INTENT(IN) :: B
+         INTREALNE = (A%LOWER.NE.B) .OR. (A%UPPER.NE.B)
+      END FUNCTION INTREALNE
+
+      FUNCTION IGRINTNE(A,B)
+         IMPLICIT NONE
+         LOGICAL IGRINTNE
+         INTEGER, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         IGRINTNE = (DBLE(A).NE.B%LOWER) .OR. (DBLE(A).NE.B%UPPER)
+      END FUNCTION IGRINTNE
+
+      FUNCTION INTIGRNE(A,B)
+         IMPLICIT NONE
+         LOGICAL INTIGRNE
+         TYPE(INTERVAL), INTENT(IN) :: A
+         INTEGER, INTENT(IN) :: B
+         INTIGRNE = (A%LOWER.NE.DBLE(B)) .OR. (A%UPPER.NE.DBLE(B))
+      END FUNCTION INTIGRNE
+
+  ! .EQ.
+
+      FUNCTION INTINTEQ(A,B)
+         IMPLICIT NONE
+         LOGICAL INTINTEQ
+         TYPE(INTERVAL), INTENT(IN) :: A, B
+         INTINTEQ = (A%LOWER.EQ.B%LOWER) .AND. (A%UPPER.EQ.B%UPPER)
+      END FUNCTION INTINTEQ
+
+      FUNCTION REALINTEQ(A,B)
+         IMPLICIT NONE
+         LOGICAL REALINTEQ
+         DOUBLE PRECISION, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         REALINTEQ = (A.EQ.B%LOWER) .AND. (A.EQ.B%UPPER)
+      END FUNCTION REALINTEQ
+
+      FUNCTION INTREALEQ(A,B)
+         IMPLICIT NONE
+         LOGICAL INTREALEQ
+         TYPE(INTERVAL), INTENT(IN) :: A
+         DOUBLE PRECISION, INTENT(IN) :: B
+         INTREALEQ = (A%LOWER.EQ.B) .AND. (A%UPPER.EQ.B)
+      END FUNCTION INTREALEQ
+
+      FUNCTION IGRINTEQ(A,B)
+         IMPLICIT NONE
+         LOGICAL IGRINTEQ
+         INTEGER, INTENT(IN) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         IGRINTEQ = (DBLE(A).EQ.B%LOWER) .AND. (DBLE(A).EQ.B%UPPER)
+      END FUNCTION IGRINTEQ
+
+      FUNCTION INTIGREQ(A,B)
+         IMPLICIT NONE
+         LOGICAL INTIGREQ
+         TYPE(INTERVAL), INTENT(IN) :: A
+         INTEGER, INTENT(IN) :: B
+         INTIGREQ = (A%LOWER.EQ.DBLE(B)) .AND. (A%UPPER.EQ.DBLE(B))
+      END FUNCTION INTIGREQ
+
+ ! Assignment of other data types to interval
+
+      SUBROUTINE INTEGER_TO_INTERVAL (A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL), INTENT(OUT) :: A
+         INTEGER, INTENT(IN) :: B
+         A = INTERVAL(B,B)
+         IF (B.NE.0) CALL RNDOUT_F90(A,.TRUE.,.TRUE.)
+       END SUBROUTINE INTEGER_TO_INTERVAL
+
+      SUBROUTINE DOUBLE_TO_INTERVAL (A,B)
+         IMPLICIT NONE
+         TYPE(INTERVAL), INTENT(OUT) :: A
+         DOUBLE PRECISION, INTENT(IN) :: B
+         A = INTERVAL(B,B)
+         IF (B.NE.0) CALL RNDOUT_F90(A,.TRUE.,.TRUE.)
+      END SUBROUTINE DOUBLE_TO_INTERVAL
+
+   ! Internal data conversion routines for interfacing with INTLIB
+
+      FUNCTION IDBLA(B) RESULT(A)
+         IMPLICIT NONE
+         TYPE(INTERVAL) :: A
+         DOUBLE PRECISION, DIMENSION(2) :: B
+         A%LOWER = B(1)
+         A%UPPER = B(2)
+      END FUNCTION IDBLA
+
+      FUNCTION DBLAI(B) RESULT(A)
+         IMPLICIT NONE
+         DOUBLE PRECISION, DIMENSION(2) :: A
+         TYPE(INTERVAL), INTENT(IN) :: B
+         A(1) = B%LOWER
+         A(2) = B%UPPER
+      END FUNCTION DBLAI
+
+      FUNCTION DBLAD(B) RESULT(A)
+         IMPLICIT NONE
+         DOUBLE PRECISION, DIMENSION(2) :: A
+         DOUBLE PRECISION, INTENT(IN) :: B
+         A(1) = B
+         A(2) = B
+      END FUNCTION DBLAD
+
+      FUNCTION DBLAN(B) RESULT(A)
+         IMPLICIT NONE
+         DOUBLE PRECISION, DIMENSION(2) :: A
+         INTEGER, INTENT(IN) :: B
+         A(1) = DBLE(B)
+         A(2) = DBLE(B)
+      END FUNCTION DBLAN
+
+      FUNCTION IVL1_F90(A) RESULT(R)
+         IMPLICIT NONE
+        DOUBLE PRECISION, INTENT(IN) :: A
+         TYPE(INTERVAL) :: R
+         R = INTERVAL(A,A)
+         CALL RNDOUT_F90(R,.TRUE.,.TRUE.)
+         END FUNCTION IVL1_F90
+
+      FUNCTION IVL2_F90(A,B) RESULT(R)
+         IMPLICIT NONE
+         DOUBLE PRECISION, INTENT(IN) :: A, B
+         TYPE(INTERVAL):: R
+         R = INTERVAL(A,B)
+         CALL RNDOUT_F90(R,.TRUE.,.TRUE.)
+      END FUNCTION IVL2_F90
+
+      FUNCTION IVL1I_F90(A) RESULT(R)
+         IMPLICIT NONE
+         INTEGER, INTENT(IN) :: A
+         TYPE(INTERVAL) :: R
+         R = INTERVAL(A,A)
+         CALL RNDOUT_F90(R,.TRUE.,.TRUE.)
+      END FUNCTION IVL1I_F90
+
+      FUNCTION IVL2I_F90(A,B) RESULT(R)
+         IMPLICIT NONE
+         INTEGER, INTENT(IN) :: A, B
+         TYPE(INTERVAL):: R
+         R = INTERVAL(A,B)
+         CALL RNDOUT_F90(R,.TRUE.,.TRUE.)
+      END FUNCTION IVL2I_F90
+
+      FUNCTION IVL2DI_F90(A,B) RESULT(R)
+         IMPLICIT NONE
+         DOUBLE PRECISION, INTENT(IN) :: A
+         INTEGER, INTENT(IN) :: B
+         TYPE(INTERVAL):: R
+         R = INTERVAL(A,B)
+         CALL RNDOUT_F90(R,.TRUE.,.TRUE.)
+      END FUNCTION IVL2DI_F90
+
+      FUNCTION IVL2ID_F90(A,B) RESULT(R)
+         IMPLICIT NONE
+         INTEGER, INTENT(IN) :: A
+         DOUBLE PRECISION, INTENT(IN) :: B
+         TYPE(INTERVAL):: R
+         R = INTERVAL(A,B)
+         CALL RNDOUT_F90(R,.TRUE.,.TRUE.)
+      END FUNCTION IVL2ID_F90
+
+      FUNCTION IVL_IVL(A) RESULT(R)
+         IMPLICIT NONE
+         TYPE(INTERVAL), INTENT(IN) :: A
+         TYPE(INTERVAL) :: R
+         R = A
+      END FUNCTION IVL_IVL
+
+ ! mag, abs, max, iwid, mig, imid --
+
+      FUNCTION INTABS_F90(A) RESULT(D)
+         IMPLICIT NONE
+         TYPE(INTERVAL) :: A
+         DOUBLE PRECISION D
+         
+         TYPE(INTERVAL) :: T
+         
+         T%UPPER = ABS(A%LOWER)
+         CALL RNDOUT_F90(T,.FALSE.,.TRUE.)
+         T%LOWER=T%UPPER
+         T%UPPER = ABS(A%UPPER)
+         CALL RNDOUT_F90(T,.FALSE.,.TRUE.)
+         D = MAX (T%LOWER, T%UPPER)
+      END FUNCTION INTABS_F90
+
+      FUNCTION IWID_F90(A) RESULT(B)
+         IMPLICIT NONE
+         TYPE(INTERVAL) :: A
+         DOUBLE PRECISION B
+         TYPE(INTERVAL) :: T
+         B = A%UPPER - A%LOWER
+         T = INTERVAL(B,B)
+         CALL RNDOUT_F90(T,.FALSE.,.TRUE.)
+         B = T%UPPER
+      END FUNCTION IWID_F90
+
+      FUNCTION IMIG_F90(A) RESULT(B)
+         IMPLICIT NONE
+         TYPE(INTERVAL) :: A
+         DOUBLE PRECISION B
+         TYPE(INTERVAL) :: T   
+         IF ( ((A%LOWER.GT.0D0) .AND. (A%UPPER.GT.0D0)) &
+           .OR.((A%LOWER.LT.0D0) .AND. (A%UPPER.LT.0D0)) ) THEN
+            T%LOWER = ABS(A%UPPER)
+            CALL RNDOUT_F90(T,.TRUE.,.FALSE.)
+            T%UPPER=T%LOWER
+            T%LOWER = ABS(A%LOWER)
+            CALL RNDOUT_F90(T,.TRUE.,.FALSE.)
+            B = MIN (T%LOWER, T%UPPER)
+         ELSE
+            B = 0D0
+         END IF
+      END FUNCTION IMIG_F90
+
+      FUNCTION IMID_F90(B)
+         IMPLICIT NONE
+         TYPE(INTERVAL):: B
+         DOUBLE PRECISION IMID_F90      
+         IMID_F90 = B%LOWER + (B%UPPER - B%LOWER) / 2D0
+      END FUNCTION IMID_F90
+
+ ! Additional routines for compatibility with Fortran-SC syntax
+ 
+      FUNCTION SUP_F90(X) RESULT(R)
+         IMPLICIT NONE
+         TYPE(INTERVAL), INTENT(IN) :: X
+         DOUBLE PRECISION R
+         R = X%UPPER
+      END FUNCTION SUP_F90
+
+      FUNCTION INF_F90(X) RESULT(R)
+         IMPLICIT NONE
+         TYPE(INTERVAL), INTENT(IN) :: X
+         DOUBLE PRECISION R
+         R = X%LOWER
+      END FUNCTION INF_F90
+
+END MODULE INTERVAL_ARITHMETIC

@@ -1,0 +1,1108 @@
+C     ALGORITHM 602, COLLECTED ALGORITHMS FROM ACM.
+C     ALGORITHM APPEARED IN ACM-TRANS. MATH. SOFTWARE, VOL.9, NO. 3,
+C     SEP., 1983, P. 355-357.
+      SUBROUTINE HURRY(A, L, M, SUM, F, N, ERR, SIGMAS, DA)             HUR   10
+C
+C***********************************************************************
+C*                                                                     *
+C* COMPUTES THE ACCELERATED SUM OF A SERIES OR LIMIT OF A SEQUENCE.    *
+C*                                                                     *
+C* ARGUMENTS:                                                          *
+C*    A      = ARRAY OF ELEMENTS OF SERIES OR SEQUENCE                 *
+C*    L      = LEAST NUMBER OF TERMS TO BE USED                        *
+C*    M      = MOST NUMBER OF TERMS TO BE USED                         *
+C*    SUM    = .TRUE. FOR A SUM, .FALSE. FOR A SEQUENCE                *
+C*    F      = FINAL VALUE RETURNED                                    *
+C*    N      = NUMBER OF TERMS GIVING 'BEST' RESULT                    *
+C*    ERR    = ESTIMATED UNCERTAINTY OF RESULT                         *
+C*    SIGMAS = .TRUE. IF UNCERTAINTIES PROVIDED IN DA                  *
+C*    DA     = ARRAY OF UNCERTAINTIES OF ELEMENTS                      *
+C*                                                                     *
+C* INPUTS FROM DRIVER PROGRAM: A, L, M, SUM, SIGMAS, DA                *
+C*                                                                     *
+C* OUTPUTS TO DRIVER PROGRAM: F, N, ERR                                *
+C*                                                                     *
+C***********************************************************************
+C
+C
+      LOGICAL SUM, SIGMAS, BETTER, BEGUN, BEFORE, LARGE
+      INTEGER I, J, L, M, N
+      DOUBLE PRECISION A(M), DA(M), RESULT(50), TRUNC(50), DRDA(50),
+     * NOISE(50), W1(50), W2(50), WW1(50,50), WW2(50,50), F, ERR, S,
+     * HUGE, SMALL, FACTOR, TEST
+C
+      DATA HUGE, SMALL, FACTOR /1.0D75,0.01D0,3.0D0/
+C
+C          HUGE IS USED TO START THE TEST FOR LEAST TRUNCATION
+C          ERROR SO FAR.  ANY ALLOWABLE NUMBER LARGER THAN ANY
+C          CONCEIVABLE TRUNCATION ERROR WILL DO.  SEE SECTION 2
+C          OF ACCOMPANYING ARTICLE FOR EXPLANATION OF SMALL AND
+C          FACTOR.
+C
+      DO 100 I=L,M
+C        (COMPUTE RESULT OF ACCELERATING I TERMS)
+        IF (I.EQ.L) CALL WHIZ(A, I, W1, W2, SUM, RESULT(I), S, SIGMAS,
+     *   DRDA, WW1, WW2, 50)
+        IF (I.NE.L) CALL WHIZ1(A, I, W1, W2, SUM, RESULT(I), S, SIGMAS,
+     *   DRDA, WW1, WW2, 50)
+        NOISE(I) = 0.0D0
+C
+        IF (.NOT.SIGMAS) GO TO 20
+        DO 10 J=1,I
+C
+C                        ***  WARNING  ***
+C              THE NEXT EXECUTABLE STATEMENT CAN AND DOES CAUSE
+C              UNDERFLOWS -- THE APPROPRIATE FIX IS MACHINE
+C              DEPENDENT.  IF THE MACHINE SETS UNDERFLOWED
+C              QUANTITY TO ZERO, NO HARM RESULTS.
+C
+          NOISE(I) = NOISE(I) + (DA(J)*DRDA(J))**2
+   10   CONTINUE
+        IF (NOISE(I).GT.0.0) NOISE(I) = DSQRT(NOISE(I))
+C
+   20   CONTINUE
+C              (CHECK TRUNCATION ERROR AND CONVERGENCE)
+        IF (I.LE.L) GO TO 30
+        TRUNC(I) = DABS(RESULT(I)-RESULT(I-1))
+        BETTER = (TRUNC(I).LT.TRUNC(I-1)) .OR. (TRUNC(I).LT.SMALL*
+     *   DABS(RESULT(I)))
+        BEGUN = BEGUN .OR. (BETTER .AND. BEFORE)
+        GO TO 40
+   30   CONTINUE
+        TRUNC(I) = 0.0D0
+        BETTER = .FALSE.
+        BEGUN = .FALSE.
+        TEST = HUGE
+   40   CONTINUE
+        BEFORE = BETTER
+C
+        IF (BEGUN) GO TO 50
+        N = I
+        GO TO 90
+   50   CONTINUE
+C              (TEST NUMBER OF TERMS GIVING BEST RESULT SO FAR)
+        IF (TRUNC(I).GE.TEST) GO TO 60
+        N = I
+        TEST = TRUNC(I)
+        GO TO 70
+   60   CONTINUE
+        IF (N.NE.I-1) TEST = (TEST+TRUNC(I))/2.0D0
+   70   CONTINUE
+        IF (I.EQ.N) GO TO 80
+C                 (IS NOISE FROM FROM TERMS LARGE YET?)
+        LARGE = TEST.LT.FACTOR*NOISE(I)
+        IF (LARGE) GO TO 110
+   80   CONTINUE
+   90   CONTINUE
+  100 CONTINUE
+C
+  110 CONTINUE
+      F = RESULT(N)
+      ERR = DMAX1(TRUNC(N),NOISE(N))
+C
+      RETURN
+      END
+      SUBROUTINE WHIZ(A, N, QNUM, QDEN, SUM, VALUE, S, DERIVS, DVDA,    WHI   10
+     * DQNUM, DQDEN, M)
+C
+C***********************************************************************
+C*                                                                     *
+C* THE U ALGORITHM FOR ACCELERATING A SERIES OR A LIMIT OF A SEQUENCE. *
+C*                                                                     *
+C* ARGUMENTS:                                                          *
+C*    A      = ARRAY OF ELEMENTS OF SERIES OR SEQUENCE                 *
+C*    N      = NUMBER OF ELEMENTS IN A                                 *
+C*    QNUM   = BACKWARD DIAGONAL OF NUMERATOR ARRAY, AT LEAST N LONG   *
+C*    QDEN   = BACKWARD DIAGONAL OF DENOMINATOR ARRAY, AT LEAST N LONG *
+C*    SUM    = .TRUE. FOR A SUM, .FALSE. FOR A SEQUENCE                *
+C*    VALUE  = ACCELERATED VALUE OF A SUM OR LIMIT                     *
+C*    S      = PARTIAL SUM OF SERIES                                   *
+C*    DERIVS = .TRUE. IF DERIVATIVES ARE TO BE CALCULATED              *
+C*    DVDA   = ARRAY OF CALCULATED DERIVATIVES, D(VALUE)/DA            *
+C*    DQNUM  = WORKING STORAGE ARRAY, N*N LONG                         *
+C*             (USED ONLY IF DERIVS = .TRUE.)                          *
+C*    DQDEN  = WORKING STORAGE ARRAY, N*N LONG                         *
+C*             (USED ONLY IF DERIVS = .TRUE.)                          *
+C*    M      = FIRST DIMENSION OF DQNUM AND DQDEN ARRAYS               *
+C*             (DQNUM AND DQDEN ARE DIMENSIONED (M,N), AND M MUST BE   *
+C*              AT LEAST AS LARGE AS THE LARGEST N TO BE USED)         *
+C*                                                                     *
+C* INPUTS FROM DRIVER, PASSED BY HURRY:  A, N, SUM, DERIVS             *
+C*                                                                     *
+C* INPUT FROM HURRY:  M                                                *
+C*                                                                     *
+C* OUTPUTS PASSED TO WHIZ1 BY HURRY:  QNUM, QDEN, VALUE, S, DVDA,      *
+C*                                    DQNUM, DQDEN                     *
+C*                                                                     *
+C***********************************************************************
+C
+      LOGICAL SUM, DERIVS
+      INTEGER N, M, NEXT, I, L
+      DOUBLE PRECISION A(N), QNUM(N), QDEN(N), VALUE, S, DVDA(N),
+     * DQNUM(M,N), DQDEN(M,N), TERM, FNEXT, FL, RATIO, FJ, FACTOR, C,
+     * DTERM, DS
+C
+      S = 0.0D0
+C
+      DO 130 NEXT=1,N
+C           (GET NEXT DIAGONAL)
+        IF (SUM) GO TO 10
+        TERM = A(NEXT) - S
+        S = A(NEXT)
+        GO TO 20
+   10   CONTINUE
+        TERM = A(NEXT)
+        S = A(NEXT) + S
+   20   CONTINUE
+        L = NEXT - 1
+        FNEXT = FLOAT(NEXT)
+        QDEN(NEXT) = 1.0D0/(TERM*FNEXT**2)
+        QNUM(NEXT) = S*QDEN(NEXT)
+        IF (.NOT.DERIVS) GO TO 80
+        DO 70 I=1,NEXT
+          IF (I.NE.NEXT) GO TO 30
+          DTERM = 1.0D0
+          DS = 1.0D0
+          GO TO 60
+   30     CONTINUE
+          IF (SUM) GO TO 40
+          IF (I.EQ.L) DTERM = -1.0D0
+          IF (I.NE.L) DTERM = 0.0D0
+          DS = 0.0D0
+          GO TO 50
+   40     CONTINUE
+          DTERM = 0.0D0
+          DS = 1.0D0
+   50     CONTINUE
+   60     CONTINUE
+          DQDEN(I,NEXT) = -QDEN(I)*DTERM/TERM
+          DQNUM(I,NEXT) = DQDEN(I,NEXT)*S + QDEN(NEXT)*DS
+   70   CONTINUE
+   80   CONTINUE
+        IF (NEXT.LE.1) GO TO 120
+        FACTOR = 1.0D0
+        FL = FLOAT(L)
+        RATIO = FL/FNEXT
+        LPLUS1 = L + 1
+        DO 110 K=1,L
+          J = LPLUS1 - K
+          FJ = FLOAT(J)
+          C = FACTOR*FJ/FNEXT
+          FACTOR = FACTOR*RATIO
+          QDEN(J) = QDEN(J+1) - C*QDEN(J)
+          QNUM(J) = QNUM(J+1) - C*QNUM(J)
+          IF (.NOT.DERIVS) GO TO 100
+          DO 90 I=1,L
+            DQDEN(I,J) = DQDEN(I,J+1) - C*DQDEN(I,J)
+            DQNUM(I,J) = DQNUM(I,J+1) - C*DQNUM(I,J)
+   90     CONTINUE
+          DQDEN(NEXT,J) = DQDEN(NEXT,J+1)
+          DQNUM(NEXT,J) = DQNUM(NEXT,J+1)
+  100     CONTINUE
+  110   CONTINUE
+  120   CONTINUE
+  130 CONTINUE
+C
+      VALUE = QNUM(1)/QDEN(1)
+      IF (.NOT.DERIVS) GO TO 150
+      DO 140 I=1,N
+        DVDA(I) = (DQNUM(I,1)-VALUE*DQDEN(I,1))/QDEN(1)
+  140 CONTINUE
+  150 CONTINUE
+C
+      RETURN
+      END
+      SUBROUTINE WHIZ1(A, N, QNUM, QDEN, SUM, VALUE, S, DERIVS, DVDA,   WHI   10
+     * DQNUM, DQDEN, M)
+C
+C***********************************************************************
+C*                                                                     *
+C* THE U ALGORITHM FOR ACCELERATING A SERIES OR A LIMIT OF A SEQUENCE. *
+C* THIS SUBROUTINE IS USED TO GET THE N-TERMS RESULT FROM THE          *
+C* RESULT OF N-1 TERMS.  WHIZ1 DIFFERS FROM WHIZ IN THAT:              *
+C*  (1) THE ALGORITHM IS RUN FOR NEXT=N RATHER THAN FOR NEXT=1 TO N    *
+C*  (2) S IS NOT ZEROED AT THE START OF THE SUBROUTINE                 *
+C*                                                                     *
+C* ARGUMENTS:                                                          *
+C*    A      = ARRAY OF ELEMENTS OF SERIES OR SEQUENCE                 *
+C*    N      = NUMBER OF ELEMENTS IN A                                 *
+C*    QNUM   = BACKWARD DIAGONAL OF NUMERATOR ARRAY, AT LEAST N LONG   *
+C*    QDEN   = BACKWARD DIAGONAL OF DENOMINATOR ARRAY, AT LEAST N LONG *
+C*    SUM    = .TRUE. FOR A SUM, .FALSE. FOR A LIMIT                   *
+C*    VALUE  = ACCELERATED VALUE OF A SUM OR LIMIT                     *
+C*    S      = SIMPLE SUM OF SERIES                                    *
+C*    DERIVS = .TRUE. IF DERIVATIVES ARE TO BE CALCULATED              *
+C*    DVDA   = ARRAY OF CALCULATED DERIVATIVES, D(VALUE)/DA            *
+C*    DQNUM  = WORKING STORAGE ARRAY, N*N LONG                         *
+C*             (USED ONLY IF DERIVS = .TRUE.)                          *
+C*    DQDEN  = WORKING STORAGE ARRAY, N*N LONG                         *
+C*             (USED ONLY IF DERIVS = .TRUE.)                          *
+C*    M      = FIRST DIMENSION OF DQNUM AND DQDEN ARRAYS               *
+C*             (DQNUM AND DQDEN ARE DIMENSIONED (M,N), AND M MUST BE   *
+C*              AT LEAST AS LARGE AS THE LARGEST N TO BE USED)         *
+C*                                                                     *
+C* INPUTS FROM DRIVER, PASSED BY HURRY:  A, N, SUM, DERIVS             *
+C*                                                                     *
+C* INPUT FROM HURRY:  M                                                *
+C*                                                                     *
+C* INPUTS FROM WHIZ, PASSED BY HURRY:  QNUM, QDEN, VALUE, S, DVDA,     *
+C*                                     DQNUM, DQDEN                    *
+C*                                                                     *
+C* OUTPUTS TO HURRY:  VALUE, DVDA                                      *
+C*                                                                     *
+C***********************************************************************
+C
+      LOGICAL SUM, DERIVS
+      INTEGER N, M, NEXT, I, L
+      DOUBLE PRECISION A(N), QNUM(N), QDEN(N), VALUE, S, DVDA(N),
+     * DQNUM(M,N), DQDEN(M,N), TERM, FNEXT, FL, RATIO, FJ, FACTOR, C,
+     * DTERM, DS
+C
+      NEXT = N
+      IF (SUM) GO TO 10
+      TERM = A(NEXT) - S
+      S = A(NEXT)
+      GO TO 20
+   10 CONTINUE
+      TERM = A(NEXT)
+      S = A(NEXT) + S
+   20 CONTINUE
+      L = NEXT - 1
+      FNEXT = FLOAT(NEXT)
+      QDEN(NEXT) = 1.0/(TERM*FNEXT**2)
+      QNUM(NEXT) = S*QDEN(NEXT)
+      IF (.NOT.DERIVS) GO TO 80
+      DO 70 I=1,NEXT
+        IF (I.NE.NEXT) GO TO 30
+        DTERM = 1.0D0
+        DS = 1.0D0
+        GO TO 60
+   30   CONTINUE
+        IF (SUM) GO TO 40
+        IF (I.EQ.L) DTERM = -1.0D0
+        IF (I.NE.L) DTERM = 0.0D0
+        DS = 0.0D0
+        GO TO 50
+   40   CONTINUE
+        DTERM = 0.0D0
+        DS = 1.0D0
+   50   CONTINUE
+   60   CONTINUE
+        DQDEN(I,NEXT) = -QDEN(I)*DTERM/TERM
+        DQNUM(I,NEXT) = DQDEN(I,NEXT)*S + QDEN(NEXT)*DS
+   70 CONTINUE
+   80 CONTINUE
+      IF (NEXT.LE.1) GO TO 120
+      FACTOR = 1.0D0
+      FL = FLOAT(L)
+      RATIO = FL/FNEXT
+      LPLUS1 = L + 1
+      DO 110 K=1,L
+        J = LPLUS1 - K
+        FJ = FLOAT(J)
+        C = FACTOR*FJ/FNEXT
+        FACTOR = FACTOR*RATIO
+        QDEN(J) = QDEN(J+1) - C*QDEN(J)
+        QNUM(J) = QNUM(J+1) - C*QNUM(J)
+        IF (.NOT.DERIVS) GO TO 100
+        DO 90 I=1,L
+          DQDEN(I,J) = DQDEN(I,J+1) - C*DQDEN(I,J)
+          DQNUM(I,J) = DQNUM(I,J+1) - C*DQNUM(I,J)
+   90   CONTINUE
+        DQDEN(NEXT,J) = DQDEN(NEXT,J+1)
+        DQNUM(NEXT,J) = DQNUM(NEXT,J+1)
+  100   CONTINUE
+  110 CONTINUE
+  120 CONTINUE
+C
+      VALUE = QNUM(1)/QDEN(1)
+      IF (.NOT.DERIVS) GO TO 140
+      DO 130 I=1,N
+        DVDA(I) = (DQNUM(I,1)-VALUE*DQDEN(I,1))/QDEN(1)
+  130 CONTINUE
+  140 CONTINUE
+C
+      RETURN
+      END
+C                   XACCEL--DRIVER PROGRAM FOR HURRY                    MAN   10
+C                                                                       MAN   20
+C***********************************************************************MAN   30
+C*                                                                     *MAN   40
+C* DEMONSTRATES THE USE OF SUBROUTINE HURRY FOR ACCELERATING SUMS AND  *MAN   50
+C* LIMITS OF SEQUENCES.                                                *MAN   60
+C*                                                                     *MAN   70
+C* INPUT:                                                              *MAN   80
+C* THIS 'DRIVER' PROGRAM ALLOWS THE USER TO TEST THE PERFORMANCE OF    *MAN   90
+C* HURRY FOR ONE OR MORE BUILT-IN SEQUENCES.  FOR EACH TEST DESIRED,   *MAN  100
+C* THE USER PROVIDES A DATA CARD IN THE FOLLOWING FORMAT:              *MAN  110
+C*                                                                     *MAN  120
+C*    ITEM             COLUMNS        FORMAT         RANGE             *MAN  130
+C*                                                                     *MAN  140
+C*    EXAMPLE CODE      1 - 10          I10          1 - 10            *MAN  150
+C*    MINIMUM NUMBER   11 - 20          I10          2 - 50            *MAN  160
+C*       OF TERMS                                                      *MAN  170
+C*    MAXIMUM NUMBER   21 - 30          I10          2 - 50            *MAN  180
+C*       OF TERMS                                                      *MAN  190
+C*    X                31 - 40          G10.0          -               *MAN  200
+C*    NOISE            41 - 50          G10.0          -               *MAN  210
+C*                                                                     *MAN  220
+C* ALL ENTRIES MUST BE RIGHT-JUSTIFIED, OF COURSE.  THE 'EXAMPLE       *MAN  230
+C* CODE' IS GIVEN IN THE LIST OF SEQUENCES BELOW.  THE MINIMUM AND     *MAN  240
+C* MAXIMUM NUMBER OF TERMS TO BE USED IN HURRY MUST LIE IN THE RANGE   *MAN  250
+C* 2 - 50 (INCLUSIVE) AND THE MAXIMUM MUST BE GREATER THAN OR EQUAL    *MAN  260
+C* TO THE MINIMUM.  X IS THE POINT AT WHICH THE SERIES OR SEQUENCE IS  *MAN  270
+C* TO BE EVALUATED AND SHOULD, THEREFORE, LIE IN ITS DOMAIN.           *MAN  280
+C* (EXAMPLES 1, 2, 5, AND 9 MAKE USE OF THE X INPUT; THE OTHERS DO     *MAN  290
+C* NOT.)  DIGITAL 'NOISE' IS EXPLAINED IN THE ACCOMPANYING ARTICLE.    *MAN  300
+C*                                                                     *MAN  310
+C* TEST SEQUENCES AND SERIES PROVIDED:                                 *MAN  320
+C*                                                                     *MAN  330
+C*    EXAMPLE CODE    SEQUENCE/SERIES                                  *MAN  340
+C*                                                                     *MAN  350
+C*          1         MACLAURIN SERIES FOR EXP(X)                      *MAN  360
+C*          2         CONTINUED FRACTION SEQUENCE FOR EXP(X)           *MAN  370
+C*          3         ALTERNATING, LINEARLY CONVERGENT SERIES          *MAN  380
+C*          4         ZETA(2) LOGARITHMIC CONVERGENCE                  *MAN  390
+C*          5         SERIES FOR -LOG(1-X) (CONVERGENT -1 <= X < 1)    *MAN  400
+C*          6         ALTERNATING ASYMPTOTIC SERIES 1                  *MAN  410
+C*          7         ALTERNATING ASYMPTOTIC SERIES 2                  *MAN  420
+C*          8         ALTERNATING ASYMPTOTIC SERIES 3                  *MAN  430
+C*          9         MONOTONE ASYMPTOTIC SERIES, USE X=25, 50, OR 100 *MAN  440
+C*         10         SEQUENCE FOR EULER'S CONSTANT                    *MAN  450
+C*                                                                     *MAN  460
+C* FOR MORE INFORMATION ON THESE SEQUENCES AND SERIES, SEE THE BODY    *MAN  470
+C* OF THE PROGRAM.                                                     *MAN  480
+C*                                                                     *MAN  490
+C* FOR MORE INFORMATION ON THE PROGRAM, CONTACT:                       *MAN  500
+C*                             DAVID A SMITH                           *MAN  510
+C*                             MATHEMATICS DEPARTMENT                  *MAN  520
+C*                             DUKE UNIVERSITY                         *MAN  530
+C*                             DURHAM, NC  27706                       *MAN  540
+C*                                                                     *MAN  550
+C***********************************************************************MAN  560
+C* THIS PROGRAM CONTAINS SUBROUTINES FROM THE IMSL LIBRARY, A PROPRIE- *MAN  570
+C* TARY PACKAGE FROM INTERNATIONAL MATHEMATICAL & STATISTICAL LIBRAR-  *MAN  580
+C* IES, INC., HOUSTON, TEXAS.  THESE ROUTINES MAY NOT BE REDISTRIBUTED *MAN  590
+C* OR REMOVED FROM THIS SOFTWARE FOR USE IN OTHER SOFTWARE DEVELOPMENT.*MAN  600
+C* IMSL ROUTINES INCLUDED ARE GGNQF, MDNRIS, MERFI, UERTST, UGETIO.    *MAN  610
+C*                                                                     *MAN  620
+C***********************************************************************MAN  630
+C                                                                       MAN  640
+C                                                                       MAN  650
+      INTEGER EXAMPL, MIN, MAX, I                                       MAN  660
+      DOUBLE PRECISION NOISE, X, TERM(50), DA(50), ANSWER, AI, BI, AYE, MAN  670
+     * TOP(3), BOT(3), FACTOR, PTSUM, TINY, ENORM, PI, ARG, RESULT,     MAN  680
+     * ESTERR, ACTERR, DIGITS, ANS, FUZZ, DSEED                         MAN  690
+      LOGICAL OK, SIGMAS, SUM                                           MAN  700
+C                                                                       MAN  710
+      DIGITS(ARG,ENORM) = -DLOG10(DMAX1(DABS(ARG/ENORM),TINY))          MAN  720
+C                                                                       MAN  730
+      TINY = 1.0D-16                                                    MAN  740
+      DSEED = 9973.D0                                                   MAN  750
+      PI = 3.141592653589793D0                                          MAN  760
+      FUZZ = 1.0D-5                                                     MAN  770
+C                                                                       MAN  780
+C                                                                       MAN  790
+C        (THE ENTIRE PROGRAM IS REPEATED FOR EACH INPUT CARD)           MAN  800
+C                                                                       MAN  810
+   10 READ(5,99999,END=270) EXAMPL, MIN, MAX, X, NOISE                  MAN  820
+      WRITE (6,99998) EXAMPL, X, NOISE, MIN, MAX                        MAN  830
+C                                                                       MAN  840
+      SIGMAS = .FALSE.                                                  MAN  850
+C                                                                       MAN  860
+C                                                                       MAN  870
+C        CHECK INPUT VALUES                                             MAN  880
+C                                                                       MAN  890
+      OK = (MIN.GE.2) .AND. (MIN.LE.MAX) .AND. (MAX.LE.50) .AND.        MAN  900
+     * (EXAMPL.GE.1) .AND. (EXAMPL.LE.10)                               MAN  910
+      IF (OK) GO TO (20, 40, 80, 100, 120, 140, 160, 180, 200, 220),    MAN  920
+     * EXAMPL                                                           MAN  930
+      WRITE (6,99997)                                                   MAN  940
+      GO TO 10                                                          MAN  950
+C                                                                       MAN  960
+C                                                                       MAN  970
+C**********EXAMPLE 1:  MACLAURIN SERIES FOR EXP(X)                      MAN  980
+C                                                                       MAN  990
+   20 TERM(1) = 1.0D0                                                   MAN 1000
+      DO 30 I=2,MAX                                                     MAN 1010
+        AYE = FLOAT(I)                                                  MAN 1020
+        TERM(I) = TERM(I-1)*X/(AYE-1.0D0)                               MAN 1030
+   30 CONTINUE                                                          MAN 1040
+      SUM = .TRUE.                                                      MAN 1050
+      ANSWER = DEXP(X)                                                  MAN 1060
+      GO TO 240                                                         MAN 1070
+C                                                                       MAN 1080
+C                                                                       MAN 1090
+C**********EXAMPLE 2:  CONTINUED-FRACTION SEQUENCE FOR EXP(X)           MAN 1100
+C                                                                       MAN 1110
+   40 TERM(1) = 1.0D0                                                   MAN 1120
+      TOP(1) = 1.0D0                                                    MAN 1130
+      TOP(2) = 0.0D0                                                    MAN 1140
+      TOP(3) = 1.0D0                                                    MAN 1150
+      BOT(1) = 0.0D0                                                    MAN 1160
+      BOT(2) = 1.0D0                                                    MAN 1170
+      BOT(3) = 1.0D0                                                    MAN 1180
+      DO 70 I=2,MAX                                                     MAN 1190
+        IF (MOD(I,2).EQ.0) GO TO 50                                     MAN 1200
+        AI = X                                                          MAN 1210
+        BI = 2.0D0                                                      MAN 1220
+        GO TO 60                                                        MAN 1230
+   50   CONTINUE                                                        MAN 1240
+        AI = -X                                                         MAN 1250
+        BI = FLOAT(I-1)                                                 MAN 1260
+   60   CONTINUE                                                        MAN 1270
+        TOP(1) = TOP(2)                                                 MAN 1280
+        TOP(2) = TOP(3)                                                 MAN 1290
+        BOT(1) = BOT(2)                                                 MAN 1300
+        BOT(2) = BOT(3)                                                 MAN 1310
+        TOP(3) = BI*TOP(2) + AI*TOP(1)                                  MAN 1320
+        BOT(3) = BI*BOT(2) + AI*BOT(1)                                  MAN 1330
+        TERM(I) = TOP(3)/BOT(3)                                         MAN 1340
+   70 CONTINUE                                                          MAN 1350
+      SUM = .FALSE.                                                     MAN 1360
+      ANSWER = DEXP(X)                                                  MAN 1370
+      GO TO 240                                                         MAN 1380
+C                                                                       MAN 1390
+C                                                                       MAN 1400
+C**********EXAMPLE 3:  ALTERNATING LINEARLY CONVERGENT SERIES           MAN 1410
+C                                                                       MAN 1420
+   80 FACTOR = -1.0D0                                                   MAN 1430
+      DO 90 I=1,MAX                                                     MAN 1440
+        AYE = FLOAT(I)                                                  MAN 1450
+        FACTOR = -FACTOR                                                MAN 1460
+        TERM(I) = FACTOR/DSQRT(AYE)                                     MAN 1470
+   90 CONTINUE                                                          MAN 1480
+      SUM = .TRUE.                                                      MAN 1490
+      ANSWER = 0.60489864342162D0                                       MAN 1500
+      GO TO 240                                                         MAN 1510
+C                                                                       MAN 1520
+C                                                                       MAN 1530
+C**********EXAMPLE 4:  ZETA(2) LOGARITHMIC CONVERGENCE                  MAN 1540
+C                                                                       MAN 1550
+  100 DO 110 I=1,MAX                                                    MAN 1560
+        AYE = FLOAT(I)                                                  MAN 1570
+        TERM(I) = 1.0D0/(AYE*AYE)                                       MAN 1580
+  110 CONTINUE                                                          MAN 1590
+      SUM = .TRUE.                                                      MAN 1600
+      ANSWER = 1.644934066848226D0                                      MAN 1610
+      GO TO 240                                                         MAN 1620
+C                                                                       MAN 1630
+C                                                                       MAN 1640
+C**********EXAMPLE 5:  SERIES FOR -LOG(1-X)                             MAN 1650
+C                      (CONVERGES ON -1<=X<1)                           MAN 1660
+  120 FACTOR = 1.D0                                                     MAN 1670
+      DO 130 I=1,MAX                                                    MAN 1680
+        AYE = FLOAT(I)                                                  MAN 1690
+        FACTOR = FACTOR*X                                               MAN 1700
+        TERM(I) = FACTOR/AYE                                            MAN 1710
+  130 CONTINUE                                                          MAN 1720
+      SUM = .TRUE.                                                      MAN 1730
+      ANSWER = -DLOG(1.0D0-X)                                           MAN 1740
+      GO TO 240                                                         MAN 1750
+C                                                                       MAN 1760
+C                                                                       MAN 1770
+C**********EXAMPLE 6:  ALTERNATING ASYMPTOTIC SERIES 1                  MAN 1780
+  140 TERM(1) = 3.0D0/(PI*PI)                                           MAN 1790
+      DO 150 I=2,MAX                                                    MAN 1800
+        AYE = FLOAT(I)                                                  MAN 1810
+        TERM(I) = -TERM(I-1)*(4.0D0*AYE-1.0D0)/(PI*PI)                  MAN 1820
+  150 CONTINUE                                                          MAN 1830
+      SUM = .TRUE.                                                      MAN 1840
+      ANSWER = 0.19259404877D0                                          MAN 1850
+      GO TO 240                                                         MAN 1860
+C                                                                       MAN 1870
+C                                                                       MAN 1880
+C**********EXAMPLE 7:  ALTERNATING ASYMPTOTIC SERIES 2                  MAN 1890
+C                                                                       MAN 1900
+  160 TERM(1) = 1.0D0                                                   MAN 1910
+      DO 170 I=2,MAX                                                    MAN 1920
+        AYE = FLOAT(I)                                                  MAN 1930
+        TERM(I) = -TERM(I-1)*(2.0D0*AYE-3.0D0)/2.0D0                    MAN 1940
+  170 CONTINUE                                                          MAN 1950
+      SUM = .TRUE.                                                      MAN 1960
+      ANSWER = 0.7578721564D0                                           MAN 1970
+      GO TO 240                                                         MAN 1980
+C                                                                       MAN 1990
+C                                                                       MAN 2000
+C**********EXAMPLE 8:  ALTERNATING ASYMPTOTIC SERIES 3                  MAN 2010
+C                                                                       MAN 2020
+  180 FACTOR = -1.0D0                                                   MAN 2030
+      DO 190 I=1,MAX                                                    MAN 2040
+        AYE = FLOAT(I)                                                  MAN 2050
+        FACTOR = -FACTOR*(AYE+1.0D0)                                    MAN 2060
+        TERM(I) = FACTOR*AYE                                            MAN 2070
+  190 CONTINUE                                                          MAN 2080
+      SUM = .TRUE.                                                      MAN 2090
+      ANSWER = 0.210957917D0                                            MAN 2100
+      GO TO 240                                                         MAN 2110
+C                                                                       MAN 2120
+C                                                                       MAN 2130
+C**********EXAMPLE 9:  MONOTONE AYMPTOTIC SERIES                        MAN 2140
+C                      (X=25, 50, OR 100)                               MAN 2150
+C                                                                       MAN 2160
+  200 FACTOR = 1.D0                                                     MAN 2170
+      DO 210 I=1,MAX                                                    MAN 2180
+        AYE = FLOAT(I)                                                  MAN 2190
+        FACTOR = FACTOR*(AYE+1.0D0)/X                                   MAN 2200
+        TERM(I) = FACTOR*AYE*AYE                                        MAN 2210
+  210 CONTINUE                                                          MAN 2220
+      SUM = .TRUE.                                                      MAN 2230
+      IF (DABS(X-25.0D0).LT.FUZZ) ANSWER = 0.140396959326971D0          MAN 2240
+      IF (DABS(X-50.0D0).LT.FUZZ) ANSWER = 0.051707744368624644D0       MAN 2250
+      IF (DABS(X-100.0D0).LT.FUZZ) ANSWER = 0.226372038599530D-1        MAN 2260
+      GO TO 240                                                         MAN 2270
+C                                                                       MAN 2280
+C                                                                       MAN 2290
+C**********EXAMPLE 10:  SEQUENCE FOR EULER'S CONTANT                    MAN 2300
+C                                                                       MAN 2310
+  220 PTSUM = 0.0D0                                                     MAN 2320
+      DO 230 I=1,MAX                                                    MAN 2330
+        AYE = FLOAT(I)                                                  MAN 2340
+        PTSUM = PTSUM + 1.0D0/AYE                                       MAN 2350
+        TERM(I) = PTSUM - DLOG(AYE)                                     MAN 2360
+  230 CONTINUE                                                          MAN 2370
+      SUM = .FALSE.                                                     MAN 2380
+      ANSWER = 0.5772156649015329D0                                     MAN 2390
+C                                                                       MAN 2400
+C                                                                       MAN 2410
+C        SEQUENCES CREATED...NOW SEE IF NOISE NEEDED:                   MAN 2420
+C                                                                       MAN 2430
+  240 CONTINUE                                                          MAN 2440
+      IF (NOISE.EQ.0.0D0) GO TO 260                                     MAN 2450
+      SIGMAS = .TRUE.                                                   MAN 2460
+      DO 250 I=1,MAX                                                    MAN 2470
+        DA(I) = NOISE*TERM(I)                                           MAN 2480
+        IF (NOISE.GT.0.0) TERM(I) = TERM(I) + DA(I)*GGNQF(DSEED)        MAN 2490
+C                                                                       MAN 2500
+C        THE PRECEDING STATEMENT USES THE IMSL ROUTINE GGNQF,           MAN 2510
+C        WHICH CALLS IMSL ROUTINES MDNRIS, MERFI, UERTST, UGETIO.       MAN 2520
+C        SEE IMSL NOTICE IN PROGRAM HEADING.                            MAN 2530
+C                                                                       MAN 2540
+  250 CONTINUE                                                          MAN 2550
+C                                                                       MAN 2560
+C                                                                       MAN 2570
+  260 CONTINUE                                                          MAN 2580
+C                                                                       MAN 2590
+C                                                                       MAN 2600
+      CALL HURRY(TERM, MIN, MAX, SUM, RESULT, NUSED, ESTERR, SIGMAS, DA)MAN 2610
+C                                                                       MAN 2620
+C                                                                       MAN 2630
+      ANS = ANSWER                                                      MAN 2640
+      IF (ANS.EQ.0.0D0) ANS = 1.0D0                                     MAN 2650
+      ACTERR = RESULT - ANSWER                                          MAN 2660
+      DEST = DIGITS(ESTERR,ANS)                                         MAN 2670
+      DACT = DIGITS(ACTERR,ANS)                                         MAN 2680
+C                                                                       MAN 2690
+      WRITE (6,99996) NUSED, DEST, RESULT, DACT, ANSWER                 MAN 2700
+C                                                                       MAN 2710
+      GO TO 10                                                          MAN 2720
+C                                                                       MAN 2730
+      WRITE (6,99995)                                                   MAN 2740
+C                                                                       MAN 2750
+      STOP                                                              MAN 2760
+99999 FORMAT (3I10, 2G10.0)                                             MAN 2770
+99998 FORMAT (////9H EXAMPLE:, I3, 5H; X =, F10.5, 9H, NOISE =,         MAN 2780
+     * G10.3//4X, 23H NUMBER OF TERMS: MIN =, I3/21X, 6H MAX =, I3)     MAN 2790
+99997 FORMAT (44H ERROR IN INPUT VALUE OF MIN, MAX, OR EXAMPL)          MAN 2800
+99996 FORMAT (18X, 9H ACTUAL =, I3//4X, 27H DIGITS ESTIMATED ACCURACY:, MAN 2810
+     * F7.2, 5X, 17H COMPUTED RESULT:, G25.16/4X, 18H DIGITS ACTUAL ACC,MAN 2820
+     * 6HURACY:, 3X, F7.2, 5X, 16H CORRECT ANSWER:, G26.16)             MAN 2830
+99995 FORMAT (////23H ALL EXAMPLES PROCESSED)                           MAN 2840
+      END                                                               MAN 2850
+C   IMSL ROUTINE NAME   - GGNQF                                         GGN   10
+C                                                                       GGN   20
+C-----------------------------------------------------------------------GGN   30
+C                                                                       GGN   40
+C   COMPUTER            - IBM/SINGLE                                    GGN   50
+C                                                                       GGN   60
+C   LATEST REVISION     - JUNE 1, 1980                                  GGN   70
+C                                                                       GGN   80
+C   PURPOSE             - NORMAL RANDOM DEVIATE GENERATOR - FUNCTION    GGN   90
+C                           FORM OF GGNML                               GGN  100
+C                                                                       GGN  110
+C   USAGE               - FUNCTION GGNQF (DSEED)                        GGN  120
+C                                                                       GGN  130
+C   ARGUMENTS    GGNQF  - RESULTANT NORMAL (0,1) DEVIATE.               GGN  140
+C                DSEED  - INPUT/OUTPUT DOUBLE PRECISION VARIABLE        GGN  150
+C                           ASSIGNED AN INTEGER VALUE IN THE            GGN  160
+C                           EXCLUSIVE RANGE (1.D0, 2147483647.D0).      GGN  170
+C                           DSEED IS REPLACED BY A NEW VALUE TO BE      GGN  180
+C                           USED IN A SUBSEQUENT CALL.                  GGN  190
+C                                                                       GGN  200
+C   PRECISION/HARDWARE  - SINGLE/ALL                                    GGN  210
+C                                                                       GGN  220
+C   REQD. IMSL ROUTINES - MDNRIS,MERFI,UERTST,UGETIO                    GGN  230
+C                                                                       GGN  240
+C   NOTATION            - INFORMATION ON SPECIAL NOTATION AND           GGN  250
+C                           CONVENTIONS IS AVAILABLE IN THE MANUAL      GGN  260
+C                           INTRODUCTION OR THROUGH IMSL ROUTINE UHELP  GGN  270
+C                                                                       GGN  280
+C   COPYRIGHT           - 1980 BY IMSL, INC. ALL RIGHTS RESERVED.       GGN  290
+C                                                                       GGN  300
+C   WARRANTY            - IMSL WARRANTS ONLY THAT IMSL TESTING HAS BEEN GGN  310
+C                           APPLIED TO THIS CODE. NO OTHER WARRANTY,    GGN  320
+C                           EXPRESSED OR IMPLIED, IS APPLICABLE.        GGN  330
+C                                                                       GGN  340
+C-----------------------------------------------------------------------GGN  350
+C                                                                       GGN  360
+      REAL FUNCTION GGNQF(DSEED)                                        GGN  370
+C                                  SPECIFICATIONS FOR ARGUMENTS
+      DOUBLE PRECISION DSEED
+C                                  SPECIFICATIONS FOR LOCAL VARIABLES
+      INTEGER IER
+      DOUBLE PRECISION D2P31M, D2PN31
+C                                  D2P31M = (2**31) - 1
+C                                  D2PN31 = (2**31)
+      DATA D2P31M /2147483647.D0/, D2PN31 /2147483648.D0/
+C                                  GENERATE A RANDOM (0,1) DEVIATE.
+C                                  16807 = (7**5)
+C                                  FIRST EXECUTABLE STATEMENT
+      DSEED = DMOD(16807.D0*DSEED,D2P31M)
+      GGNQF = DSEED/D2PN31
+C                                  TRANSFORM TO NORMAL DEVIATE
+      CALL MDNRIS(GGNQF, GGNQF, IER)
+      RETURN
+      END
+C   IMSL ROUTINE NAME   - MDNRIS                                        MDN   10
+C                                                                       MDN   20
+C-----------------------------------------------------------------------MDN   30
+C                                                                       MDN   40
+C   COMPUTER            - IBM/SINGLE                                    MDN   50
+C                                                                       MDN   60
+C   LATEST REVISION     - JUNE 1, 1981                                  MDN   70
+C                                                                       MDN   80
+C   PURPOSE             - INVERSE STANDARD NORMAL (GAUSSIAN)            MDN   90
+C                           PROBABILITY DISTRIBUTION FUNCTION           MDN  100
+C                                                                       MDN  110
+C   USAGE               - CALL MDNRIS (P,Y,IER)                         MDN  120
+C                                                                       MDN  130
+C   ARGUMENTS    P      - INPUT VALUE IN THE EXCLUSIVE RANGE (0.0,1.0)  MDN  140
+C                Y      - OUTPUT VALUE OF THE INVERSE NORMAL (0,1)      MDN  150
+C                           PROBABILITY DISTRIBUTION FUNCTION           MDN  160
+C                IER    - ERROR PARAMETER (OUTPUT)                      MDN  170
+C                         TERMINAL ERROR                                MDN  180
+C                           IER = 129 INDICATES P LIES OUTSIDE THE LEGALMDN  190
+C                             RANGE. PLUS OR MINUS MACHINE INFINITY IS  MDN  200
+C                             GIVEN AS THE RESULT (SIGN IS THE SIGN OF  MDN  210
+C                             THE FUNCTION VALUE OF THE NEAREST LEGAL   MDN  220
+C                             ARGUMENT).                                MDN  230
+C                                                                       MDN  240
+C   PRECISION/HARDWARE  - SINGLE/ALL                                    MDN  250
+C                                                                       MDN  260
+C   REQD. IMSL ROUTINES - MERFI,UERTST,UGETIO                           MDN  270
+C                                                                       MDN  280
+C   NOTATION            - INFORMATION ON SPECIAL NOTATION AND           MDN  290
+C                           CONVENTIONS IS AVAILABLE IN THE MANUAL      MDN  300
+C                           INTRODUCTION OR THROUGH IMSL ROUTINE UHELP  MDN  310
+C                                                                       MDN  320
+C   COPYRIGHT           - 1978 BY IMSL, INC. ALL RIGHTS RESERVED.       MDN  330
+C                                                                       MDN  340
+C   WARRANTY            - IMSL WARRANTS ONLY THAT IMSL TESTING HAS BEEN MDN  350
+C                           APPLIED TO THIS CODE. NO OTHER WARRANTY,    MDN  360
+C                           EXPRESSED OR IMPLIED, IS APPLICABLE.        MDN  370
+C                                                                       MDN  380
+C-----------------------------------------------------------------------MDN  390
+C                                                                       MDN  400
+      SUBROUTINE MDNRIS(P, Y, IER)                                      MDN  410
+C                                  SPECIFICATIONS FOR ARGUMENTS
+      REAL P, Y
+      INTEGER IER
+C                                  SPECIFICATIONS FOR LOCAL VARIABLES
+      REAL EPS, G0, G1, G2, G3, H0, H1, H2, A, W, WI, SN, SD
+      REAL SIGMA, SQRT2, X, XINF
+      DATA XINF /Z7FFFFFFF/
+      DATA SQRT2 /1.414214/
+      DATA EPS /Z3C100000/
+      DATA G0 /.1851159E-3/, G1 /-.2028152E-2/
+      DATA G2 /-.1498384/, G3 /.1078639E-1/
+      DATA H0 /.9952975E-1/, H1 /.5211733/
+      DATA H2 /-.6888301E-1/
+C                                  FIRST EXECUTABLE STATEMENT
+      IER = 0
+      IF (P.GT.0.0 .AND. P.LT.1.0) GO TO 10
+      IER = 129
+      SIGMA = SIGN(1.0,P)
+      Y = SIGMA*XINF
+      GO TO 30
+   10 IF (P.LE.EPS) GO TO 20
+      X = 1.0 - (P+P)
+      CALL MERFI(X, Y, IER)
+      Y = -SQRT2*Y
+      GO TO 40
+C                                  P TOO SMALL, COMPUTE Y DIRECTLY
+   20 A = P + P
+      W = SQRT(-ALOG(A+(A-A*A)))
+C                                  USE A RATIONAL FUNCTION IN 1./W
+      WI = 1./W
+      SN = ((G3*WI+G2)*WI+G1)*WI
+      SD = ((WI+H2)*WI+H1)*WI + H0
+      Y = W + W*(G0+SN/SD)
+      Y = -Y*SQRT2
+      GO TO 40
+   30 CONTINUE
+      CALL UERTST(IER, 6HMDNRIS)
+   40 RETURN
+      END
+C   IMSL ROUTINE NAME   - MERFI                                         MER   10
+C                                                                       MER   20
+C-----------------------------------------------------------------------MER   30
+C                                                                       MER   40
+C   COMPUTER            - IBM/SINGLE                                    MER   50
+C                                                                       MER   60
+C   LATEST REVISION     - JANUARY 1, 1978                               MER   70
+C                                                                       MER   80
+C   PURPOSE             - INVERSE ERROR FUNCTION                        MER   90
+C                                                                       MER  100
+C   USAGE               - CALL MERFI (P,Y,IER)                          MER  110
+C                                                                       MER  120
+C   ARGUMENTS    P      - INPUT VALUE IN THE EXCLUSIVE RANGE (-1.0,1.0) MER  130
+C                Y      - OUTPUT VALUE OF THE INVERSE ERROR FUNCTION    MER  140
+C                IER    - ERROR PARAMETER (OUTPUT)                      MER  150
+C                         TERMINAL ERROR                                MER  160
+C                           IER = 129 INDICATES P LIES OUTSIDE THE LEGALMER  170
+C                             RANGE. PLUS OR MINUS MACHINE INFINITY IS  MER  180
+C                             GIVEN AS THE RESULT (SIGN IS THE SIGN OF  MER  190
+C                             THE FUNCTION VALUE OF THE NEAREST LEGAL   MER  200
+C                             ARGUMENT).                                MER  210
+C                                                                       MER  220
+C   PRECISION/HARDWARE  - SINGLE/ALL                                    MER  230
+C                                                                       MER  240
+C   REQD. IMSL ROUTINES - UERTST,UGETIO                                 MER  250
+C                                                                       MER  260
+C   NOTATION            - INFORMATION ON SPECIAL NOTATION AND           MER  270
+C                           CONVENTIONS IS AVAILABLE IN THE MANUAL      MER  280
+C                           INTRODUCTION OR THROUGH IMSL ROUTINE UHELP  MER  290
+C                                                                       MER  300
+C   COPYRIGHT           - 1978 BY IMSL, INC. ALL RIGHTS RESERVED.       MER  310
+C                                                                       MER  320
+C   WARRANTY            - IMSL WARRANTS ONLY THAT IMSL TESTING HAS BEEN MER  330
+C                           APPLIED TO THIS CODE. NO OTHER WARRANTY,    MER  340
+C                           EXPRESSED OR IMPLIED, IS APPLICABLE.        MER  350
+C                                                                       MER  360
+C-----------------------------------------------------------------------MER  370
+C                                                                       MER  380
+      SUBROUTINE MERFI(P, Y, IER)                                       MER  390
+C                                  SPECIFICATIONS FOR ARGUMENTS
+      REAL P, Y
+      INTEGER IER
+C                                  SPECIFICATIONS FOR LOCAL VARIABLES
+      REAL A, B, X, Z, W, WI, SN, SD, F, Z2, RINFM, A1, A2, A3, B0, B1,
+     * B2, B3, C0, C1, C2, C3, D0, D1, D2, E0, E1, E2, E3, F0, F1, F2,
+     * G0, G1, G2, G3, H0, H1, H2, SIGMA
+      DATA A1 /-.5751703/, A2 /-1.896513/, A3 /-.5496261E-1/
+      DATA B0 /-.1137730/, B1 /-3.293474/, B2 /-2.374996/
+      DATA B3 /-1.187515/
+      DATA C0 /-.1146666/, C1 /-.1314774/, C2 /-.2368201/
+      DATA C3 /.5073975E-1/
+      DATA D0 /-44.27977/, D1 /21.98546/, D2 /-7.586103/
+      DATA E0 /-.5668422E-1/, E1 /.3937021/, E2 /-.3166501/
+      DATA E3 /.6208963E-1/
+      DATA F0 /-6.266786/, F1 /4.666263/, F2 /-2.962883/
+      DATA G0 /.1851159E-3/, G1 /-.2028152E-2/
+      DATA G2 /-.1498384/, G3 /.1078639E-1/
+      DATA H0 /.9952975E-1/, H1 /.5211733/
+      DATA H2 /-.6888301E-1/
+      DATA RINFM /Z7FFFFFFF/
+C                                  FIRST EXECUTABLE STATEMENT
+      IER = 0
+      X = P
+      SIGMA = SIGN(1.0,X)
+C                                  TEST FOR INVALID ARGUMENT
+      IF (.NOT.(X.GT.-1. .AND. X.LT.1.)) GO TO 50
+      Z = ABS(X)
+      IF (Z.LE..85) GO TO 30
+      A = 1. - Z
+      B = Z
+C                                  REDUCED ARGUMENT IS IN (.85,1.),
+C                                     OBTAIN THE TRANSFORMED VARIABLE
+      W = SQRT(-ALOG(A+A*B))
+      IF (W.LT.2.5) GO TO 20
+      IF (W.LT.4.) GO TO 10
+C                                  W GREATER THAN 4., APPROX. F BY A
+C                                     RATIONAL FUNCTION IN 1./W
+      WI = 1./W
+      SN = ((G3*WI+G2)*WI+G1)*WI
+      SD = ((WI+H2)*WI+H1)*WI + H0
+      F = W + W*(G0+SN/SD)
+      GO TO 40
+C                                  W BETWEEN 2.5 AND 4., APPROX. F
+C                                     BY A RATIONAL FUNCTION IN W
+   10 SN = ((E3*W+E2)*W+E1)*W
+      SD = ((W+F2)*W+F1)*W + F0
+      F = W + W*(E0+SN/SD)
+      GO TO 40
+C                                  W BETWEEN 1.13222 AND 2.5, APPROX.
+C                                     F BY A RATIONAL FUNCTION IN W
+   20 SN = ((C3*W+C2)*W+C1)*W
+      SD = ((W+D2)*W+D1)*W + D0
+      F = W + W*(C0+SN/SD)
+      GO TO 40
+C                                  Z BETWEEN 0. AND .85, APPROX. F
+C                                     BY A RATIONAL FUNCTION IN Z
+   30 Z2 = Z*Z
+      F = Z + Z*(B0+A1*Z2/(B1+Z2+A2/(B2+Z2+A3/(B3+Z2))))
+C                                  FORM THE SOLUTION BY MULT. F BY
+C                                     THE PROPER SIGN
+   40 Y = SIGMA*F
+      IER = 0
+      GO TO 60
+C                                  ERROR EXIT. SET SOLUTION TO PLUS
+C                                     (OR MINUS) INFINITY
+   50 IER = 129
+      Y = SIGMA*RINFM
+      CONTINUE
+      CALL UERTST(IER, 6HMERFI )
+   60 RETURN
+      END
+C   IMSL ROUTINE NAME   - UERTST                                        UER   10
+C                                                                       UER   20
+C-----------------------------------------------------------------------UER   30
+C                                                                       UER   40
+C   COMPUTER            - IBM/SINGLE                                    UER   50
+C                                                                       UER   60
+C   LATEST REVISION     - JANUARY 1, 1978                               UER   70
+C                                                                       UER   80
+C   PURPOSE             - PRINT A MESSAGE REFLECTING AN ERROR CONDITION UER   90
+C                                                                       UER  100
+C   USAGE               - CALL UERTST (IER,NAME)                        UER  110
+C                                                                       UER  120
+C   ARGUMENTS    IER    - ERROR PARAMETER. (INPUT)                      UER  130
+C                           IER = I+J WHERE                             UER  140
+C                             I = 128 IMPLIES TERMINAL ERROR,           UER  150
+C                             I =  64 IMPLIES WARNING WITH FIX, AND     UER  160
+C                             I =  32 IMPLIES WARNING.                  UER  170
+C                             J = ERROR CODE RELEVANT TO CALLING        UER  180
+C                                 ROUTINE.                              UER  190
+C                NAME   - A SIX CHARACTER LITERAL STRING GIVING THE     UER  200
+C                           NAME OF THE CALLING ROUTINE. (INPUT)        UER  210
+C                                                                       UER  220
+C   PRECISION/HARDWARE  - SINGLE/ALL                                    UER  230
+C                                                                       UER  240
+C   REQD. IMSL ROUTINES - UGETIO                                        UER  250
+C                                                                       UER  260
+C   NOTATION            - INFORMATION ON SPECIAL NOTATION AND           UER  270
+C                           CONVENTIONS IS AVAILABLE IN THE MANUAL      UER  280
+C                           INTRODUCTION OR THROUGH IMSL ROUTINE UHELP  UER  290
+C                                                                       UER  300
+C   REMARKS      THE ERROR MESSAGE PRODUCED BY UERTST IS WRITTEN        UER  310
+C                ONTO THE STANDARD OUTPUT UNIT. THE OUTPUT UNIT         UER  320
+C                NUMBER CAN BE DETERMINED BY CALLING UGETIO AS          UER  330
+C                FOLLOWS..   CALL UGETIO(1,NIN,NOUT).                   UER  340
+C                THE OUTPUT UNIT NUMBER CAN BE CHANGED BY CALLING       UER  350
+C                UGETIO AS FOLLOWS..                                    UER  360
+C                                NIN = 0                                UER  370
+C                                NOUT = NEW OUTPUT UNIT NUMBER          UER  380
+C                                CALL UGETIO(3,NIN,NOUT)                UER  390
+C                SEE THE UGETIO DOCUMENT FOR MORE DETAILS.              UER  400
+C                                                                       UER  410
+C   COPYRIGHT           - 1978 BY IMSL, INC. ALL RIGHTS RESERVED.       UER  420
+C                                                                       UER  430
+C   WARRANTY            - IMSL WARRANTS ONLY THAT IMSL TESTING HAS BEEN UER  440
+C                           APPLIED TO THIS CODE. NO OTHER WARRANTY,    UER  450
+C                           EXPRESSED OR IMPLIED, IS APPLICABLE.        UER  460
+C                                                                       UER  470
+C-----------------------------------------------------------------------UER  480
+C                                                                       UER  490
+      SUBROUTINE UERTST(IER, NAME)                                      UER  500
+C                                  SPECIFICATIONS FOR ARGUMENTS
+      INTEGER IER
+      INTEGER*2          NAME(3)
+C                                  SPECIFICATIONS FOR LOCAL VARIABLES
+      INTEGER*2          NAMSET(3),NAMEQ(3)
+      DATA NAMSET /2HUE,2HRS,2HET/
+      DATA NAMEQ /2H  ,2H  ,2H  /
+C                                  FIRST EXECUTABLE STATEMENT
+      DATA LEVEL /4/, IEQDF /0/, IEQ /1H=/
+      IF (IER.GT.999) GO TO 50
+      IF (IER.LT.-32) GO TO 70
+      IF (IER.LE.128) GO TO 10
+      IF (LEVEL.LT.1) GO TO 60
+C                                  PRINT TERMINAL MESSAGE
+      CALL UGETIO(1, NIN, IOUNIT)
+      IF (IEQDF.EQ.1) WRITE (IOUNIT,99999) IER, NAMEQ, IEQ, NAME
+      IF (IEQDF.EQ.0) WRITE (IOUNIT,99999) IER, NAME
+      GO TO 60
+   10 IF (IER.LE.64) GO TO 20
+      IF (LEVEL.LT.2) GO TO 60
+C                                  PRINT WARNING WITH FIX MESSAGE
+      CALL UGETIO(1, NIN, IOUNIT)
+      IF (IEQDF.EQ.1) WRITE (IOUNIT,99998) IER, NAMEQ, IEQ, NAME
+      IF (IEQDF.EQ.0) WRITE (IOUNIT,99998) IER, NAME
+      GO TO 60
+   20 IF (IER.LE.32) GO TO 30
+C                                  PRINT WARNING MESSAGE
+      IF (LEVEL.LT.3) GO TO 60
+      CALL UGETIO(1, NIN, IOUNIT)
+      IF (IEQDF.EQ.1) WRITE (IOUNIT,99997) IER, NAMEQ, IEQ, NAME
+      IF (IEQDF.EQ.0) WRITE (IOUNIT,99997) IER, NAME
+      GO TO 60
+   30 CONTINUE
+C                                  CHECK FOR UERSET CALL
+      DO 40 I=1,3
+        IF (NAME(I).NE.NAMSET(I)) GO TO 50
+   40 CONTINUE
+      LEVOLD = LEVEL
+      LEVEL = IER
+      IER = LEVOLD
+      IF (LEVEL.LT.0) LEVEL = 4
+      IF (LEVEL.GT.4) LEVEL = 4
+      GO TO 60
+   50 CONTINUE
+      IF (LEVEL.LT.4) GO TO 60
+C                                  PRINT NON-DEFINED MESSAGE
+      CALL UGETIO(1, NIN, IOUNIT)
+      IF (IEQDF.EQ.1) WRITE (IOUNIT,99996) IER, NAMEQ, IEQ, NAME
+      IF (IEQDF.EQ.0) WRITE (IOUNIT,99996) IER, NAME
+   60 IEQDF = 0
+      RETURN
+99999 FORMAT (19H *** TERMINAL ERROR, 10X, 7H(IER = , I3, 10H) FROM IMS,
+     * 10HL ROUTINE , 3A2, A1, 3A2)
+99998 FORMAT (36H *** WARNING WITH FIX ERROR  (IER = , I3, 9H) FROM IM,
+     * 11HSL ROUTINE , 3A2, A1, 3A2)
+99997 FORMAT (18H *** WARNING ERROR, 11X, 7H(IER = , I3, 11H) FROM IMSL,
+     * 9H ROUTINE , 3A2, A1, 3A2)
+99996 FORMAT (20H *** UNDEFINED ERROR, 9X, 7H(IER = , I5, 10H) FROM IMS,
+     * 10HL ROUTINE , 3A2, A1, 3A2)
+C                                  SAVE P FOR P = R CASE
+C                                    P IS THE PAGE NAME
+C                                    R IS THE ROUTINE NAME
+   70 IEQDF = 1
+      DO 80 I=1,3
+        NAMEQ(I) = NAME(I)
+   80 CONTINUE
+      RETURN
+      END
+C   IMSL ROUTINE NAME   - UGETIO                                        UGE   10
+C                                                                       UGE   20
+C-----------------------------------------------------------------------UGE   30
+C                                                                       UGE   40
+C   COMPUTER            - IBM/SINGLE                                    UGE   50
+C                                                                       UGE   60
+C   LATEST REVISION     - JUNE 1, 1981                                  UGE   70
+C                                                                       UGE   80
+C   PURPOSE             - TO RETRIEVE CURRENT VALUES AND TO SET NEW     UGE   90
+C                           VALUES FOR INPUT AND OUTPUT UNIT            UGE  100
+C                           IDENTIFIERS.                                UGE  110
+C                                                                       UGE  120
+C   USAGE               - CALL UGETIO(IOPT,NIN,NOUT)                    UGE  130
+C                                                                       UGE  140
+C   ARGUMENTS    IOPT   - OPTION PARAMETER. (INPUT)                     UGE  150
+C                           IF IOPT=1, THE CURRENT INPUT AND OUTPUT     UGE  160
+C                           UNIT IDENTIFIER VALUES ARE RETURNED IN NIN  UGE  170
+C                           AND NOUT, RESPECTIVELY.                     UGE  180
+C                           IF IOPT=2, THE INTERNAL VALUE OF NIN IS     UGE  190
+C                           RESET FOR SUBSEQUENT USE.                   UGE  200
+C                           IF IOPT=3, THE INTERNAL VALUE OF NOUT IS    UGE  210
+C                           RESET FOR SUBSEQUENT USE.                   UGE  220
+C                NIN    - INPUT UNIT IDENTIFIER.                        UGE  230
+C                           OUTPUT IF IOPT=1, INPUT IF IOPT=2.          UGE  240
+C                NOUT   - OUTPUT UNIT IDENTIFIER.                       UGE  250
+C                           OUTPUT IF IOPT=1, INPUT IF IOPT=3.          UGE  260
+C                                                                       UGE  270
+C   PRECISION/HARDWARE  - SINGLE/ALL                                    UGE  280
+C                                                                       UGE  290
+C   REQD. IMSL ROUTINES - NONE REQUIRED                                 UGE  300
+C                                                                       UGE  310
+C   NOTATION            - INFORMATION ON SPECIAL NOTATION AND           UGE  320
+C                           CONVENTIONS IS AVAILABLE IN THE MANUAL      UGE  330
+C                           INTRODUCTION OR THROUGH IMSL ROUTINE UHELP  UGE  340
+C                                                                       UGE  350
+C   REMARKS      EACH IMSL ROUTINE THAT PERFORMS INPUT AND/OR OUTPUT    UGE  360
+C                OPERATIONS CALLS UGETIO TO OBTAIN THE CURRENT UNIT     UGE  370
+C                IDENTIFIER VALUES. IF UGETIO IS CALLED WITH IOPT=2 OR  UGE  380
+C                IOPT=3, NEW UNIT IDENTIFIER VALUES ARE ESTABLISHED.    UGE  390
+C                SUBSEQUENT INPUT/OUTPUT IS PERFORMED ON THE NEW UNITS. UGE  400
+C                                                                       UGE  410
+C   COPYRIGHT           - 1978 BY IMSL, INC. ALL RIGHTS RESERVED.       UGE  420
+C                                                                       UGE  430
+C   WARRANTY            - IMSL WARRANTS ONLY THAT IMSL TESTING HAS BEEN UGE  440
+C                           APPLIED TO THIS CODE. NO OTHER WARRANTY,    UGE  450
+C                           EXPRESSED OR IMPLIED, IS APPLICABLE.        UGE  460
+C                                                                       UGE  470
+C-----------------------------------------------------------------------UGE  480
+C                                                                       UGE  490
+      SUBROUTINE UGETIO(IOPT, NIN, NOUT)                                UGE  500
+C                                  SPECIFICATIONS FOR ARGUMENTS
+      INTEGER IOPT, NIN, NOUT
+C                                  SPECIFICATIONS FOR LOCAL VARIABLES
+      INTEGER NIND, NOUTD
+      DATA NIND /5/, NOUTD /6/
+C                                  FIRST EXECUTABLE STATEMENT
+      IF (IOPT.EQ.3) GO TO 20
+      IF (IOPT.EQ.2) GO TO 10
+      IF (IOPT.NE.1) GO TO 30
+      NIN = NIND
+      NOUT = NOUTD
+      GO TO 30
+   10 NIND = NIN
+      GO TO 30
+   20 NOUTD = NOUT
+   30 RETURN
+      END
+         1         2        35     -10.0   -1.D-15                      DAT   10
+         3         2        20             -1.D-15                      DAT   20
+         5         2        20      -1.0   -1.D-15                      DAT   30
+         5         2        20      -2.0   -1.D-15                      DAT   40
+         6         2        25             -1.D-15                      DAT   50
+         7         2        25             -1.D-15                      DAT   60
+         8         2        25             -1.D-15                      DAT   70
+         1         2        20       1.0   -1.D-15                      DAT   80
+         1         2        35      10.0   -1.D-15                      DAT   90
+         1         2        35      25.0   -1.D-15                      DAT  100
+         4         2        25             -1.D-15                      DAT  110
+         5         2        30       0.5   -1.D-15                      DAT  120
+         9         2        25     100.0   -1.D-15                      DAT  130
+         9         2        25      50.0   -1.D-15                      DAT  140
+         9         2        25      25.0   -1.D-15                      DAT  150
+         2         2        35      10.0   -1.D-15                      DAT  160
+        10         2        25             -1.D-15                      DAT  170
+         1         8        35     -10.0    1.D-12                      DAT  180
+         3         8        20              1.D-12                      DAT  190
+         5         8        20      -1.0    1.D-12                      DAT  200
+         5         8        20      -2.0    1.D-12                      DAT  210
+         6         8        25              1.D-12                      DAT  220
+         7         8        25              1.D-12                      DAT  230
+         8         8        25              1.D-12                      DAT  240
+         1         8        20       1.0    1.D-12                      DAT  250
+         1         8        35      10.0    1.D-12                      DAT  260
+         1         8        35      25.0    1.D-12                      DAT  270
+         4         8        25              1.D-12                      DAT  280
+         5         8        30       0.5    1.D-12                      DAT  290
+         9         8        25     100.0    1.D-12                      DAT  300
+         9         8        25      50.0    1.D-12                      DAT  310
+         9         8        25      25.0    1.D-12                      DAT  320
+         2         8        35      10.0    1.D-12                      DAT  330
+        10         8        25              1.D-12                      DAT  340
+         1         6        35     -10.0    1.D-08                      DAT  350
+         3         6        20              1.D-08                      DAT  360
+         5         6        20      -1.0    1.D-08                      DAT  370
+         5         6        20      -2.0    1.D-08                      DAT  380
+         6         6        25              1.D-08                      DAT  390
+         7         6        25              1.D-08                      DAT  400
+         8         6        25              1.D-08                      DAT  410
+         1         6        20       1.0    1.D-08                      DAT  420
+         1         6        35      10.0    1.D-08                      DAT  430
+         4         6        25              1.D-08                      DAT  440
+         5         6        30       0.5    1.D-08                      DAT  450
+         9         6        25     100.0    1.D-08                      DAT  460
+         9         6        25      50.0    1.D-08                      DAT  470
+         2         6        35      10.0    1.D-08                      DAT  480
+        10         6        25              1.D-08                      DAT  490
+         3         2        20              1.D-04                      DAT  500
+         5         2        20      -1.0    1.D-04                      DAT  510
+         5         2        20      -2.0    1.D-04                      DAT  520
+         6         2        25              1.D-04                      DAT  530
+         7         2        25              1.D-04                      DAT  540
+         1         2        20       1.0    1.D-04                      DAT  550
+         4         2        25              1.D-04                      DAT  560
+         5         2        30       0.5    1.D-04                      DAT  570
+         9         2        25     100.0    1.D-04                      DAT  580
+         9         2        25      50.0    1.D-04                      DAT  590
+         9         2        25      25.0    1.D-04                      DAT  600
+        10         2        25              1.D-04                      DAT  610
+         9         2        25     100.0   -1.D-12                      DAT  620
+         9         2        25      50.0   -1.D-12                      DAT  630
+         9         2        25      25.0   -1.D-12                      DAT  640
+         9         2        25      50.0   -1.D-08                      DAT  650
+         9         2        25      25.0   -1.D-08                      DAT  660
+         9         2        25      25.0   -1.D-04                      DAT  670

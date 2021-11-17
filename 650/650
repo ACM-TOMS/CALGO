@@ -1,0 +1,428 @@
+;      ALGORITHM 650, COLLECTED ALGORITHMS FROM ACM.
+;      THIS WORK PUBLISHED IN TRANSACTIONS ON MATHEMATICAL SOFTWARE,
+;      VOL. 13, NO. 2, P. 138.
+INTSQRT                        ;USAGE:
+                               ;  PUSH 32-BIT (UNSIGNED) ARGUMENT ONTO STACK.
+                               ;  JSR TO INTSQRT.
+                               ;  32-BIT RESULT IS RETURNED ON STACK AND
+                               ;  ROUNDING STATUS IS RETURNED IN CCR:
+                               ;    Z = 1 AND C = 0 IF
+                               ;      RESULT = EXACT SQUARE ROOT;
+                               ;    Z = 0 AND C = 0 IF
+                               ;      RESULT > EXACT SQUARE ROOT;
+                               ;    Z = 0 AND C = 1 IF
+                               ;      RESULT < EXACT SQUARE ROOT.
+                               ;REGISTERS USED:
+                               ;  D0,D1,D2
+       MOVE.L  4(SP),D1        ;D1:= U[17] = X
+       MOVEQ   #FFH,D2         ;D2:= FFFFFFFFH;
+       CLR.W   D2              ;D2:= FFFF0000H: D2 = V[17] = 2**16*(2**16-1).
+       CMP.L   D2,D1           ;U[17] > V[17]?
+       BHI.S   $2              ;BRANCH TO $2 IF U[17] > V[17].
+                               ;U[17] <= V[17].
+                               ;THE FOLLOWING IMPLICIT ASSIGNMENTS ARE MADE:
+                               ;  D1:= U[16] = U[17]
+                               ;  D2:= G[16] = V[17]
+                               ;  I:= 15
+       MOVEQ   #31.,D0         ;D0:= 2I+1 = 31
+$0:                            ;REGISTER STATUS:
+                               ;  D0 = 2I+1
+                               ;  D1 = U[I+1]
+                               ;  D2 = Q[I+1]
+       BCLR    D0,D2           ;D2:= Q[I+1] - 2**(2I+1)
+       LSR.L   #1,D2           ;D2:= V[I+1] = (Q[I+1] - 2**(2I+1))/2
+       CMP.L   D2,D1           ;U[I+1] > V[I+1]?
+       BLS.S   $1              ;IF U[I+1] <= V[I+1], THEN BRANCH TO $1 WITH
+                               ;  THE FOLLOWING IMPLICIT ASSIGNMENTS:
+                               ;  D1:= U[I] = U[I+1]
+                               ;  D2:= Q[I] = V[I+1]
+                               ;U[I+1] > V[I+1]:
+       SUB.L   D2,D1           ;D1:= U[I] = U[I+1] - V[I+1]
+       BSET    D0,D2           ;D2:= Q[I] = V[I+1] + 2**(2I+1)
+$1:    SUBQ.B  #2,D0           ;D0:= 2I-1
+                               ;REGISTER STATUS:
+                               ;  D0 = 2I-1
+                               ;  D1 = U[I]
+                               ;  D2 = Q[I]
+                               ;I:= I-1
+                               ;REGISTER STATUS:
+                               ;  D0 = 2(I+1)-1 = 2I+1
+                               ;  D1 = U[I+1]
+                               ;  D2 = Q[I+1]
+       BCC.S   $0              ;BRANCH TO $0 IF I >= 0.
+                               ;I = -1
+                               ;REGISTER STATUS:
+                               ;  D1 = U[0] = X - Y[0]*(Y[0]-1)
+                               ;  D2 = Q[0] = 2*Y[0]
+       LSR.L   #1,D2           ;D2:= Q[0]/2 = Y[0]
+                               ;INTSQRT(X):= Y[0]
+       MOVE.L  D2,4(SP)        ;SUBSTITUTE RESULT FOR ARGUMENT ON STACK.
+       CMP.L   D1,D2           ;CHECK ROUNDING STATUS
+                               ;  (D2-D1 = Y[0]-U[0] = Y[0]*Y[0] - X);
+                               ;  DEFINE Z AND C FLAGS ACCORDINGLY.
+       RTS                     ;RETURN.
+$2:                            ;U[17] > V[17]:
+       MOVE.L  #00010000H,4(SP);RESULT = 2**16.
+       MOVE.W  #0,CCR          ;CLEAR Z AND C FLAGS TO INDICATE
+                               ;  RESULT > EXACT SQUARE ROOT.
+       RTS                     ;RETURN.
+ 
+SPSQRT                         ;USAGE:
+                               ;  (IEEE SINGLE-PRECISION STANDARD IS USED.)
+                               ;  PUSH 32-BIT ARGUMENT ONTO STACK.
+                               ;  JSR TO SPSQRT.
+                               ;  IF ARGUMENT IS NORMALIZED AND >= 0, THEN
+                               ;    32-BIT RESULT IS RETURNED ON STACK AND
+                               ;    ROUNDING STATUS IS RETURNED IN CCR:
+                               ;      Z = 1 AND C = 0 IF
+                               ;        RESULT = EXACT SQUARE ROOT;
+                               ;      Z = 0 AND C = 0 IF
+                               ;        RESULT > EXACT SQUARE ROOT;
+                               ;      Z = 0 AND C = 1 IF
+                               ;        RESULT < EXACT SQUARE ROOT.
+                               ;  IF ARGUMENT IS NORMALIZED AND < 0, PROGRAM
+                               ;    CONTROL IS TRANSFERRED TO NEGARG, WITH
+                               ;    ARGUMENT AND RETURN ADDR. STILL ON THE
+                               ;    STACK.
+                               ;  IF ARGUMENT IS NOT NORMALIZED, PROGRAM
+                               ;    CONTROL IS TRANSFERRED TO NONNORM, WITH
+                               ;    ARGUMENT AND RETURN ADDR. STILL ON THE
+                               ;    STACK.
+                               ;  IF ARGUMENT IS INFINITY OR NAN (CODE FFH
+                               ;    IN EXPONENT FIELD), PROGRAM CONTROL IS
+                               ;    TRANSFERRED TO NAN, WITH ARGUMENT AND
+                               ;    RETURN ADDR. STILL ON THE STACK.
+                               ;REGISTERS USED:
+                               ;  D0,D1,D2,D3
+       MOVE.L  #7F800000H,D0   ;(MASK FOR EXPONENT FIELD)
+       MOVE.L  4(SP),D2        ;D2 = ARGUMENT.
+       BEQ.S   $3              ;IF ARGUMENT = 0, BRANCH TO $3 AND RETURN WITH
+                               ;  ZERO RESULT AND Z = 1, C = 0 TO INDICATE NO
+                               ;  ROUNDING ERROR.
+       BMI.S   $4              ;BRANCH TO $4 IF SIGN BIT = 1.
+       MOVE.L  D2,D1           ;USE D1 TO STORE EXPONENT.
+       AND.L   D0,D1           ;CLEAR FRACTION FIELD IN D1:
+                               ;  D1 = [M + 7FH]*2**23 (M = ARG'S EXPONENT).
+       BEQ.S   NONNORM         ;BRANCH TO NONNORM IF ARGUMENT IS NOT
+                               ;  NORMALIZED.
+       CMP.L   D0,D1           ;TEST FOR INFINITY OR NAN.
+       BEQ.S   NAN             ;BRANCH TO NAN IF ARGUMENT IS INFINITY OR NAN.
+                               ;ARGUMENT IS NORMALIZED AND > 0.
+       SUB.L   D1,D2           ;CLEAR EXPONENT FIELD IN D2.
+       BSET    #23.,D2         ;RESTORE IMPLICIT 1 IN BIT 23
+                               ;  (D2 = X = SIGNIFICAND*2**23).
+       ADDI.L  #3F800000H,D1   ;D1:= (M + 2*7FH)*2**23
+       LSR.L   #1,D1           ;D1:= ((M/2) + 7FH)*2**23 =
+                               ;  ((M DIV 2) + 7FH)*2**23 +
+                               ;  (M MOD 2)*2**22
+       BCLR    #22.,D1         ;D1:= ((M DIV 2) + 7FH)*2**23;
+                               ;  TEST (M MOD 2)
+       BEQ.S   $0              ;BRANCH TO $0 IF M IS EVEN.
+       LSL.L   #1,D2           ;DOUBLE X IF M IS ODD.
+$0:                            ;D1 = ((M DIV 2) + 7FH)*2**23
+                               ;D2 = X*2**(M MOD 2)
+                               ;RENORMALIZE ARGUMENT:
+                               ;  X:= X*2**(M MOD 2).
+                               ;  M:= M - (M MOD 2);
+                               ;D1 = ((M/2) + 7FH)*2**23
+                               ;  (M/2 = RESULT'S EXPONENT)
+                               ;D2 = X
+                               ;SQUARE ROOT ALGORITHM (CALCULATE
+                               ;  Y0:= SQRT(X*2**N); D2 = X, N = 23):
+       MOVEQ   #22.,D0         ;D0:= I:= N-1
+       MOVE.B  #23.,D1         ;D1 (LOW BYTE):= I+1 (EXPONENT IS IN HIGH WORD)
+       SUBI.L  #007FFFFFH,D2   ;D2:= P[N] = X-(2**N-1)
+       MOVE.L  #017FFFFFH,D3   ;D3:= Q[N] = 2**(N+1)+2**N-1
+$1:                            ;REGISTER STATUS:
+                               ;  D0 = I
+                               ;  D1 (LOW BYTE) = I+1
+                               ;  D2 = P[I+1]
+                               ;  D3 = Q[I+1]
+       LSL.L   #1,D2           ;D2:= U[I+1] = 2*P[I+1]
+       BCLR    D0,D3           ;D3:= V[I+1] = Q[I+1] - 2**I
+       CMP.L   D3,D2           ;U[I+1] > V[I+1]?
+       BLS.S   $2              ;IF U[I+1] <= V[I+1] THEN BRANCH TO $2
+                               ;WITH THE FOLLOWING IMPLICIT ASSIGNMENTS:
+                               ;  D2:= P[I] = U[I+1]
+                               ;  D3:= Q[I] = V[I+1]
+                               ;U[I+1] > V[I+1]:
+       SUB.L   D3,D2           ;D2:= P[I] = U[I+1] - V[I+1]
+       BSET    D1,D3           ;D3:= Q[I] = V[I+1] + 2**(I+1)
+$2     MOVE.B  D0,D1           ;D1 (LOW BYTE) := I
+       SUBQ.B  #1,D0           ;D0:= I-1
+                               ;REGISTER STATUS:
+                               ;  D0 = I-1
+                               ;  D1 (LOW BYTE) = I
+                               ;  D2 = P[I]
+                               ;  D3 = Q[I]
+                               ;I:= I-1
+                               ;REGISTER STATUS:
+                               ;  D0 = I
+                               ;  D1 (LOW BYTE) = I+1
+                               ;  D2 = P[I+1]
+                               ;  D3 = Q[I+1]
+       BCC.S   $1              ;BRANCH TO $1 IF I >= 0.
+                               ;I = -1
+                               ;REGISTER STATUS:
+                               ;  D1 (LOW BYT = I+1 = 0 (LOW WORD OF D1
+                               ;     IS CLEARED, EXPONENT IS IN HIGH WOR)
+                               ;  D2 = P[0] = (2**N)*X-Y[0]*(Y[0]-1)
+                               ;  D3 = Q[0] = 2*Y[0]
+       LSR.L   #1,D3           ;D3:= Q[0]/2 = Y[0]
+       MOVE.L  D3,D0           ;SET UP RESULT IN D0:
+       BCLR    #23.,D0         ;CLEAR EXPONENT FIELD.
+       OR.L    D1,D0           ;BIND IN EXPONENT.
+       MOVE.L  D0,4(SP)        ;REPLACE ARGUMENT WITH RESULT.
+       CMP.L   D2,D3           ;CHECK ROUNDING STATUS
+                               ;  (D3-D2 = Y[0]-P[0] = Y[0]*Y[0]-(2**N)*X);
+                               ;  DEFINE Z AND C FLAGS ACCORDINGLY.
+$3:    RTS                     ;RETURN.
+$4:                            ;SIGN BIT = 1.
+       ADD.L   D2,D2           ;SHIFT LEFT; AND ...
+       ROR.L   #1,D2           ;SHIFT RIGHT, CLEAR SIGN BIT, AND TEST RESULT.
+       BEQ.S   $3              ;IF ARGUMENT = -0, BRANCH TO $3 AND RETURN WITH
+                               ;  -0 RESULT AND Z = 1, C = 0 TO INDICATE NO
+                               ;  ROUNDING ERROR.
+       AND.L   D0,D2           ;CLEAR FRACTION FIELD.
+       BEQ.S   NONNORM         ;BRANCH TO NONNORM IF ARGUMENT IS NOT
+                               ;  NORMALIZED.
+       CMP.L   D0,D2           ;TEST FOR INFINITY OR NAN.
+       BEQ.S   NAN             ;BRANCH TO NAN IF RESULT IS INFINITY OR NAN.
+NEGARG                         ;ARGUMENT IS NORMALIZED AND < 0.
+       .
+       .
+       .
+NONNORM                        ;ARGUMENT IS NOT NORMALIZED.
+       .
+       .
+       .
+NAN                            ;ARGUMENT IS INFINITY OR NAN.
+       .
+       .
+       .
+ 
+DPSQRT                         ;USAGE:
+                               ;  (IEEE DOUBLE PRECISION STANDARD IS USED.)
+                               ;  PUSH LSLW OF ARGUMENT ONTO STACK.
+                               ;  PUSH MSLW OF ARGUMENT ONTO STACK.
+                               ;  JSR TO DPSQRT.
+                               ;  IF ARGUMENT IS NORMALIZED AND >= 0, THEN
+                               ;    64-BIT RESULT IS RETURNED ON STACK (PULL
+                               ;      MSLW FROM STACK FIRST, THEN LSLW) AND
+                               ;    ROUNDING STATUS IS RETURNED IN CCR:
+                               ;      Z = 1 AND C = 0 IF
+                               ;        RESULT = EXACT SQUARE ROOT;
+                               ;      Z = 0 AND C = 0 IF
+                               ;        RESULT > EXACT SQUARE ROOT;
+                               ;      Z = 0 AND C = 1 IF
+                               ;        RESULT < EXACT SQUARE ROOT.
+                               ;  IF ARGUMENT IS NORMALIZED AND > 0, PROGRAM
+                               ;    CONTROL IS TRANSFERRED TO NEGARG, WITH
+                               ;    ARGUMENT AND RETURN ADDR. STILL ON THE
+                               ;    STACK.
+                               ;  IF ARGUMENT IS NOT NORMALIZED, PROGRAM
+                               ;    CONTROL IS TRANSFERRED TO NONNORM, WITH
+                               ;    ARGUMENT AND RETURN ADDR. STILL ON THE
+                               ;    STACK.
+                               ;  IF ARGUMENT IS INFINITY OR NAN (CODE 7FFH
+                               ;    IN EXPONENT FIELD), PROGRAM CONTROL IS
+                               ;    TRANSFERRED TO NAN, WITH ARGUMENT AND
+                               ;    RETURN ADDR. STILL ON THE STACK.
+                               ;REGISTERS USED:
+                               ;  D0,D1,D2,D3,D4,D5,D6,D7
+       MOVE.L  #7FF00000H,D0   ;(MASK FOR EXPONENT FIELD)
+       MOVE.L  8(SP),D3        ;D3 = LSLW OF ARGUMENT
+       MOVE.L  4(SP),D2        ;D2 = MSLW OF ARGUMENT
+       BEQ     $6              ;BRANCH TO $6 IF MSLW = 0.
+       BMI     $8              ;BRANCH TO $8 IF SIGN BIT = 1.
+       MOVE.L  D2,D1           ;USE D1 TO STORE EXPONENT.
+       AND.L   D0,D1           ;CLEAR FRACTION FIELD IN D1:
+                               ;  D1 = (M + 3FFH)*2**20 (M = ARG'S EXPONENT).
+       BEQ     NONNORM         ;BRANCH TO NONNORM IF ARGUMENT IS NOT
+                               ;  NORMALIZED.
+       CMP.L   D0,D1           ;TEST FOR INFINITY OR NAN.
+       BEQ     NAN             ;BRANCH TO NAN IF ARGUMENT IS INFINITY OR NAN.
+                               ;ARGUMENT IS NORMALIZED AND > 0.
+       SUB.L   D1,D2           ;CLEAR EXPONENT FIELD IN D2.
+       BSET    #20.,D2         ;RESTORE IMPLICIT 1 IN BIT 20
+                               ;  ((D2,D3) = X = SIGNIFICAND*2**52).
+       ADDI.L  #3FF00000H,D1   ;D1:= (M + 2*3FFH))*2**20
+       LSR.L   #1,D1           ;D1:= ((M/2) + 3FFH)*2**20 =
+                               ;  ((M DIV 2) + 3FFH)*2**20 +
+                               ;  (M MOD 2)*2**19
+       BCLR    #19.,D1         ;D1:= ((M DIV 2) + 3FFH)*2**20;
+                               ;  TEST (M MOD 2)
+       BEQ.S   $0              ;BRANCH TO $0 IF M IS EVEN.
+       LSL.L   #1,D3
+       ROXL.L  #1,D2           ;DOUBLE X IF M IS ODD.
+$0:                            ;D1 = ((M DIV 2) + 3FFH)*2**20
+                               ;(D2,D3) = X*2**(M MOD 2)
+                               ;RENORMALIZE ARGUMENT:
+                               ;  X:= X*2**(M MOD 2).
+                               ;  M:= M - (M MOD 2);
+                               ;D1 = ((M/2) + 3FFH)*2**20
+                               ;  (M/2 = RESULT'S EXPONENT)
+                               ;(D2,D3) = X
+                               ;SQUARE ROOT ALGORITHM (CALCULATE
+                               ;  Y0:= SQRT(X*2**N); (D2,D3) = X, N = 52):
+       MOVEQ   #19.,D0         ;D0 + 32:= I:= N-1
+       MOVE.B  #20.,D1         ;D1 (LOW BYTE) + 32:= I+1
+                               ;  (EXPONENT IS IN HIGH WORD)
+       MOVEQ   #FFH,D5
+       MOVE.L  #000FFFFFH,D4   ;(D4,D5):= 2**N-1
+       SUB.L   D5,D3
+       SUBX.L  D4,D2           ;(D2,D3):= P[N] = X-(2**N-1)
+       BSET    #21.,D4         ;(D4,D5):= Q[N] = 2**(N+1)+2**N-1
+$1:                            ;REGISTER STATUS:
+                               ;  D0 + 32 = I >= 32
+                               ;  D1 (LOW BYTE) + 32 = I+1 > 32
+                               ;  (D2,D3) = P[I+1]
+                               ;  (D4,D5) = Q[I+1]
+       LSL.L   #1,D3
+       ROXL.L  #1,D2           ;(D2,D3):= U[I+1] = 2*P[I+1]
+       BCLR    D0,D4           ;(D4,D5):= V[I+1] = Q[I+1] - 2**I (I >= 32)
+       MOVE.L  D2,D6
+       MOVE.L  D3,D7
+       SUB.L   D5,D7
+       SUBX.L  D4,D6           ;(D6,D7):= U[I+1] - V[I+1]
+       BLS.S   $2              ;IF U[I+1] <= V[I+1], BRANCH TO $2
+                               ;WITH THE FOLLOWING IMPLICIT ASSIGNMENTS:
+                               ;  (D2,D3):= P[I] = U[I+1]
+                               ;  (D4,D5):= Q[I] = V[I+1]
+                               ;U[I+1] > V[I+1]:
+       MOVE.L  D6,D2
+       MOVE.L  D7,D3           ;(D2,D3):= P[I] = U[I+1] - V[I+1].
+       BSET    D1,D4           ;(D4,D5):= Q[I] = V[I+1] + 2**(I+1) (I+1 > 32)
+$2:    MOVE.B  D0,D1           ;D1 (LOW BYTE) + 32:= I
+       SUBQ.B  #1,D0           ;D0 + 32:= I-1
+                               ;REGISTER STATUS:
+                               ;  D0 + 32 = I-1
+                               ;  D1 (LOW BYTE) + 32 = I
+                               ;  (D2,D3) = P[I]
+                               ;  (D4,D5) = Q[I]
+                               ;I:= I-1.
+                               ;REGISTER STATUS:
+                               ;  D0 + 32 = I
+                               ;  D1 (LOW BYTE) + 32 = I+1
+                               ;  (D2,D3) = P[I+1]
+                               ;  (D4,D5) = Q[I+1]
+       BCC.S   $1              ;BRANCH TO $1 IF I >= 32.
+                               ;I = 31
+       MOVEQ   #31.,D0         ;D0:= I
+                               ;REGISTER STATUS:
+                               ;  D0 = I = 31
+                               ;  D1 (LOW BYTE) + 32 = I+1 = 32
+                               ;  (D2,D3) = P[I+1]
+                               ;  (D4,D5) = Q[I+1]
+       LSL.L   #1,D3
+       ROXL.L  #1,D2           ;(D2,D3):= U[I+1] = 2*P[I+1]
+       BCLR    D0,D5           ;(D4,D5):= V[I+1] = Q[I+1] - 2**I (I = 31)
+       MOVE.L  D2,D6
+       MOVE.L  D3,D7
+       SUB.L   D5,D7
+       SUBX.L  D4,D6           ;(D6,D7):= U[I+1] - V[I+1]
+       BLS.S   $3              ;IF U[I+1] <= V[I+1], BRANCH TO $3
+                               ;WITH THE FOLLOWING IMPLICIT ASSIGNMENTS:
+                               ;  (D2,D3):= P[I] = U[I+1]
+                               ;  (D4,D5):= Q[I] = V[I+1]
+                               ;U[I+1] > V[I+1]:
+       MOVE.L  D6,D2
+       MOVE.L  D7,D3           ;(D2,D3):= P[I] = U[I+1] - V[I+1].
+       BSET    D1,D4           ;(D4,D5):= Q[I] = V[I+1] + 2**(I+1) (I+1 = 32)
+$3:    MOVE.B  D0,D1           ;D1 (LOW BYTE):= I = 31
+       SUBQ.B  #1,D0           ;D0:= I-1 = 30
+                               ;REGISTER STATUS:
+                               ;  D0 = I-1 = 30
+                               ;  D1 (LOW BYTE) = I = 31
+                               ;  (D2,D3) = P[I]
+                               ;  (D4,D5) = Q[I]
+                               ;I:= I-1 = 30
+                               ;REGISTER STATUS:
+                               ;  D0 = I = 30
+                               ;  D1 (LOW BYTE) = I+1 = 31
+                               ;  (D2,D3) = P[I+1]
+                               ;  (D4,D5) = Q[I+1]
+$4:                            ;REGISTER STATUS:
+                               ;  D0 = I < 31
+                               ;  D1 (LOW BYTE) = I+1 <= 31
+                               ;  (D2,D3) = P[I+1]
+                               ;  (D4,D5) = Q[I+1]
+       LSL.L   #1,D3
+       ROXL.L  #1,D2           ;(D2,D3):= U[I+1] = 2*P[I+1]
+       BCLR    D0,D5           ;(D4,D5):= V[I+1] = Q[I+1] - 2**I (I < 31)
+       MOVE.L  D2,D6
+       MOVE.L  D3,D7
+       SUB.L   D5,D7
+       SUBX.L  D4,D6           ;(D6,D7(:= U[I+1] - V[I+1]
+       BLS.S   $5              ;IF U[I+1] <= V[I+1], BRANCH TO $5
+                               ;WITH THE FOLLOWING IMPLICIT ASSIGNMENTS:
+                               ;  (D2,D3):= P[I] = U[I+1]
+                               ;  (D4,D5):= Q[I] = V[I+1]
+                               ;U[I+1] > V[I+1]:
+       MOVE.L  D6,D2
+       MOVE.L  D7,D3           ;(D2,D3):= P[I] = U[I+1] - V[I+1].
+       BSET    D1,D5           ;(D4,D5):= Q[I] = V[I+1] + 2**(I+1) (I+1 <= 31)
+$5:    MOVE.B  D0,D1           ;D1 (LOW BYTE) := I
+       SUBQ.B  #1,D0           ;D0:= I-1
+                               ;REGISTER STATUS:
+                               ;  D0 = I-1
+                               ;  D1 (LOW BYTE) = I
+                               ;  (D2,D3) = P[I]
+                               ;  (D4,D5) = Q[I]
+                               ;I:= I-1.
+                               ;REGISTER STATUS:
+                               ;  D0 = I
+                               ;  D1 (LOW BYTE) = I+1
+                               ;  (D2,D3) = P[I+1]
+                               ;  (D4,D5) = Q[I+1]
+       BCC.S   $4              ;BRANCH TO $4 IF I >= 0.
+                               ;I = -1
+                               ;REGISTER STATUS:
+                               ;  D1 (LOW BYTE) = I+1 = 0 (LOW WORD OF D1
+                               ;     IS CLEARED, EXPONENT IS IN HIGH WORD.)
+                               ;  (D2,D3) = P[0] = [2**N]*X-Y[0]*(Y[0]-1)
+                               ;  (D4,D5) = Q[0] = 2*Y[0]
+       LSR.L   #1,D4
+       ROXR.L  #1,D5           ;(D4,D5):= Q[0]/2 = Y[0]
+       MOVE.L  D4,D0           ;SET UP MSLW OF RESULT IN D0:
+       BCLR    #20.,D0         ;CLEAR EXPONENT FIELD.
+       OR.L    D1,D0           ;BIND IN EXPONENT.
+       MOVE.L  D0,4(SP)
+       MOVE.L  D5,8(SP)        ;REPLACE ARGUMENT WITH RESULT.
+       SUB.L   D3,D5
+       SUBX.L  D2,D4           ;CHECK ROUNDING STATUS
+                               ;  ((D4,D5):= Y[0]-P[0] = Y[0]*Y[0]-(2**N)*X);
+                               ;  DEFINE Z AND C FLAGS ACCORDINGLY.
+       RTS                     ;RETURN.
+$6:                            ;MSLW OF ARGUMENT IS 0.
+       TST.L   D3              ;CHECK IF LSLW = 0.
+       BNE.S   NONNORM         ;IF LSLW IS NOT 0, BRANCH TO NONNORM.
+$7:    RTS                     ;ARGUMENT = 0. RETURN WITH ZERO RESULT AND
+                               ;  Z = 1, C = 0 TO INDICATE NO ROUNDING ERROR.
+$8:                            ;SIGN BIT = 1.
+       ADD.L   D2,D2           ;SHIFT LEFT; AND ...
+       ROR.L   #1,D2           ;SHIFT RIGHT, CLEAR SIGN BIT, AND TEST RESULT.
+       BNE.S   $9
+       TST.L   D3
+       BEQ.S   $7              ;IF ARGUMENT = -0, BRANCH TO $7 AND RETURN WITH
+                               ;  -0 RESULT AND Z = 1, C = 0 TO INDICATE NO
+                               ;  ROUNDING ERROR.
+       BRA.S   NONNORM         ;ARGUMENT IS NOT NORMALIZED.
+$9:    AND.L   D0,D2           ;CLEAR FRACTION FIELD.
+       BEQ.S   NONNORM         ;BRANCH TO NONNORM IF ARGUMENT IS NOT
+                               ;  NORMALIZED.
+       CMP.L   D0,D2           ;TEST FOR INFINITY OR NAN.
+       BEQ.S   NAN             ;BRANCH TO NAN IF RESULT IS INFINITY OR NAN.
+NEGARG                         ;ARGUMENT IS NORMALIZED AND < 0.
+       .
+       .
+       .
+NONNORM                        ;ARGUMENT IS NOT NORMALIZED.
+       .
+       .
+       .
+NAN                            ;ARGUMENT IS INFINITY OR NAN.
+       .
+       .
+       .
+

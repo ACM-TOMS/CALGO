@@ -1,0 +1,4 @@
+var structLatBuilder_1_1Task_1_1CBCSelector_3_01LAT_00_01COMPRESS_00_01CoordUniformFigureOfMerit_3_01KERNEL_01_4_01_4 =
+[
+    [ "CBC", "dc/d0a/structLatBuilder_1_1Task_1_1CBCSelector_3_01LAT_00_01COMPRESS_00_01CoordUniformFigureOfMerit_3_01KERNEL_01_4_01_4.html#a07a034aa1023d01e26775b8a074a120b", null ]
+];

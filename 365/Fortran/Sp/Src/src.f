@@ -1,0 +1,149 @@
+      SUBROUTINE CRF ( ZS, HS, HM, DM, FUNC, DS, ZE, HE, DE, N )
+C
+C  THE SUBROUTINE DETERMINES A ROOT OF A TRANSCEN-
+C  DENTAL COMPLEX EQUATION F(Z)=0 BY STEP-WISE ITE-
+C  RATION, (THE DOWN HILL METHOD).
+C
+C  INPUT-PARAMETERS.
+C
+C  ZS = START VALUE OF Z. (COMPLEX)
+C  HS = LENGTH OF STEP AT START.
+C  HM = MINIMUM LENGTH OF STEP.
+C  DM = MINIMUM DEVIATION.
+C
+C  SUBPROGRAM.
+C
+C  FUNC(Z), A COMPLEX FUNCTION SUBPROGRAM FOR THE
+C  CALCULATION OF THE VALUE OF F(Z) FOR A COMPLEX
+C  ARGUMENT Z.
+C
+C  OUTPUT-PARAMETERS.
+C
+C  DS = CABS(FUNC(ZS)) = DEVIATION AT START.
+C  ZE = END VALUE OF Z. (COMPLEX)
+C  HE = LENGTH OF STEP AT END.
+C  DE = CABS(FUNC(ZE)) = DEVIATION AT END.
+C  N  = NUMBER OF ITERATIONS.
+C
+C  RESTRICTIONS.
+C
+C  THE FUNCTION W=F(Z) MUST BE ANALYTICAL IN THE
+C  REGION WHERE ROOTS ARE SOUGHT.
+C
+      IMPLICIT NONE
+
+      COMPLEX A
+      COMPLEX CW
+      REAL DE
+      REAL DM
+      REAL DS
+      COMPLEX FUNC
+      REAL H
+      REAL HE
+      REAL HM
+      REAL HS
+      INTEGER I
+      INTEGER K
+      INTEGER N
+      INTEGER NR
+      COMPLEX U(7)
+      COMPLEX V
+      REAL W(3)
+      REAL W0
+      COMPLEX Z(3)
+      COMPLEX Z0
+      COMPLEX ZE
+      COMPLEX ZS
+
+      U(1) = (  1.0E+00, 0.0E+00 )
+      U(2) = (  0.8660254E+00, 0.5000000E+00 )
+      U(3) = (  0.0000000E+00, 1.0000000E+00 )
+      U(4) = (  0.9659258E+00, 0.2588190E+00 )
+      U(5) = (  0.7071068E+00, 0.7071068E+00 )
+      U(6) = (  0.2588190E+00, 0.9659258E+00 )
+      U(7) = ( -0.2588190E+00, 0.9659258E+00 )
+      H = HS
+      Z0 = ZS
+      N = 0
+C
+C  CALCULATION OF DS.
+C
+      CW = FUNC ( Z0 )
+      W0 = ABS ( REAL ( CW ) ) + ABS ( AIMAG ( CW ) )
+      DS = W0
+      IF ( W0 - DM ) 18, 18, 1
+1     K = 1
+      I = 0
+2     V = ( -1.0E+00, 0.0E+00 )
+C
+C  EQUILATERAL TRIANGLE WALK PATTERN.
+C
+3     A = ( -0.5E+00, 0.866E+00 )
+C
+C  CALCULATION OF DEVIATIONS W IN THE NEW TEST POINTS.
+C
+4     Z(1) = Z0 + H * V * A
+      CW = FUNC ( Z(1) )
+      W(1) = ABS ( REAL ( CW ) ) + ABS ( AIMAG ( CW ) )
+      Z(2) = Z0 + H * V
+      CW = FUNC ( Z(2) )
+      W(2) = ABS ( REAL ( CW ) ) + ABS ( AIMAG ( CW ) )
+      Z(3) = Z0 + H * CONJG ( A ) * V
+      CW = FUNC ( Z(3) )
+      W(3) = ABS ( REAL ( CW ) ) + ABS ( AIMAG ( CW ) )
+      N = N + 1
+C
+C  DETERMINATI0N OF W(NR), THE SMALLEST OF W(I).
+C
+      IF ( W(1) - W(3) ) 5, 5, 6
+5     IF ( W(1) - W(2) ) 7, 8, 8
+6     IF ( W(2) - W(3) ) 8, 8, 9
+7     NR = 1
+      GO TO 10
+8     NR = 2
+      GO TO 10
+9     NR = 3
+10    IF ( W0 - W(NR) ) 11, 12, 12
+11    GO TO ( 13, 14, 15 ), K
+12    K = 1
+      I = 0
+C
+C  FORWARD DIRECTED WALK PATTERN.
+C
+      A = ( 0.707E+00, 0.707E+00 )
+      V = ( Z(NR) - Z0 ) / H
+      W0 = W(NR)
+      Z0 = Z(NR)
+      IF ( W0 - DM ) 18, 18, 4
+13    K = 2
+C
+C  REDUCTION OF STEP LENGTH.
+C
+      IF ( H .LT. HM ) GO TO 18
+      H = H * 0.25E+00
+      GO TO 3
+14    K = 3
+C
+C  RESTORATION OF STEP LENGTH.
+C
+      H = H * 4.0E+00
+      GO TO 2
+15    I = I + 1
+C
+C  ROTATION OF WALK PATTERN.
+C
+      IF ( I - 7 ) 16, 16, 17
+16    V = U(I)
+      GO TO 3
+C
+C  REDUCTION OF STEP LENGTH.
+C
+17    IF ( H .LT. HM ) GO TO 18
+      H = H * 0.25E+00
+      I = 0
+      GO TO 2
+18    ZE = Z0
+      HE = H
+      DE = W0
+      RETURN
+      END

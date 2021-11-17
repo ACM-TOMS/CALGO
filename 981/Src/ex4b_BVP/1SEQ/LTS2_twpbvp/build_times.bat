@@ -1,0 +1,51 @@
+cls
+@echo off
+
+set TALBOTdir=../../../TalbotSuiteDE
+set EXdir=../..
+
+echo Example folder is: "%EXdir%"
+echo Talbot Suite folder is: "%TALBOTdir%"
+
+echo.
+echo     *** Compile sources ***
+@echo on
+
+gfortran -c twpbvp.f prtfun.f testfun.f
+
+gcc -c -std=gnu99 -Wall -pedantic -Wextra ./SEQ_main_TIMES.c ./SEQ_LTsamples_twpbvp.c %EXdir%/LTsings2.c %TALBOTdir%/COM/COM_Talbot_pack.c %TALBOTdir%/COM_DE/COM_Talbot_pack_DE.c %TALBOTdir%/FUN_DE/SEQ_Talbot_pack_DE.c
+
+@echo off
+:: pause
+echo.
+echo.
+echo.
+echo     *** Build executable ***
+echo.
+@echo on
+gcc -o ex4_time.exe ./SEQ_main_TIMES.o ./SEQ_LTsamples_twpbvp.o ./LTsings2.o ./COM_Talbot_pack.o ./COM_Talbot_pack_DE.o ./SEQ_Talbot_pack_DE.o twpbvp.o prtfun.o testfun.o -lm -lgfortran
+
+@echo off
+:: pause
+echo.
+echo.
+echo.
+echo     *** Run executable as: ***
+echo     ex4_time tol
+echo.
+echo     where:
+echo.
+echo     tol = 1e-6, 1e-8, 1e-10, 1e-12
+echo.
+@echo on
+
+:: OUTPUT TO THE DISPLAY
+::ex4_time 1e-6
+
+:: OUTPUT TO A FILE
+::@echo off
+::echo.
+::echo     *** Output to file: out_times_tol1.txt ***
+::echo.
+::@echo on
+::ex4_time 1e-6 > out_times_tol1.txt

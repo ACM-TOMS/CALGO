@@ -1,0 +1,1395 @@
+C     ALGORITHM 592, COLLECTED ALGORITHMS FROM ACM.
+C     ALGORITHM APPEARED IN ACM-TRANS. MATH. SOFTWARE, VOL.9, NO. 1,
+C     MAR., 1983, P. 98-116.
+      SUBROUTINE RANGE(IAG, N, X, F, K, WK, LWK, AL, ALPHA, IL,         RAN   10
+     *     LEP, ETA, PSI, LOW, UP, OMEGA, IFAIL)
+C ********************************************************************
+C                          PURPOSE                                   *
+C ********************************************************************
+C                                                                    *
+C      GIVEN VALUES OF A FUNCTION F(X) AT N DISTINCT POINTS          *
+C      X(1).LT.X(2),...,.LT.X(N) AND GIVEN A FINITE BOUND,AL,        *
+C      ON THE KTH. DERIVATIVE OF F(X), 1.LE.K.LE.N,                  *
+C      THIS SUBROUTINE COMPUTES THE CLOSEST POSSIBLE BOUNDS          *
+C      ON F(ALPHA), WHERE ALPHA IS A SPECIFIED VALUE OF X.           *
+C      THE SUBROUTINE ALSO PROVIDES THE ESTIMATE, OMEGA, OF          *
+C      F(ALPHA) WHOSE ERROR HAS THE SMALLEST POSSIBLE BOUND.         *
+C                                                                    *
+C ********************************************************************
+C
+C
+C **** I N P U T ****
+C
+C   IAG      IS AN INTEGER VARIABLE WHICH MUST BE SET TO THE VALUE +1
+C            AT THE FIRST CALL OF THE SUBROUTINE. THE SUBROUTINE MAY
+C            BE RE-ENTERED WITH A DIFFERENT VALUE OF ALPHA. IN THIS
+C            CASE IF THE VALUE OF IAG IS GREATER THAN 1, AND THE
+C            REMAINING PARAMETERS ARE UNALTERED, THEN EXECUTION IS
+C            MUCH FASTER.NOTE THAT THE CODE DOES NOT CHECK THAT THE
+C            REMAINING PARAMETERS ARE UNALTERED.
+C            THIS ARGUMENT IS NOT ALTERED BY THE SUBROUTINE.
+C
+C   N        IS AN INTEGER VARIABLE WHICH MUST BE SET TO THE NUMBER
+C            OF DATA POINTS X(I),I=1,...,N. RESTRICTION: N.GE.2
+C            THIS ARGUMENT IS NOT ALTERED BY THE SUBROUTINE.
+C
+C   X        IS A REAL ARRAY OF LENGTH AT LEAST N WHICH MUST BE
+C            SET TO THE VALUES OF THE DATA POINTS X(I),I=1,...,N.
+C            RESTRICTION: THE DATA POINTS MUST BE DISTINCT AND
+C            THEY MUST BE IN ASCENDING ORDER.
+C            THIS ARGUMENT IS NOT ALTERED BY THE SUBROUTINE.
+C
+C   F        IS A REAL ARRAY OF LENGTH AT LEAST N WHICH MUST BE
+C            SET TO THE FUNCTION VALUES F(X(1)),...,F(X(N)).
+C            THIS ARGUMENT IS NOT ALTERED BY THE SUBROUTINE.
+C
+C   K        IS AN INTEGER VARIABLE WHICH MUST BE SET TO THE ORDER
+C            OF THE DERIVATIVE OF F(X) FOR WHICH A FINITE BOUND IS
+C            GIVEN. THE VALUE OF K SHOULD BE VERY MUCH SMALLER THAN
+C            THE VALUE OF N. IN FACT WE RECOMMEND THAT ONLY IN
+C            EXCEPTIONAL CIRCUMSTANCES AND THEN ONLY ON SOUND
+C            NUMERICAL GROUNDS, SHOULD THE VALUE OF K BE GREATER
+C            THAN 8. RESTRICTION: 1.LE.K.LE.N
+C            THIS ARGUMENT IS NOT ALTERED BY THE SUBROUTINE.
+C
+C   WK       IS A REAL ARRAY OF LENGTH AT LEAST:
+C
+C                  5*N-2*K+1+(N-K)*MIN(K,N-K)
+C
+C            WHICH IS USED AS WORKSPACE.
+C
+C   LWK      IS AN INTEGER VARIABLE WHICH MUST BE SET TO THE
+C            LENGTH OF WK.
+C            RESTRICTION: LWK.GE.5*N-2*K+1+(N-K)*MIN(K,N-K).
+C            THIS ARGUMENT IS NOT ALTERED BY THE SUBROUTINE.
+C
+C   AL       IS A REAL VARIABLE WHICH MUST BE SET TO THE VALUE
+C            L, OF THE FINITE BOUND ON THE KTH. DERIVATIVE OF
+C            F(X).
+C            RESTRICTION: L MUST BE GREATER THAN THE LEAST VALUE
+C            OF THE MAXIMUM ABSOLUTE VALUE OF THE KTH. DERIVATIVE
+C            OF F(X) THAT IS CONSISTENT WITH THE GIVEN FUNCTION
+C            VALUES F(X(1)),...,F(X(N)). IN PARTICULAR L MUST
+C            SATISFY THE INEQUALITIES
+C
+C                              L .GT. 0
+C            AND
+C                 L .GE. FACTORIAL(K)*ABS(F(X(I),...,X(I+K))
+C                 I=1,...,N-K,
+C
+C            WHERE F(X(I),...,X(I+K)) DENOTES THE KTH. DIVIDED
+C            DIFFERENCE OF F(X) BASED ON THE POINTS X(I),...,X(I+K).
+C            THIS ARGUMENT IS NOT ALTERED BY THE SUBROUTINE.
+C
+C   ALPHA    IS A REAL VARIABLE WHICH MUST BE SET TO THE VALUE
+C            OF THE ARGUMENT  X  AT WHICH THE RANGE OF POSSIBLE
+C            VALUES OF F(X) IS COMPUTED.
+C            RESTRICTION: X(1).LE.ALPHA
+C            THIS ARGUMENT IS NOT ALTERED BY THE SUBROUTINE.
+C
+C   IL       IS AN INTEGER ARRAY OF LENGTH AT LEAST N. IT IS USED
+C            AS WORKSPACE.
+C
+C   LEP      IS AN INTEGER VARIABLE WHICH MUST BE SET TO THE LESSER
+C            LENGTH OF ARRAYS ETA AND PSI. RESTRICTION: LEP.GE.N-K.
+C            THIS ARGUMENT IS NOT ALTERED BY THE SUBROUTINE.
+C
+C
+C **** O U T P U T ****
+C
+C   ETA      IS A REAL ARRAY OF LENGTH AT LEAST N-K. ON EXIT
+C            FROM THE SUBROUTINE ETA CONTAINS THE KNOTS
+C            OF THE PERFECT SPLINE U(X).
+C
+C   PSI      IS A REAL ARRAY OF LENGTH AT LEAST N-K. ON EXIT
+C            FROM THE SUBROUTINE PSI CONTAINS THE KNOTS OF THE
+C            PERFECT SPLINE L(X).
+C
+C   LOW      IS A REAL VARIABLE. ON EXIT FROM THE SUBROUTINE
+C            LOW IS SET TO THE GREATEST LOWER BOUND OF F(ALPHA).
+C
+C   UP       IS A REAL VARIABLE. ON EXIT FROM THE SUBROUTINE
+C            UP IS SET TO THE LEAST UPPER BOUND OF F(ALPHA).
+C
+C   OMEGA    IS A REAL VARIABLE. ON EXIT FROM THE SUBROUTINE
+C            OMEGA IS SET TO THE OPTIMAL ESTIMATE OF F(ALPHA).
+C            THE SMALLEST VALUE OF THE ERROR OF THIS ESTIMATE
+C            OF F(ALPHA) IS ZERO, AND THE MAXIMUM VALUE WHICH
+C            IT CAN ATTAIN IS THE QUANTITY: 0.5*ABS(UP-LOW).
+C
+C   IFAIL    IS AN ERROR RETURN FLAG. ON EXIT FROM THE SUBROUTINE
+C            IT HAS ONE OF THE FOLLOWING VALUES:
+C
+C            0      SUCCESSFUL ENTRY
+C            1      N .LT. 2
+C            2      K .LT. 1 OR K .GT. N
+C            3      X(I) .GE. X(I+1) FOR SOME I
+C            4      L .LT. FACTORIAL(K)*ABS(F(X(I),...,X(I+K))
+C                   FOR SOME I
+C            5      MORE THAN IMAX ITERATIONS NEEDED TO CALCULATE
+C                   THE KNOTS  ETA AND/OR PSI.
+C            6      THE METHOD USED TO CALCULATE THE KNOTS ETA,
+C                   AND PSI, FAILED. THIS IS USUALLY BECAUSE L
+C                   IS TOO SMALL OR THE VALUE OF K IS TOO LARGE.
+C            7      L .LE. 0
+C            8      THE ARRAY WK IS TOO SMALL
+C            9      THE ARRAYS ETA AND PSI ARE TOO SMALL
+C            10     ALPHA .LT. X(1)
+C
+C
+C **** ADDITIONAL ROUTINES ****
+C
+C   THE FOLLOWING ADDITIONAL ROUTINES ARE SUPPLIED WITH RANGE:
+C
+C                SUBROUTINE KNOTS
+C                SUBROUTINE RESID
+C                SUBROUTINE JAC
+C
+C   SINCE THESE ROUTINES ARE CALLED FROM WITHIN RANGE THE USER
+C   SHOULD ENSURE THAT THERE ARE NO POTENTIAL PROBLEMS DUE TO
+C   NAME CONFLICTS.
+C
+C
+C **** QUALITY ASSURANCE AND SOFTWARE STANDARD ****
+C
+C   THE SUBROUTINES THAT COMPRISE THIS PACKAGE
+C   HAVE BEEN WRITTEN TO CONFORM TO THE FORTRAN IV
+C   ANSI STANDARD 1966, AND THEY HAVE BEEN VERIFIED
+C   USING THE BELL TELEPHONE LABORATORIES FORTRAN
+C   VERIFIER: PFORT.
+C   THE SUBROUTINES HAVE BEEN EXTENSIVELY TESTED ON
+C   A VARIETY OF TEST PROBLEMS, AND THEY HAVE BEEN
+C   ANALYSED FOR ERRORS USING THE DAVE SYSTEM FROM
+C   THE UNIVERSITY OF COLORADO.
+C   TO MAKE THE CODE EASY TO READ THE SUBROUTINES
+C   HAVE BEEN REFORMATTED USING POLISH.
+C
+C
+C
+C **** P.W.GAFFNEY  DECEMBER 30. 1981 ****
+C
+C ********************************************************************
+C
+      REAL X(N), F(N), WK(LWK), ETA(LEP), PSI(LEP), LOW
+      REAL LAMBDA
+      INTEGER IL(N), HALFK
+C
+C **************************************************************
+C      N.B. IN THE FOLLOWING DATA STATEMENT                    *
+C      IMAX  IS A LIMIT IMPOSED ON THE NUMBER OF NEWTON        *
+C            ITERATIONS REQUIRED TO COMPUTE THE KNOTS ETA AND  *
+C            PSI.                                              *
+C            DEFAULT: IMAX=1000                                *
+C      NOUT  IS THE LOGICAL UNIT NUMBER FOR THE OUTPUT UNIT    *
+C            WHERE ERROR MESSAGES ARE PRINTED.                 *
+C            DEFAULT: NOUT = 6                                 *
+C            TO SUPPRESS PRINTING SET NOUT .LE. 0              *
+C                                                              *
+      DATA IMAX, NOUT /1000,6/
+C **************************************************************
+C
+      DATA ZERO, POINT5, ONE /0.0,0.5,1.0/
+      IFAIL = 0
+      NMK = N - K
+      NK = MIN0(K,NMK)
+      LAJ = NMK*NK
+      KM1 = K - 1
+      KP1 = K + 1
+      KP2 = K + 2
+      NP1 = N + 1
+      NP2 = N + 2
+C***************************************************************
+C      CHECK THAT THE INPUT PARAMETERS ARE SENSIBLE            *
+C***************************************************************
+      IF (ALPHA.LT.X(1)) GO TO 400
+      IF (N.LT.2) GO TO 310
+      IF (LWK.LT.5*N-2*K+1+LAJ) GO TO 380
+      IF (LEP.LT.NMK) GO TO 390
+      IF (K.LT.1 .OR. K.GT.N) GO TO 320
+      IF (AL.LE.ZERO) GO TO 370
+      NM1 = N - 1
+      DO 10 I=1,NM1
+           IF (X(I).LT.X(I+1)) GO TO 10
+           GO TO 330
+   10 CONTINUE
+C
+C COMPUTE FACTORIAL K-1. NOTE THAT IF K HAS A VALUE MUCH LARGER
+C THAN 8 THEN THERE IS THE POTENTIAL FOR OVERFLOW IN THE FOLLOWING
+C CALCULATION.
+C
+      FACT = ONE
+      IF (KM1.LT.2) GO TO 30
+      DO 20 I=2,KM1
+           FACT = FACT*FLOAT(I)
+   20 CONTINUE
+C END OF COMPUTING FACTORIAL K-1.
+C
+   30 IF (IAG.GT.1) GO TO 80
+      IF (K.EQ.N) GO TO 80
+C
+C COMPUTE THE KTH. DIVIDED DIFFERENCES F(X(I),...,X(I+K))
+C AND STORE THEM IN WK(K+1+I),I=1,...,N-K
+C
+      DO 40 I=1,N
+           KI = KP1 + I
+           WK(KI) = F(I)
+   40 CONTINUE
+      DO 60 J=1,K
+C      J DENOTES THE JTH DIVIDED DIFFERENCE OF F.
+           NMJ = N - J
+           DO 50 I=1,NMJ
+C      WK(KP1+I) IS THE DIVIDED DIFFERENCE F(X(I),...,X(I+J-1)).
+                KI = KP1 + I
+                S1 = WK(KI+1) - WK(KI)
+                IPJ = I + J
+                S1 = S1/(X(IPJ)-X(I))
+                WK(KI) = S1
+   50      CONTINUE
+   60 CONTINUE
+C
+C END OF COMPUTING THE DIVIDED DIFFERENCES.
+C
+C COMPUTE THE COMPONENTS OF CSTA, NAMELY:
+C FACTORIAL(K-1)*F(X(I),...,X(I+K))/AL, I=1,...,N-K,
+C IN WK(K+1+I),I=1,...,NMK, AND NOTE THE LARGEST COMPONENT
+C IN THE VARIABLE WKM.
+C
+      WKM = ZERO
+      DO 70 I=1,NMK
+           KI = KP1 + I
+           WK(KI) = FACT*WK(KI)/AL
+           WKM = AMAX1(ABS(WK(KI)),WKM)
+   70 CONTINUE
+C
+C END OF COMPUTING THE COMPONENTS OF CSTA.
+C
+C CHECK THAT THE VALUE OF AL IS LARGE ENOUGH
+C
+      IF (WKM.GT.ONE/FLOAT(K)) GO TO 340
+C***************************************************************
+C      END OF CHECKING THE INPUT PARAMETERS.                   *
+C***************************************************************
+C                                                              *
+C***************************************************************
+C      COMPUTE MACHINE EPSILON                                 *
+C***************************************************************
+   80 EPS = ONE
+   90 EPS = POINT5*EPS
+      EPSP1 = EPS + ONE
+      IF (EPSP1.GT.ONE) GO TO 90
+      EPS = EPS + EPS
+C***************************************************************
+C      END OF COMPUTING MACHINE EPSILON.                       *
+C***************************************************************
+C
+C***************************************************************
+C      COMPUTE JINT SUCH THAT X(JINT).LE.ALPHA.LT.X(JINT+1)    *
+C      NOTE THAT THE FOLLOWING CODE MAKES USE OF THE FACT THAT *
+C      IN FORTRAN THE RESULT OF INTEGER DIVISION IS ROUNDED    *
+C      DOWN TO THE NEAREST INTEGER.                            *
+C***************************************************************
+      ILEFT = 1
+      IRITE = NP1
+  100 MIDDLE = (ILEFT+IRITE)/2
+      IF (ALPHA.LT.X(MIDDLE)) IRITE = MIDDLE
+      IF (ALPHA.GE.X(MIDDLE)) ILEFT = MIDDLE
+      IF (IRITE.GT.ILEFT+1) GO TO 100
+      JINT = ILEFT
+C***************************************************************
+C      END OF COMPUTING JINT.                                  *
+C***************************************************************
+C
+      IF (K.GT.1) GO TO 140
+C
+C***************************************************************
+C      SET THE SOLUTION FOR K=1 AND RETURN                     *
+C***************************************************************
+C
+C IF RE-ENTERED,(WITH ALPHA AND IAG THE ONLY CHANGED
+C PARAMETERS), THEN DO NOT RE-COMPUTE THE KNOTS
+C
+      IF (IAG.GT.1) GO TO 120
+      DO 110 I=1,NMK
+           IP1 = I + 1
+           XP = X(I) + POINT5*(X(IP1)-X(I))
+           FP = F(IP1) - F(I)
+           ETA(I) = XP + POINT5*(FLOAT((-1)**IP1)*FP)/AL
+           PSI(I) = XP + POINT5*(FLOAT((-1)**I)*FP)/AL
+  110 CONTINUE
+  120 I = JINT
+      J = JINT
+      IF (ALPHA.GE.X(N)) GO TO 130
+      IF (ALPHA.GE.ETA(JINT)) I = JINT + 1
+      IF (ALPHA.GE.PSI(JINT)) J = JINT + 1
+  130 TEMP1 = FLOAT((-1)**(I-1))*AL*(ALPHA-X(I)) + F(I)
+      TEMP2 = FLOAT((-1)**(J))*AL*(ALPHA-X(J)) + F(J)
+      LOW = AMIN1(TEMP1,TEMP2)
+      UP = AMAX1(TEMP1,TEMP2)
+      OMEGA = POINT5*(LOW+UP)
+C***************************************************************
+C      RETURN TO CALLING PROGRAM                               *
+C***************************************************************
+C
+      GO TO 410
+C
+C***************************************************************
+C   COMPUTE THE CLOSEST POSSIBLE BOUNDS ON F(ALPHA) FOR K.KE.2 *
+C***************************************************************
+C
+C IF RE-ENTERED,(WITH ALPHA AND IAG THE ONLY CHANGED
+C PARAMETERS), THEN DO NOT RE-COMPUTE THE KNOTS
+C
+  140 IF (IAG.GT.1) GO TO 160
+C
+      IF (K.EQ.N) GO TO 160
+C
+C***************************************************************
+C      COMPUTE THE KNOTS OF THE PERFECT SPLINES                *
+C***************************************************************
+      IWK = 4*NMK + (2*K)
+      INCP1 = LWK - LAJ + 1
+C
+C FIRST COMPUTE THE KNOTS ETA(1),...,ETA(N-K)
+      CALL KNOTS(N, X, K, WK(KP2), WK(INCP1), NK, WK(NP2), IWK,
+     *     IL, NMK, ETA, IMAX, IFAIL, EPS)
+C
+C THEN(IF IFAIL=0) COMPUTE THE KNOTS PSI(1),...,PSI(N-K)
+      IF (IFAIL.EQ.5) GO TO 350
+      IF (IFAIL.EQ.6) GO TO 360
+      DO 150 I=1,NMK
+           KI = KP1 + I
+           WK(KI) = -WK(KI)
+  150 CONTINUE
+      CALL KNOTS(N, X, K, WK(KP2), WK(INCP1), NK, WK(NP2), IWK,
+     *     IL, NMK, PSI, IMAX, IFAIL, EPS)
+      IF (IFAIL.EQ.5) GO TO 350
+      IF (IFAIL.EQ.6) GO TO 360
+C***************************************************************
+C      END OF COMPUTING THE KNOTS.                             *
+C***************************************************************
+C
+C***************************************************************
+C      SET THE KNOTS OF THE AUGMENTED B-SPLINE MALPHA(X),BY    *
+C      CHOOSING K DATA POINTS CLOSEST TO ALPHA AND ARRANGING   *
+C      THE RESULTING K+1 POINTS IN ASCENDING ORDER.            *
+C      STORE THE KNOTS IN WK(1),...,WK(K+1), AND STORE         *
+C      THE SUBSCRIPT OF THE DATA POINT WHICH FORMS THE FIRST   *
+C      KNOT OF MALPHA(X) IN THE VARIABLE IBAR.                 *
+C***************************************************************
+  160 HALFK = K/2
+      IF (JINT.LE.HALFK) GO TO 190
+      IF (JINT.GE.NMK+HALFK) GO TO 220
+      J1 = JINT - HALFK
+      DO 170 I=1,HALFK
+           II = J1 + I
+           WK(I) = X(II)
+  170 CONTINUE
+      WK(HALFK+1) = ALPHA
+      J2 = HALFK + 2
+      DO 180 I=J2,KP1
+           II = J1 - 1 + I
+           WK(I) = X(II)
+  180 CONTINUE
+      IBAR = J1 + 1
+      GO TO 250
+  190 DO 200 I=1,JINT
+           WK(I) = X(I)
+  200 CONTINUE
+      WK(JINT+1) = ALPHA
+      J2 = JINT + 2
+      DO 210 I=J2,KP1
+           WK(I) = X(I-1)
+  210 CONTINUE
+      IBAR = 1
+      GO TO 250
+  220 IEND = JINT - NMK
+      DO 230 I=1,IEND
+           II = NMK + I
+           WK(I) = X(II)
+  230 CONTINUE
+      WK(IEND+1) = ALPHA
+      J2 = IEND + 2
+      IBAR = NMK + 1
+      IF (J2.GT.KP1) GO TO 250
+      DO 240 I=J2,KP1
+           II = NMK - 1 + I
+           WK(I) = X(II)
+  240 CONTINUE
+C***************************************************************
+C      END OF SETTING THE KNOTS OF MALPHA(X).                  *
+C***************************************************************
+C
+C***************************************************************
+C      COMPUTE THE QUANTITIES CUP AND CLOW                     *
+C***************************************************************
+C
+C      SET CUP AND CLOW WHEN K=N
+  250 IF (K.LT.N) GO TO 260
+      CUP = AL/FLOAT(K)
+      CLOW = -CUP
+      GO TO 270
+C
+C CALCULATE CUP AND CLOW WHEN K.LT.N
+C FIRST COMPUTE THE INTEGRAL OF MALPHA*(THE KTH.DERIV. OF U(X)/AL)
+  260 I2 = NP2 + K
+      CALL RESID(-1, 1, 1, KP1, WK(1), NMK, ETA, WK(KP2), K,
+     *     WK(NP2), WK(I2), NP2, WK, NP1, IL(KP1), SS, ICONT,
+     *     LAMBDA)
+      TEMP = AL*WK(NP2)
+C
+C THEN COMPUTE THE INTEGRAL OF MALPHA*(THE KTH.DERIV. OF L(X)/AL)
+      CALL RESID(-1, 1, 1, KP1, WK(1), NMK, PSI, WK(KP2), K,
+     *     WK(NP2), WK(I2), NP2, WK, NP1, IL(KP1), SS, ICONT,
+     *     LAMBDA)
+      CUP = AMAX1(TEMP,-AL*WK(NP2))
+      CLOW = AMIN1(TEMP,-AL*WK(NP2))
+C***************************************************************
+C      END OF COMPUTING CUP AND CLOW.                          *
+C***************************************************************
+C
+C***************************************************************
+C      USING A MODIFIED NEVILLE ALGORITHM COMPUTE THE VALUE,   *
+C      AT X=ALPHA, OF THE POLYNOMIAL OF DEGREE K-1 WHICH       *
+C      PASSES THROUGH THE K FUNCTION VALUES F(X(IBAR)),...,    *
+C      F(X(IBAR+K-1)), AND STORE THE RESULT IN THE VARIABLE    *
+C      PALPHA.                                                 *
+C***************************************************************
+C
+  270 WK(1) = F(IBAR)
+      DO 290 I=2,K
+           IBI = IBAR + I - 1
+           WK(I) = F(IBI)
+           IM1 = I - 1
+           DO 280 IJ=1,IM1
+                J = I - IJ
+                IBJ = IBAR + J - 1
+                WK(J) = WK(J+1) + (WK(J+1)-WK(J))*(ALPHA-X(IBI))
+     *               /(X(IBI)-X(IBJ))
+  280      CONTINUE
+  290 CONTINUE
+      PALPHA = WK(1)
+C***************************************************************
+C      END OF EVALUATING THE INTERPOLATING POLYNOMIAL.         *
+C***************************************************************
+C
+C***************************************************************
+C      COMPUTE THE RANGE OF POSSIBLE VALUES OF F(ALPHA)        *
+C      AND COMPUTE THE OPTIMAL ESTIMATE OMEGA                  *
+C***************************************************************
+C
+      PROD = ONE
+      DO 300 I=1,K
+           LI = IBAR + I - 1
+           PROD = PROD*(ALPHA-X(LI))
+  300 CONTINUE
+      TEMP1 = PALPHA + PROD*CLOW/FACT
+      TEMP2 = PALPHA + PROD*CUP/FACT
+      LOW = AMIN1(TEMP1,TEMP2)
+      UP = AMAX1(TEMP1,TEMP2)
+      OMEGA = POINT5*(LOW+UP)
+C***************************************************************
+C      END OF COMPUTING THE CLOSEST POSSIBLE BOUNDS ON F(ALPHA)*
+C***************************************************************
+      GO TO 410
+C***************************************************************
+C      DIAGNOSTIC PRINTING                                     *
+C***************************************************************
+  310 IFAIL = 1
+      IF (NOUT.GT.0) WRITE (NOUT,99999)
+      GO TO 410
+  320 IFAIL = 2
+      IF (NOUT.GT.0) WRITE (NOUT,99998)
+      GO TO 410
+  330 IFAIL = 3
+      IF (NOUT.GT.0) WRITE (NOUT,99997)
+      GO TO 410
+  340 IFAIL = 4
+      WKM = WKM*FLOAT(K)*AL
+      IF (NOUT.GT.0) WRITE (NOUT,99996) WKM
+      GO TO 410
+  350 IF (NOUT.GT.0) WRITE (NOUT,99995)
+      GO TO 410
+  360 IF (NOUT.GT.0) WRITE (NOUT,99993)
+      GO TO 410
+  370 IFAIL = 7
+      IF (NOUT.GT.0) WRITE (NOUT,99994)
+      GO TO 410
+  380 IFAIL = 8
+      IF (NOUT.GT.0) WRITE (NOUT,99992)
+      GO TO 410
+  390 IFAIL = 9
+      IF (NOUT.GT.0) WRITE (NOUT,99991)
+      GO TO 410
+  400 IFAIL = 10
+      IF (NOUT.GT.0) WRITE (NOUT,99990)
+C      END OF PRINTING.
+C***************************************************************
+  410 RETURN
+C***************************************************************
+99999 FORMAT (1X, 24H***** MESSAGE FROM RANGE, 3X, 9HN.LT.2 **,
+     *     3H***)
+99998 FORMAT (1X, 24H***** MESSAGE FROM RANGE, 3X, 9HK IS NOT ,
+     *     6HIN THE, 28H INTERVAL  1.LE.K.LE.N *****)
+99997 FORMAT (1X, 24H***** MESSAGE FROM RANGE, 3X, 9HTHE DATA ,
+     *     6HPOINTS, 34H ARE NOT IN ASCENDING ORDER. *****)
+99996 FORMAT (1X, 24H***** MESSAGE FROM RANGE, 3X, 9HTHE VALUE,
+     *     6H OF AL, 17H MUST BE AT LEAST, 1PE14.6, 6H *****)
+99995 FORMAT (1X, 24H***** MESSAGE FROM RANGE, 3X, 9HMETHOD FA,
+     *     6HILED T, 36HO CONVERGE IN IMAX ITERATIONS. *****)
+99994 FORMAT (1X, 24H***** MESSAGE FROM RANGE, 3X, 9HTHE VALUE,
+     *     6H OF AL, 19H IS .LE. ZERO *****)
+99993 FORMAT (1X, 24H***** MESSAGE FROM RANGE, 3X, 9HTHE CONTI,
+     *     6HNUATIO, 20HN METHOD HAS FAILED.//1X, 10HTHIS IS US,
+     *     10HUALLY BECA, 22HUSE AL IS TOO SMALL OR//1X,
+     *     18HTHE VALUE OF K IS , 16HTOO LARGE. *****)
+99992 FORMAT (1X, 24H***** MESSAGE FROM RANGE, 3X, 9H THE ARRA,
+     *     6HY WK I, 17HS TOO SMALL *****)
+99991 FORMAT (1X, 24H***** MESSAGE FROM RANGE, 3X, 9H THE ARRA,
+     *     6HYS ETA, 28H AND PSI ARE TOO SMALL *****)
+99990 FORMAT (1X, 24H***** MESSAGE FROM RANGE, 3X, 9HALPHA.LT.,
+     *     10HX(1) *****)
+      END
+      SUBROUTINE KNOTS(N, X, K, CSTA, AJ, NK, WK, ISW, L, NMK,          KNO   10
+     *     ETA, IMAX, IFAIL, EPS)
+C   ***************************************************************
+C   *                        PURPOSE                              *
+C   ***************************************************************
+C   *                                                             *
+C   * GIVEN THE DATA POINTS:   X(1).LT.X(2).,...,.LT.X(N)         *
+C   * AND THE VECTOR: (CSTA(1),...,CSTA(N-K)), WHERE 1.LE.K.LE.N-1*
+C   * THIS SUBROUTINE COMPUTES THE KNOTS OF THE PERFECT SPLINE U  *
+C   *                                                             *
+C   ***************************************************************
+C
+      REAL X(N), CSTA(NMK), AJ(NMK,NK), WK(ISW), ETA(NMK),
+     *     LASTSS, LAMBDA
+      INTEGER L(NMK)
+      DATA ZERO, POINT5, ONE, TWO, FIVE, TON
+     *     /0.0,0.5,1.0,2.0,5.0,100.0/
+      IFAIL = 0
+      LAMBDA = ONE
+      N2 = 2*NMK
+      N3 = 3*NMK
+      N1P1 = NMK + 1
+      N3P1 = N3 + 1
+      I1 = 4*NMK + 1
+      I2 = I1 + K
+      EPS1 = TON*FLOAT(NMK*NMK)*EPS*EPS
+C***************************************************************
+C      SET THE INITIAL APPROXIMATION                           *
+C***************************************************************
+      KP1 = K + 1
+      DO 20 I=1,NMK
+           SUM = ZERO
+           DO 10 J=1,KP1
+                IPJM1 = I + J - 1
+                SUM = SUM + X(IPJM1)
+   10      CONTINUE
+           ETA(I) = SUM/FLOAT(KP1)
+   20 CONTINUE
+C      END OF INITIALISATION.
+C***************************************************************
+C
+C      THE VALUES OF THE INTEGER VARIABLES: ICONT,IUP,IARG AND IA
+C
+C      ICONT HAS THE VALUE -1 WHEN A CONTINUATION STEP IS IN
+C            PROGRESS. OTHERWISE IT HAS THE VALUE +1.
+C
+C      IUP   IS SET TO +1 WHEN ETA IS UPDATED AND -1 OTHERWISE.
+C
+C      IARG  IS USED IN RESID. THE RESIDUALS ARE EVALUATED AT ETA
+C            IF IARG=+1 AND AT ETA+(NEWTON CORRECTION) IF IARG=-1
+C
+C      IA    IS DEFINED IN RESID. IN THIS SUBROUTINE
+C            IT IS SET TO THE VALUE +1.
+C
+C
+      ICONT = 1
+      IUP = -1
+      IA = 1
+C
+C***************************************************************
+C      OUTER LOOP FOR CONTINUATION METHOD                      *
+C***************************************************************
+      DO 230 JCONT=1,IMAX
+           IARG = 1
+C
+C***************************************************************
+C      BEGIN NEWTON ITERATION                                  *
+C***************************************************************
+           DO 160 ITER=JCONT,IMAX
+C
+C      COMPUTE THE RESIDUALS IN WK(NMK+1),...,WK(2*NMK), AND
+C      COMPUTE THE SUM OF SQUARES SS
+                CALL RESID(IA, IARG, NMK, N, X, NMK, ETA, CSTA,
+     *               K, WK(I1), WK(I2), N3, WK, NMK, L, SS,
+     *               ICONT, LAMBDA)
+                IF (ITER.EQ.JCONT) GO TO 50
+C
+C      IF SS HAS DECREASED THEN UPDATE THE APPROXIMATION
+                IF (SS.LT.LASTSS) GO TO 30
+C
+C      IF SS HAS INCREASED DUE TO ROUNDING ERROR FINISH ITERATION
+                IF (SS.LE.LASTSS+FIVE*EPS*EPS) GO TO 140
+C
+C      ELSE SET LAMBDA AND BEGIN CONTINUATION STEP
+                LAMBDA = POINT5*LAMBDA
+                IF (LAMBDA.LE.EPS) GO TO 250
+                GO TO 170
+C
+C      UPDATE THE APPROXIMATION
+   30           IUP = 1
+                DO 40 I=1,NMK
+                     ETA(I) = ETA(I) + WK(I)
+   40           CONTINUE
+C      END OF UPDATE.
+C
+C      IF SS IS LESS THAN OR EQUAL TO EPS1 FINISH ITERATION
+                IF (SS.LE.EPS1) GO TO 140
+C
+C      STORE THE SUM OF SQUARES
+   50           LASTSS = SS
+C
+C      COMPUTE THE NEWTON CORRECTION IN WK(1),...,WK(NMK)
+                CALL JAC(N, X, NMK, ETA, L, K, WK(I1), NK, AJ,
+     *               WK(1), WK(N1P1))
+                IARG = -1
+C
+C
+C      COMPUTE THE SQUARE OF THE L2-NORM OF THE CORRECTION AND OF ETA
+C      AND THEN TEST FOR CONVERGENCE
+                S1 = ZERO
+                S2 = ZERO
+                DO 60 I=1,NMK
+                     S1 = S1 + WK(I)*WK(I)
+                     S2 = S2 + ETA(I)*ETA(I)
+   60           CONTINUE
+                IF (S1.LE.EPS*EPS*S2) GO TO 140
+C
+C      TEST THAT THE COMPONENTS OF ETA+(NEWTON CORRECTION) ARE
+C      DISTINCT AND IN ASCENDING ORDER
+                IJ = -1
+                NMKM1 = NMK - 1
+                IREND = NMKM1
+                DO 70 I=1,NMKM1
+                     E1 = ETA(I) + WK(I)
+                     E2 = ETA(I+1) + WK(I+1)
+                     IF (E1.LT.E2) GO TO 70
+                     GO TO 90
+   70           CONTINUE
+                IJ = 1
+                IREND = NMK
+C
+C      TEST THAT THE SCHOENBERG-WHITNEY CONDITIONS ARE SATISFIED
+                DO 80 I=1,NMK
+                     IPK = I + K
+                     TEMP = ETA(I) + WK(I)
+                     IF (TEMP.LE.X(I) .OR. TEMP.GE.X(IPK)) GO
+     *                    TO 90
+   80           CONTINUE
+C      THE SCHOENBERG-WHITNEY CONDITIONS ARE SATISFIED.
+C
+                GO TO 160
+C
+C      REDUCE LAMBDA
+   90           LAMBDA = POINT5*LAMBDA
+                IF (LAMBDA.LE.EPS) GO TO 250
+C
+C      IF DOING A CONTINUATION STEP THEN CONTINUE
+                IF (ICONT.EQ.(-1)) GO TO 200
+C
+C      ELSE COMPUTE AN LAMBDA SUCH THAT IF IJ=-1 THE COMPONENTS OF
+C      ETA +LAMBDA*(NEWTON CORRECTION) ARE DISTINCT AND IN
+C      ASCENDING ORDER,OR IF IJ=1 THE COMPONENTS SATISFY THE
+C      SCHOENBERG-WHITNEY CONDITIONS
+                ITEND = 1 + IABS(INT(ALOG10(EPS)/ALOG10(TWO)))
+                DO 130 IT=1,ITEND
+                     DO 110 IR=I,IREND
+                          IF (IJ.EQ.(-1)) GO TO 100
+                          IRPK = IR + K
+                          TEMP = ETA(IR) + LAMBDA*WK(IR)
+                          IF (TEMP.LE.X(IR) .OR.
+     *                         TEMP.GE.X(IRPK)) GO TO 120
+                          GO TO 110
+  100                     E1 = ETA(IR) + LAMBDA*WK(IR)
+                          E2 = ETA(IR+1) + LAMBDA*WK(IR+1)
+                          IF (E1.GE.E2) GO TO 120
+  110                CONTINUE
+                     GO TO 170
+  120                LAMBDA = POINT5*LAMBDA
+  130           CONTINUE
+C      AT THIS STAGE LAMBDA IS .LE. EPS SO WE FINISH
+                GO TO 250
+C
+C      FINISH ITERATION...
+C      IF DOING A NEWTON STEP THEN RETURN
+  140           IF (ICONT.EQ.1) GO TO 260
+C
+C      ELSE IF ETA HAS NOT BEEN UPDATED THEN SET ERROR FLAG
+                IF (IUP.EQ.(-1)) GO TO 250
+C
+C      OTHERWISE FINISH CONTINUATION AND START NEWTON STEP
+                LAMBDA = ONE + LAMBDA
+                ICONT = 1
+C
+C      STORE THE VECTOR ETA
+                DO 150 I=1,NMK
+                     N3PI = N3 + I
+                     WK(N3PI) = ETA(I)
+  150           CONTINUE
+C      END OF STORING ETA.
+                GO TO 230
+  160      CONTINUE
+C
+C      AT THIS STAGE NEWTONS METHOD HAS FAILED TO CONVERGE
+C      AFTER IMAX ITERATIONS.
+           GO TO 240
+C
+C***************************************************************
+C      END OF NEWTON ITERATION.                                *
+C***************************************************************
+C
+C***************************************************************
+C      CONTINUATION STEP                                       *
+C***************************************************************
+C
+C      IF DOING A CONTINUATION STEP THEN CONTINUE
+  170      IF (ICONT.EQ.(-1)) GO TO 200
+C
+C      ELSE BEGIN CONTINUATION...
+C      IF THIS IS THE FIRST CONTINUATION STEP THEN STORE THE
+C      INITIAL APPROXIMATION IN WK(3*NMK+1),...,WK(4*NMK)
+           IF (JCONT.GT.1) GO TO 190
+           DO 180 I=1,NMK
+                N3PI = N3 + I
+                WK(N3PI) = ETA(I)
+  180      CONTINUE
+C
+C      STORE THE RESIDUALS, AT THE INITIAL APPROXIMATION, IN
+C      WK(2*NMK+1),...,WK(3*NMK)
+  190      CALL RESID(IA, 1, NMK, N, X, NMK, WK(N3P1), CSTA, K,
+     *          WK(I1), WK(I2), N3, WK, N2, L, SS, ICONT,
+     *          LAMBDA)
+C
+C      SET ICONT = -1
+           ICONT = -1
+C
+C      IF ETA HAS NOT BEEN UPDATED THEN BEGIN ANOTHER ITERATION
+  200      IF (IUP.EQ.(-1)) GO TO 230
+C
+C      ELSE,IF NECESSARY, RESET THE INITIAL APPROXIMATION
+           IF (JCONT.EQ.1) GO TO 220
+           DO 210 I=1,NMK
+                N3PI = N3 + I
+                ETA(I) = WK(N3PI)
+  210      CONTINUE
+  220      IUP = -1
+  230 CONTINUE
+C
+C      AT THIS STAGE THE CONTINUATION METHOD HAS FAILED TO
+C      CONVERGE AFTER IMAX ITERATIONS.
+      GO TO 240
+C
+C***************************************************************
+C      END OF CONTINUATION METHOD.                             *
+C***************************************************************
+C
+C***************************************************************
+C      SET THE ERROR RETURN FLAG: IFAIL                        *
+C***************************************************************
+  240 IFAIL = 5
+      GO TO 260
+  250 IFAIL = 6
+C      END OF SETTING.
+C***************************************************************
+  260 RETURN
+C***************************************************************
+      END
+      SUBROUTINE RESID(IA, IARG, NR, N, X, NMK, ETA, CSTA, K,           RES   10
+     *     V, VINT, IW, WK, INC, L, SS, ICONT, LAMBDA)
+C      *********************************************************
+C                           PURPOSE
+C      *********************************************************
+C
+C      THE PURPOSE OF THIS SUBROUTINE IS TWO-FOLD DEPENDING ON THE
+C      VALUE OF IA.
+C
+C      IF  IA = +1  THEN THE SUBROUTINE COMPUTES:
+C      A)  THE INTEGERS L(J) WHERE X(L(J)).LE.ETA(J).LT.X(L(J)+1)
+C          J=1,...,N-K.  IT IS ASSUMED THAT THE KNOTS ETA(J),
+C          J=1,...,N-K  SATISFY THE SCHOENBERG-WHITNEY CONDITIONS.
+C
+C      B)  THE RESIDUALS AT ETA WHEN IARG = +1
+C      AND THE RESIDUALS AT ETA+(NEWTON CORRECTION) WHEN IARG = -1
+C
+C      C)  THE SUM OF THE SQUARES OF THE RESIDUALS
+C      WHERE THE RESIDUALS ARE:
+C          F - LAMBDA*CSTA   WHEN LAMBDA=ONE AND ICONT =+1
+C      AND
+C          F - LAMBDA*CSTA - (ONE-LAMBDA)*CHAT WHEN ICONT =-1
+C      THE COMPONENTS OF CHAT ARE THE RESIDUALS AT THE INITIAL
+C      APPROXIMATION.
+C
+C      IN THIS CASE THE ARGUMENT NR IS THE NUMBER OF RESIDUALS.
+C      THEREFORE IT SHOULD HAVE THE VALUE N-K.
+C
+C      IF  IA = -1  THEN THE SUBROUTINE COMPUTES:
+C
+C      THE INTEGRAL OF THE QUANTITY  MALPHA * PHIBAR  WHERE MALPHA
+C      IS THE AUGMENTED B-SPLINE AND PHIBAR IS A BANG-BANG
+C      FUNCTION WHICH HAS BREAKPOINTS AT ETA(1),...,ETA(N-K),
+C      AND WHICH HAS THE VALUE +1 ON THE INTERVAL
+C      X(1).LE.X.LE.ETA(1).
+C
+C      IN THIS CASE ONLY ONE INTEGRAL IS CALCULATED. THEREFORE
+C      NR SHOULD HAVE THE VALUE +1.
+C
+C      *********************************************************
+      REAL X(N), ETA(NMK), CSTA(NMK), V(K), VINT(K), WK(IW),
+     *     LAMBDA
+      INTEGER L(NMK), P, Q, QP1
+      DATA ZERO, ONE, TWO /0.0,1.0,2.0/
+      SS = ZERO
+C      *********************************************************
+C      IF IA=+1 THEN COMPUTE THE INTEGERS L(J),J=1,...,N-K
+C      *********************************************************
+      IF (IA.EQ.(-1)) GO TO 40
+      DO 30 J=1,NMK
+           IF (IARG.EQ.1) E1 = ETA(J)
+           IF (IARG.EQ.(-1)) E1 = ETA(J) + WK(J)
+           JPKM1 = J + K - 1
+           DO 10 JT=J,JPKM1
+                IF (E1.LT.X(JT+1)) GO TO 20
+   10      CONTINUE
+   20      L(J) = JT
+   30 CONTINUE
+C      END OF COMPUTING L(J).
+C      *********************************************************
+C
+C      *********************************************************
+C      BEGIN TO COMPUTE THE NR RESIDUALS
+C      *********************************************************
+   40 DO 330 I=1,NR
+           IPK = I + K
+           INCPI = INC + I
+           KP1 = K + 1
+           IF (IA.EQ.1) GO TO 150
+C
+C      DETERMINE WHICH BREAKPOINTS ARE IN THE SUPPORT OF MALPHA
+C
+           DO 50 Q=1,NMK
+                IF (X(1).LE.ETA(Q)) GO TO 60
+   50      CONTINUE
+C
+C     IF THIS COMMENT STATEMENT IS REACHED DURING EXECUTION THEN
+C     THERE ARE NO BREAKPOINTS IN THE SUPPORT OF THE B-SPLINE MALPHA.
+C     THEREFORE, THE INTEGRAL OF  MALPHA * PHIBAR IS THE VALUE:
+C     (-1)**IEXP*(1/K) WHERE
+           IEXP = NMK
+           GO TO 70
+C
+   60      IF (ETA(Q).LT.X(KP1)) GO TO 80
+C
+C     LIKEWISE IF THIS STATEMENT IS REACHED THEN THERE ARE NO
+C     BREAKPOINTS IN THE SUPPORT OF MALPHA AND THEREFORE THE INTEGRAL
+C     OF  MALPHA * PHIBAR IS THE VALUE:
+C     (-1)**IEXP*(1/K) WHERE
+           IEXP = Q - 1
+   70      WK(INCPI) = FLOAT((-1)**(IEXP))/FLOAT(K)
+           RETURN
+C
+C      THE SUPPORT OF THE B-SPLINE CONTAINS THE BREAKPOINT ETA(Q).
+C      WE NOW DETERMINE THE REMAINING BREAKPOINTS IN THE SUPPORT.
+C
+   80      IF (Q.LT.NMK) GO TO 90
+           P = NMK
+           GO TO 120
+   90      QP1 = Q + 1
+           DO 100 J=QP1,NMK
+                IF (X(KP1).LE.ETA(J)) GO TO 110
+  100      CONTINUE
+           J = NMK + 1
+  110      P = J - 1
+C
+C     THE SUPPORT OF MALPHA CONTAINS THE BREAKPOINTS ETA(Q),...,ETA(P).
+C
+C     NOW COMPUTE THE KNOT INTERVALS WHERE THE DATA POINTS LIE
+  120      DO 140 J=Q,P
+                E1 = ETA(J)
+                IL = 1
+                IR = K + 2
+  130           MIDDLE = (IL+IR)/2
+                IF (E1.LT.X(MIDDLE)) IR = MIDDLE
+                IF (E1.GE.X(MIDDLE)) IL = MIDDLE
+                IF (IR.GT.IL+1) GO TO 130
+                L(J) = IL
+  140      CONTINUE
+C      END OF COMPUTING THE KNOT INTERVALS.
+           GO TO 200
+C
+C     IF IA=+1 THEN COMPUTE THE INTEGERS Q AND P
+C
+  150      J1 = MAX0(1,I-K+1)
+           J2 = MIN0(I+1,NMK)
+C      COMPUTE THE INTEGER Q SUCH THAT L(Q-1).LT.I.LE.L(Q)
+           DO 160 Q=J1,NMK
+                IF (I.LE.L(Q)) GO TO 170
+  160      CONTINUE
+C      END OF COMPUTING Q.
+C
+C      COMPUTE THE INTEGER P SUCH THAT L(P).LT.I+K.LE.L(P+1)
+  170      DO 180 J=J2,NMK
+                IF (IPK.LE.L(J)) GO TO 190
+  180      CONTINUE
+           J = NMK + 1
+  190      P = J - 1
+C      END OF COMPUTING P.
+C      *********************************************************
+C      COMPUTE THE INTEGRALS AND STORE THE SUMS IN S1 AND S2
+C      *********************************************************
+  200      DO 300 ISUM=1,2
+                SUM = ZERO
+                IF (ISUM.EQ.1) GO TO 210
+                Q = Q + 1
+                IF (Q.GT.P) GO TO 290
+  210           DO 280 J=Q,P,2
+                     IF (IARG.EQ.1) E1 = ETA(J)
+                     IF (IARG.EQ.(-1)) E1 = ETA(J) + WK(J)
+                     DO 220 IR=1,K
+                          V(IR) = ZERO
+                          VINT(IR) = ZERO
+  220                CONTINUE
+                     JINT = L(J)
+                     JJ1 = IPK - JINT
+                     E10 = E1 - X(JINT)
+                     E20 = X(JINT+1) - E1
+                     V(1) = ONE/(X(JINT+1)-X(JINT))
+                     VINT(1) = E10*V(1)
+                     NK = MIN0(K,JJ1)
+                     IF (NK.EQ.1) GO TO 240
+                     DO 230 IJ=2,NK
+                          JINTPJ = JINT + IJ
+                          V(IJ) = (E10/(X(JINTPJ)-X(JINT)))*
+     *                         V(IJ-1)
+                          VINT(IJ) = E10*V(IJ)
+  230                CONTINUE
+  240                IF (JINT.EQ.I) GO TO 270
+                     MJ = JINT - I
+                     DO 260 IJ=1,MJ
+                          JINTMJ = JINT - IJ
+                          E30 = E1 - X(JINTMJ)
+                          V(1) = (E20/(X(JINT+1)-X(JINTMJ)))*
+     *                         V(1)
+                          VINT(1) = VINT(1) + E30*V(1)
+                          NKJ = MIN0(K-IJ,JJ1)
+                          IF (NKJ.LE.1) GO TO 260
+                          DO 250 LI=2,NKJ
+                               JINTPL = JINT + LI
+                               A1 = E30*V(LI-1) +
+     *                              (X(JINTPL)-E1)*V(LI)
+                               A2 = X(JINTPL) - X(JINTMJ)
+                               V(LI) = A1/A2
+                               VINT(LI) = VINT(LI) + E30*V(LI)
+  250                     CONTINUE
+  260                CONTINUE
+  270                TERM = VINT(JJ1)/FLOAT(K)
+                     SUM = SUM + TERM
+  280           CONTINUE
+                IF (ISUM.EQ.1) S1 = SUM
+  290           IF (ISUM.EQ.2) S2 = SUM
+  300      CONTINUE
+C      END OF COMPUTING THE INTEGRALS.
+C      *********************************************************
+C
+C      *********************************************************
+C      STORE THE RESIDUALS IN WK(INC+I),I=1,...,NR AND
+C      COMPUTE THE SUM OF SQUARES IN SS
+C      *********************************************************
+           SUM = FLOAT((-1)**(Q-2))
+           SUM = SUM*(S1-S2)
+           IF (IA.EQ.1) GO TO 310
+           S1 = TWO*SUM + (FLOAT((-1)**P)/FLOAT(K))
+           GO TO 320
+  310      S1 = TWO*SUM + (FLOAT((-1)**P)/FLOAT(K)) -
+     *          LAMBDA*CSTA(I)
+           N2PI = 2*NMK + I
+           IF (ICONT.EQ.(-1)) S1 = S1 - (ONE-LAMBDA)*WK(N2PI)
+           SS = SS + S1*S1
+  320      INCPI = INC + I
+           WK(INCPI) = S1
+  330 CONTINUE
+C      *********************************************************
+C      END OF COMPUTING THE RESIDUALS.
+C      *********************************************************
+      RETURN
+      END
+      SUBROUTINE JAC(N, X, NMK, ETA, L, K, V, NK, AJ, Y, B)             JAC   10
+C      *************************************************************
+C                            PURPOSE
+C      *************************************************************
+C
+C      GIVEN THE DATA POINTS:  X(1)<X(2)<,...,<X(N-1)<X(N)
+C      AND THE KNOTS:  ETA(1),ETA(2),...,ETA(N-K-1),ETA(N-K)
+C      THIS SUBROUTINE COMPUTES:-
+C      1)  THE ELEMENTS:
+C                 J(P,Q)=(-1)**(Q-1)*MKP(ETA(Q))  1.LE.P,Q.LE.N-K
+C          OF THE JACOBIAN MATRIX J AND STORES THE TRANSPOSE OF
+C          J,IN COMPACT FORM,IN THE ARRAY AJ.
+C          N.B. THE ARRAY AJ HAS N-K ROWS AND NK=MIN(K,N-K)
+C               COLUMNS.
+C               THE FUNCTION MKP(X) IS A SPLINE OF DEGREE K-1
+C               WITH KNOTS AT THE POINTS X(P),X(P+1),...,X(P+K),
+C               AND IS NON-ZERO ONLY OVER THE RANGE X(P)<X<X(P+K).
+C      AND
+C      2)  PERFORMS GAUSSIAN ELIMINATION ON J AND THEN USES
+C          BACK SUBSTITUTION TO SOLVE THE LINEAR EQUATIONS:
+C                            J.Y = -B
+C          WHERE Y AND B ARE GIVEN COLUMN VECTORS OF LENGTH N-K.
+C
+C      *************************************************************
+      REAL X(N), ETA(NMK), V(K), AJ(NMK,NK), Y(NMK), B(NMK),
+     *     MULT
+      INTEGER L(NMK)
+      DATA ZERO, ONE, TWO /0.0,1.0,2.0/
+C
+C      *************************************************************
+C      COMPUTE THE TRANSPOSE OF THE JACOBIAN MATRIX
+C      *************************************************************
+      DO 80 J=1,NMK
+           DO 10 I=1,K
+                V(I) = ZERO
+   10      CONTINUE
+           JINT = L(J)
+           XVALUE = ETA(J)
+           JJ1 = N - JINT
+           E1 = XVALUE - X(JINT)
+           E2 = X(JINT+1) - XVALUE
+           V(1) = ONE/(X(JINT+1)-X(JINT))
+           NKM = MIN0(K,JJ1)
+           IF (NKM.EQ.1) GO TO 30
+           DO 20 IJ=2,NKM
+                JINTPJ = JINT + IJ
+                V(IJ) = (E1/(X(JINTPJ)-X(JINT)))*V(IJ-1)
+   20      CONTINUE
+   30      IF (JINT.EQ.1) GO TO 60
+           MJ = MIN0(JINT,K) - 1
+           DO 50 IJ=1,MJ
+                JINTMJ = JINT - IJ
+                E3 = XVALUE - X(JINTMJ)
+                V(1) = (E2/(X(JINT+1)-X(JINTMJ)))*V(1)
+                NKJ = MIN0(K-IJ,JJ1)
+                IF (NKJ.LE.1) GO TO 50
+                DO 40 LI=2,NKJ
+                     JINTPL = JINT + LI
+                     V(LI) = (E3*V(LI-1)+(X(JINTPL)-XVALUE)*
+     *                    V(LI))/(X(JINTPL)-X(JINTMJ))
+   40           CONTINUE
+   50      CONTINUE
+   60      I1 = MAX0(0,K-JINT)
+           KM = MIN0(JINT,NK)
+           DO 70 I=1,KM
+                IPI1 = I + I1
+                AJ(J,I) = TWO*((-ONE)**(J-1))*V(IPI1)
+   70      CONTINUE
+   80 CONTINUE
+C      THE TRANSPOSE OF THE JACOBIAN MATRIX IS STORED IN COMPACT
+C      FORM IN THE ARRAY AJ.
+C      *************************************************************
+C
+C      **************************************************************
+C      BEGIN GAUSSIAN ELIMINATION STEP
+C      *************************************************************
+      IF (NMK.EQ.1) GO TO 130
+      NMKM1 = NMK - 1
+      DO 120 JCOL=1,NMKM1
+           JCOLP1 = JCOL + 1
+           LJC = L(JCOL)
+           IF (LJC.LT.JCOLP1) GO TO 120
+           JINC = MIN0(0,K-LJC)
+           I1 = JCOL + JINC
+           PIVOT = AJ(JCOL,I1)
+           DO 110 I=JCOLP1,NMK
+                IF (LJC.LT.I) GO TO 120
+                I1 = I + JINC
+                MULT = AJ(JCOL,I1)/PIVOT
+                DO 90 J=JCOLP1,NMK
+                     LJ = L(J)
+                     IF (LJ.GE.JCOL+K) GO TO 100
+                     IINC = MIN0(0,K-LJ)
+                     I1 = I + IINC
+                     I2 = JCOL + IINC
+                     AJ(J,I1) = AJ(J,I1) - MULT*AJ(J,I2)
+   90           CONTINUE
+  100           B(I) = B(I) - MULT*B(JCOL)
+  110      CONTINUE
+  120 CONTINUE
+C      END OF ELIMINATION.
+C      **************************************************************
+C
+C      *************************************************************
+C      BEGIN BACK SUBSTITUTION
+C      *************************************************************
+  130 DO 160 IT=1,NMK
+           J = NMK - IT + 1
+           LJ = L(J)
+           JINC = MIN0(0,K-LJ)
+           I1 = J + JINC
+           PIVOT = AJ(J,I1)
+           SUM = ZERO
+           IF (IT.EQ.1) GO TO 150
+           SUM = ZERO
+           DO 140 I=1,NMKM1
+                JPI = J + I
+                IF (JPI.GT.NMK) GO TO 150
+                LJPI = L(JPI)
+                IF (LJPI.GE.J+K) GO TO 150
+                IINC = MIN0(0,K-LJPI)
+                I1 = J + IINC
+                SUM = SUM + AJ(JPI,I1)*Y(JPI)
+  140      CONTINUE
+  150      Y(J) = (-B(J)-SUM)/PIVOT
+  160 CONTINUE
+C      END OF BACK SUBSTITUTION.
+C      *************************************************************
+      RETURN
+      END
+      REAL X(16), F(16), WK(200), ETA(13), PSI(13)                      MAN   10
+      REAL XT(101), L(101), U(101), OMEGA(101)                          MAN   20
+      INTEGER IL(16)                                                    MAN   30
+C                                                                       MAN   40
+C ASSEMBLE THE DATA FROM TABLE 1.                                       MAN   50
+C                                                                       MAN   60
+      DATA X /-5.,-3.,-1.2,-1.,-.6,-.4,-.2,0.,.2,.4,.8,1.,1.4,3.2,4.4,  MAN   70
+     * 5.0/                                                             MAN   80
+      DATA F /.301599,.304435,.327397,.339216,.405263,.522222,.966667,  MAN   90
+     * 2.3,.966667,.522222,.360606,.339216,.320202,.303899,.302064,     MAN  100
+     * .301599/                                                         MAN  110
+C                                                                       MAN  120
+C SET THE NUMBER OF DATA POINTS                                         MAN  130
+C                                                                       MAN  140
+      N = 16                                                            MAN  150
+C                                                                       MAN  160
+C SET THE VALUE OF K                                                    MAN  170
+C                                                                       MAN  180
+      K = 3                                                             MAN  190
+C                                                                       MAN  200
+C SET THE LENGTH OF THE WORKSPACE ARRAY WK.                             MAN  210
+C NOTE THAT LWK MUST BE AT LEAST THE VALUE                              MAN  220
+C       5*N-2*K+1+(N-K)*MIN(K,N-K)                                      MAN  230
+C                                                                       MAN  240
+      LWK = 200                                                         MAN  250
+C                                                                       MAN  260
+C SET THE VALUE OF THE BOUND ON THE KTH. DERIVATIVE                     MAN  270
+C OF F(X).                                                              MAN  280
+C                                                                       MAN  290
+      AL = 8000.0                                                       MAN  300
+C                                                                       MAN  310
+C SET THE LENGTH OF THE ARRAYS ETA AND PSI.                             MAN  320
+C NOTE THAT LEP MUST BE AT LEAST N-K.                                   MAN  330
+C                                                                       MAN  340
+      LEP = 13                                                          MAN  350
+C                                                                       MAN  360
+C COMPUTE THE OPTIMAL ESTIMATE OF F AT 101                              MAN  370
+C EQUALLY SPACED VALUES OF X IN THE INTERVAL                            MAN  380
+C -5.0 .LE. X .LE. 5.0.                                                 MAN  390
+C                                                                       MAN  400
+C NOTE THAT IN THE CALL TO RANGE THE VALUE OF                           MAN  410
+C THE VARIABLE IAG IS SET TO THE VALUE OF THE                           MAN  420
+C DO LOOP VARIABLE I. IN THIS WAY THE SUBSEQUENT                        MAN  430
+C COMPUTATION OF THE OPTIMAL ESTIMATE FOR I.GE.2                        MAN  440
+C IS MUCH FASTER.                                                       MAN  450
+C                                                                       MAN  460
+      DO 10 I=1,101                                                     MAN  470
+        XT(I) = X(1) + 0.1*FLOAT(I-1)                                   MAN  480
+        IAG = I                                                         MAN  490
+        CALL RANGE(IAG, N, X, F, K, WK, LWK, AL, XT(I), IL, LEP, ETA,   MAN  500
+     *   PSI, L(I), U(I), OMEGA(I), IFAIL)                              MAN  510
+        IF (IFAIL.EQ.0) GO TO 10                                        MAN  520
+        WRITE (6,99999) IFAIL                                           MAN  530
+        GO TO 20                                                        MAN  540
+   10 CONTINUE                                                          MAN  550
+   20 STOP                                                              MAN  560
+99999 FORMAT (3X, 8HIFAIL = , I4)                                       MAN  570
+      END                                                               MAN  580
+C ************                                                          MAN   10
+C                                                                       MAN   20
+C THIS IS A PROGRAM TO TEST SUBROUTINE RANGE BY P.W.GAFFNEY             MAN   30
+C                                                                       MAN   40
+C VERSION: DECEMBER 30 1981                                             MAN   50
+C                                                                       MAN   60
+C ************                                                          MAN   70
+C                                                                       MAN   80
+      REAL LOW, X(100), F(100), WK(2000), ETA(100), PSI(100)            MAN   90
+      REAL TX(10)                                                       MAN  100
+      INTEGER IL(100)                                                   MAN  110
+      COMMON /OUT/ NMK, ERRMAX                                          MAN  120
+      WRITE (6,99999)                                                   MAN  130
+      LEP = 100                                                         MAN  140
+      LWK = 2000                                                        MAN  150
+      K = 0                                                             MAN  160
+      AL = 12.0                                                         MAN  170
+      DO 180 ITEST=1,20                                                 MAN  180
+           GO TO (10, 20, 20, 20, 20, 20, 50, 60, 60, 60, 60,           MAN  190
+     *          60, 90, 100, 110, 120, 130, 140, 150, 160),             MAN  200
+     *          ITEST                                                   MAN  210
+C                                                                       MAN  220
+C   EXAMPLES 1-6:  F(X) = X**5 IS SPECIFIED AT 6 EQUALLY SPACED POINTS. MAN  230
+C                                                                       MAN  240
+   10      N = 6                                                        MAN  250
+   20      K = K + 1                                                    MAN  260
+           AL = 5.0*AL                                                  MAN  270
+           NMK = N - K                                                  MAN  280
+           DO 30 I=1,N                                                  MAN  290
+                X(I) = FLOAT(I-1)*0.4                                   MAN  300
+                F(I) = X(I)**5                                          MAN  310
+   30      CONTINUE                                                     MAN  320
+           X0 = (X(1)+X(N))/2.0                                         MAN  330
+           CALL RANGE(1, N, X, F, K, WK, LWK, AL, X0, IL, LEP,          MAN  340
+     *          ETA, PSI, LOW, UP, OMEGA, IFAIL)                        MAN  350
+           CALL OUTPUT(ITEST, N, K, LEP, AL, ETA, PSI, X0, LOW,         MAN  360
+     *          UP, OMEGA, IFAIL)                                       MAN  370
+           ERRMAX = 0.0                                                 MAN  380
+           DO 40 I=1,101                                                MAN  390
+                X0 = FLOAT(I-1)*.02                                     MAN  400
+                CALL RANGE(2, N, X, F, K, WK, LWK, AL, X0, IL,          MAN  410
+     *               LEP, ETA, PSI, LOW, UP, OMEGA, IFAIL)              MAN  420
+                TEMP = ABS(X0**5-OMEGA)                                 MAN  430
+                IF (TEMP.LE.ERRMAX) GO TO 40                            MAN  440
+                ERRMAX = TEMP                                           MAN  450
+                XERR = X0                                               MAN  460
+                OMERR = OMEGA                                           MAN  470
+                FERR = X0**5                                            MAN  480
+   40      CONTINUE                                                     MAN  490
+           WRITE (6,99998) ERRMAX, XERR, OMERR, FERR                    MAN  500
+           GO TO 180                                                    MAN  510
+C                                                                       MAN  520
+C EXAMPLES 7-12:  F(X) = X**5 IS SPECIFIED AT 10 UNEQUALLY SPACED POINTSMAN  530
+C                                                                       MAN  540
+   50      K = 3                                                        MAN  550
+           N = 10                                                       MAN  560
+           AL = 60.0                                                    MAN  570
+   60      K = K + 1                                                    MAN  580
+           AL = 5.0*AL                                                  MAN  590
+           NMK = N - K                                                  MAN  600
+           X(1) = 0.0                                                   MAN  610
+           X(2) = 0.1                                                   MAN  620
+           X(3) = 0.12                                                  MAN  630
+           X(4) = 0.123                                                 MAN  640
+           X(5) = 0.1234                                                MAN  650
+           X(6) = 0.12345                                               MAN  660
+           X(7) = 0.2                                                   MAN  670
+           X(8) = 3.0                                                   MAN  680
+           X(9) = 3.1                                                   MAN  690
+           X(10) = 3.1005                                               MAN  700
+           DO 70 I=1,N                                                  MAN  710
+                F(I) = X(I)**5                                          MAN  720
+   70      CONTINUE                                                     MAN  730
+           X0 = (X(1)+X(N))/2.0                                         MAN  740
+           CALL RANGE(1, N, X, F, K, WK, LWK, AL, X0, IL, LEP,          MAN  750
+     *          ETA, PSI, LOW, UP, OMEGA, IFAIL)                        MAN  760
+           CALL OUTPUT(ITEST, N, K, LEP, AL, ETA, PSI, X0, LOW,         MAN  770
+     *          UP, OMEGA, IFAIL)                                       MAN  780
+           ERRMAX = 0.0                                                 MAN  790
+           DO 80 I=1,101                                                MAN  800
+                X0 = FLOAT(I-1)*0.031005                                MAN  810
+                CALL RANGE(2, N, X, F, K, WK, LWK, AL, X0, IL,          MAN  820
+     *               LEP, ETA, PSI, LOW, UP, OMEGA, IFAIL)              MAN  830
+                TEMP = ABS(X0**5-OMEGA)                                 MAN  840
+                IF (TEMP.LE.ERRMAX) GO TO 80                            MAN  850
+                ERRMAX = TEMP                                           MAN  860
+                XERR = X0                                               MAN  870
+                OMERR = OMEGA                                           MAN  880
+                FERR = X0**5                                            MAN  890
+   80      CONTINUE                                                     MAN  900
+           WRITE (6,99998) ERRMAX, XERR, OMERR, FERR                    MAN  910
+           GO TO 180                                                    MAN  920
+C                                                                       MAN  930
+C                                                                       MAN  940
+C EXAMPLE 13:  TEST THE VALUE OF N                                      MAN  950
+C                                                                       MAN  960
+   90      N = 1                                                        MAN  970
+           GO TO 170                                                    MAN  980
+C                                                                       MAN  990
+C EXAMPLE 14:  TEST THE VALUE OF K                                      MAN 1000
+C                                                                       MAN 1010
+  100      N = 9                                                        MAN 1020
+           K = 0                                                        MAN 1030
+           GO TO 170                                                    MAN 1040
+C                                                                       MAN 1050
+C EXAMPLE 15:  DATA POINTS IN ASCENDING ORDER                           MAN 1060
+C                                                                       MAN 1070
+  110      N = 10                                                       MAN 1080
+           K = 4                                                        MAN 1090
+           XTEMP = X(2)                                                 MAN 1100
+           X(2) = -30.                                                  MAN 1110
+           GO TO 170                                                    MAN 1120
+C                                                                       MAN 1130
+C EXAMPLE 16:  AL MUST BE POSITIVE                                      MAN 1140
+C                                                                       MAN 1150
+  120      X(2) = XTEMP                                                 MAN 1160
+           AL = -20.0                                                   MAN 1170
+           GO TO 170                                                    MAN 1180
+C                                                                       MAN 1190
+C EXAMPLE 17:  LENGTH OF PSI AND ETA ARRAYS                             MAN 1200
+C                                                                       MAN 1210
+  130      LEP = 1                                                      MAN 1220
+           GO TO 170                                                    MAN 1230
+C                                                                       MAN 1240
+C EXAMPLE 18:  LENGTH OF WORKSPACE ARRAY                                MAN 1250
+C                                                                       MAN 1260
+  140      LWK = 2                                                      MAN 1270
+           GO TO 170                                                    MAN 1280
+C                                                                       MAN 1290
+C EXAMPLE 19:  ALPHA MUST BE .GE. X(1)                                  MAN 1300
+C                                                                       MAN 1310
+  150      LWK = 2000                                                   MAN 1320
+           LEP = 100                                                    MAN 1330
+           ALPHA = -39.0                                                MAN 1340
+           GO TO 170                                                    MAN 1350
+C                                                                       MAN 1360
+C EXAMPLE 20:  AL MUST BE LARGE ENOUGH                                  MAN 1370
+C                                                                       MAN 1380
+  160      ALPHA = (X(1)+X(N))/3.0                                      MAN 1390
+           AL = 0.5                                                     MAN 1400
+           GO TO 170                                                    MAN 1410
+  170      IAG = 1                                                      MAN 1420
+           CALL RANGE(IAG, N, X, F, K, WK, LWK, AL, ALPHA, IL,          MAN 1430
+     *          LEP, ETA, PSI, LOW, UP, OMEGA, IFAIL)                   MAN 1440
+           CALL OUTPUT(ITEST, N, K, LEP, AL, ETA, PSI, X0, LOW,         MAN 1450
+     *          UP, OMEGA, IFAIL)                                       MAN 1460
+  180 CONTINUE                                                          MAN 1470
+      STOP                                                              MAN 1480
+99999 FORMAT (12X, 41H ----------------------------------------,        MAN 1490
+     *     6H------/12X, 35H  THESE ARE THE RESULTS FROM RANGE.,        MAN 1500
+     *     11H ALL ERROR /12X, 29H  FLAGS EXCEPT IFAIL = 5 ARE ,        MAN 1510
+     *     7HTESTED./12X, 34H ---------------------------------,        MAN 1520
+     *     13H-------------/)                                           MAN 1530
+99998 FORMAT (3X, 42HMAXIMUM ERROR OVER 101 EQUALLY SPACED POIN,        MAN 1540
+     *     9HTS IN THE/3X, 33HCLOSED INTERVAL X(1) TO X(N) IS =,        MAN 1550
+     *     1H , E14.6/3X, 22HWHICH OCCURRED AT X = , E14.6/3X,          MAN 1560
+     *     14HWHERE OMEGA = , E14.6, 12H AND F(X)  =, E14.6/)           MAN 1570
+      END                                                               MAN 1580
+      SUBROUTINE OUTPUT(ITEST, N, K, LEP, AL, ETA, PSI, X0,             OUT   10
+     *     LOW, UP, OMEGA, IFAIL)
+      REAL ETA(LEP), PSI(LEP)
+      REAL LOW
+      COMMON /OUT/ NMK, ERRMAX
+      WRITE (6,99998) ITEST, N, K, AL
+      IF (IFAIL.EQ.0) GO TO 10
+      WRITE (6,99999) IFAIL
+      GO TO 30
+   10 IF (NMK.EQ.0) GO TO 20
+      WRITE (6,99997)
+      WRITE (6,99996) (ETA(I),PSI(I),I=1,NMK)
+   20 WRITE (6,99995) X0, LOW, UP, OMEGA
+   30 RETURN
+99999 FORMAT (25H   RANGE FAILED. IFAIL = , I4/)
+99998 FORMAT (3X, 15HEXAMPLE NUMBER , I2/3X, 4HN = , I3,
+     *     6H  K = , I3, 7H  AL = , E14.6)
+99997 FORMAT (40H   THE KNOTS OF THE PERFECT SPLINES ARE:/11X,
+     *     3HETA, 16X, 3HPSI)
+99996 FORMAT (2E20.8)
+99995 FORMAT (3X, 25HINTERPOLATION POINT X0 = , E14.6/3X,
+     *     14HLOWER BOUND = , E14.6, 16H  UPPER BOUND = ,
+     *     E14.6/3X, 16HOPTIMAL VALUE = , E14.6)
+      END

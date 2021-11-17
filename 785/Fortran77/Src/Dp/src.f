@@ -1,0 +1,3794 @@
+C
+C
+************* DSCPACK *************************************************
+* THIS IS A COLLECTION OF SUBROUTINES TO SOLVE PARAMETER PROBLEM OF   *
+* THE SCHWARZ-CHRISTOFFEL TRANSFORMATION FOR DOUBLY CONNECTED REGIONS *
+* A DRIVER IS NEEDED FOR A/AN PARTICULAR PROBLEM OR APPLICATION.      *
+* AUTHOR:                                                             *
+* CHENGLIE HU   APRIL,1994 (REVISED JULY,1995) AT WICHITA STATE UNIV. *
+*               A FURTHER REVISION WAS DONE AT FHSU (JULY, 1997)      *
+* REFERENCES:1. H.DAEPPEN, DIE SCHWARZ-CRISTOFFEL ABBILDUNG FUER      *
+*               ZWEIFACH ZUSAMMENHAENGENDE GEBIETE MIT ANWENDUNGEN.   *
+*               PH.D. DISSERTATION, ETH ZUERICH.                      *
+*            2. L.N.TREFETHEN, SCPACK USER'S GUIDE(MIT REPORT 1989)   *
+*            3. HENRICI,APPLIED & COMPUTATIONAL COMPLEX ANALYSIS,VOL.3*
+*            4. C.HU, APPLICATION OF COMPUTATIONAL COMPLEX ANALYSIS TO*
+*               SOME FREE BOUNDARY AND VORTEX FLOWS.PH.D. DISS. 1995  *
+***********************************************************************
+C
+C    ----------------------
+      SUBROUTINE THDATA(U)
+C    ----------------------
+C    GENERATES DATA RELATED ONLY TO INNER RADIUS
+C    U AND USED IN COMPUTING THE THETA-FUNCTION.
+C
+C
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION U
+C     ..
+C     .. Scalars in Common ..
+      DOUBLE PRECISION DLAM
+      INTEGER IU
+C     ..
+C     .. Arrays in Common ..
+      DOUBLE PRECISION UARY(8),VARY(3)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION PI
+      INTEGER K,N
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC ACOS,EXP,LOG
+C     ..
+C     .. Common blocks ..
+      COMMON /PARAM4/UARY,VARY,DLAM,IU
+C     ..
+      PI = ACOS(-1.D0)
+      IF (U.GE.0.63D0) GO TO 20
+      IF (U.LT.0.06D0) THEN
+          IU = 3
+
+      ELSE IF (U.LT.0.19D0) THEN
+          IU = 4
+
+      ELSE IF (U.LT.0.33D0) THEN
+          IU = 5
+
+      ELSE IF (U.LT.0.45D0) THEN
+          IU = 6
+
+      ELSE IF (U.LT.0.55D0) THEN
+          IU = 7
+
+      ELSE
+          IU = 8
+      END IF
+
+      DO 10 K = 1,IU
+          N = K**2
+          UARY(K) = U**N
+   10 CONTINUE
+      RETURN
+
+   20 VARY(1) = EXP(PI**2/LOG(U))
+      DLAM = -LOG(U)/PI
+      RETURN
+
+      END
+      DOUBLE COMPLEX
+C  -------------------------
+     +  FUNCTION WTHETA(U,W)
+C  -------------------------
+C    EVALUATES THETA-FUNCTION AT W,WHERE U IS THE
+C    INNER RADIUS OF THE ANNULUS.THE DEFINITION OF
+C    THETA-FUNCTION CAN BE FOUND IN REFERENCE 3.
+C
+C
+C     .. Scalar Arguments ..
+      DOUBLE COMPLEX W
+      DOUBLE PRECISION U
+C     ..
+C     .. Scalars in Common ..
+      DOUBLE PRECISION DLAM
+      INTEGER IU
+C     ..
+C     .. Arrays in Common ..
+      DOUBLE PRECISION UARY(8),VARY(3)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE COMPLEX WT,WWN,WWN0,WWP,WWP0,ZI
+      DOUBLE PRECISION PI
+      INTEGER K
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC ACOS,EXP,LOG,SQRT
+C     ..
+C     .. Common blocks ..
+      COMMON /PARAM4/UARY,VARY,DLAM,IU
+C     ..
+      WWP = (1.D0,0.D0)
+      WWN = (1.D0,0.D0)
+      WTHETA = (1.D0,0.D0)
+      IF (U.GE.0.63D0) GO TO 20
+      WWP0 = -W
+      WWN0 = -1.D0/W
+      DO 10 K = 1,IU
+          WWP = WWP*WWP0
+          WWN = WWN*WWN0
+          WTHETA = WTHETA + UARY(K)* (WWP+WWN)
+   10 CONTINUE
+      RETURN
+
+   20 PI = ACOS(-1.D0)
+      ZI = (0.D0,1.D0)
+      WT = -ZI*LOG(-W)
+      IF (U.GE.0.94D0) GO TO 30
+      WWP = EXP(WT/DLAM)
+      WWN = 1.D0/WWP
+      WTHETA = WTHETA + VARY(1)* (WWP+WWN)
+   30 WTHETA = EXP(-WT**2/ (4.D0*PI*DLAM))*WTHETA/SQRT(DLAM)
+      RETURN
+
+      END
+      DOUBLE COMPLEX
+C   --------------------------------------------
+     +  FUNCTION WPROD(W,M,N,U,W0,W1,ALFA0,ALFA1)
+C   --------------------------------------------
+C    COMPUTES THE PRODUCT (D-SC INTEGRAND):
+C M                                   N
+CPROD THETA(W/U*W0(K))**(ALFA0(K)-1)*PROD THETA(U*W/W1(K))**(ALFA1(K)-1)
+C K=1                                 K=1
+C    THE CALLING SEQUENCE IS EXPLAINED IN THE ABOVE FORMULA.
+C
+C
+C     .. Scalar Arguments ..
+      DOUBLE COMPLEX W
+      DOUBLE PRECISION U
+      INTEGER M,N
+C     ..
+C     .. Array Arguments ..
+      DOUBLE COMPLEX W0(M),W1(N)
+      DOUBLE PRECISION ALFA0(M),ALFA1(N)
+C     ..
+C     .. Scalars in Common ..
+      DOUBLE PRECISION DLAM
+      INTEGER IU
+C     ..
+C     .. Arrays in Common ..
+      DOUBLE PRECISION UARY(8),VARY(3)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE COMPLEX WSUM,WTH
+      INTEGER K
+C     ..
+C     .. External Functions ..
+      DOUBLE COMPLEX WTHETA
+      EXTERNAL WTHETA
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC EXP,LOG
+C     ..
+C     .. Common blocks ..
+      COMMON /PARAM4/UARY,VARY,DLAM,IU
+C     ..
+      WSUM = (0.D0,0.D0)
+      DO 10 K = 1,M
+          WTH = LOG(WTHETA(U,W/ (U*W0(K))))
+          WSUM = WSUM + (ALFA0(K)-1.D0)*WTH
+   10 CONTINUE
+      DO 20 K = 1,N
+          WTH = LOG(WTHETA(U,U*W/W1(K)))
+          WSUM = WSUM + (ALFA1(K)-1.D0)*WTH
+   20 CONTINUE
+      WPROD = EXP(WSUM)
+      RETURN
+
+      END
+C    ----------------------------------------------
+      SUBROUTINE QINIT(M,N,ALFA0,ALFA1,NPTQ,QWORK)
+C    ----------------------------------------------
+C   COMPUTES THE GAUSS-JACOBI NODES &  WEIGHTS FOR GAUSS-JACOBI
+C   QUADRATURE.   WORK ARRAY QWORK MUST BE DIMENSIONED AT LEAST
+C   NPTQ*(2(M+N)+3).  IT IS DIVIDED UP INTO 2(M+N)+3 VECTORS OF
+C   LENGTH NPTQ:    THE FIRST M+N+1 CONTAIN QUADRATURE NODES ON
+C   OUTPUT, THE NEXT M+N+1 CONTAIN THE CORRESPONDING WEIGHTS ON
+C   OUTPUT,AND THE LAST ONE IS A SCRATCH VECTOR USED BY GAUSSJ.
+C   NPTQ IS THE NUMBER OF G-J NODES (SAME AS WEIGHTS) USED. SEE
+C   COMMENT ON ROUTINE WPROD FOR THE REST OF CALLING SEQUENCE.
+C
+C
+C   FOR EACH FINITE VERTEX,COMPUTE NODES & WEIGHTS
+C   FOR ONE-SIDED GAUSS-JACOBI QUADRATURE:
+C     .. Scalar Arguments ..
+      INTEGER M,N,NPTQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION ALFA0(M),ALFA1(N),QWORK(1660)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION ALPHA
+      INTEGER INODES,ISCR,IWTS,J,K
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL GAUSSJ
+C     ..
+      ISCR = NPTQ* (2* (M+N)+2) + 1
+      DO 30 K = 1,M + N
+          INODES = NPTQ* (K-1) + 1
+          IWTS = NPTQ* (M+N+K) + 1
+          IF (K.LE.M) THEN
+              ALPHA = ALFA0(K) - 1.D0
+              IF (ALFA0(K).GT.0.D0) THEN
+                  CALL GAUSSJ(NPTQ,0.D0,ALPHA,QWORK(ISCR),QWORK(INODES),
+     +                        QWORK(IWTS))
+
+              ELSE
+                  DO 10 J = 1,NPTQ
+                      QWORK(IWTS+J-1) = 0.D0
+                      QWORK(INODES+J-1) = 0.D0
+   10             CONTINUE
+              END IF
+
+          ELSE
+              ALPHA = ALFA1(K-M) - 1.D0
+              CALL GAUSSJ(NPTQ,0.D0,ALPHA,QWORK(ISCR),QWORK(INODES),
+     +                    QWORK(IWTS))
+          END IF
+C
+C   TAKE SINGULARITIES INTO ACCOUNT IN ADVANCE FOR THE
+C   PURPOSE OF SAVING CERTAIN AMOUNT OF CALCULATION IN WQSUM:
+          DO 20 J = 1,NPTQ
+              QWORK(IWTS+J-1) = QWORK(IWTS+J-1)*
+     +                          (1.D0+QWORK(INODES+J-1))** (-ALPHA)
+   20     CONTINUE
+   30 CONTINUE
+C
+C   COMPUTE NODES & WEIGHTS FOR PURE GAUSSIAN QUADRATURE:
+      INODES = NPTQ* (M+N) + 1
+      IWTS = NPTQ* (2* (M+N)+1) + 1
+      CALL GAUSSJ(NPTQ,0.D0,0.D0,QWORK(ISCR),QWORK(INODES),QWORK(IWTS))
+      RETURN
+
+      END
+      DOUBLE COMPLEX
+C   ------------------------------------------------------------
+     +  FUNCTION WQSUM(WA,PHIA,KWA,IC,WB,PHIB,RADIUS,M,N,U,W0,W1,ALFA0,
+     +                 ALFA1,NPTQ,QWORK,LINEARC)
+C   ------------------------------------------------------------
+C   CALCULATES THE  COMPLEX  INTEGRAL  FROM WA TO WB ALONG  A
+C   LINE SEGMENT (LINEARC=0)OR A CIRCULAR ARC (LINEARC=1)WITH
+C   POSSIBLE SINGULARITY AT WA, WHERE  KWA IS THE INDEX OF WA
+C   IN W0 (IC=0) OR IN W1 (IC=1). KWA=0 AND IC=2 ( NO OTHER
+C   VALUES PERMITTED ) IF WA IS NOT A PREVERTEX, WHICH THEN
+C   INDICATES THAT ONLY PURE GAUSSIAN QUARATURE IS NEEDED.
+C   PHIA & PHIB  ARE  ARGUMENTS OF  WA & WB  RESPECTIVELY. IF
+C   INTEGRATING ALONG A CIRCULAR ARC,RADIUS SHOULD BE ASSIGNED
+C   TO BE EITHER 1 OR U. ANY VALUE,HOWEVER,CAN BE ASSIGNED TO
+C   RADIUS IF INTEGRATING ALONG A LINE SEGMENT.SEE DOCUMENTATIONS
+C   OF WPROD AND QINIT FOR THE REST OF CALLING SEQUENCE.
+C
+C
+C     .. Scalar Arguments ..
+      DOUBLE COMPLEX WA,WB
+      DOUBLE PRECISION PHIA,PHIB,RADIUS,U
+      INTEGER IC,KWA,LINEARC,M,N,NPTQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE COMPLEX W0(M),W1(N)
+      DOUBLE PRECISION ALFA0(M),ALFA1(N),QWORK(NPTQ* (2* (M+N)+3))
+C     ..
+C     .. Scalars in Common ..
+      DOUBLE PRECISION DLAM
+      INTEGER IU
+C     ..
+C     .. Arrays in Common ..
+      DOUBLE PRECISION UARY(8),VARY(3)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE COMPLEX W,WC,WH,ZI
+      DOUBLE PRECISION PWC,PWH
+      INTEGER I,IOFFST,IWT1,IWT2
+C     ..
+C     .. External Functions ..
+      DOUBLE COMPLEX WPROD
+      EXTERNAL WPROD
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC EXP
+C     ..
+C     .. Common blocks ..
+      COMMON /PARAM4/UARY,VARY,DLAM,IU
+C     ..
+      WQSUM = (0.D0,0.D0)
+C
+C   INDEX ARRANGEMENT:
+      IWT1 = NPTQ* (IC*M+KWA-1) + 1
+      IF (KWA.EQ.0) IWT1 = NPTQ* (M+N) + 1
+      IWT2 = IWT1 + NPTQ - 1
+      IOFFST = NPTQ* (M+N+1)
+C
+C   COMPUTE GAUSS-JACOBI SUM(W(J)*PROD(X(J))):
+      IF (LINEARC.EQ.1) GO TO 20
+C
+C   INTEGRATE ALONG A LINE SEGMENT:
+      WH = (WB-WA)/2.D0
+      WC = (WA+WB)/2.D0
+      DO 10 I = IWT1,IWT2
+          W = WC + WH*QWORK(I)
+          WQSUM = WQSUM + QWORK(IOFFST+I)*
+     +            WPROD(W,M,N,U,W0,W1,ALFA0,ALFA1)
+   10 CONTINUE
+      WQSUM = WQSUM*WH
+      RETURN
+C
+C   INTEGRATE ALONG A CIRCULAR ARC:
+   20 ZI = (0.D0,1.D0)
+      PWH = (PHIB-PHIA)/2.D0
+      PWC = (PHIB+PHIA)/2.D0
+      DO 30 I = IWT1,IWT2
+          W = RADIUS*EXP(ZI* (PWC+PWH*QWORK(I)))
+          WQSUM = WQSUM + QWORK(IOFFST+I)*W*
+     +            WPROD(W,M,N,U,W0,W1,ALFA0,ALFA1)
+   30 CONTINUE
+      WQSUM = WQSUM*PWH*ZI
+      RETURN
+
+      END
+      DOUBLE COMPLEX
+C   -------------------------------------------------------------
+     +  FUNCTION WQUAD1(WA,PHIA,KWA,IC,WB,PHIB,RADIUS,M,N,U,W0,W1,ALFA0,
+     +                  ALFA1,NPTQ,QWORK,LINEARC)
+C   -------------------------------------------------------------
+C   CALCULATES THE COMPLEX INTEGRAL OF WPROD FROM WA TO WB ALONG
+C   EITHER A CIRCULAR ARC OR A LINE-EGMENT.  COMPOUND ONE-SIDED
+C   GAUSS-JACOBI QUDRATURE IS USED.SEE SUBROUTINE WQSUM FOR THE
+C   CALLING SEQUENCE.
+C
+C
+C   CHECK FOR ZERO-LENGTH INTEGRAL:
+C     .. Scalar Arguments ..
+      DOUBLE COMPLEX WA,WB
+      DOUBLE PRECISION PHIA,PHIB,RADIUS,U
+      INTEGER IC,KWA,LINEARC,M,N,NPTQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE COMPLEX W0(M),W1(N)
+      DOUBLE PRECISION ALFA0(M),ALFA1(N),QWORK(NPTQ* (2* (N+M)+3))
+C     ..
+C     .. Scalars in Common ..
+      DOUBLE PRECISION DLAM
+      INTEGER IU
+C     ..
+C     .. Arrays in Common ..
+      DOUBLE PRECISION UARY(8),VARY(3)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE COMPLEX WAA,WBB,ZI
+      DOUBLE PRECISION PHAA,PHBB,R
+C     ..
+C     .. External Functions ..
+      DOUBLE COMPLEX WQSUM
+      DOUBLE PRECISION DIST
+      EXTERNAL WQSUM,DIST
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC ABS,EXP,MIN
+C     ..
+C     .. Common blocks ..
+      COMMON /PARAM4/UARY,VARY,DLAM,IU
+C     ..
+      IF (ABS(WA-WB).GT.0.D0) GO TO 10
+      WQUAD1 = (0.D0,0.D0)
+      RETURN
+
+   10 ZI = (0.D0,1.D0)
+      IF (LINEARC.EQ.1) GO TO 30
+C
+C   LINE SEGMENT INTEGRATION PATH IS CONCERNED BELOW:
+C   STEP1:ONE-SIDED G-J QUADRATURE FOR LEFT ENDPT WA:
+      R = MIN(1.D0,DIST(M,N,W0,W1,WA,KWA,IC)/ABS(WB-WA))
+      WAA = WA + R* (WB-WA)
+      WQUAD1 = WQSUM(WA,0.D0,KWA,IC,WAA,0.D0,0.D0,M,N,U,W0,W1,ALFA0,
+     +         ALFA1,NPTQ,QWORK,LINEARC)
+C
+C   STEP2:ADJOIN INTERVALS OF PURE GAUSS QUADRATURE IF NECESSARY:
+   20 IF (R.EQ.1.D0) RETURN
+      R = MIN(1.D0,DIST(M,N,W0,W1,WAA,0,IC)/ABS(WAA-WB))
+      WBB = WAA + R* (WB-WAA)
+      WQUAD1 = WQUAD1 + WQSUM(WAA,0.D0,0,2,WBB,0.D0,0.D0,M,N,U,W0,W1,
+     +         ALFA0,ALFA1,NPTQ,QWORK,LINEARC)
+      WAA = WBB
+      GO TO 20
+*
+*   CIRCULAR ARC INTEGRATION PATH IS CONCERNED BELOW:
+*   STEP1:ONE-SIDED G-J QUADRATURE FOR LEFT ENDPT WA:
+   30 R = MIN(1.D0,DIST(M,N,W0,W1,WA,KWA,IC)/ABS(WB-WA))
+      PHAA = PHIA + R* (PHIB-PHIA)
+      WAA = RADIUS*EXP(ZI*PHAA)
+      WQUAD1 = WQSUM(WA,PHIA,KWA,IC,WAA,PHAA,RADIUS,M,N,U,W0,W1,ALFA0,
+     +         ALFA1,NPTQ,QWORK,LINEARC)
+C
+C   STEP2:ADJOIN INTERVALS OF PURE GAUSS QUADRATURE IF NECESSARY:
+   40 IF (R.EQ.1.D0) RETURN
+      R = MIN(1.D0,DIST(M,N,W0,W1,WAA,0,IC)/ABS(WAA-WB))
+      PHBB = PHAA + R* (PHIB-PHAA)
+      WBB = RADIUS*EXP(ZI*PHBB)
+      WQUAD1 = WQUAD1 + WQSUM(WAA,PHAA,0,2,WBB,PHBB,RADIUS,M,N,U,W0,W1,
+     +         ALFA0,ALFA1,NPTQ,QWORK,LINEARC)
+      PHAA = PHBB
+      WAA = WBB
+      GO TO 40
+
+      END
+      DOUBLE COMPLEX
+C   ---------------------------------------------------------------
+     +  FUNCTION WQUAD(WA,PHIA,KWA,ICA,WB,PHIB,KWB,ICB,RADIUS,M,N,U,W0,
+     +                 W1,ALFA0,ALFA1,NPTQ,QWORK,LINEARC,IEVL)
+C   ---------------------------------------------------------------
+C   CALCULATES THE COMPLEX INTEGRAL OF WPROD FROM WA TO WB
+C   ALONG A CIRCULAR ARC OR A LINE-SEGMENT.FUNCTION WQUAD1
+C   IS CALLED FOUR TIMES,ONE FOR EACH 1/4 OF THE INTERVAL.
+C   NOTE:  WQUAD1 ALLOWS  ONLY THE LEFT ENDPOINT  TO  BE A
+C   POSSIBLE SINGULARITY. SEE ROUTINE WQSUM FOR THE CALLING
+C   SEQUENCE.
+C
+C
+C     .. Scalar Arguments ..
+      DOUBLE COMPLEX WA,WB
+      DOUBLE PRECISION PHIA,PHIB,RADIUS,U
+      INTEGER ICA,ICB,IEVL,KWA,KWB,LINEARC,M,N,NPTQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE COMPLEX W0(M),W1(N)
+      DOUBLE PRECISION ALFA0(M),ALFA1(N),QWORK(NPTQ* (2* (M+N)+3))
+C     ..
+C     .. Scalars in Common ..
+      DOUBLE PRECISION DLAM
+      INTEGER IU
+C     ..
+C     .. Arrays in Common ..
+      DOUBLE PRECISION UARY(8),VARY(3)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE COMPLEX WMID,WMIDA,WMIDB,WQA,WQB,ZI
+      DOUBLE PRECISION PHMID,PHMIDA,PHMIDB,PI
+C     ..
+C     .. External Functions ..
+      DOUBLE COMPLEX WQUAD1
+      EXTERNAL WQUAD1
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC ACOS,EXP
+C     ..
+C     .. Common blocks ..
+      COMMON /PARAM4/UARY,VARY,DLAM,IU
+C     ..
+      PI = ACOS(-1.D0)
+      ZI = (0.D0,1.D0)
+C
+C   DETERMINE MIDPTS ON A LINE SEGMENT OR ON A CIRCULAR ARC:
+      IF (LINEARC.EQ.0) THEN
+          WMID = (WA+WB)/2.D0
+          WMIDA = (WA+WMID)/2.D0
+          WMIDB = (WB+WMID)/2.D0
+          PHMID = 0.D0
+          PHMIDA = 0.D0
+          PHMIDB = 0.D0
+
+      ELSE
+C
+          IF (IEVL.EQ.1) GO TO 10
+C
+          IF (PHIB.LT.PHIA) PHIA = PHIA - 2.D0*PI
+   10     PHMID = (PHIA+PHIB)/2.D0
+          WMID = RADIUS*EXP(ZI*PHMID)
+          PHMIDA = (PHIA+PHMID)/2.D0
+          WMIDA = RADIUS*EXP(ZI*PHMIDA)
+          PHMIDB = (PHIB+PHMID)/2.D0
+          WMIDB = RADIUS*EXP(ZI*PHMIDB)
+      END IF
+C
+C   COMPOUND GAUSS-JACOBI PROCESS ACCORDING TO ONE-QUATER RULE:
+      WQA = WQUAD1(WA,PHIA,KWA,ICA,WMIDA,PHMIDA,RADIUS,M,N,U,W0,W1,
+     +      ALFA0,ALFA1,NPTQ,QWORK,LINEARC) -
+     +      WQUAD1(WMID,PHMID,0,2,WMIDA,PHMIDA,RADIUS,M,N,U,W0,W1,ALFA0,
+     +      ALFA1,NPTQ,QWORK,LINEARC)
+      WQB = WQUAD1(WB,PHIB,KWB,ICB,WMIDB,PHMIDB,RADIUS,M,N,U,W0,W1,
+     +      ALFA0,ALFA1,NPTQ,QWORK,LINEARC) -
+     +      WQUAD1(WMID,PHMID,0,2,WMIDB,PHMIDB,RADIUS,M,N,U,W0,W1,ALFA0,
+     +      ALFA1,NPTQ,QWORK,LINEARC)
+      WQUAD = WQA - WQB
+      RETURN
+
+      END
+C   -----------------------------------------------
+      SUBROUTINE XWTRAN(M,N,X,U,C,W0,W1,PHI0,PHI1)
+C   -----------------------------------------------
+C  TRANSFORMS X(K)(UNCONSTRAINED PARAMETERS) TO ACTUAL
+C  D-SC PARAMETERS:U,C,W0,W1.PHI0 & PHI1 ARE ARGUMENTS
+C  OF THE PREVERTICES CONTAINED IN W0 & W1.
+C
+C
+C     .. Scalar Arguments ..
+      DOUBLE COMPLEX C
+      DOUBLE PRECISION U
+      INTEGER M,N
+C     ..
+C     .. Array Arguments ..
+      DOUBLE COMPLEX W0(M),W1(N)
+      DOUBLE PRECISION PHI0(M),PHI1(N),X(M+N+2)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION DPH,PH,PHSUM,PI
+      INTEGER I
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC ABS,ACOS,COS,DCMPLX,EXP,SIN,SQRT
+C     ..
+      PI = ACOS(-1.D0)
+      IF (ABS(X(1)).LE.1.D-14) THEN
+          U = 0.5D0
+
+      ELSE
+          U = (X(1)-2.D0-SQRT(0.9216D0*X(1)**2+4.D0))/ (2.D0*X(1))
+          U = (0.0196D0*X(1)-1.D0)/ (U*X(1))
+      END IF
+
+      C = DCMPLX(X(2),X(3))
+      IF (ABS(X(N+3)).LE.1.D-14) THEN
+          PHI1(N) = 0.D0
+
+      ELSE
+          PH = (1.D0+SQRT(1.D0+PI*PI*X(N+3)**2))/X(N+3)
+          PHI1(N) = PI*PI/PH
+      END IF
+
+      DPH = 1.D0
+      PHSUM = DPH
+      DO 10 I = 1,N - 1
+          DPH = DPH/EXP(X(3+I))
+          PHSUM = PHSUM + DPH
+   10 CONTINUE
+      DPH = 2.D0*PI/PHSUM
+      PHI1(1) = PHI1(N) + DPH
+      W1(1) = U*DCMPLX(COS(PHI1(1)),SIN(PHI1(1)))
+      W1(N) = U*DCMPLX(COS(PHI1(N)),SIN(PHI1(N)))
+      PHSUM = PHI1(1)
+      DO 20 I = 1,N - 2
+          DPH = DPH/EXP(X(3+I))
+          PHSUM = PHSUM + DPH
+          PHI1(I+1) = PHSUM
+          W1(I+1) = U*DCMPLX(COS(PHSUM),SIN(PHSUM))
+   20 CONTINUE
+      DPH = 1.D0
+      PHSUM = DPH
+      DO 30 I = 1,M - 1
+          DPH = DPH/EXP(X(N+3+I))
+          PHSUM = PHSUM + DPH
+   30 CONTINUE
+      DPH = 2.D0*PI/PHSUM
+      PHSUM = DPH
+      PHI0(1) = DPH
+      W0(1) = DCMPLX(COS(DPH),SIN(DPH))
+      DO 40 I = 1,M - 2
+          DPH = DPH/EXP(X(N+3+I))
+          PHSUM = PHSUM + DPH
+          PHI0(I+1) = PHSUM
+          W0(I+1) = DCMPLX(COS(PHSUM),SIN(PHSUM))
+   40 CONTINUE
+      RETURN
+
+      END
+C    --------------------------------------
+      SUBROUTINE DSCFUN(NDIM,X,FVAL,IFLAG)
+C    --------------------------------------
+C  FORMS THE NONLINEAR SYSTEM SATISFIED BY D-SC PARAMETERS.THE
+C  SUBROUTINE WILL BE CALLED BY NONLINEAR SYSTEM SOLVER HYBRD.
+C  SEE ROUTINE DSCSOLV FOR THE VARIABLES IN THE COMMON BLOCKS.
+C  NDIM: THE DIMENSION OF THE SYSTEM.
+C  X:    UNKNOWNS
+C  FVAL: THE VECTOR DEFINED BY THE SYSTEM.
+C  IFLAG:(ON OUTPUT)=1,THE ITERATION WAS SUCCESSFULLY COMPLETED.
+C         =2,3,OR 4, UNSUCCESSFUL TERMINATION OF THE ITERATION.
+C         =5 MAY INDICATE THE TOLERANCE GIVEN IN THE CALLING
+C         SEQUENCE OF HYBRD IS TOO SMALL.
+C
+C
+C  TRANSFORM UNCONSTRAINED X(K) TO ACTUAL D-SC PARAMETERS
+C  AND COMPUTE DATA TO BE USED IN WTHETA:
+C
+C     .. Scalar Arguments ..
+      INTEGER IFLAG,NDIM
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION FVAL(NDIM),X(NDIM)
+C     ..
+C     .. Scalars in Common ..
+      DOUBLE COMPLEX C
+      DOUBLE PRECISION DLAM,U
+      INTEGER ICOUNT,ISHAPE,ISPRT,IU,LINEARC,M,N,NPTQ,NSHAPE
+C     ..
+C     .. Arrays in Common ..
+      DOUBLE COMPLEX W0(30),W1(30),Z0(30),Z1(30)
+      DOUBLE PRECISION ALFA0(30),ALFA1(30),PHI0(30),PHI1(30),
+     +                 QWORK(1660),UARY(8),VARY(3)
+      INTEGER IND(20)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE COMPLEX WA,WAI,WARC,WB,WBI,WCIRCLE,WIN1,WIN2,WIN3,WIN4,
+     +               WINT1,WINT2,WINT3,WLINE,WLINE1,WLINE2,WX,ZI
+      DOUBLE PRECISION FMAXN,PHIA,PHIB,RADIUS,TEST1
+      INTEGER I,J,K
+C     ..
+C     .. External Functions ..
+      DOUBLE COMPLEX WQUAD
+      DOUBLE PRECISION FMAX
+      EXTERNAL WQUAD,FMAX
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL THDATA,XWTRAN
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC ABS,COS,DCMPLX,DIMAG,EXP
+C     ..
+C     .. Common blocks ..
+      COMMON /PARAM1/W0,W1,Z0,Z1,C
+      COMMON /PARAM2/U,PHI0,PHI1,ALFA0,ALFA1,QWORK
+      COMMON /PARAM3/M,N,NPTQ,ISHAPE,LINEARC,NSHAPE,IND
+      COMMON /PARAM4/UARY,VARY,DLAM,IU
+      COMMON /PARAM5/ISPRT,ICOUNT
+C     ..
+      CALL XWTRAN(M,N,X,U,C,W0,W1,PHI0,PHI1)
+      CALL THDATA(U)
+      ZI = (0.D0,1.D0)
+      ICOUNT = ICOUNT + 1
+C
+C  TWO EQUATIONS TO ELIMINATE POSSIBLE ROTATION OF THE INNER POLYGON:
+      WIN1 = Z1(1) - Z1(N) - C*WQUAD(W1(N),PHI1(N),N,1,W1(1),PHI1(1),1,
+     +       1,U,M,N,U,W0,W1,ALFA0,ALFA1,NPTQ,QWORK,LINEARC,2)
+      FVAL(1) = DIMAG(ZI*WIN1)
+      FVAL(2) = DIMAG(WIN1)
+C
+C  N-1 SIDE LENGTH CONDITIONS FOR THE INNER POLYGON:
+      DO 10 I = 1,N - 1
+          WINT1 = WQUAD(W1(I),PHI1(I),I,1,W1(I+1),PHI1(I+1),I+1,1,U,M,N,
+     +            U,W0,W1,ALFA0,ALFA1,NPTQ,QWORK,LINEARC,2)
+          FVAL(I+2) = ABS(Z1(I+1)-Z1(I)) - ABS(C*WINT1)
+   10 CONTINUE
+C
+C  TWO EQUATIONS TO FIX THE RELATIVE POSITION OF THE INNER POLYGON:
+      TEST1 = COS(PHI1(N))
+      IF (TEST1.GE.U) GO TO 20
+C
+C  IF THE LINE PATH FROM W0(M) TO W1(N) IS OUT OF DOMAIN,THE
+C  COMBINATION OF TWO DIFFERENT PATHS WILL BE USED INSTEAD:
+      WX = DCMPLX(U,0.D0)
+      WLINE = WQUAD(W0(M),0.D0,M,0,WX,0.D0,0,2,0.D0,M,N,U,W0,W1,ALFA0,
+     +        ALFA1,NPTQ,QWORK,0,2)
+      IF (PHI1(N).LE.0.D0) THEN
+          WARC = WQUAD(W1(N),PHI1(N),N,1,WX,0.D0,0,2,U,M,N,U,W0,W1,
+     +           ALFA0,ALFA1,NPTQ,QWORK,1,2)
+          WIN2 = WLINE - WARC
+
+      ELSE
+          WARC = WQUAD(WX,0.D0,0,2,W1(N),PHI1(N),N,1,U,M,N,U,W0,W1,
+     +           ALFA0,ALFA1,NPTQ,QWORK,1,2)
+          WIN2 = WLINE + WARC
+      END IF
+
+      GO TO 30
+
+   20 WIN2 = WQUAD(W0(M),0.D0,M,0,W1(N),0.D0,N,1,0.D0,M,N,U,W0,W1,ALFA0,
+     +       ALFA1,NPTQ,QWORK,0,2)
+   30 FVAL(N+2) = DIMAG(ZI* (Z1(N)-Z0(M)-C*WIN2))
+      FVAL(N+3) = DIMAG(Z1(N)-Z0(M)-C*WIN2)
+C
+C  TWO EQUATIONS TO ELIMINATE POSSIBLE ROTATION OF THE OUTER POLYGON:
+      WIN3 = Z0(1) - Z0(M) - C*WQUAD(W0(M),PHI0(M),M,0,W0(1),PHI0(1),1,
+     +       0,1.D0,M,N,U,W0,W1,ALFA0,ALFA1,NPTQ,QWORK,LINEARC,2)
+      FVAL(N+4) = DIMAG(ZI*WIN3)
+      FVAL(N+5) = DIMAG(WIN3)
+C
+      IF (M.EQ.3) THEN
+C
+C  CALCULATE THE MAXIMUM-NORM OF THE FUNCTION FVAL:
+          IF (ISPRT.NE.1) GO TO 40
+          FMAXN = FMAX(NDIM,FVAL)
+          WRITE (6,FMT=9000) ICOUNT,FMAXN
+   40     CONTINUE
+          RETURN
+
+      END IF
+
+      IF (ISHAPE.EQ.1) GO TO 70
+C
+C  M-3 SIDE LENGTH CONDITIONS OF THE OUTER POLYGON:
+      DO 50 J = 1,M - 3
+          WINT2 = WQUAD(W0(J),PHI0(J),J,0,W0(J+1),PHI0(J+1),J+1,0,1.D0,
+     +            M,N,U,W0,W1,ALFA0,ALFA1,NPTQ,QWORK,LINEARC,2)
+          FVAL(N+5+J) = ABS(Z0(J+1)-Z0(J)) - ABS(C*WINT2)
+   50 CONTINUE
+C
+C  CALCULATE THE MAXIMUM-NORM OF THE FUNCTION FVAL:
+      IF (ISPRT.NE.1) GO TO 60
+      FMAXN = FMAX(NDIM,FVAL)
+      WRITE (6,FMT=9010) ICOUNT,FMAXN
+   60 CONTINUE
+      RETURN
+C
+C  OUTER POLYGON CONTAINS SOME INFINITE VERTICES & FOR EACH OF THEM
+C  TWO LENGTH CONDITIONS WILL BE REPLACED BY A COMPLEX INTEGRAL:
+   70 DO 100 K = 1,NSHAPE - 1
+          IF (IND(K+1).EQ.2 .OR. IND(K).GE.IND(K+1)-2) GO TO 90
+          DO 80 J = IND(K) + 1,IND(K+1) - 2
+              WINT3 = WQUAD(W0(J),PHI0(J),J,0,W0(J+1),PHI0(J+1),J+1,0,
+     +                1.D0,M,N,U,W0,W1,ALFA0,ALFA1,NPTQ,QWORK,LINEARC,2)
+              FVAL(N+5+J) = ABS(Z0(J+1)-Z0(J)) - ABS(C*WINT3)
+   80     CONTINUE
+   90     IF (K.EQ.NSHAPE-1 .OR. IND(K+1).EQ.M-1) GO TO 100
+C
+C  THE COMBINATION  OF THREE DIFFERENT PATHS  IS USED TO INTEGRATE
+C  FROM WA TO WB TO AVOID DOMAIN PROBLEM.THE BY-PRODUCT OF THIS IS
+C  THAT IT IS NUMERICALLY  MORE EFFICIENT THAN A SINGLE LINE PATH:
+          WA = W0(IND(K+1)-1)
+          WB = W0(IND(K+1)+1)
+          PHIA = PHI0(IND(K+1)-1)
+          PHIB = PHI0(IND(K+1)+1)
+          RADIUS = (1.D0+U)/2.D0
+          WAI = RADIUS*EXP(ZI*PHIA)
+          WBI = RADIUS*EXP(ZI*PHIB)
+          WLINE1 = WQUAD(WA,0.D0,IND(K+1)-1,0,WAI,0.D0,0,2,0.D0,M,N,U,
+     +             W0,W1,ALFA0,ALFA1,NPTQ,QWORK,0,2)
+          WLINE2 = WQUAD(WB,0.D0,IND(K+1)+1,0,WBI,0.D0,0,2,0.D0,M,N,U,
+     +             W0,W1,ALFA0,ALFA1,NPTQ,QWORK,0,2)
+          WCIRCLE = WQUAD(WAI,PHIA,0,2,WBI,PHIB,0,2,RADIUS,M,N,U,W0,W1,
+     +              ALFA0,ALFA1,NPTQ,QWORK,1,2)
+          WIN4 = C* (WLINE1+WCIRCLE-WLINE2)
+          FVAL(N+5+IND(K+1)-1) = DIMAG(ZI*
+     +                           (Z0(IND(K+1)+1)-Z0(IND(K+1)-1)-WIN4))
+          FVAL(N+5+IND(K+1)) = DIMAG(Z0(IND(K+1)+1)-Z0(IND(K+1)-1)-WIN4)
+  100 CONTINUE
+C
+C  CALCULATE THE MAXIMUM-NORM OF THE FUNCTION FVAL:
+      IF (ISPRT.NE.1) GO TO 110
+      FMAXN = FMAX(NDIM,FVAL)
+      WRITE (6,FMT=9020) ICOUNT,FMAXN
+  110 CONTINUE
+      RETURN
+
+ 9000 FORMAT (2X,I5,6X,E10.4)
+ 9010 FORMAT (2X,I5,6X,E10.4)
+ 9020 FORMAT (2X,I5,6X,E10.4)
+      END
+C  -----------------------------------------------------------------
+      SUBROUTINE DSCSOLV(TOL,IGUESS,M,N,U,C,W0,W1,PHI0,PHI1,Z0,Z1,ALFA0,
+     +                   ALFA1,NPTQ,QWORK,ISHAPE,LINEARC)
+C  -----------------------------------------------------------------
+C  SOLVES THE NONLINEAR SYSTEM FOR D-SC PARAMETERS.
+C  CALLING SEQUENCE:
+C  TOL       A TOLERANCE TO CONTROL THE CONVERGENCE IN HYBRD
+C  IGUESS    (=0 )A NON-EQUALLY SPACED INITIAL GUESS OR(=1)THE
+C            OTHER  EQUALLY-SPACED  INITIAL GUESS PROVIDED, OR
+C            (=2)USER-SUPPLIED INITIAL GUESS WHICH IS REQUIRED
+C            TO BE THE ARGUMENTS OF THE INITIAL PREVERTICES.
+C            ROUTINE ARGUM MAY BE USED FOR COMPUTING ARGUMENTS
+C            IF NEEDED. NOTE: C WILL BE COMPUTED IN THE ROUTINE
+C            (NOT SUPPLIED!)
+C  M,N,U,C,W0,W1,PHI0,PHI1,ALFA0,ALFA1,Z0,Z1
+C            CONSTITUTE THE GEOMETRY OF THE POLYGONAL REGION
+C            AND THE MAPPING FUNCTION. ON RETURN U,C,W0,& W1
+C            WILL  CONTAIN COMPUTED PARAMETERS. (PHI0 & PHI1
+C            WILL CONTAIN THE ARGUMENTS OF THE PREVERTICES.)
+C  QWORK     SEE CALLING SEQUENCE DOCUMENTATION IN QINIT.THE ARRAY
+C            MUST HAVE BEEN FILLED BY QINIT BEFORE CALLING DSCSOLV.
+C  NPTQ      THE NUMBER OF GAUSS-JACOBI POINTS USED
+C  ISHAPE    INDICATES  THAT  OUTER POLYGON  CONTAINS NO INFINITE
+C            VERTICES (ISHAPE=0) OR IT HAS SOME INFINITE VERTICES
+C            (ISHAPE=1).
+C  LINEARC   INTEGER VARIABLE TO CONTROL INTEGRATION PATH.IN PATICULAR:
+C            LINEARC=0:INTEGRATING ALONG LINE SEGMENT WHENEVER POSSIBLE
+C            LINEARC=1:INTEGRATING ALONG CIRCULAR ARC WHENEVER POSSIBLE
+C  THE DISCRIPTION OF ARRAY IND & VARIABLE NSHAPE NEEDED IN DSCFUN:
+C  IND       CONTAINS INDICES  CORRESPONDING TO  THOSE INFINITE
+C            VERTICES,BUT THE FIRST & THE LAST ENTRIS MUST BE 0
+C            & M-1(M IS THE # OF VERTICES ON THE OUTER POLYGON).
+C  NSHAPE    THE DIMENSION OF THE INTERGE ARRAY IND(NSHAPE)
+C
+C
+C     .. Scalar Arguments ..
+      DOUBLE COMPLEX C
+      DOUBLE PRECISION TOL,U
+      INTEGER IGUESS,ISHAPE,LINEARC,M,N,NPTQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE COMPLEX W0(M),W1(N),Z0(M),Z1(N)
+      DOUBLE PRECISION ALFA0(M),ALFA1(N),PHI0(M),PHI1(N),
+     +                 QWORK(NPTQ* (2* (N+M)+3))
+C     ..
+C     .. Scalars in Common ..
+      DOUBLE COMPLEX C2
+      DOUBLE PRECISION DLAM,U2
+      INTEGER ICOUNT,ISHAPE2,ISPRT,IU,LINEARC2,M2,N2,NPTQ2,NSHAPE
+C     ..
+C     .. Arrays in Common ..
+      DOUBLE COMPLEX W02(30),W12(30),Z02(30),Z12(30)
+      DOUBLE PRECISION ALFA02(30),ALFA12(30),PHI02(30),PHI12(30),
+     +                 QWORK2(1660),UARY(8),VARY(3)
+      INTEGER IND(20)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE COMPLEX C1,WINT,ZI
+      DOUBLE PRECISION AVE,BOTM,DSTEP,FACTOR,PI,TOP
+      INTEGER I,INFO,K,KM,KN,MAXFUN,NFEV,NM,NWDIM
+C     ..
+C     .. Local Arrays ..
+      DOUBLE PRECISION DIAG(42),FJAC(42,42),FVAL(42),QW(1114),X(42)
+C     ..
+C     .. External Functions ..
+      DOUBLE COMPLEX WQUAD
+      EXTERNAL WQUAD
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL DSCFUN,DSCPRINT,HYBRD,THDATA,XWTRAN
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC ACOS,DBLE,DIMAG,LOG
+C     ..
+C     .. Common blocks ..
+      COMMON /PARAM1/W02,W12,Z02,Z12,C2
+      COMMON /PARAM2/U2,PHI02,PHI12,ALFA02,ALFA12,QWORK2
+      COMMON /PARAM3/M2,N2,NPTQ2,ISHAPE2,LINEARC2,NSHAPE,IND
+      COMMON /PARAM4/UARY,VARY,DLAM,IU
+      COMMON /PARAM5/ISPRT,ICOUNT
+C     ..
+      ZI = (0.D0,1.D0)
+      PI = ACOS(-1.D0)
+      ICOUNT = 0
+      IF (ISHAPE.EQ.0.D0) GO TO 20
+C
+C  DETERMIN THE NUMBER OF OUTER BOUNDARY COMPONENTS,ETC.:
+      NSHAPE = 1
+      DO 10 I = 2,M - 1
+          IF (ALFA0(I).GT.0.D0) GO TO 10
+          NSHAPE = NSHAPE + 1
+          IND(NSHAPE) = I
+   10 CONTINUE
+      IND(1) = 0
+      NSHAPE = NSHAPE + 1
+      IND(NSHAPE) = M - 1
+C
+C  FIX ONE PREVERTEX:
+   20 W0(M) = (1.D0,0.D0)
+      PHI0(M) = 0.D0
+C
+C  FOLLOWING TWO VALUE ASSIGNMENTS ARE TO SATISFY THE COMPILER WATFOR77:
+      X(2) = 0.D0
+      X(3) = 0.D0
+C  INITIAL GUESS (IGUESS=0):
+      IF (IGUESS.EQ.0) THEN
+          X(1) = 1.D0/0.5D0 - 1.D0/0.46D0
+          AVE = 2.D0*PI/DBLE(N)
+          DO 30 I = 1,N - 2
+              X(3+I) = LOG((AVE+0.0001D0*DBLE(I))/
+     +                 (AVE+0.0001D0*DBLE(I+1)))
+   30     CONTINUE
+          X(N+2) = LOG((AVE+0.0001D0*DBLE(N-1))/
+     +             (2.D0*PI-DBLE(N-1)* (AVE+DBLE(N)*0.00005D0)))
+          X(N+3) = 1.D0/ (4.D0-0.1D0) - 1.D0/ (4.D0+0.1D0)
+          AVE = 2.D0*PI/DBLE(M)
+          DO 40 I = 1,M - 2
+              X(N+3+I) = LOG((AVE+0.0001D0*DBLE(I-1))/
+     +                   (AVE+0.0001D0*DBLE(I)))
+   40     CONTINUE
+          X(M+N+2) = LOG((AVE+0.0001D0*DBLE(M-2))/
+     +               (2.D0*PI-DBLE(M-1)* (AVE+DBLE(M-2)*0.00005D0)))
+
+      ELSE IF (IGUESS.EQ.1) THEN
+C
+C  INITIAL GUESS (IGUESS=1):
+          X(1) = 1.D0/0.53D0 - 1.D0/0.43D0
+          DO 50 I = 1,N - 1
+              X(3+I) = 0.D0
+   50     CONTINUE
+          X(N+3) = 1.D0/ (4.D0-0.1D0) - 1.D0/ (4.D0+0.1D0)
+          DO 60 I = 1,M - 1
+              X(N+3+I) = 0.D0
+   60     CONTINUE
+
+      ELSE
+          X(1) = 1.D0/ (0.98D0-U) - 1.D0/ (U-0.02D0)
+          DO 70 K = 1,N - 1
+              KN = K - 1
+              IF (KN.EQ.0) KN = N
+              TOP = PHI1(K) - PHI1(KN)
+              IF (TOP.LT.0.D0) TOP = TOP + 2.D0*PI
+              BOTM = PHI1(K+1) - PHI1(K)
+              IF (BOTM.LT.0.D0) BOTM = BOTM + 2.D0*PI
+              X(3+K) = LOG(TOP) - LOG(BOTM)
+   70     CONTINUE
+          X(N+3) = 1.D0/ (PI-PHI1(N)) - 1.D0/ (PI+PHI1(N))
+          DO 80 K = 1,M - 1
+              KM = K - 1
+              IF (KM.EQ.0) KM = M
+              TOP = PHI0(K) - PHI0(KM)
+              IF (TOP.LT.0.D0) TOP = TOP + 2.D0*PI
+              BOTM = PHI0(K+1) - PHI0(K)
+              IF (BOTM.LT.0.D0) BOTM = BOTM + 2.D0*PI
+              X(N+3+K) = LOG(TOP) - LOG(BOTM)
+   80     CONTINUE
+      END IF
+C
+C  CALCULATE THE INITIAL GUESS X(2) & X(3) TO MATCH
+C  THE CHOICE FOR X(1),X(4),...,X(M+N+2):
+      CALL XWTRAN(M,N,X,U,C,W0,W1,PHI0,PHI1)
+      CALL THDATA(U)
+      WINT = WQUAD(W0(M),0.D0,M,0,W1(N),0.D0,N,1,0.D0,M,N,U,W0,W1,ALFA0,
+     +       ALFA1,NPTQ,QWORK,0,2)
+      C1 = (Z1(N)-Z0(M))/WINT
+      X(2) = DIMAG(ZI*C1)
+      X(3) = DIMAG(C1)
+C
+C  HYBRD CONTROL PARAMETERS:
+      DSTEP = 1.D-7
+      MAXFUN = 200* (M+N)
+      FACTOR = 2.D0
+      NM = M + N + 2
+C
+C  COPY RELEVANT DATA TO THE COMMON BLOCK IN DSCFUN:
+      M2 = M
+      N2 = N
+      ISHAPE2 = ISHAPE
+      LINEARC2 = LINEARC
+      NPTQ2 = NPTQ
+      DO 90 K = 1,M
+          W02(K) = W0(K)
+          PHI02(K) = PHI0(K)
+          Z02(K) = Z0(K)
+          ALFA02(K) = ALFA0(K)
+   90 CONTINUE
+      DO 100 K = 1,N
+          W12(K) = W1(K)
+          PHI12(K) = PHI1(K)
+          Z12(K) = Z1(K)
+          ALFA12(K) = ALFA1(K)
+  100 CONTINUE
+      NWDIM = NPTQ* (2* (M+N)+3)
+      DO 110 I = 1,NWDIM
+          QWORK2(I) = QWORK(I)
+  110 CONTINUE
+C
+C  CHOOSE SCREEN DISPLAY:
+      PRINT '(/)'
+      WRITE (6,FMT=*)
+     +  'WANT SCREEN-DISPLAY OF THE RESIDUAL OF THE SYSTEM'
+      WRITE (6,FMT=*)
+     +  '           AS THE ITERATION GOES ON ?            '
+      WRITE (6,FMT=*) '(1 FOR "YES", 2 FOR "NO")'
+      PRINT '(/)'
+      READ (5,FMT=*) ISPRT
+      IF (ISPRT.EQ.1) THEN
+          WRITE (6,FMT=*)
+     +      '# OF ITERATIONS> <MAXIMUM NORM OF THE RESIDUALS'
+
+      ELSE
+          WRITE (6,FMT=*)
+     +      '***TIME FOR OBTAINING A CONVERGED RESULT MAY RANGE'
+          WRITE (6,FMT=*)
+     +      ' FROM SEVERAL SECONDS TO SEVERAL MINUTES OR LONGER'
+          WRITE (6,FMT=*)
+     +      ' DEPENDING ON THE COMPLEXITY OF THE GEOMETRY OF THE'
+          WRITE (6,FMT=*) '    REGION AND THE LOCAL COMPUTING SYSTEM.'
+          WRITE (6,FMT=*) '               SO, BE PATIENT !'
+      END IF
+C
+C  SOLVE NONLINEAR SYSTEM WITH HYBRD:
+      CALL HYBRD(DSCFUN,NM,X,FVAL,TOL,MAXFUN,NM,NM,DSTEP,DIAG,1,FACTOR,
+     +           -1,INFO,NFEV,FJAC,42,QW(1),903,QW(904),QW(946),QW(988),
+     +           QW(1030),QW(1072))
+C
+C  CHECK ERROR INFORMATION. THE DESCRIPTION OF INFO CAN BE
+C  FOUND IN THE DOCUMENTATION OF HYBRD.(INFO=1: SECCESSFUL EXIT)
+      WRITE (6,FMT=*) 'INFO=',INFO
+C
+C  COPY OUTPUT DATA FROM COMMON BLOCK AND PRINT THE RESULTS:
+      CALL XWTRAN(M,N,X,U,C,W0,W1,PHI0,PHI1)
+      CALL DSCPRINT(M,N,C,U,W0,W1,PHI0,PHI1,TOL,NPTQ)
+      RETURN
+
+      END
+      DOUBLE COMPLEX
+C   ----------------------------------------------------------
+     +  FUNCTION ZDSC(WW,KWW,IC,M,N,U,C,W0,W1,Z0,Z1,ALFA0,ALFA1,PHI0,
+     +                PHI1,NPTQ,QWORK,IOPT)
+C   ----------------------------------------------------------
+C   COMPUTES THE FORWORD MAP Z(WW) BY INTEGRATING FROM WA TO
+C   WW WHERE WA IS THE NEAREST PREVERTEX TO WW.KWW=K,IC=0 IF
+C   WW=W0(K), OR KWW=K, IC=1 IF WW=W1(K),OR KWW=0 AND IC=2
+C   OTHERWISE.
+C   IOPT: =1 IS NORMALLY ASSUMED FOR ANY GEOMETRY.
+C         =# OTHER THAN 1 ASSUMES THAT ONLY LINE SEGMENT PATH
+C          IS USED.
+C   SEE ROUTINE DSCSOLV FOR THE REST OF THE CALLING SEQUENCE.
+C
+C
+C     .. Scalar Arguments ..
+      DOUBLE COMPLEX C,WW
+      DOUBLE PRECISION U
+      INTEGER IC,IOPT,KWW,M,N,NPTQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE COMPLEX W0(M),W1(N),Z0(M),Z1(N)
+      DOUBLE PRECISION ALFA0(M),ALFA1(N),PHI0(M),PHI1(N),
+     +                 QWORK(NPTQ* (2* (M+N)+3))
+C     ..
+C     .. Scalars in Common ..
+      DOUBLE PRECISION DLAM
+      INTEGER IU
+C     ..
+C     .. Arrays in Common ..
+      DOUBLE PRECISION UARY(8),VARY(3)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE COMPLEX WA,WB,WINT1,WINT2,WW0,ZA,ZI
+      DOUBLE PRECISION DWW0,PHIWB,PHIWW0,PI
+      INTEGER IBD,INEAR,KNEAR
+C     ..
+C     .. External Functions ..
+      DOUBLE COMPLEX WQUAD
+      DOUBLE PRECISION ARGUM
+      EXTERNAL WQUAD,ARGUM
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL NEARW
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC ABS,ACOS,EXP
+C     ..
+C     .. Common blocks ..
+      COMMON /PARAM4/UARY,VARY,DLAM,IU
+C     ..
+      ZI = (0.D0,1.D0)
+      PI = ACOS(-1.D0)
+      IBD = 1
+      WW0 = WW
+C
+      IF (IOPT.NE.1) GO TO 10
+      IF (ABS(ABS(WW0)-1.D0).LE.1.D-11) THEN
+          WW0 = (1.D0+U)*WW0/2.D0
+          IBD = 2
+      END IF
+C
+C   FIND THE NEAREST PREVERTEX TO THE PT WW0:
+   10 CALL NEARW(M,N,W0,W1,ALFA0,WW0,KNEAR,INEAR)
+      IF (INEAR.EQ.0) THEN
+          ZA = Z0(KNEAR)
+          WA = W0(KNEAR)
+
+      ELSE
+          ZA = Z1(KNEAR)
+          WA = W1(KNEAR)
+      END IF
+
+      IF (IOPT.NE.1) GO TO 40
+C
+C   DETERMINE THE POINT CLOSEST TO WA ON THE
+C   SAME CONCENTRIC CIRCLE AS WW0 IS ON:
+      PHIWW0 = ARGUM(ABS(WW0),WW0)
+      DWW0 = ABS(WW0)
+      IF (INEAR.EQ.0) THEN
+          PHIWB = PHI0(KNEAR)
+
+      ELSE
+          PHIWB = PHI1(KNEAR)
+      END IF
+
+      WB = DWW0*EXP(ZI*PHIWB)
+C
+C   INTEGRATION FROM WA TO WB ON A LINE SEGMENT:
+      IF (ABS(WB-WA).LE.1.D-11) THEN
+          WINT1 = (0.D0,0.D0)
+          GO TO 20
+
+      END IF
+
+      WINT1 = WQUAD(WA,0.D0,KNEAR,INEAR,WB,0.D0,0,2,0.D0,M,N,U,W0,W1,
+     +        ALFA0,ALFA1,NPTQ,QWORK,0,1)
+C
+C   INTEGRATION FROM WB TO WW ON A CIRCULAR ARC:
+   20 IF (ABS(WB-WW0).LE.1.D-11) THEN
+          WINT2 = (0.D0,0.D0)
+          GO TO 30
+
+      END IF
+
+      IF (ABS(PHIWB-2.D0*PI-PHIWW0).LT.
+     +    ABS(PHIWB-PHIWW0)) PHIWB = PHIWB - 2.D0*PI
+      IF (ABS(PHIWW0-2.D0*PI-PHIWB).LT.
+     +    ABS(PHIWB-PHIWW0)) PHIWW0 = PHIWW0 - 2.D0*PI
+      IF (ABS(WB-WA).LE.1.D-11) THEN
+          WINT2 = WQUAD(WB,PHIWB,KNEAR,INEAR,WW0,PHIWW0,KWW,IC,DWW0,M,N,
+     +            U,W0,W1,ALFA0,ALFA1,NPTQ,QWORK,1,1)
+          GO TO 30
+
+      END IF
+
+      WINT2 = WQUAD(WB,PHIWB,0,2,WW0,PHIWW0,0,2,DWW0,M,N,U,W0,W1,ALFA0,
+     +        ALFA1,NPTQ,QWORK,1,1)
+C
+C   EVALUATE THE MAPPING FUNCTION. THE INTEGRATION PATH IS
+C   A COMBINATION OF A CIRCULAR ARC AND LINE SEGMENT(S):
+   30 ZDSC = ZA + C* (WINT1+WINT2)
+      IF (IBD.EQ.2) THEN
+          ZDSC = ZDSC + C*WQUAD(WW0,0.D0,0,2,WW,0.D0,KWW,IC,0.D0,M,N,U,
+     +           W0,W1,ALFA0,ALFA1,NPTQ,QWORK,0,1)
+      END IF
+
+      RETURN
+
+   40 ZDSC = ZA + C*WQUAD(WA,0.D0,KNEAR,INEAR,WW,0.D0,KWW,IC,0.D0,M,N,U,
+     +       W0,W1,ALFA0,ALFA1,NPTQ,QWORK,0,1)
+      RETURN
+
+      END
+      DOUBLE COMPLEX
+C   ----------------------------------------------------
+     +  FUNCTION WDSC(ZZ,M,N,U,C,W0,W1,Z0,Z1,ALFA0,ALFA1,PHI0,PHI1,NPTQ,
+     +                QWORK,EPS,IOPT)
+C   ----------------------------------------------------
+C   COMPUTES THE INVERSE MAP AFTER  ALL ACCESSARY PARAMETERS HAVE
+C   BEEN DETERMINED.EULER'S SCHEME FOR SOLVING ODE IS USED TO GIVE
+C   THE INITIAL GUESS WHICH IS THEN REFINED BY NEWTON'S ITERATION.
+C   ZZ IS THE POINT AT WHICH INVERSE MAP IS EVALUATED. EPS IS THE
+C   REQUIRED ACCURACY SUPPLIED BY THE USER.
+C   NOTE: ZZ IS NOT ALLOWED TO BE A VERTEX!
+C
+C
+C   IF THE INVERSE EVALUATION IS NOT SUCCESSFUL, THE NAME OF THE
+C   FUNCTION, WDSC, WILL BE ASSIGNED WITH:
+C     .. Scalar Arguments ..
+      DOUBLE COMPLEX C,ZZ
+      DOUBLE PRECISION EPS,U
+      INTEGER IOPT,M,N,NPTQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE COMPLEX W0(M),W1(N),Z0(M),Z1(N)
+      DOUBLE PRECISION ALFA0(M),ALFA1(N),PHI0(M),PHI1(N),
+     +                 QWORK(NPTQ* (2* (M+N)+3))
+C     ..
+C     .. Scalars in Common ..
+      DOUBLE PRECISION DLAM
+      INTEGER IU
+C     ..
+C     .. Arrays in Common ..
+      DOUBLE PRECISION UARY(8),VARY(3)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE COMPLEX WFN,WI,ZS,ZZ1
+      INTEGER I,INZ,IT,K,KNZ
+C     ..
+C     .. Local Arrays ..
+      DOUBLE COMPLEX ZS0(50),ZS1(50)
+C     ..
+C     .. External Functions ..
+      DOUBLE COMPLEX WPROD,ZDSC
+      EXTERNAL WPROD,ZDSC
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL NEARZ
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC ABS
+C     ..
+C     .. Common blocks ..
+      COMMON /PARAM4/UARY,VARY,DLAM,IU
+C     ..
+      WDSC = (0.D0,0.D0)
+C
+C  1.FORM WORK ARRAYS:
+      DO 10 I = 1,M
+          ZS0(I) = Z0(I)
+   10 CONTINUE
+      DO 20 I = 1,N
+          ZS1(I) = Z1(I)
+   20 CONTINUE
+C
+C  2.GENERATE THE INITIAL VALUE FOR SOLVING ODE:
+   30 CALL NEARZ(M,N,ZS0,ZS1,ALFA0,ZZ,KNZ,INZ)
+      IF (INZ.EQ.2) GO TO 80
+      IF (INZ.EQ.0) THEN
+          IF (KNZ.GE.2) THEN
+              WI = (W0(KNZ)+W0(KNZ-1))/2.D0
+
+          ELSE
+              WI = (W0(KNZ)+W0(M))/2.D0
+          END IF
+
+      ELSE
+          IF (KNZ.GE.2) THEN
+              WI = (W1(KNZ)+W1(KNZ-1))/2.D0
+
+          ELSE
+              WI = (W0(KNZ)+W1(N))/2.D0
+          END IF
+
+          WI = U*WI/ABS(WI)
+      END IF
+
+      ZS = ZDSC(WI,0,2,M,N,U,C,W0,W1,Z0,Z1,ALFA0,ALFA1,PHI0,PHI1,NPTQ,
+     +     QWORK,1)
+C
+C  3.SOLVE ODE INITIAL VALUE PROBLEM (ALONG LINE SEGMENT FROM
+C    ZS TO ZZ) BY EULER'S SCHEME TO GENERATE THE INITIAL GUESS:
+      DO 40 K = 1,20
+          WI = WI + (ZZ-ZS)/ (20.D0*C*WPROD(WI,M,N,U,W0,W1,ALFA0,ALFA1))
+   40 CONTINUE
+      IF (ABS(WI).GT.1.D0) WI = WI/ (ABS(WI)+ABS(1.D0-ABS(WI)))
+      IF (ABS(WI).LT.U) WI = U*WI* (ABS(WI)+ABS(U-ABS(WI)))/ABS(WI)
+C
+C  4.REFINE THE SOLUTION BY NEWTON'S ITERATION:
+      DO 50 IT = 1,15
+          WFN = ZZ - ZDSC(WI,0,2,M,N,U,C,W0,W1,Z0,Z1,ALFA0,ALFA1,PHI0,
+     +          PHI1,NPTQ,QWORK,IOPT)
+          WI = WI + WFN/ (C*WPROD(WI,M,N,U,W0,W1,ALFA0,ALFA1))
+          IF (ABS(WI).GT.1.D0) WI = WI/ (ABS(WI)+ABS(1.D0-ABS(WI)))
+          IF (ABS(WI).LT.U) WI = U*WI* (ABS(WI)+ABS(U-ABS(WI)))/ABS(WI)
+          IF (ABS(WFN).LT.EPS) GO TO 60
+   50 CONTINUE
+C
+C  THE ITERATION FAILED TO MEET THE TOLERANCE IN 15 ITERATIONS.
+C  TRY A DIFFERENT VERTEX AS A REFERENCE POINT:
+      ZZ1 = (1.D0,1.D0) + ZZ
+      GO TO 70
+
+   60 WDSC = WI
+C
+C  5.VERIFICATION:
+      ZZ1 = ZDSC(WI,0,2,M,N,U,C,W0,W1,Z0,Z1,ALFA0,ALFA1,PHI0,PHI1,NPTQ,
+     +      QWORK,1)
+   70 IF (ABS(WI).GE.U .AND. ABS(WI).LE.1.D0 .AND.
+     +    ABS(ZZ-ZZ1).LE.1.D-3) GO TO 90
+      IF (INZ.EQ.0) THEN
+          ZS0(KNZ) = ZZ
+
+      ELSE
+          ZS1(KNZ) = ZZ
+      END IF
+
+      GO TO 30
+
+   80 WRITE (6,FMT=9000) ZZ
+   90 RETURN
+
+ 9000 FORMAT (/,'***THE INVERSE EVALUATION FAILED',/,3X,'AT POINT Z=(',
+     +       F10.6,',',F10.6,')','.',/,3X,
+     +       'THE DESIGNED INVERSION PROCEDURE EXPERIENCED',/,8X,
+     +       'SOME ESSENTIAL DIFFICULTIES.')
+      END
+C    --------------------------------------
+      SUBROUTINE ANGLES(MN,Z01,ALFA01,I01)
+C    --------------------------------------
+C   COMPUTES THE INTERIOR ANGLES OF A DOUBLY
+C   CONNECTED AND  BOUNDED POLYGONAL REGION.
+C   I01:=0(OUTER POLYGON):=1(INNER POLYGON)
+C   MN:     THE NUMBER OF VERTICES
+C   Z01:    ARRAY CONTAINING VERTICES
+C   ALFA01: ARRAY CONTAINING INTERIOR TURNING ANGLES ON RETURN
+C
+C
+C     .. Scalar Arguments ..
+      INTEGER I01,MN
+C     ..
+C     .. Array Arguments ..
+      DOUBLE COMPLEX Z01(MN)
+      DOUBLE PRECISION ALFA01(MN)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION PI
+      INTEGER K,KL,KR
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC ACOS,DIMAG,LOG,MOD
+C     ..
+      PI = ACOS(-1.D0)
+      DO 10 K = 1,MN
+          KL = MOD(K+MN-2,MN) + 1
+          KR = MOD(K,MN) + 1
+          ALFA01(K) = DIMAG(LOG((Z01(KL)-Z01(K))/ (Z01(KR)-Z01(K))))/PI
+          IF (ALFA01(K).LE.0.D0) ALFA01(K) = ALFA01(K) + 2.D0
+   10 CONTINUE
+      IF (I01.EQ.1) THEN
+          DO 20 K = 1,MN
+              IF (ALFA01(K).NE.2.D0) ALFA01(K) = 2.D0 - ALFA01(K)
+   20     CONTINUE
+      END IF
+
+      RETURN
+
+      END
+      DOUBLE PRECISION
+C    ----------------------------
+     +  FUNCTION ARGUM(U1,W01K)
+C    ----------------------------
+C   COMPUTES THE ARGUMENT OF VECTOR W01K (I.E.,A COMPLEX NUMBER)
+C   WHOSE LENGTH IS U1.
+C   NOTE: BE SURE THAT THE SPECIFIED VALUE FOR
+C         U1 MUST BE DOUBLE PRECISION.
+C
+C
+C     .. Scalar Arguments ..
+      DOUBLE COMPLEX W01K
+      DOUBLE PRECISION U1
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION PI,REW
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC ACOS,DIMAG
+C     ..
+      PI = ACOS(-1.D0)
+      REW = DIMAG((0.D0,1.D0)*W01K)
+      IF (DIMAG(W01K).GE.0.D0) THEN
+          ARGUM = ACOS(REW/U1)
+
+      ELSE
+          ARGUM = ACOS(-REW/U1) + PI
+      END IF
+
+      RETURN
+
+      END
+C   --------------------------------------------------
+      SUBROUTINE NEARW(M,N,W0,W1,ALFA0,W,KNEAR,INEAR)
+C   --------------------------------------------------
+C    GIVEN PT W,THIS ROUTINE DETERMINES THE NEAREST PREVERTEX TO
+C    THE PT W.ON RETURN INTEGER'INEAR'INDICATES THAT THE NEAREST
+C    PT IS FOUND EITHER IN W0(INEAR=0) OR IN W1(INEAR=1).  KNEAR
+C    CONTAINS THE CORRESPONDING INDEX IN W0 OR 1N W1.
+C    NOTE: THE PREVERTICES CORRESPONDING TO INFINITE VERTICES
+C          WILL BE SKIPPED (OUTER CIRCLE ONLY).
+C    SEE ROUTINE DSCSOLV FOR THE REST OF THE CALLING SEQUENCE.
+C
+*
+C     .. Scalar Arguments ..
+      DOUBLE COMPLEX W
+      INTEGER INEAR,KNEAR,M,N
+C     ..
+C     .. Array Arguments ..
+      DOUBLE COMPLEX W0(M),W1(N)
+      DOUBLE PRECISION ALFA0(M)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION D,DIST
+      INTEGER I
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC ABS
+C     ..
+      DIST = 2.D0
+      DO 10 I = 1,M
+          D = ABS(W-W0(I))
+          IF (D.LE.1.D-11 .OR. D.GE.DIST .OR.
+     +        ALFA0(I).LE.0.D0) GO TO 10
+          KNEAR = I
+          DIST = D
+   10 CONTINUE
+      INEAR = 0
+      DO 20 I = 1,N
+          D = ABS(W-W1(I))
+          IF (D.LE.1.D-6 .OR. D.GE.DIST) GO TO 20
+          DIST = D
+          KNEAR = I
+          INEAR = 1
+   20 CONTINUE
+      RETURN
+
+      END
+C   --------------------------------------------------
+      SUBROUTINE NEARZ(M,N,Z0,Z1,ALFA0,Z,KNZ,INZ)
+C   --------------------------------------------------
+C    GIVEN PT Z, THIS ROUTINE DETERMINES THE NEAREST VERTEX TO
+C    THE PT Z.ON RETURN INTEGER'INZ'INDICATES THAT THE NEAREST
+C    PT IS FOUND  EITHER IN Z0 (INZ=0 ) OR IN Z1 ( INZ=1). KNZ
+C    CONTAINS THE CORRESPONDING INDEX IN Z0 OR 1N Z1.
+C    (IF ON RETURN INZ=2, THAT MEANS NO APPROPRIATE VERTEX IS
+C    FOUND, WHICH IS A DEVICE USED FOR INVERSE MAPPING ROUTINE.
+C    NOTE: THE VERTICES CORRESPONDING TO INFINITE VERTICES
+C          WILL BE SKIPPED (OUTER POLYGON ONLY).
+C    SEE ROUTINE DSCSOLV FOR THE REST OF CALLING SEQUENCE.
+C
+C
+C     .. Scalar Arguments ..
+      DOUBLE COMPLEX Z
+      INTEGER INZ,KNZ,M,N
+C     ..
+C     .. Array Arguments ..
+      DOUBLE COMPLEX Z0(M),Z1(N)
+      DOUBLE PRECISION ALFA0(M)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION D,DIST
+      INTEGER I
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC ABS
+C     ..
+      INZ = 2
+      DIST = 99.D0
+      DO 10 I = 1,M
+          D = ABS(Z-Z0(I))
+          IF (D.LE.1.D-11 .OR. D.GE.DIST .OR.
+     +        ALFA0(I).LE.0.D0) GO TO 10
+          KNZ = I
+          DIST = D
+          INZ = 0
+   10 CONTINUE
+      DO 20 I = 1,N
+          D = ABS(Z-Z1(I))
+          IF (D.LE.1.D-11 .OR. D.GE.DIST) GO TO 20
+          DIST = D
+          KNZ = I
+          INZ = 1
+   20 CONTINUE
+      RETURN
+
+      END
+      DOUBLE PRECISION
+C   -----------------------------------
+     +  FUNCTION DIST(M,N,W0,W1,W,KWA,IC)
+C   -----------------------------------
+C    DETERMINES THE DISTANCE FROM W TO THE NEAREST SINGULARITY
+C    OTHER THAN W ITSELF.( W COULD BE ONE OF THE PREVERTICES.)
+C    KWA IS THE INDEX OF W IN W0 (IF IC=0) OR W1 (IF IC=1), OR
+C    WK COULD BE 0 (IF ONE CHOOSES) WHEN W IS NOT A PREVERTEX.
+C
+C
+C     .. Scalar Arguments ..
+      DOUBLE COMPLEX W
+      INTEGER IC,KWA,M,N
+C     ..
+C     .. Array Arguments ..
+      DOUBLE COMPLEX W0(M),W1(N)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION D
+      INTEGER I
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC ABS,MIN
+C     ..
+      DIST = 2.D0
+      DO 10 I = 1,M
+          D = ABS(W-W0(I))
+          IF (I.EQ.KWA .AND. IC.EQ.0) GO TO 10
+          DIST = MIN(DIST,D)
+   10 CONTINUE
+      DO 20 I = 1,N
+          D = ABS(W-W1(I))
+          IF (I.EQ.KWA .AND. IC.EQ.1) GO TO 20
+          DIST = MIN(DIST,D)
+   20 CONTINUE
+      RETURN
+
+      END
+C  ---------------------------------------------
+      SUBROUTINE CHECK(ALFA0,ALFA1,M,N,ISHAPE)
+C  ---------------------------------------------
+C   CHECKS IF THE INPUT DATA AND PARAMETERS ARE CORRECT.
+C   NOTE1:    ANGLE-CHECKING MAKES SENSE ONLY IF ANGLES
+C             ARE USER-PROVIDED.
+C   NOTE2:    USERS ARE RESPONSIBLE FOR CHECKING THE FOLLOWING:
+C   1. EACH COMPONENT OF THE OUTER POLYGON CONTAINS AT LEAST ONE
+C      FINITE VERTEX.
+C   2. Z1(N) IS THE CLOSEST (OR ALMOST CLOSEST)
+C      INNER VERTEX TO Z1(M).
+C   3. COUNTERCLOCKWISE ORIENTATION OF THE VERTICES.
+C
+C
+C     .. Scalar Arguments ..
+      INTEGER ISHAPE,M,N
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION ALFA0(M),ALFA1(N)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION EPS,SUM
+      INTEGER K,MK
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC ABS
+C     ..
+      IF (M.GE.3 .AND. M.LE.30 .AND. N.LE.30 .AND.
+     +    M+N.LE.40) GO TO 10
+      WRITE (6,FMT=*) '***WARNING: M MUST BE NO LESS THEN 3'
+      WRITE (6,FMT=*) '*********** N , M MUST BE NO GREATER THAN 30'
+      WRITE (6,FMT=*) '*********** M+N MUST BE NO GREATER THAN 40'
+      STOP
+
+   10 EPS = 0.00001D0
+      SUM = 0.D0
+      MK = 0
+      DO 20 K = 1,M
+          IF (ALFA0(K).GT.0.D0) MK = MK + 1
+          SUM = SUM + ALFA0(K)
+   20 CONTINUE
+      IF ((MK.LT.M.AND.ISHAPE.EQ.1) .OR.
+     +    (MK.EQ.M.AND.ISHAPE.EQ.0)) GO TO 30
+      WRITE (6,FMT=*)
+     +'***WARNING: FOR FINITE REGIONS ISHAPE MUST BE 0
+     +      AND FOR INFINITE REGIONS ISHAPE MUST BE 1'
+      STOP
+
+   30 IF (ABS(SUM- (M-2)).LT.EPS) GO TO 40
+      WRITE (6,FMT=*)
+     +  '***WARNING: SOME ANGLES FOR OUTER POLYGON ARE WRONG'
+      STOP
+
+   40 SUM = 0.D0
+      DO 50 K = 1,N
+          SUM = SUM + ALFA1(K)
+   50 CONTINUE
+      IF (ABS(SUM- (N+2)).LT.EPS) GO TO 60
+      WRITE (6,FMT=*)
+     +  '***WARNING: SOME ANGLES FOR INNER POLYGON ARE WRONG'
+      STOP
+
+   60 IF (ALFA0(1).GT.0.D0) GO TO 70
+      WRITE (6,FMT=*) '***WARNING: Z0(1) MUST BE FINITE'
+      STOP
+
+   70 IF (ALFA0(M).GT.0.D0) GO TO 80
+      WRITE (6,FMT=*) '***WARNING: Z0(M) MUST BE FINITE'
+      STOP
+
+   80 IF (ALFA0(M-2).GT.0.D0) GO TO 90
+      WRITE (6,FMT=*) '***WARNING: Z0(M-2) MUST BE FINITE'
+      STOP
+
+   90 IF (ALFA0(M-1).LT.2.D0-EPS) GO TO 100
+      WRITE (6,FMT=*)
+     +  '***WARNING: Z0(M-1) MUST NOT BE A RE-ENTRANT CORNER'
+      STOP
+
+  100 IF (ALFA0(M-1).LT.1.D0-EPS .OR.
+     +    ALFA0(M-1).GT.1.D0+EPS) GO TO 110
+      WRITE (6,FMT=*)
+     +  '***WARNING: Z0(M-1) MUST NOT BE AN ARTIFITIAL CORNER'
+      STOP
+
+  110 WRITE (6,FMT=*)
+     +  '*** INPUTS ARE CHECKED WITH NO ERROR BEING FOUND ***'
+      RETURN
+
+      END
+      DOUBLE PRECISION
+C   -------------------------
+     +  FUNCTION FMAX(MN,FVAL)
+C   -------------------------
+C    DETERMINES THE MAXIMUM-NORM OF THE VECTOR FVAL.
+C
+C
+C     .. Scalar Arguments ..
+      INTEGER MN
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION FVAL(MN)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION FV
+      INTEGER K
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC ABS
+C     ..
+      FMAX = 0.D0
+      DO 10 K = 1,MN
+          FV = ABS(FVAL(K))
+          IF (FV.GT.FMAX) FMAX = FV
+   10 CONTINUE
+      RETURN
+
+      END
+C   ---------------------------------------------------------
+      SUBROUTINE DSCPRINT(M,N,C,U,W0,W1,PHI0,PHI1,TOL,NPTQ)
+C   ---------------------------------------------------------
+C    PRINTS THE COMPUTED SC-PARAMETERS AND SOME
+C    OTHER CONTROLING PARAMETERS FOR REFERENCE:
+C
+C
+C  OPEN FILE DSCPACK FOR OUTPUT:
+C     .. Scalar Arguments ..
+      DOUBLE COMPLEX C
+      DOUBLE PRECISION TOL,U
+      INTEGER M,N,NPTQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE COMPLEX W0(M),W1(N)
+      DOUBLE PRECISION PHI0(M),PHI1(N)
+C     ..
+C     .. Local Scalars ..
+      INTEGER K
+C     ..
+      OPEN (UNIT=11,FILE='DSCPACK.OUTPUT',FORM='FORMATTED')
+C
+      WRITE (6,FMT=9000) M,N,NPTQ,TOL
+      WRITE (6,FMT=9010) U,C
+      WRITE (11,FMT=9000) M,N,NPTQ,TOL
+      WRITE (11,FMT=9010) U,C
+      DO 10 K = 1,M
+          WRITE (6,FMT=9020) K,W0(K),PHI0(K)
+          WRITE (11,FMT=9020) K,W0(K),PHI0(K)
+   10 CONTINUE
+      WRITE (6,FMT=9030)
+      WRITE (11,FMT=9030)
+      DO 20 K = 1,N
+          WRITE (6,FMT=9040) K,W1(K),PHI1(K)
+          WRITE (11,FMT=9040) K,W1(K),PHI1(K)
+   20 CONTINUE
+C     ENDFILE(UNIT=11)
+C     CLOSE(UNIT=11)
+      RETURN
+C
+ 9000 FORMAT (/,1X,'PARAMETERS DEFINING MAP:',3X,'(M=',I2,')',3X,'(N=',
+     +       I2,')',3X,'(NPTQ=',I2,')',3X,'(TOL=',E8.1,')')
+ 9010 FORMAT (1X,'U=',F16.13,5X,/,1X,'C=(',F16.13,',',F16.13,')',/,1X,
+     +       'K',20X,'W0(K)',20X,'PHI0(K)',/,'---',19X,'-----',20X,
+     +       '-------')
+ 9020 FORMAT (I2,4X,'(',F16.13,',',F16.13,')',3X,F15.12)
+ 9030 FORMAT (1X,'K',20X,'W1(K)',20X,'PHI1(K)',/,'---',19X,'-----',20X,
+     +       '-------')
+ 9040 FORMAT (I2,4X,'(',F16.13,',',F16.13,')',3X,F16.13)
+      END
+C   ----------------------------------------------------------------
+      SUBROUTINE DSCTEST(M,N,U,C,W0,W1,Z0,Z1,ALFA0,ALFA1,NPTQ,QWORK)
+C   ----------------------------------------------------------------
+C   TESTS THE COMPUTED PARAMETERS FOR ACCURACY BY COMPUTING VERTICES
+C   Z0(K) NUMERICALLY AND COMPARING WITH THE EXACT ONES. ON OUTPUT,
+C   THE MAXIMUM AND MINIMUM ERRORS ACHIEVED WILL BE GIVEN TOGETHER
+C   WITH THE CORRESPONDING INDICES KMAX AND KMIN RESPECTIVELY. SEE
+C   ROUTINE DSCSOLV FOR THE CALLING SEQUENCE.
+C
+C
+C     .. Scalar Arguments ..
+      DOUBLE COMPLEX C
+      DOUBLE PRECISION U
+      INTEGER M,N,NPTQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE COMPLEX W0(M),W1(N),Z0(M),Z1(N)
+      DOUBLE PRECISION ALFA0(M),ALFA1(N),QWORK(NPTQ* (2* (M+N)+3))
+C     ..
+C     .. Scalars in Common ..
+      DOUBLE PRECISION DLAM
+      INTEGER IU
+C     ..
+C     .. Arrays in Common ..
+      DOUBLE PRECISION UARY(8),VARY(3)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE COMPLEX WA,ZC,ZTEST
+      DOUBLE PRECISION D,D1,DIST,ERRMAX,ERRMIN
+      INTEGER I,K,KMAX,KMIN,KWA
+C     ..
+C     .. External Functions ..
+      DOUBLE COMPLEX WQUAD
+      EXTERNAL WQUAD
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC ABS
+C     ..
+C     .. Common blocks ..
+      COMMON /PARAM4/UARY,VARY,DLAM,IU
+C     ..
+      ERRMAX = 0.D0
+      ERRMIN = 99.D0
+      DO 20 K = 1,M - 1
+          IF (ALFA0(K).LE.0.D0) GO TO 20
+          DIST = 2.D0
+          DO 10 I = 1,N
+              D = ABS(W0(K)-W1(I))
+              IF (D.GE.DIST) GO TO 10
+              DIST = D
+              WA = W1(I)
+              KWA = I
+              ZC = Z1(I)
+   10     CONTINUE
+          ZTEST = ZC + C*WQUAD(WA,0.D0,KWA,1,W0(K),0.D0,K,0,0.D0,M,N,U,
+     +            W0,W1,ALFA0,ALFA1,NPTQ,QWORK,0,1)
+          D1 = ABS(Z0(K)-ZTEST)
+          IF (D1.GT.ERRMAX) THEN
+              ERRMAX = D1
+              KMAX = K
+          END IF
+
+          IF (D1.LT.ERRMIN) THEN
+              ERRMIN = D1
+              KMIN = K
+          END IF
+
+   20 CONTINUE
+      WRITE (6,FMT=9000) ERRMAX,KMAX,ERRMIN,KMIN
+      WRITE (11,FMT=9000) ERRMAX,KMAX,ERRMIN,KMIN
+      RETURN
+
+ 9000 FORMAT (/,1X,'ACCURACY TEST: MAXIMUM ERROR=',E10.3,2X,'ACHIEVED',
+     +       1X,'AT',1X,'KMAX=',I2,/,16X,'MINIMUM ERROR=',E10.3,2X,
+     +       'ACHIEVED',1X,'AT',1X,'KMAX=',I2,/)
+      END
+C---------------------------------------------------------------------
+C---------------------------------------------------------------------
+      SUBROUTINE HYBRD(FCN,N,X,FVEC,XTOL,MAXFEV,ML,MU,EPSFCN,DIAG,MODE,
+     +                 FACTOR,NPRINT,INFO,NFEV,FJAC,LDFJAC,R,LR,QTF,WA1,
+     +                 WA2,WA3,WA4)
+C     ***********
+C
+C     SUBROUTINE HYBRD
+C
+C     THE PURPOSE OF HYBRD IS TO FIND A ZERO OF A SYSTEM OF
+C     N NONLINEAR FUNCTIONS IN N VARIABLES BY A MODIFICATION
+C     OF THE POWELL HYBRID METHOD. THE USER MUST PROVIDE A
+C     SUBROUTINE WHICH CALCULATES THE FUNCTIONS. THE JACOBIAN IS
+C     THEN CALCULATED BY A FORWARD-DIFFERENCE APPROXIMATION.
+C
+C     THE SUBROUTINE STATEMENT IS
+C
+C       SUBROUTINE HYBRD(FCN,N,X,FVEC,XTOL,MAXFEV,ML,MU,EPSFCN,
+C                        DIAG,MODE,FACTOR,NPRINT,INFO,NFEV,FJAC,
+C                        LDFJAC,R,LR,QTF,WA1,WA2,WA3,WA4)
+C
+C     WHERE
+C
+C       FCN IS THE NAME OF THE USER-SUPPLIED SUBROUTINE WHICH
+C         CALCULATES THE FUNCTIONS. FCN MUST BE DECLARED
+C         IN AN EXTERNAL STATEMENT IN THE USER CALLING
+C         PROGRAM, AND SHOULD BE WRITTEN AS FOLLOWS.
+C
+C         SUBROUTINE FCN(N,X,FVEC,IFLAG)
+C         INTEGER N,IFLAG
+C         DOUBLE PRECISION X(N),FVEC(N)
+C         ----------
+C         CALCULATE THE FUNCTIONS AT X AND
+C         RETURN THIS VECTOR IN FVEC.
+C         ---------
+C         RETURN
+C         END
+C
+C         THE VALUE OF IFLAG SHOULD NOT BE CHANGED BY FCN UNLESS
+C         THE USER WANTS TO TERMINATE EXECUTION OF HYBRD.
+C         IN THIS CASE SET IFLAG TO A NEGATIVE INTEGER.
+C
+C       N IS A POSITIVE INTEGER INPUT VARIABLE SET TO THE NUMBER
+C         OF FUNCTIONS AND VARIABLES.
+C
+C       X IS AN ARRAY OF LENGTH N. ON INPUT X MUST CONTAIN
+C         AN INITIAL ESTIMATE OF THE SOLUTION VECTOR. ON OUTPUT X
+C         CONTAINS THE FINAL ESTIMATE OF THE SOLUTION VECTOR.
+C
+C       FVEC IS AN OUTPUT ARRAY OF LENGTH N WHICH CONTAINS
+C         THE FUNCTIONS EVALUATED AT THE OUTPUT X.
+C
+C       XTOL IS A NONNEGATIVE INPUT VARIABLE. TERMINATION
+C         OCCURS WHEN THE RELATIVE ERROR BETWEEN TWO CONSECUTIVE
+C         ITERATES IS AT MOST XTOL.
+C
+C       MAXFEV IS A POSITIVE INTEGER INPUT VARIABLE. TERMINATION
+C         OCCURS WHEN THE NUMBER OF CALLS TO FCN IS AT LEAST MAXFEV
+C         BY THE END OF AN ITERATION.
+C
+C       ML IS A NONNEGATIVE INTEGER INPUT VARIABLE WHICH SPECIFIES
+C         THE NUMBER OF SUBDIAGONALS WITHIN THE BAND OF THE
+C         JACOBIAN MATRIX. IF THE JACOBIAN IS NOT BANDED, SET
+C         ML TO AT LEAST N - 1.
+C
+C       MU IS A NONNEGATIVE INTEGER INPUT VARIABLE WHICH SPECIFIES
+C         THE NUMBER OF SUPERDIAGONALS WITHIN THE BAND OF THE
+C         JACOBIAN MATRIX. IF THE JACOBIAN IS NOT BANDED, SET
+C         MU TO AT LEAST N - 1.
+C
+C       EPSFCN IS AN INPUT VARIABLE USED IN DETERMINING A SUITABLE
+C         STEP LENGTH FOR THE FORWARD-DIFFERENCE APPROXIMATION. THIS
+C         APPROXIMATION ASSUMES THAT THE RELATIVE ERRORS IN THE
+C         FUNCTIONS ARE OF THE ORDER OF EPSFCN. IF EPSFCN IS LESS
+C         THAN THE MACHINE PRECISION, IT IS ASSUMED THAT THE RELATIVE
+C         ERRORS IN THE FUNCTIONS ARE OF THE ORDER OF THE MACHINE
+C         PRECISION.
+C
+C       DIAG IS AN ARRAY OF LENGTH N. IF MODE = 1 (SEE
+C         BELOW), DIAG IS INTERNALLY SET. IF MODE = 2, DIAG
+C         MUST CONTAIN POSITIVE ENTRIES THAT SERVE AS
+C         MULTIPLICATIVE SCALE FACTORS FOR THE VARIABLES.
+C
+C       MODE IS AN INTEGER INPUT VARIABLE. IF MODE = 1, THE
+C         VARIABLES WILL BE SCALED INTERNALLY. IF MODE = 2,
+C         THE SCALING IS SPECIFIED BY THE INPUT DIAG. OTHER
+C         VALUES OF MODE ARE EQUIVALENT TO MODE = 1.
+C
+C       FACTOR IS A POSITIVE INPUT VARIABLE USED IN DETERMINING THE
+C         INITIAL STEP BOUND. THIS BOUND IS SET TO THE PRODUCT OF
+C         FACTOR AND THE EUCLIDEAN NORM OF DIAG*X IF NONZERO, OR ELSE
+C         TO FACTOR ITSELF. IN MOST CASES FACTOR SHOULD LIE IN THE
+C         INTERVAL (.1,100.). 100. IS A GENERALLY RECOMMENDED VALUE.
+C
+C       NPRINT IS AN INTEGER INPUT VARIABLE THAT ENABLES CONTROLLED
+C         PRINTING OF ITERATES IF IT IS POSITIVE. IN THIS CASE,
+C         FCN IS CALLED WITH IFLAG = 0 AT THE BEGINNING OF THE FIRST
+C         ITERATION AND EVERY NPRINT ITERATIONS THEREAFTER AND
+C         IMMEDIATELY PRIOR TO RETURN, WITH X AND FVEC AVAILABLE
+C         FOR PRINTING. IF NPRINT IS NOT POSITIVE, NO SPECIAL CALLS
+C         OF FCN WITH IFLAG = 0 ARE MADE.
+C
+C       INFO IS AN INTEGER OUTPUT VARIABLE. IF THE USER HAS
+C         TERMINATED EXECUTION, INFO IS SET TO THE (NEGATIVE)
+C         VALUE OF IFLAG. SEE DESCRIPTION OF FCN. OTHERWISE,
+C         INFO IS SET AS FOLLOWS.
+C
+C         INFO = 0   IMPROPER INPUT PARAMETERS.
+C
+C         INFO = 1   RELATIVE ERROR BETWEEN TWO CONSECUTIVE ITERATES
+C                    IS AT MOST XTOL.
+C
+C         INFO = 2   NUMBER OF CALLS TO FCN HAS REACHED OR EXCEEDED
+C                    MAXFEV.
+C
+C         INFO = 3   XTOL IS TOO SMALL. NO FURTHER IMPROVEMENT IN
+C                    THE APPROXIMATE SOLUTION X IS POSSIBLE.
+C
+C         INFO = 4   ITERATION IS NOT MAKING GOOD PROGRESS, AS
+C                    MEASURED BY THE IMPROVEMENT FROM THE LAST
+C                    FIVE JACOBIAN EVALUATIONS.
+C
+C         INFO = 5   ITERATION IS NOT MAKING GOOD PROGRESS, AS
+C                    MEASURED BY THE IMPROVEMENT FROM THE LAST
+C                    TEN ITERATIONS.
+C
+C       NFEV IS AN INTEGER OUTPUT VARIABLE SET TO THE NUMBER OF
+C         CALLS TO FCN.
+C
+C       FJAC IS AN OUTPUT N BY N ARRAY WHICH CONTAINS THE
+C         ORTHOGONAL MATRIX Q PRODUCED BY THE QR FACTORIZATION
+C         OF THE FINAL APPROXIMATE JACOBIAN.
+C
+C       LDFJAC IS A POSITIVE INTEGER INPUT VARIABLE NOT LESS THAN N
+C         WHICH SPECIFIES THE LEADING DIMENSION OF THE ARRAY FJAC.
+C
+C       R IS AN OUTPUT ARRAY OF LENGTH LR WHICH CONTAINS THE
+C         UPPER TRIANGULAR MATRIX PRODUCED BY THE QR FACTORIZATION
+C         OF THE FINAL APPROXIMATE JACOBIAN, STORED ROWWISE.
+C
+C       LR IS A POSITIVE INTEGER INPUT VARIABLE NOT LESS THAN
+C         (N*(N+1))/2.
+C
+C       QTF IS AN OUTPUT ARRAY OF LENGTH N WHICH CONTAINS
+C         THE VECTOR (Q TRANSPOSE)*FVEC.
+C
+C       WA1, WA2, WA3, AND WA4 ARE WORK ARRAYS OF LENGTH N.
+C
+C     SUBPROGRAMS CALLED
+C
+C       USER-SUPPLIED ...... FCN
+C
+C       MINPACK-SUPPLIED ... DOGLEG,DPMPAR,ENORM,FDJAC1,
+C                            QFORM,QRFAC,R1MPYQ,R1UPDT
+C
+C       FORTRAN-SUPPLIED ... DABS,DMAX1,DMIN1,MIN0,MOD
+C
+C     ARGONNE NATIONAL LABORATORY. MINPACK PROJECT. MARCH 1980.
+C     BURTON S. GARBOW, KENNETH E. HILLSTROM, JORGE J. MORE
+C
+C     **********
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION EPSFCN,FACTOR,XTOL
+      INTEGER INFO,LDFJAC,LR,MAXFEV,ML,MODE,MU,N,NFEV,NPRINT
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION DIAG(N),FJAC(LDFJAC,N),FVEC(N),QTF(N),R(LR),
+     +                 WA1(N),WA2(N),WA3(N),WA4(N),X(N)
+C     ..
+C     .. Subroutine Arguments ..
+      EXTERNAL FCN
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION ACTRED,DELTA,EPSMCH,FNORM,FNORM1,ONE,P0001,P001,
+     +                 P1,P5,PNORM,PRERED,RATIO,SUM,TEMP,XNORM,ZERO
+      INTEGER I,IFLAG,ITER,J,JM1,L,MSUM,NCFAIL,NCSUC,NSLOW1,NSLOW2
+      LOGICAL JEVAL,SING
+C     ..
+C     .. Local Arrays ..
+      INTEGER IWA(1)
+C     ..
+C     .. External Functions ..
+      DOUBLE PRECISION DPMPAR,ENORM
+      EXTERNAL DPMPAR,ENORM
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL DOGLEG,FDJAC1,QFORM,QRFAC,R1MPYQ,R1UPDT
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC DABS,DMAX1,DMIN1,MIN0,MOD
+C     ..
+C     .. Data statements ..
+C
+      DATA ONE/1.0D0/
+      DATA P1,P5,P001,P0001,ZERO/1.0D-1,5.0D-1,1.0D-3,1.0D-4,0.0D0/
+C     ..
+C
+C     EPSMCH IS THE MACHINE PRECISION.
+C
+      EPSMCH = DPMPAR(1)
+C
+      INFO = 0
+      IFLAG = 0
+      NFEV = 0
+C
+C     CHECK THE INPUT PARAMETERS FOR ERRORS.
+C
+      IF (N.LE.0 .OR. XTOL.LT.ZERO .OR. MAXFEV.LE.0 .OR. ML.LT.0 .OR.
+     +    MU.LT.0 .OR. FACTOR.LE.ZERO .OR. LDFJAC.LT.N .OR.
+     +    LR.LT. (N* (N+1))/2) GO TO 300
+      IF (MODE.NE.2) GO TO 20
+      DO 10 J = 1,N
+          IF (DIAG(J).LE.ZERO) GO TO 300
+   10 CONTINUE
+   20 CONTINUE
+C
+C     EVALUATE THE FUNCTION AT THE STARTING POINT
+C     AND CALCULATE ITS NORM.
+C
+      IFLAG = 1
+      CALL FCN(N,X,FVEC,IFLAG)
+      NFEV = 1
+      IF (IFLAG.LT.0) GO TO 300
+      FNORM = ENORM(N,FVEC)
+C
+C     DETERMINE THE NUMBER OF CALLS TO FCN NEEDED TO COMPUTE
+C     THE JACOBIAN MATRIX.
+C
+      MSUM = MIN0(ML+MU+1,N)
+C
+C     INITIALIZE ITERATION COUNTER AND MONITORS.
+C
+      ITER = 1
+      NCSUC = 0
+      NCFAIL = 0
+      NSLOW1 = 0
+      NSLOW2 = 0
+C
+C     BEGINNING OF THE OUTER LOOP.
+C
+   30 CONTINUE
+      JEVAL = .TRUE.
+C
+C        CALCULATE THE JACOBIAN MATRIX.
+C
+      IFLAG = 2
+      CALL FDJAC1(FCN,N,X,FVEC,FJAC,LDFJAC,IFLAG,ML,MU,EPSFCN,WA1,WA2)
+      NFEV = NFEV + MSUM
+      IF (IFLAG.LT.0) GO TO 300
+C
+C        COMPUTE THE QR FACTORIZATION OF THE JACOBIAN.
+C
+      CALL QRFAC(N,N,FJAC,LDFJAC,.FALSE.,IWA,1,WA1,WA2,WA3)
+C
+C        ON THE FIRST ITERATION AND IF MODE IS 1, SCALE ACCORDING
+C        TO THE NORMS OF THE COLUMNS OF THE INITIAL JACOBIAN.
+C
+      IF (ITER.NE.1) GO TO 70
+      IF (MODE.EQ.2) GO TO 50
+      DO 40 J = 1,N
+          DIAG(J) = WA2(J)
+          IF (WA2(J).EQ.ZERO) DIAG(J) = ONE
+   40 CONTINUE
+   50 CONTINUE
+C
+C        ON THE FIRST ITERATION, CALCULATE THE NORM OF THE SCALED X
+C        AND INITIALIZE THE STEP BOUND DELTA.
+C
+      DO 60 J = 1,N
+          WA3(J) = DIAG(J)*X(J)
+   60 CONTINUE
+      XNORM = ENORM(N,WA3)
+      DELTA = FACTOR*XNORM
+      IF (DELTA.EQ.ZERO) DELTA = FACTOR
+   70 CONTINUE
+C
+C        FORM (Q TRANSPOSE)*FVEC AND STORE IN QTF.
+C
+      DO 80 I = 1,N
+          QTF(I) = FVEC(I)
+   80 CONTINUE
+      DO 120 J = 1,N
+          IF (FJAC(J,J).EQ.ZERO) GO TO 110
+          SUM = ZERO
+          DO 90 I = J,N
+              SUM = SUM + FJAC(I,J)*QTF(I)
+   90     CONTINUE
+          TEMP = -SUM/FJAC(J,J)
+          DO 100 I = J,N
+              QTF(I) = QTF(I) + FJAC(I,J)*TEMP
+  100     CONTINUE
+  110     CONTINUE
+  120 CONTINUE
+C
+C        COPY THE TRIANGULAR FACTOR OF THE QR FACTORIZATION INTO R.
+C
+      SING = .FALSE.
+      DO 150 J = 1,N
+          L = J
+          JM1 = J - 1
+          IF (JM1.LT.1) GO TO 140
+          DO 130 I = 1,JM1
+              R(L) = FJAC(I,J)
+              L = L + N - I
+  130     CONTINUE
+  140     CONTINUE
+          R(L) = WA1(J)
+          IF (WA1(J).EQ.ZERO) SING = .TRUE.
+  150 CONTINUE
+C
+C        ACCUMULATE THE ORTHOGONAL FACTOR IN FJAC.
+C
+      CALL QFORM(N,N,FJAC,LDFJAC,WA1)
+C
+C        RESCALE IF NECESSARY.
+C
+      IF (MODE.EQ.2) GO TO 170
+      DO 160 J = 1,N
+          DIAG(J) = DMAX1(DIAG(J),WA2(J))
+  160 CONTINUE
+  170 CONTINUE
+C
+C        BEGINNING OF THE INNER LOOP.
+C
+  180 CONTINUE
+C
+C           IF REQUESTED, CALL FCN TO ENABLE PRINTING OF ITERATES.
+C
+      IF (NPRINT.LE.0) GO TO 190
+      IFLAG = 0
+      IF (MOD(ITER-1,NPRINT).EQ.0) CALL FCN(N,X,FVEC,IFLAG)
+      IF (IFLAG.LT.0) GO TO 300
+  190 CONTINUE
+C
+C           DETERMINE THE DIRECTION P.
+C
+      CALL DOGLEG(N,R,LR,DIAG,QTF,DELTA,WA1,WA2,WA3)
+C
+C           STORE THE DIRECTION P AND X + P. CALCULATE THE NORM OF P.
+C
+      DO 200 J = 1,N
+          WA1(J) = -WA1(J)
+          WA2(J) = X(J) + WA1(J)
+          WA3(J) = DIAG(J)*WA1(J)
+  200 CONTINUE
+      PNORM = ENORM(N,WA3)
+C
+C           ON THE FIRST ITERATION, ADJUST THE INITIAL STEP BOUND.
+C
+      IF (ITER.EQ.1) DELTA = DMIN1(DELTA,PNORM)
+C
+C           EVALUATE THE FUNCTION AT X + P AND CALCULATE ITS NORM.
+C
+      IFLAG = 1
+      CALL FCN(N,WA2,WA4,IFLAG)
+      NFEV = NFEV + 1
+      IF (IFLAG.LT.0) GO TO 300
+      FNORM1 = ENORM(N,WA4)
+C
+C           COMPUTE THE SCALED ACTUAL REDUCTION.
+C
+      ACTRED = -ONE
+      IF (FNORM1.LT.FNORM) ACTRED = ONE - (FNORM1/FNORM)**2
+C
+C           COMPUTE THE SCALED PREDICTED REDUCTION.
+C
+      L = 1
+      DO 220 I = 1,N
+          SUM = ZERO
+          DO 210 J = I,N
+              SUM = SUM + R(L)*WA1(J)
+              L = L + 1
+  210     CONTINUE
+          WA3(I) = QTF(I) + SUM
+  220 CONTINUE
+      TEMP = ENORM(N,WA3)
+      PRERED = ZERO
+      IF (TEMP.LT.FNORM) PRERED = ONE - (TEMP/FNORM)**2
+C
+C           COMPUTE THE RATIO OF THE ACTUAL TO THE PREDICTED
+C           REDUCTION.
+C
+      RATIO = ZERO
+      IF (PRERED.GT.ZERO) RATIO = ACTRED/PRERED
+C
+C           UPDATE THE STEP BOUND.
+C
+      IF (RATIO.GE.P1) GO TO 230
+      NCSUC = 0
+      NCFAIL = NCFAIL + 1
+      DELTA = P5*DELTA
+      GO TO 240
+
+  230 CONTINUE
+      NCFAIL = 0
+      NCSUC = NCSUC + 1
+      IF (RATIO.GE.P5 .OR. NCSUC.GT.1) DELTA = DMAX1(DELTA,PNORM/P5)
+      IF (DABS(RATIO-ONE).LE.P1) DELTA = PNORM/P5
+  240 CONTINUE
+C
+C           TEST FOR SUCCESSFUL ITERATION.
+C
+      IF (RATIO.LT.P0001) GO TO 260
+C
+C           SUCCESSFUL ITERATION. UPDATE X, FVEC, AND THEIR NORMS.
+C
+      DO 250 J = 1,N
+          X(J) = WA2(J)
+          WA2(J) = DIAG(J)*X(J)
+          FVEC(J) = WA4(J)
+  250 CONTINUE
+      XNORM = ENORM(N,WA2)
+      FNORM = FNORM1
+      ITER = ITER + 1
+  260 CONTINUE
+C
+C           DETERMINE THE PROGRESS OF THE ITERATION.
+C
+      NSLOW1 = NSLOW1 + 1
+      IF (ACTRED.GE.P001) NSLOW1 = 0
+      IF (JEVAL) NSLOW2 = NSLOW2 + 1
+      IF (ACTRED.GE.P1) NSLOW2 = 0
+C
+C           TEST FOR CONVERGENCE.
+C
+      IF (DELTA.LE.XTOL*XNORM .OR. FNORM.EQ.ZERO) INFO = 1
+      IF (INFO.NE.0) GO TO 300
+C
+C           TESTS FOR TERMINATION AND STRINGENT TOLERANCES.
+C
+      IF (NFEV.GE.MAXFEV) INFO = 2
+      IF (P1*DMAX1(P1*DELTA,PNORM).LE.EPSMCH*XNORM) INFO = 3
+      IF (NSLOW2.EQ.5) INFO = 4
+      IF (NSLOW1.EQ.10) INFO = 5
+      IF (INFO.NE.0) GO TO 300
+C
+C           CRITERION FOR RECALCULATING JACOBIAN APPROXIMATION
+C           BY FORWARD DIFFERENCES.
+C
+      IF (NCFAIL.EQ.2) GO TO 290
+C
+C           CALCULATE THE RANK ONE MODIFICATION TO THE JACOBIAN
+C           AND UPDATE QTF IF NECESSARY.
+C
+      DO 280 J = 1,N
+          SUM = ZERO
+          DO 270 I = 1,N
+              SUM = SUM + FJAC(I,J)*WA4(I)
+  270     CONTINUE
+          WA2(J) = (SUM-WA3(J))/PNORM
+          WA1(J) = DIAG(J)* ((DIAG(J)*WA1(J))/PNORM)
+          IF (RATIO.GE.P0001) QTF(J) = SUM
+  280 CONTINUE
+C
+C           COMPUTE THE QR FACTORIZATION OF THE UPDATED JACOBIAN.
+C
+      CALL R1UPDT(N,N,R,LR,WA1,WA2,WA3,SING)
+      CALL R1MPYQ(N,N,FJAC,LDFJAC,WA2,WA3)
+      CALL R1MPYQ(1,N,QTF,1,WA2,WA3)
+C
+C           END OF THE INNER LOOP.
+C
+      JEVAL = .FALSE.
+      GO TO 180
+
+  290 CONTINUE
+C
+C        END OF THE OUTER LOOP.
+C
+      GO TO 30
+
+  300 CONTINUE
+C
+C     TERMINATION, EITHER NORMAL OR USER IMPOSED.
+C
+      IF (IFLAG.LT.0) INFO = IFLAG
+      IFLAG = 0
+      IF (NPRINT.GT.0) CALL FCN(N,X,FVEC,IFLAG)
+      RETURN
+C
+C     LAST CARD OF SUBROUTINE HYBRD.
+C
+      END
+
+
+      SUBROUTINE DOGLEG(N,R,LR,DIAG,QTB,DELTA,X,WA1,WA2)
+C     **********
+C
+C     SUBROUTINE DOGLEG
+C
+C     GIVEN AN M BY N MATRIX A, AN N BY N NONSINGULAR DIAGONAL
+C     MATRIX D, AN M-VECTOR B, AND A POSITIVE NUMBER DELTA, THE
+C     PROBLEM IS TO DETERMINE THE CONVEX COMBINATION X OF THE
+C     GAUSS-NEWTON AND SCALED GRADIENT DIRECTIONS THAT MINIMIZES
+C     (A*X - B) IN THE LEAST SQUARES SENSE, SUBJECT TO THE
+C     RESTRICTION THAT THE EUCLIDEAN NORM OF D*X BE AT MOST DELTA.
+C
+C     THIS SUBROUTINE COMPLETES THE SOLUTION OF THE PROBLEM
+C     IF IT IS PROVIDED WITH THE NECESSARY INFORMATION FROM THE
+C     QR FACTORIZATION OF A. THAT IS, IF A = Q*R, WHERE Q HAS
+C     ORTHOGONAL COLUMNS AND R IS AN UPPER TRIANGULAR MATRIX,
+C     THEN DOGLEG EXPECTS THE FULL UPPER TRIANGLE OF R AND
+C     THE FIRST N COMPONENTS OF (Q TRANSPOSE)*B.
+C
+C     THE SUBROUTINE STATEMENT IS
+C
+C       SUBROUTINE DOGLEG(N,R,LR,DIAG,QTB,DELTA,X,WA1,WA2)
+C
+C     WHERE
+C
+C       N IS A POSITIVE INTEGER INPUT VARIABLE SET TO THE ORDER OF R.
+C
+C       R IS AN INPUT ARRAY OF LENGTH LR WHICH MUST CONTAIN THE UPPER
+C         TRIANGULAR MATRIX R STORED BY ROWS.
+C
+C       LR IS A POSITIVE INTEGER INPUT VARIABLE NOT LESS THAN
+C         (N*(N+1))/2.
+C
+C       DIAG IS AN INPUT ARRAY OF LENGTH N WHICH MUST CONTAIN THE
+C         DIAGONAL ELEMENTS OF THE MATRIX D.
+C
+C       QTB IS AN INPUT ARRAY OF LENGTH N WHICH MUST CONTAIN THE FIRST
+C         N ELEMENTS OF THE VECTOR (Q TRANSPOSE)*B.
+C
+C       DELTA IS A POSITIVE INPUT VARIABLE WHICH SPECIFIES AN UPPER
+C         BOUND ON THE EUCLIDEAN NORM OF D*X.
+C
+C       X IS AN OUTPUT ARRAY OF LENGTH N WHICH CONTAINS THE DESIRED
+C         CONVEX COMBINATION OF THE GAUSS-NEWTON DIRECTION AND THE
+C         SCALED GRADIENT DIRECTION.
+C
+C       WA1 AND WA2 ARE WORK ARRAYS OF LENGTH N.
+C
+C     SUBPROGRAMS CALLED
+C
+C       MINPACK-SUPPLIED ... DPMPAR,ENORM
+C
+C       FORTRAN-SUPPLIED ... DABS,DMAX1,DMIN1,DSQRT
+C
+C     ARGONNE NATIONAL LABORATORY. MINPACK PROJECT. MARCH 1980.
+C     BURTON S. GARBOW, KENNETH E. HILLSTROM, JORGE J. MORE
+C
+C     **********
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION DELTA
+      INTEGER LR,N
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION DIAG(N),QTB(N),R(LR),WA1(N),WA2(N),X(N)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION ALPHA,BNORM,EPSMCH,GNORM,ONE,QNORM,SGNORM,SUM,
+     +                 TEMP,ZERO
+      INTEGER I,J,JJ,JP1,K,L
+C     ..
+C     .. External Functions ..
+      DOUBLE PRECISION DPMPAR,ENORM
+      EXTERNAL DPMPAR,ENORM
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC DABS,DMAX1,DMIN1,DSQRT
+C     ..
+C     .. Data statements ..
+      DATA ONE,ZERO/1.0D0,0.0D0/
+C     ..
+C
+C     EPSMCH IS THE MACHINE PRECISION.
+C
+      EPSMCH = DPMPAR(1)
+C
+C     FIRST, CALCULATE THE GAUSS-NEWTON DIRECTION.
+C
+      JJ = (N* (N+1))/2 + 1
+      DO 50 K = 1,N
+          J = N - K + 1
+          JP1 = J + 1
+          JJ = JJ - K
+          L = JJ + 1
+          SUM = ZERO
+          IF (N.LT.JP1) GO TO 20
+          DO 10 I = JP1,N
+              SUM = SUM + R(L)*X(I)
+              L = L + 1
+   10     CONTINUE
+   20     CONTINUE
+          TEMP = R(JJ)
+          IF (TEMP.NE.ZERO) GO TO 40
+          L = J
+          DO 30 I = 1,J
+              TEMP = DMAX1(TEMP,DABS(R(L)))
+              L = L + N - I
+   30     CONTINUE
+          TEMP = EPSMCH*TEMP
+          IF (TEMP.EQ.ZERO) TEMP = EPSMCH
+   40     CONTINUE
+          X(J) = (QTB(J)-SUM)/TEMP
+   50 CONTINUE
+C
+C     TEST WHETHER THE GAUSS-NEWTON DIRECTION IS ACCEPTABLE.
+C
+      DO 60 J = 1,N
+          WA1(J) = ZERO
+          WA2(J) = DIAG(J)*X(J)
+   60 CONTINUE
+      QNORM = ENORM(N,WA2)
+      IF (QNORM.LE.DELTA) GO TO 140
+C
+C     THE GAUSS-NEWTON DIRECTION IS NOT ACCEPTABLE.
+C     NEXT, CALCULATE THE SCALED GRADIENT DIRECTION.
+C
+      L = 1
+      DO 80 J = 1,N
+          TEMP = QTB(J)
+          DO 70 I = J,N
+              WA1(I) = WA1(I) + R(L)*TEMP
+              L = L + 1
+   70     CONTINUE
+          WA1(J) = WA1(J)/DIAG(J)
+   80 CONTINUE
+C
+C     CALCULATE THE NORM OF THE SCALED GRADIENT AND TEST FOR
+C     THE SPECIAL CASE IN WHICH THE SCALED GRADIENT IS ZERO.
+C
+      GNORM = ENORM(N,WA1)
+      SGNORM = ZERO
+      ALPHA = DELTA/QNORM
+      IF (GNORM.EQ.ZERO) GO TO 120
+C
+C     CALCULATE THE POINT ALONG THE SCALED GRADIENT
+C     AT WHICH THE QUADRATIC IS MINIMIZED.
+C
+      DO 90 J = 1,N
+          WA1(J) = (WA1(J)/GNORM)/DIAG(J)
+   90 CONTINUE
+      L = 1
+      DO 110 J = 1,N
+          SUM = ZERO
+          DO 100 I = J,N
+              SUM = SUM + R(L)*WA1(I)
+              L = L + 1
+  100     CONTINUE
+          WA2(J) = SUM
+  110 CONTINUE
+      TEMP = ENORM(N,WA2)
+      SGNORM = (GNORM/TEMP)/TEMP
+C
+C     TEST WHETHER THE SCALED GRADIENT DIRECTION IS ACCEPTABLE.
+C
+      ALPHA = ZERO
+      IF (SGNORM.GE.DELTA) GO TO 120
+C
+C     THE SCALED GRADIENT DIRECTION IS NOT ACCEPTABLE.
+C     FINALLY, CALCULATE THE POINT ALONG THE DOGLEG
+C     AT WHICH THE QUADRATIC IS MINIMIZED.
+C
+      BNORM = ENORM(N,QTB)
+      TEMP = (BNORM/GNORM)* (BNORM/QNORM)* (SGNORM/DELTA)
+      TEMP = TEMP - (DELTA/QNORM)* (SGNORM/DELTA)**2 +
+     +       DSQRT((TEMP- (DELTA/QNORM))**2+
+     +       (ONE- (DELTA/QNORM)**2)* (ONE- (SGNORM/DELTA)**2))
+      ALPHA = ((DELTA/QNORM)* (ONE- (SGNORM/DELTA)**2))/TEMP
+  120 CONTINUE
+C
+C     FORM APPROPRIATE CONVEX COMBINATION OF THE GAUSS-NEWTON
+C     DIRECTION AND THE SCALED GRADIENT DIRECTION.
+C
+      TEMP = (ONE-ALPHA)*DMIN1(SGNORM,DELTA)
+      DO 130 J = 1,N
+          X(J) = TEMP*WA1(J) + ALPHA*X(J)
+  130 CONTINUE
+  140 CONTINUE
+      RETURN
+C
+C     LAST CARD OF SUBROUTINE DOGLEG.
+C
+      END
+
+
+      DOUBLE PRECISION FUNCTION DPMPAR(I)
+C     **********
+C
+C     FUNCTION DPMPAR
+C
+C     THIS FUNCTION PROVIDES DOUBLE PRECISION MACHINE PARAMETERS
+C     WHEN THE APPROPRIATE SET OF DATA STATEMENTS IS ACTIVATED (BY
+C     REMOVING THE C FROM COLUMN 1) AND ALL OTHER DATA STATEMENTS ARE
+C     RENDERED INACTIVE. MOST OF THE PARAMETER VALUES WERE OBTAINED
+C     FROM THE CORRESPONDING BELL LABORATORIES PORT LIBRARY FUNCTION.
+C
+C     THE FUNCTION STATEMENT IS
+C
+C       DOUBLE PRECISION FUNCTION DPMPAR(I)
+C
+C     WHERE
+C
+C       I IS AN INTEGER INPUT VARIABLE SET TO 1, 2, OR 3 WHICH
+C         SELECTS THE DESIRED MACHINE PARAMETER. IF THE MACHINE HAS
+C         T BASE B DIGITS AND ITS SMALLEST AND LARGEST EXPONENTS ARE
+C         EMIN AND EMAX, RESPECTIVELY, THEN THESE PARAMETERS ARE
+C
+C         DPMPAR(1) = B**(1 - T), THE MACHINE PRECISION,
+C
+C         DPMPAR(2) = B**(EMIN - 1), THE SMALLEST MAGNITUDE,
+C
+C         DPMPAR(3) = B**EMAX*(1 - B**(-T)), THE LARGEST MAGNITUDE.
+C
+C     ARGONNE NATIONAL LABORATORY. MINPACK PROJECT. JUNE 1983.
+C     BURTON S. GARBOW, KENNETH E. HILLSTROM, JORGE J. MORE
+C
+C     **********
+C     .. Scalar Arguments ..
+      INTEGER I
+C     ..
+C     .. Local Scalars ..
+      REAL EPS,XINF,XMIN
+C     ..
+C     .. Local Arrays ..
+      DOUBLE PRECISION DMACH(3)
+      INTEGER MAXMAG(4),MCHEPS(4),MINMAG(4)
+C     ..
+C     .. Equivalences ..
+      EQUIVALENCE (DMACH(1),MCHEPS(1))
+      EQUIVALENCE (DMACH(2),MINMAG(1))
+      EQUIVALENCE (DMACH(3),MAXMAG(1))
+C     ..
+C     .. Data statements ..
+C
+C     MACHINE CONSTANTS FOR THE IBM 360/370 SERIES,
+C     THE AMDAHL 470/V6, THE ICL 2900, THE ITEL AS/6,
+C     THE XEROX SIGMA 5/7/9 AND THE SEL SYSTEMS 85/86.
+C
+C     DATA MCHEPS(1),MCHEPS(2) / Z34100000, Z00000000 /
+C     DATA MINMAG(1),MINMAG(2) / Z00100000, Z00000000 /
+C     DATA MAXMAG(1),MAXMAG(2) / Z7FFFFFFF, ZFFFFFFFF /
+C
+C     MACHINE CONSTANTS FOR THE HONEYWELL 600/6000 SERIES.
+C
+C     DATA MCHEPS(1),MCHEPS(2) / O606400000000, O000000000000 /
+C     DATA MINMAG(1),MINMAG(2) / O402400000000, O000000000000 /
+C     DATA MAXMAG(1),MAXMAG(2) / O376777777777, O777777777777 /
+C
+C     MACHINE CONSTANTS FOR THE CDC 6000/7000 SERIES.
+C
+C     DATA MCHEPS(1) / 15614000000000000000B /
+C     DATA MCHEPS(2) / 15010000000000000000B /
+C
+C     DATA MINMAG(1) / 00604000000000000000B /
+C     DATA MINMAG(2) / 00000000000000000000B /
+C
+C     DATA MAXMAG(1) / 37767777777777777777B /
+C     DATA MAXMAG(2) / 37167777777777777777B /
+C
+C     MACHINE CONSTANTS FOR THE PDP-10 (KA PROCESSOR).
+C
+C     DATA MCHEPS(1),MCHEPS(2) / "114400000000, "000000000000 /
+C     DATA MINMAG(1),MINMAG(2) / "033400000000, "000000000000 /
+C     DATA MAXMAG(1),MAXMAG(2) / "377777777777, "344777777777 /
+C
+C     MACHINE CONSTANTS FOR THE PDP-10 (KI PROCESSOR).
+C
+C     DATA MCHEPS(1),MCHEPS(2) / "104400000000, "000000000000 /
+C     DATA MINMAG(1),MINMAG(2) / "000400000000, "000000000000 /
+C     DATA MAXMAG(1),MAXMAG(2) / "377777777777, "377777777777 /
+C
+C     MACHINE CONSTANTS FOR THE PDP-11.
+C
+C     DATA MCHEPS(1),MCHEPS(2) /   9472,      0 /
+C     DATA MCHEPS(3),MCHEPS(4) /      0,      0 /
+C
+C     DATA MINMAG(1),MINMAG(2) /    128,      0 /
+C     DATA MINMAG(3),MINMAG(4) /      0,      0 /
+C
+C     DATA MAXMAG(1),MAXMAG(2) /  32767,     -1 /
+C     DATA MAXMAG(3),MAXMAG(4) /     -1,     -1 /
+C
+C     MACHINE CONSTANTS FOR THE BURROUGHS 6700/7700 SYSTEMS.
+C
+C     DATA MCHEPS(1) / O1451000000000000 /
+C     DATA MCHEPS(2) / O0000000000000000 /
+C
+C     DATA MINMAG(1) / O1771000000000000 /
+C     DATA MINMAG(2) / O7770000000000000 /
+C
+C     DATA MAXMAG(1) / O0777777777777777 /
+C     DATA MAXMAG(2) / O7777777777777777 /
+C
+C     MACHINE CONSTANTS FOR THE BURROUGHS 5700 SYSTEM.
+C
+C     DATA MCHEPS(1) / O1451000000000000 /
+C     DATA MCHEPS(2) / O0000000000000000 /
+C
+C     DATA MINMAG(1) / O1771000000000000 /
+C     DATA MINMAG(2) / O0000000000000000 /
+C
+C     DATA MAXMAG(1) / O0777777777777777 /
+C     DATA MAXMAG(2) / O0007777777777777 /
+C
+C     MACHINE CONSTANTS FOR THE BURROUGHS 1700 SYSTEM.
+C
+C     DATA MCHEPS(1) / ZCC6800000 /
+C     DATA MCHEPS(2) / Z000000000 /
+C
+C     DATA MINMAG(1) / ZC00800000 /
+C     DATA MINMAG(2) / Z000000000 /
+C
+C     DATA MAXMAG(1) / ZDFFFFFFFF /
+C     DATA MAXMAG(2) / ZFFFFFFFFF /
+C
+C     MACHINE CONSTANTS FOR THE UNIVAC 1100 SERIES.
+C
+C     DATA MCHEPS(1),MCHEPS(2) / O170640000000, O000000000000 /
+C     DATA MINMAG(1),MINMAG(2) / O000040000000, O000000000000 /
+C     DATA MAXMAG(1),MAXMAG(2) / O377777777777, O777777777777 /
+C
+C     MACHINE CONSTANTS FOR THE DATA GENERAL ECLIPSE S/200.
+C
+C     NOTE - IT MAY BE APPROPRIATE TO INCLUDE THE FOLLOWING CARD -
+C     STATIC DMACH(3)
+C
+C     DATA MINMAG/20K,3*0/,MAXMAG/77777K,3*177777K/
+C     DATA MCHEPS/32020K,3*0/
+C
+C     MACHINE CONSTANTS FOR THE HARRIS 220.
+C
+C     DATA MCHEPS(1),MCHEPS(2) / '20000000, '00000334 /
+C     DATA MINMAG(1),MINMAG(2) / '20000000, '00000201 /
+C     DATA MAXMAG(1),MAXMAG(2) / '37777777, '37777577 /
+C
+C     MACHINE CONSTANTS FOR THE CRAY-1.
+C
+C     DATA MCHEPS(1) / 0376424000000000000000B /
+C     DATA MCHEPS(2) / 0000000000000000000000B /
+C
+C     DATA MINMAG(1) / 0200034000000000000000B /
+C     DATA MINMAG(2) / 0000000000000000000000B /
+C
+C     DATA MAXMAG(1) / 0577777777777777777777B /
+C     DATA MAXMAG(2) / 0000007777777777777776B /
+C
+C     MACHINE CONSTANTS FOR THE PRIME 400.
+C
+C     DATA MCHEPS(1),MCHEPS(2) / :10000000000, :00000000123 /
+C     DATA MINMAG(1),MINMAG(2) / :10000000000, :00000100000 /
+C     DATA MAXMAG(1),MAXMAG(2) / :17777777777, :37777677776 /
+C
+C     MACHINE CONSTANTS FOR THE VAX-11.
+C
+      DATA MCHEPS(1),MCHEPS(2)/9472,0/
+      DATA MINMAG(1),MINMAG(2)/128,0/
+      DATA MAXMAG(1),MAXMAG(2)/-32769,-1/
+C     ..
+C
+
+      XINF = 3.4E38
+      XMIN = 1.18E-38
+C      EPS =1.19E-7
+C EPSFCN IS DOUBLE PRECEISION !
+      EPS = 1.E-13
+
+      DPMPAR = DMACH(I)
+
+      IF (I.EQ.1) DPMPAR = EPS
+      IF (I.EQ.2) DPMPAR = XMIN
+      IF (I.EQ.3) DPMPAR = XINF
+
+      RETURN
+C
+C     LAST CARD OF FUNCTION DPMPAR.
+C
+      END
+
+      DOUBLE PRECISION FUNCTION ENORM(N,X)
+C     **********
+C
+C     FUNCTION ENORM
+C
+C     GIVEN AN N-VECTOR X, THIS FUNCTION CALCULATES THE
+C     EUCLIDEAN NORM OF X.
+C
+C     THE EUCLIDEAN NORM IS COMPUTED BY ACCUMULATING THE SUM OF
+C     SQUARES IN THREE DIFFERENT SUMS. THE SUMS OF SQUARES FOR THE
+C     SMALL AND LARGE COMPONENTS ARE SCALED SO THAT NO OVERFLOWS
+C     OCCUR. NON-DESTRUCTIVE UNDERFLOWS ARE PERMITTED. UNDERFLOWS
+C     AND OVERFLOWS DO NOT OCCUR IN THE COMPUTATION OF THE UNSCALED
+C     SUM OF SQUARES FOR THE INTERMEDIATE COMPONENTS.
+C     THE DEFINITIONS OF SMALL, INTERMEDIATE AND LARGE COMPONENTS
+C     DEPEND ON TWO CONSTANTS, RDWARF AND RGIANT. THE MAIN
+C     RESTRICTIONS ON THESE CONSTANTS ARE THAT RDWARF**2 NOT
+C     UNDERFLOW AND RGIANT**2 NOT OVERFLOW. THE CONSTANTS
+C     GIVEN HERE ARE SUITABLE FOR EVERY KNOWN COMPUTER.
+C
+C     THE FUNCTION STATEMENT IS
+C
+C       DOUBLE PRECISION FUNCTION ENORM(N,X)
+C
+C     WHERE
+C
+C       N IS A POSITIVE INTEGER INPUT VARIABLE.
+C
+C       X IS AN INPUT ARRAY OF LENGTH N.
+C
+C     SUBPROGRAMS CALLED
+C
+C       FORTRAN-SUPPLIED ... DABS,DSQRT
+C
+C     ARGONNE NATIONAL LABORATORY. MINPACK PROJECT. MARCH 1980.
+C     BURTON S. GARBOW, KENNETH E. HILLSTROM, JORGE J. MORE
+C
+C     **********
+C     .. Scalar Arguments ..
+      INTEGER N
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION X(N)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION AGIANT,FLOATN,ONE,RDWARF,RGIANT,S1,S2,S3,X1MAX,
+     +                 X3MAX,XABS,ZERO
+      INTEGER I
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC DABS,DSQRT
+C     ..
+C     .. Data statements ..
+      DATA ONE,ZERO,RDWARF,RGIANT/1.0D0,0.0D0,3.834D-20,1.304D19/
+C     ..
+      S1 = ZERO
+      S2 = ZERO
+      S3 = ZERO
+      X1MAX = ZERO
+      X3MAX = ZERO
+      FLOATN = N
+      AGIANT = RGIANT/FLOATN
+      DO 90 I = 1,N
+          XABS = DABS(X(I))
+          IF (XABS.GT.RDWARF .AND. XABS.LT.AGIANT) GO TO 70
+          IF (XABS.LE.RDWARF) GO TO 30
+C
+C              SUM FOR LARGE COMPONENTS.
+C
+          IF (XABS.LE.X1MAX) GO TO 10
+          S1 = ONE + S1* (X1MAX/XABS)**2
+          X1MAX = XABS
+          GO TO 20
+
+   10     CONTINUE
+          S1 = S1 + (XABS/X1MAX)**2
+   20     CONTINUE
+          GO TO 60
+
+   30     CONTINUE
+C
+C              SUM FOR SMALL COMPONENTS.
+C
+          IF (XABS.LE.X3MAX) GO TO 40
+          S3 = ONE + S3* (X3MAX/XABS)**2
+          X3MAX = XABS
+          GO TO 50
+
+   40     CONTINUE
+          IF (XABS.NE.ZERO) S3 = S3 + (XABS/X3MAX)**2
+   50     CONTINUE
+   60     CONTINUE
+          GO TO 80
+
+   70     CONTINUE
+C
+C           SUM FOR INTERMEDIATE COMPONENTS.
+C
+          S2 = S2 + XABS**2
+   80     CONTINUE
+   90 CONTINUE
+C
+C     CALCULATION OF NORM.
+C
+      IF (S1.EQ.ZERO) GO TO 100
+      ENORM = X1MAX*DSQRT(S1+ (S2/X1MAX)/X1MAX)
+      GO TO 130
+
+  100 CONTINUE
+      IF (S2.EQ.ZERO) GO TO 110
+      IF (S2.GE.X3MAX) ENORM = DSQRT(S2* (ONE+ (X3MAX/S2)* (X3MAX*S3)))
+      IF (S2.LT.X3MAX) ENORM = DSQRT(X3MAX* ((S2/X3MAX)+ (X3MAX*S3)))
+      GO TO 120
+
+  110 CONTINUE
+      ENORM = X3MAX*DSQRT(S3)
+  120 CONTINUE
+  130 CONTINUE
+      RETURN
+C
+C     LAST CARD OF FUNCTION ENORM.
+C
+      END
+
+      SUBROUTINE FDJAC1(FCN,N,X,FVEC,FJAC,LDFJAC,IFLAG,ML,MU,EPSFCN,WA1,
+     +                  WA2)
+C     **********
+C
+C     SUBROUTINE FDJAC1
+C
+C     THIS SUBROUTINE COMPUTES A FORWARD-DIFFERENCE APPROXIMATION
+C     TO THE N BY N JACOBIAN MATRIX ASSOCIATED WITH A SPECIFIED
+C     PROBLEM OF N FUNCTIONS IN N VARIABLES. IF THE JACOBIAN HAS
+C     A BANDED FORM, THEN FUNCTION EVALUATIONS ARE SAVED BY ONLY
+C     APPROXIMATING THE NONZERO TERMS.
+C
+C     THE SUBROUTINE STATEMENT IS
+C
+C       SUBROUTINE FDJAC1(FCN,N,X,FVEC,FJAC,LDFJAC,IFLAG,ML,MU,EPSFCN,
+C                         WA1,WA2)
+C
+C     WHERE
+C
+C       FCN IS THE NAME OF THE USER-SUPPLIED SUBROUTINE WHICH
+C         CALCULATES THE FUNCTIONS. FCN MUST BE DECLARED
+C         IN AN EXTERNAL STATEMENT IN THE USER CALLING
+C         PROGRAM, AND SHOULD BE WRITTEN AS FOLLOWS.
+C
+C         SUBROUTINE FCN(N,X,FVEC,IFLAG)
+C         INTEGER N,IFLAG
+C         DOUBLE PRECISION X(N),FVEC(N)
+C         ----------
+C         CALCULATE THE FUNCTIONS AT X AND
+C         RETURN THIS VECTOR IN FVEC.
+C         ----------
+C         RETURN
+C         END
+C
+C         THE VALUE OF IFLAG SHOULD NOT BE CHANGED BY FCN UNLESS
+C         THE USER WANTS TO TERMINATE EXECUTION OF FDJAC1.
+C         IN THIS CASE SET IFLAG TO A NEGATIVE INTEGER.
+C
+C       N IS A POSITIVE INTEGER INPUT VARIABLE SET TO THE NUMBER
+C         OF FUNCTIONS AND VARIABLES.
+C
+C       X IS AN INPUT ARRAY OF LENGTH N.
+C
+C       FVEC IS AN INPUT ARRAY OF LENGTH N WHICH MUST CONTAIN THE
+C         FUNCTIONS EVALUATED AT X.
+C
+C       FJAC IS AN OUTPUT N BY N ARRAY WHICH CONTAINS THE
+C         APPROXIMATION TO THE JACOBIAN MATRIX EVALUATED AT X.
+C
+C       LDFJAC IS A POSITIVE INTEGER INPUT VARIABLE NOT LESS THAN N
+C         WHICH SPECIFIES THE LEADING DIMENSION OF THE ARRAY FJAC.
+C
+C       IFLAG IS AN INTEGER VARIABLE WHICH CAN BE USED TO TERMINATE
+C         THE EXECUTION OF FDJAC1. SEE DESCRIPTION OF FCN.
+C
+C       ML IS A NONNEGATIVE INTEGER INPUT VARIABLE WHICH SPECIFIES
+C         THE NUMBER OF SUBDIAGONALS WITHIN THE BAND OF THE
+C         JACOBIAN MATRIX. IF THE JACOBIAN IS NOT BANDED, SET
+C         ML TO AT LEAST N - 1.
+C
+C       EPSFCN IS AN INPUT VARIABLE USED IN DETERMINING A SUITABLE
+C         STEP LENGTH FOR THE FORWARD-DIFFERENCE APPROXIMATION. THIS
+C         APPROXIMATION ASSUMES THAT THE RELATIVE ERRORS IN THE
+C         FUNCTIONS ARE OF THE ORDER OF EPSFCN. IF EPSFCN IS LESS
+C         THAN THE MACHINE PRECISION, IT IS ASSUMED THAT THE RELATIVE
+C         ERRORS IN THE FUNCTIONS ARE OF THE ORDER OF THE MACHINE
+C         PRECISION.
+C
+C       MU IS A NONNEGATIVE INTEGER INPUT VARIABLE WHICH SPECIFIES
+C         THE NUMBER OF SUPERDIAGONALS WITHIN THE BAND OF THE
+C         JACOBIAN MATRIX. IF THE JACOBIAN IS NOT BANDED, SET
+C         MU TO AT LEAST N - 1.
+C
+C       WA1 AND WA2 ARE WORK ARRAYS OF LENGTH N. IF ML + MU + 1 IS AT
+C         LEAST N, THEN THE JACOBIAN IS CONSIDERED DENSE, AND WA2 IS
+C         NOT REFERENCED.
+C
+C     SUBPROGRAMS CALLED
+C
+C       MINPACK-SUPPLIED ... DPMPAR
+C
+C       FORTRAN-SUPPLIED ... DABS,DMAX1,DSQRT
+C
+C     ARGONNE NATIONAL LABORATORY. MINPACK PROJECT. MARCH 1980.
+C     BURTON S. GARBOW, KENNETH E. HILLSTROM, JORGE J. MORE
+C
+C     **********
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION EPSFCN
+      INTEGER IFLAG,LDFJAC,ML,MU,N
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION FJAC(LDFJAC,N),FVEC(N),WA1(N),WA2(N),X(N)
+C     ..
+C     .. Subroutine Arguments ..
+      EXTERNAL FCN
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION EPS,EPSMCH,H,TEMP,ZERO
+      INTEGER I,J,K,MSUM
+C     ..
+C     .. External Functions ..
+      DOUBLE PRECISION DPMPAR
+      EXTERNAL DPMPAR
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC DABS,DMAX1,DSQRT
+C     ..
+C     .. Data statements ..
+      DATA ZERO/0.0D0/
+C     ..
+C
+C     EPSMCH IS THE MACHINE PRECISION.
+C
+      EPSMCH = DPMPAR(1)
+C
+      EPS = DSQRT(DMAX1(EPSFCN,EPSMCH))
+      MSUM = ML + MU + 1
+      IF (MSUM.LT.N) GO TO 40
+C
+C        COMPUTATION OF DENSE APPROXIMATE JACOBIAN.
+C
+      DO 20 J = 1,N
+          TEMP = X(J)
+          H = EPS*DABS(TEMP)
+          IF (H.EQ.ZERO) H = EPS
+          X(J) = TEMP + H
+          CALL FCN(N,X,WA1,IFLAG)
+          IF (IFLAG.LT.0) GO TO 30
+          X(J) = TEMP
+          DO 10 I = 1,N
+              FJAC(I,J) = (WA1(I)-FVEC(I))/H
+   10     CONTINUE
+   20 CONTINUE
+   30 CONTINUE
+      GO TO 100
+
+   40 CONTINUE
+C
+C        COMPUTATION OF BANDED APPROXIMATE JACOBIAN.
+C
+      DO 80 K = 1,MSUM
+          DO 50 J = K,N,MSUM
+              WA2(J) = X(J)
+              H = EPS*DABS(WA2(J))
+              IF (H.EQ.ZERO) H = EPS
+              X(J) = WA2(J) + H
+   50     CONTINUE
+          CALL FCN(N,X,WA1,IFLAG)
+          IF (IFLAG.LT.0) GO TO 90
+          DO 70 J = K,N,MSUM
+              X(J) = WA2(J)
+              H = EPS*DABS(WA2(J))
+              IF (H.EQ.ZERO) H = EPS
+              DO 60 I = 1,N
+                  FJAC(I,J) = ZERO
+                  IF (I.GE.J-MU .AND. I.LE.J+ML) FJAC(I,
+     +                J) = (WA1(I)-FVEC(I))/H
+   60         CONTINUE
+   70     CONTINUE
+   80 CONTINUE
+   90 CONTINUE
+  100 CONTINUE
+      RETURN
+C
+C     LAST CARD OF SUBROUTINE FDJAC1.
+C
+      END
+
+      SUBROUTINE QFORM(M,N,Q,LDQ,WA)
+C     **********
+C
+C     SUBROUTINE QFORM
+C
+C     THIS SUBROUTINE PROCEEDS FROM THE COMPUTED QR FACTORIZATION OF
+C     AN M BY N MATRIX A TO ACCUMULATE THE M BY M ORTHOGONAL MATRIX
+C     Q FROM ITS FACTORED FORM.
+C
+C     THE SUBROUTINE STATEMENT IS
+C
+C       SUBROUTINE QFORM(M,N,Q,LDQ,WA)
+C
+C     WHERE
+C
+C       M IS A POSITIVE INTEGER INPUT VARIABLE SET TO THE NUMBER
+C         OF ROWS OF A AND THE ORDER OF Q.
+C
+C       N IS A POSITIVE INTEGER INPUT VARIABLE SET TO THE NUMBER
+C         OF COLUMNS OF A.
+C
+C       Q IS AN M BY M ARRAY. ON INPUT THE FULL LOWER TRAPEZOID IN
+C         THE FIRST MIN(M,N) COLUMNS OF Q CONTAINS THE FACTORED FORM.
+C         ON OUTPUT Q HAS BEEN ACCUMULATED INTO A SQUARE MATRIX.
+C
+C       LDQ IS A POSITIVE INTEGER INPUT VARIABLE NOT LESS THAN M
+C         WHICH SPECIFIES THE LEADING DIMENSION OF THE ARRAY Q.
+C
+C       WA IS A WORK ARRAY OF LENGTH M.
+C
+C     SUBPROGRAMS CALLED
+C
+C       FORTRAN-SUPPLIED ... MIN0
+C
+C     ARGONNE NATIONAL LABORATORY. MINPACK PROJECT. MARCH 1980.
+C     BURTON S. GARBOW, KENNETH E. HILLSTROM, JORGE J. MORE
+C
+C     **********
+C     .. Scalar Arguments ..
+      INTEGER LDQ,M,N
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION Q(LDQ,M),WA(M)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION ONE,SUM,TEMP,ZERO
+      INTEGER I,J,JM1,K,L,MINMN,NP1
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC MIN0
+C     ..
+C     .. Data statements ..
+      DATA ONE,ZERO/1.0D0,0.0D0/
+C     ..
+C
+C     ZERO OUT UPPER TRIANGLE OF Q IN THE FIRST MIN(M,N) COLUMNS.
+C
+      MINMN = MIN0(M,N)
+      IF (MINMN.LT.2) GO TO 30
+      DO 20 J = 2,MINMN
+          JM1 = J - 1
+          DO 10 I = 1,JM1
+              Q(I,J) = ZERO
+   10     CONTINUE
+   20 CONTINUE
+   30 CONTINUE
+C
+C     INITIALIZE REMAINING COLUMNS TO THOSE OF THE IDENTITY MATRIX.
+C
+      NP1 = N + 1
+      IF (M.LT.NP1) GO TO 60
+      DO 50 J = NP1,M
+          DO 40 I = 1,M
+              Q(I,J) = ZERO
+   40     CONTINUE
+          Q(J,J) = ONE
+   50 CONTINUE
+   60 CONTINUE
+C
+C     ACCUMULATE Q FROM ITS FACTORED FORM.
+C
+      DO 120 L = 1,MINMN
+          K = MINMN - L + 1
+          DO 70 I = K,M
+              WA(I) = Q(I,K)
+              Q(I,K) = ZERO
+   70     CONTINUE
+          Q(K,K) = ONE
+          IF (WA(K).EQ.ZERO) GO TO 110
+          DO 100 J = K,M
+              SUM = ZERO
+              DO 80 I = K,M
+                  SUM = SUM + Q(I,J)*WA(I)
+   80         CONTINUE
+              TEMP = SUM/WA(K)
+              DO 90 I = K,M
+                  Q(I,J) = Q(I,J) - TEMP*WA(I)
+   90         CONTINUE
+  100     CONTINUE
+  110     CONTINUE
+  120 CONTINUE
+      RETURN
+C
+C     LAST CARD OF SUBROUTINE QFORM.
+C
+      END
+
+      SUBROUTINE QRFAC(M,N,A,LDA,PIVOT,IPVT,LIPVT,RDIAG,ACNORM,WA)
+C     **********
+C
+C     SUBROUTINE QRFAC
+C
+C     THIS SUBROUTINE USES HOUSEHOLDER TRANSFORMATIONS WITH COLUMN
+C     PIVOTING (OPTIONAL) TO COMPUTE A QR FACTORIZATION OF THE
+C     M BY N MATRIX A. THAT IS, QRFAC DETERMINES AN ORTHOGONAL
+C     MATRIX Q, A PERMUTATION MATRIX P, AND AN UPPER TRAPEZOIDAL
+C     MATRIX R WITH DIAGONAL ELEMENTS OF NONINCREASING MAGNITUDE,
+C     SUCH THAT A*P = Q*R. THE HOUSEHOLDER TRANSFORMATION FOR
+C     COLUMN K, K = 1,2,...,MIN(M,N), IS OF THE FORM
+C
+C                           T
+C           I - (1/U(K))*U*U
+C
+C     WHERE U HAS ZEROS IN THE FIRST K-1 POSITIONS. THE FORM OF
+C     THIS TRANSFORMATION AND THE METHOD OF PIVOTING FIRST
+C     APPEARED IN THE CORRESPONDING LINPACK SUBROUTINE.
+C
+C     THE SUBROUTINE STATEMENT IS
+C
+C       SUBROUTINE QRFAC(M,N,A,LDA,PIVOT,IPVT,LIPVT,RDIAG,ACNORM,WA)
+C
+C     WHERE
+C
+C       M IS A POSITIVE INTEGER INPUT VARIABLE SET TO THE NUMBER
+C         OF ROWS OF A.
+C
+C       N IS A POSITIVE INTEGER INPUT VARIABLE SET TO THE NUMBER
+C         OF COLUMNS OF A.
+C
+C       A IS AN M BY N ARRAY. ON INPUT A CONTAINS THE MATRIX FOR
+C         WHICH THE QR FACTORIZATION IS TO BE COMPUTED. ON OUTPUT
+C         THE STRICT UPPER TRAPEZOIDAL PART OF A CONTAINS THE STRICT
+C         UPPER TRAPEZOIDAL PART OF R, AND THE LOWER TRAPEZOIDAL
+C         PART OF A CONTAINS A FACTORED FORM OF Q (THE NON-TRIVIAL
+C         ELEMENTS OF THE U VECTORS DESCRIBED ABOVE).
+C
+C       LDA IS A POSITIVE INTEGER INPUT VARIABLE NOT LESS THAN M
+C         WHICH SPECIFIES THE LEADING DIMENSION OF THE ARRAY A.
+C
+C       PIVOT IS A LOGICAL INPUT VARIABLE. IF PIVOT IS SET TRUE,
+C         THEN COLUMN PIVOTING IS ENFORCED. IF PIVOT IS SET FALSE,
+C         THEN NO COLUMN PIVOTING IS DONE.
+C
+C       IPVT IS AN INTEGER OUTPUT ARRAY OF LENGTH LIPVT. IPVT
+C         DEFINES THE PERMUTATION MATRIX P SUCH THAT A*P = Q*R.
+C         COLUMN J OF P IS COLUMN IPVT(J) OF THE IDENTITY MATRIX.
+C         IF PIVOT IS FALSE, IPVT IS NOT REFERENCED.
+C
+C       LIPVT IS A POSITIVE INTEGER INPUT VARIABLE. IF PIVOT IS FALSE,
+C         THEN LIPVT MAY BE AS SMALL AS 1. IF PIVOT IS TRUE, THEN
+C         LIPVT MUST BE AT LEAST N.
+C
+C       RDIAG IS AN OUTPUT ARRAY OF LENGTH N WHICH CONTAINS THE
+C         DIAGONAL ELEMENTS OF R.
+C
+C       ACNORM IS AN OUTPUT ARRAY OF LENGTH N WHICH CONTAINS THE
+C         NORMS OF THE CORRESPONDING COLUMNS OF THE INPUT MATRIX A.
+C         IF THIS INFORMATION IS NOT NEEDED, THEN ACNORM CAN COINCIDE
+C         WITH RDIAG.
+C
+C       WA IS A WORK ARRAY OF LENGTH N. IF PIVOT IS FALSE, THEN WA
+C         CAN COINCIDE WITH RDIAG.
+C
+C     SUBPROGRAMS CALLED
+C
+C       MINPACK-SUPPLIED ... DPMPAR,ENORM
+C
+C       FORTRAN-SUPPLIED ... DMAX1,DSQRT,MIN0
+C
+C     ARGONNE NATIONAL LABORATORY. MINPACK PROJECT. MARCH 1980.
+C     BURTON S. GARBOW, KENNETH E. HILLSTROM, JORGE J. MORE
+C
+C     **********
+C     .. Scalar Arguments ..
+      INTEGER LDA,LIPVT,M,N
+      LOGICAL PIVOT
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION A(LDA,N),ACNORM(N),RDIAG(N),WA(N)
+      INTEGER IPVT(LIPVT)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION AJNORM,EPSMCH,ONE,P05,SUM,TEMP,ZERO
+      INTEGER I,J,JP1,K,KMAX,MINMN
+C     ..
+C     .. External Functions ..
+      DOUBLE PRECISION DPMPAR,ENORM
+      EXTERNAL DPMPAR,ENORM
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC DMAX1,DSQRT,MIN0
+C     ..
+C     .. Data statements ..
+      DATA ONE,P05,ZERO/1.0D0,5.0D-2,0.0D0/
+C     ..
+C
+C     EPSMCH IS THE MACHINE PRECISION.
+C
+      EPSMCH = DPMPAR(1)
+C
+C     COMPUTE THE INITIAL COLUMN NORMS AND INITIALIZE SEVERAL ARRAYS.
+C
+      DO 10 J = 1,N
+          ACNORM(J) = ENORM(M,A(1,J))
+          RDIAG(J) = ACNORM(J)
+          WA(J) = RDIAG(J)
+          IF (PIVOT) IPVT(J) = J
+   10 CONTINUE
+C
+C     REDUCE A TO R WITH HOUSEHOLDER TRANSFORMATIONS.
+C
+      MINMN = MIN0(M,N)
+      DO 110 J = 1,MINMN
+          IF (.NOT.PIVOT) GO TO 40
+C
+C        BRING THE COLUMN OF LARGEST NORM INTO THE PIVOT POSITION.
+C
+          KMAX = J
+          DO 20 K = J,N
+              IF (RDIAG(K).GT.RDIAG(KMAX)) KMAX = K
+   20     CONTINUE
+          IF (KMAX.EQ.J) GO TO 40
+          DO 30 I = 1,M
+              TEMP = A(I,J)
+              A(I,J) = A(I,KMAX)
+              A(I,KMAX) = TEMP
+   30     CONTINUE
+          RDIAG(KMAX) = RDIAG(J)
+          WA(KMAX) = WA(J)
+          K = IPVT(J)
+          IPVT(J) = IPVT(KMAX)
+          IPVT(KMAX) = K
+   40     CONTINUE
+C
+C        COMPUTE THE HOUSEHOLDER TRANSFORMATION TO REDUCE THE
+C        J-TH COLUMN OF A TO A MULTIPLE OF THE J-TH UNIT VECTOR.
+C
+          AJNORM = ENORM(M-J+1,A(J,J))
+          IF (AJNORM.EQ.ZERO) GO TO 100
+          IF (A(J,J).LT.ZERO) AJNORM = -AJNORM
+          DO 50 I = J,M
+              A(I,J) = A(I,J)/AJNORM
+   50     CONTINUE
+          A(J,J) = A(J,J) + ONE
+C
+C        APPLY THE TRANSFORMATION TO THE REMAINING COLUMNS
+C        AND UPDATE THE NORMS.
+C
+          JP1 = J + 1
+          IF (N.LT.JP1) GO TO 100
+          DO 90 K = JP1,N
+              SUM = ZERO
+              DO 60 I = J,M
+                  SUM = SUM + A(I,J)*A(I,K)
+   60         CONTINUE
+              TEMP = SUM/A(J,J)
+              DO 70 I = J,M
+                  A(I,K) = A(I,K) - TEMP*A(I,J)
+   70         CONTINUE
+              IF (.NOT.PIVOT .OR. RDIAG(K).EQ.ZERO) GO TO 80
+              TEMP = A(J,K)/RDIAG(K)
+              RDIAG(K) = RDIAG(K)*DSQRT(DMAX1(ZERO,ONE-TEMP**2))
+              IF (P05* (RDIAG(K)/WA(K))**2.GT.EPSMCH) GO TO 80
+              RDIAG(K) = ENORM(M-J,A(JP1,K))
+              WA(K) = RDIAG(K)
+   80         CONTINUE
+   90     CONTINUE
+  100     CONTINUE
+          RDIAG(J) = -AJNORM
+  110 CONTINUE
+      RETURN
+C
+C     LAST CARD OF SUBROUTINE QRFAC.
+C
+      END
+      SUBROUTINE R1MPYQ(M,N,A,LDA,V,W)
+C     **********
+C
+C     SUBROUTINE R1MPYQ
+C
+C     GIVEN AN M BY N MATRIX A, THIS SUBROUTINE COMPUTES A*Q WHERE
+C     Q IS THE PRODUCT OF 2*(N - 1) TRANSFORMATIONS
+C
+C           GV(N-1)*...*GV(1)*GW(1)*...*GW(N-1)
+C
+C     AND GV(I), GW(I) ARE GIVENS ROTATIONS IN THE (I,N) PLANE WHICH
+C     ELIMINATE ELEMENTS IN THE I-TH AND N-TH PLANES, RESPECTIVELY.
+C     Q ITSELF IS NOT GIVEN, RATHER THE INFORMATION TO RECOVER THE
+C     GV, GW ROTATIONS IS SUPPLIED.
+C
+C     THE SUBROUTINE STATEMENT IS
+C
+C       SUBROUTINE R1MPYQ(M,N,A,LDA,V,W)
+C
+C     WHERE
+C
+C       M IS A POSITIVE INTEGER INPUT VARIABLE SET TO THE NUMBER
+C         OF ROWS OF A.
+C
+C       N IS A POSITIVE INTEGER INPUT VARIABLE SET TO THE NUMBER
+C         OF COLUMNS OF A.
+C
+C       A IS AN M BY N ARRAY. ON INPUT A MUST CONTAIN THE MATRIX
+C         TO BE POSTMULTIPLIED BY THE ORTHOGONAL MATRIX Q
+C         DESCRIBED ABOVE. ON OUTPUT A*Q HAS REPLACED A.
+C
+C       LDA IS A POSITIVE INTEGER INPUT VARIABLE NOT LESS THAN M
+C         WHICH SPECIFIES THE LEADING DIMENSION OF THE ARRAY A.
+C
+C       V IS AN INPUT ARRAY OF LENGTH N. V(I) MUST CONTAIN THE
+C         INFORMATION NECESSARY TO RECOVER THE GIVENS ROTATION GV(I)
+C         DESCRIBED ABOVE.
+C
+C       W IS AN INPUT ARRAY OF LENGTH N. W(I) MUST CONTAIN THE
+C         INFORMATION NECESSARY TO RECOVER THE GIVENS ROTATION GW(I)
+C         DESCRIBED ABOVE.
+C
+C     SUBROUTINES CALLED
+C
+C       FORTRAN-SUPPLIED ... DABS,DSQRT
+C
+C     ARGONNE NATIONAL LABORATORY. MINPACK PROJECT. MARCH 1980.
+C     BURTON S. GARBOW, KENNETH E. HILLSTROM, JORGE J. MORE
+C
+C     **********
+C     .. Scalar Arguments ..
+      INTEGER LDA,M,N
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION A(LDA,N),V(N),W(N)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION COS,ONE,SIN,TEMP
+      INTEGER I,J,NM1,NMJ
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC DABS,DSQRT
+C     ..
+C     .. Data statements ..
+      DATA ONE/1.0D0/
+C     ..
+C
+C     APPLY THE FIRST SET OF GIVENS ROTATIONS TO A.
+C
+      NM1 = N - 1
+      IF (NM1.LT.1) GO TO 50
+      DO 20 NMJ = 1,NM1
+          J = N - NMJ
+          IF (DABS(V(J)).GT.ONE) COS = ONE/V(J)
+          IF (DABS(V(J)).GT.ONE) SIN = DSQRT(ONE-COS**2)
+          IF (DABS(V(J)).LE.ONE) SIN = V(J)
+          IF (DABS(V(J)).LE.ONE) COS = DSQRT(ONE-SIN**2)
+          DO 10 I = 1,M
+              TEMP = COS*A(I,J) - SIN*A(I,N)
+              A(I,N) = SIN*A(I,J) + COS*A(I,N)
+              A(I,J) = TEMP
+   10     CONTINUE
+   20 CONTINUE
+C
+C     APPLY THE SECOND SET OF GIVENS ROTATIONS TO A.
+C
+      DO 40 J = 1,NM1
+          IF (DABS(W(J)).GT.ONE) COS = ONE/W(J)
+          IF (DABS(W(J)).GT.ONE) SIN = DSQRT(ONE-COS**2)
+          IF (DABS(W(J)).LE.ONE) SIN = W(J)
+          IF (DABS(W(J)).LE.ONE) COS = DSQRT(ONE-SIN**2)
+          DO 30 I = 1,M
+              TEMP = COS*A(I,J) + SIN*A(I,N)
+              A(I,N) = -SIN*A(I,J) + COS*A(I,N)
+              A(I,J) = TEMP
+   30     CONTINUE
+   40 CONTINUE
+   50 CONTINUE
+      RETURN
+C
+C     LAST CARD OF SUBROUTINE R1MPYQ.
+C
+      END
+C
+      SUBROUTINE R1UPDT(M,N,S,LS,U,V,W,SING)
+C     **********
+C
+C     SUBROUTINE R1UPDT
+C
+C     GIVEN AN M BY N LOWER TRAPEZOIDAL MATRIX S, AN M-VECTOR U,
+C     AND AN N-VECTOR V, THE PROBLEM IS TO DETERMINE AN
+C     ORTHOGONAL MATRIX Q SUCH THAT
+C
+C                   T
+C           (S + U*V )*Q
+C
+C     IS AGAIN LOWER TRAPEZOIDAL.
+C
+C     THIS SUBROUTINE DETERMINES Q AS THE PRODUCT OF 2*(N - 1)
+C     TRANSFORMATIONS
+C
+C           GV(N-1)*...*GV(1)*GW(1)*...*GW(N-1)
+C
+C     WHERE GV(I), GW(I) ARE GIVENS ROTATIONS IN THE (I,N) PLANE
+C     WHICH ELIMINATE ELEMENTS IN THE I-TH AND N-TH PLANES,
+C     RESPECTIVELY. Q ITSELF IS NOT ACCUMULATED, RATHER THE
+C     INFORMATION TO RECOVER THE GV, GW ROTATIONS IS RETURNED.
+C
+C     THE SUBROUTINE STATEMENT IS
+C
+C       SUBROUTINE R1UPDT(M,N,S,LS,U,V,W,SING)
+C
+C     WHERE
+C
+C       M IS A POSITIVE INTEGER INPUT VARIABLE SET TO THE NUMBER
+C         OF ROWS OF S.
+C
+C       N IS A POSITIVE INTEGER INPUT VARIABLE SET TO THE NUMBER
+C         OF COLUMNS OF S. N MUST NOT EXCEED M.
+C
+C       S IS AN ARRAY OF LENGTH LS. ON INPUT S MUST CONTAIN THE LOWER
+C         TRAPEZOIDAL MATRIX S STORED BY COLUMNS. ON OUTPUT S CONTAINS
+C         THE LOWER TRAPEZOIDAL MATRIX PRODUCED AS DESCRIBED ABOVE.
+C
+C       LS IS A POSITIVE INTEGER INPUT VARIABLE NOT LESS THAN
+C         (N*(2*M-N+1))/2.
+C
+C       U IS AN INPUT ARRAY OF LENGTH M WHICH MUST CONTAIN THE
+C         VECTOR U.
+C
+C       V IS AN ARRAY OF LENGTH N. ON INPUT V MUST CONTAIN THE VECTOR
+C         V. ON OUTPUT V(I) CONTAINS THE INFORMATION NECESSARY TO
+C         RECOVER THE GIVENS ROTATION GV(I) DESCRIBED ABOVE.
+C
+C       W IS AN OUTPUT ARRAY OF LENGTH M. W(I) CONTAINS INFORMATION
+C         NECESSARY TO RECOVER THE GIVENS ROTATION GW(I) DESCRIBED
+C         ABOVE.
+C
+C       SING IS A LOGICAL OUTPUT VARIABLE. SING IS SET TRUE IF ANY
+C         OF THE DIAGONAL ELEMENTS OF THE OUTPUT S ARE ZERO. OTHERWISE
+C         SING IS SET FALSE.
+C
+C     SUBPROGRAMS CALLED
+C
+C       MINPACK-SUPPLIED ... DPMPAR
+C
+C       FORTRAN-SUPPLIED ... DABS,DSQRT
+C
+C     ARGONNE NATIONAL LABORATORY. MINPACK PROJECT. MARCH 1980.
+C     BURTON S. GARBOW, KENNETH E. HILLSTROM, JORGE J. MORE,
+C     JOHN L. NAZARETH
+C
+C     **********
+C     .. Scalar Arguments ..
+      INTEGER LS,M,N
+      LOGICAL SING
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION S(LS),U(M),V(N),W(M)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION COS,COTAN,GIANT,ONE,P25,P5,SIN,TAN,TAU,TEMP,ZERO
+      INTEGER I,J,JJ,L,NM1,NMJ
+C     ..
+C     .. External Functions ..
+      DOUBLE PRECISION DPMPAR
+      EXTERNAL DPMPAR
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC DABS,DSQRT
+C     ..
+C     .. Data statements ..
+      DATA ONE,P5,P25,ZERO/1.0D0,5.0D-1,2.5D-1,0.0D0/
+C     ..
+C
+C     GIANT IS THE LARGEST MAGNITUDE.
+C
+      GIANT = DPMPAR(3)
+C
+C     INITIALIZE THE DIAGONAL ELEMENT POINTER.
+C
+      JJ = (N* (2*M-N+1))/2 - (M-N)
+C
+C     MOVE THE NONTRIVIAL PART OF THE LAST COLUMN OF S INTO W.
+C
+      L = JJ
+      DO 10 I = N,M
+          W(I) = S(L)
+          L = L + 1
+   10 CONTINUE
+C
+C     ROTATE THE VECTOR V INTO A MULTIPLE OF THE N-TH UNIT VECTOR
+C     IN SUCH A WAY THAT A SPIKE IS INTRODUCED INTO W.
+C
+      NM1 = N - 1
+      IF (NM1.LT.1) GO TO 70
+      DO 60 NMJ = 1,NM1
+          J = N - NMJ
+          JJ = JJ - (M-J+1)
+          W(J) = ZERO
+          IF (V(J).EQ.ZERO) GO TO 50
+C
+C        DETERMINE A GIVENS ROTATION WHICH ELIMINATES THE
+C        J-TH ELEMENT OF V.
+C
+          IF (DABS(V(N)).GE.DABS(V(J))) GO TO 20
+          COTAN = V(N)/V(J)
+          SIN = P5/DSQRT(P25+P25*COTAN**2)
+          COS = SIN*COTAN
+          TAU = ONE
+          IF (DABS(COS)*GIANT.GT.ONE) TAU = ONE/COS
+          GO TO 30
+
+   20     CONTINUE
+          TAN = V(J)/V(N)
+          COS = P5/DSQRT(P25+P25*TAN**2)
+          SIN = COS*TAN
+          TAU = SIN
+   30     CONTINUE
+C
+C        APPLY THE TRANSFORMATION TO V AND STORE THE INFORMATION
+C        NECESSARY TO RECOVER THE GIVENS ROTATION.
+C
+          V(N) = SIN*V(J) + COS*V(N)
+          V(J) = TAU
+C
+C        APPLY THE TRANSFORMATION TO S AND EXTEND THE SPIKE IN W.
+C
+          L = JJ
+          DO 40 I = J,M
+              TEMP = COS*S(L) - SIN*W(I)
+              W(I) = SIN*S(L) + COS*W(I)
+              S(L) = TEMP
+              L = L + 1
+   40     CONTINUE
+   50     CONTINUE
+   60 CONTINUE
+   70 CONTINUE
+C
+C     ADD THE SPIKE FROM THE RANK 1 UPDATE TO W.
+C
+      DO 80 I = 1,M
+          W(I) = W(I) + V(N)*U(I)
+   80 CONTINUE
+C
+C     ELIMINATE THE SPIKE.
+C
+      SING = .FALSE.
+      IF (NM1.LT.1) GO TO 140
+      DO 130 J = 1,NM1
+          IF (W(J).EQ.ZERO) GO TO 120
+C
+C        DETERMINE A GIVENS ROTATION WHICH ELIMINATES THE
+C        J-TH ELEMENT OF THE SPIKE.
+C
+          IF (DABS(S(JJ)).GE.DABS(W(J))) GO TO 90
+          COTAN = S(JJ)/W(J)
+          SIN = P5/DSQRT(P25+P25*COTAN**2)
+          COS = SIN*COTAN
+          TAU = ONE
+          IF (DABS(COS)*GIANT.GT.ONE) TAU = ONE/COS
+          GO TO 100
+
+   90     CONTINUE
+          TAN = W(J)/S(JJ)
+          COS = P5/DSQRT(P25+P25*TAN**2)
+          SIN = COS*TAN
+          TAU = SIN
+  100     CONTINUE
+C
+C        APPLY THE TRANSFORMATION TO S AND REDUCE THE SPIKE IN W.
+C
+          L = JJ
+          DO 110 I = J,M
+              TEMP = COS*S(L) + SIN*W(I)
+              W(I) = -SIN*S(L) + COS*W(I)
+              S(L) = TEMP
+              L = L + 1
+  110     CONTINUE
+C
+C        STORE THE INFORMATION NECESSARY TO RECOVER THE
+C        GIVENS ROTATION.
+C
+          W(J) = TAU
+  120     CONTINUE
+C
+C        TEST FOR ZERO DIAGONAL ELEMENTS IN THE OUTPUT S.
+C
+          IF (S(JJ).EQ.ZERO) SING = .TRUE.
+          JJ = JJ + (M-J+1)
+  130 CONTINUE
+  140 CONTINUE
+C
+C     MOVE W BACK INTO THE LAST COLUMN OF THE OUTPUT S.
+C
+      L = JJ
+      DO 150 I = N,M
+          S(L) = W(I)
+          L = L + 1
+  150 CONTINUE
+      IF (S(JJ).EQ.ZERO) SING = .TRUE.
+      RETURN
+C
+C     LAST CARD OF SUBROUTINE R1UPDT.
+C
+      END
+C
+      SUBROUTINE GAUSSJ(N,ALPHA,BETA,B,T,W)
+C
+C           THIS ROUTINE COMPUTES THE NODES T(J) AND WEIGHTS
+C        W(J) FOR GAUSS-JACOBI QUADRATURE FORMULAS.
+C        THESE ARE USED WHEN ONE WISHES TO APPROXIMATE
+C
+C                 INTEGRAL (FROM A TO B)  F(X) W(X) DX
+C
+C                              N
+C        BY                   SUM W  F(T )
+C                             J=1  J    J
+C
+C        (W(X) AND W(J) HAVE NO CONNECTION WITH EACH OTHER)
+C        WHERE W(X) IS THE WEIGHT FUNCTION
+C
+C                   W(X) = (1-X)**ALPHA * (1+X)**BETA
+C
+C        ON (-1, 1), ALPHA, BETA .GT. -1.
+C
+C     INPUT:
+C
+C        N        THE NUMBER OF POINTS USED FOR THE QUADRATURE RULE
+C        ALPHA    SEE ABOVE
+C        BETA     SEE ABOVE
+C        B        REAL SCRATCH ARRAY OF LENGTH N
+C
+C     OUTPUT PARAMETERS (BOTH DOUBLE PRECISION ARRAYS OF LENGTH N)
+C
+C        T        WILL CONTAIN THE DESIRED NODES.
+C        W        WILL CONTAIN THE DESIRED WEIGHTS W(J).
+C
+C     SUBROUTINES REQUIRED: CLASS, IMTQL2
+C
+C     REFERENCE:
+C
+C        THE ROUTINE HAS BEEN ADAPTED FROM THE MORE GENERAL
+C        ROUTINE GAUSSQ BY GOLUB AND WELSCH.  SEE
+C        GOLUB, G. H., AND WELSCH, J. H., "CALCULATION OF GAUSSIAN
+C        QUADRATURE RULES," MATHEMATICS OF COMPUTATION 23 (APRIL,
+C        1969), PP. 221-230.
+C
+C
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION ALPHA,BETA
+      INTEGER N
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION B(N),T(N),W(N)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION MUZERO
+      INTEGER I,IERR
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL CLASS,IMTQL2
+C     ..
+      CALL CLASS(N,ALPHA,BETA,B,T,MUZERO)
+      W(1) = 1.0D0
+      DO 10 I = 2,N
+          W(I) = 0.0D0
+   10 CONTINUE
+      CALL IMTQL2(N,T,B,W,IERR)
+      DO 20 I = 1,N
+          W(I) = MUZERO*W(I)*W(I)
+   20 CONTINUE
+      RETURN
+
+      END
+      SUBROUTINE CLASS(N,ALPHA,BETA,B,A,MUZERO)
+C
+C           THIS PROCEDURE SUPPLIES THE COEFFICIENTS A(J), B(J) OF THE
+C        RECURRENCE RELATION
+C
+C             B P (X) = (X - A ) P   (X) - B   P   (X)
+C              J J            J   J-1       J-1 J-2
+C
+C        FOR THE VARIOUS CLASSICAL (NORMALIZED) ORTHOGONAL POLYNOMIALS,
+C        AND THE ZERO-TH MOMENT
+C
+C             MUZERO = INTEGRAL W(X) DX
+C
+C        OF THE GIVEN POLYNOMIAL'S WEIGHT FUNCTION W(X).  SINCE THE
+C        POLYNOMIALS ARE ORTHONORMALIZED, THE TRIDIAGONAL MATRIX IS
+C        GUARANTEED TO BE SYMMETRIC.
+C
+C     DOUBLE PRECISION DSQRT
+C
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION ALPHA,BETA,MUZERO
+      INTEGER N
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION A(N),B(N)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION A2B2,AB,ABI
+      INTEGER I,NM1
+C     ..
+C     .. External Functions ..
+      DOUBLE PRECISION DGAMMA
+      EXTERNAL DGAMMA
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC SQRT
+C     ..
+      NM1 = N - 1
+C
+      AB = ALPHA + BETA
+      ABI = 2.0D0 + AB
+      MUZERO = 2.0D0** (AB+1.0D0)*DGAMMA(ALPHA+1.0D0)*
+     +         DGAMMA(BETA+1.0D0)/DGAMMA(ABI)
+      A(1) = (BETA-ALPHA)/ABI
+      B(1) = SQRT(4.0D0* (1.0D0+ALPHA)* (1.0D0+BETA)/
+     +       ((ABI+1.0D0)*ABI*ABI))
+      A2B2 = BETA*BETA - ALPHA*ALPHA
+      DO 10 I = 2,NM1
+          ABI = 2.0D0*I + AB
+          A(I) = A2B2/ ((ABI-2.0D0)*ABI)
+          B(I) = SQRT(4.0D0*I* (I+ALPHA)* (I+BETA)* (I+AB)/
+     +           ((ABI*ABI-1)*ABI*ABI))
+   10 CONTINUE
+      ABI = 2.0D0*N + AB
+      A(N) = A2B2/ ((ABI-2.0D0)*ABI)
+      RETURN
+
+      END
+      SUBROUTINE IMTQL2(N,D,E,Z,IERR)
+C
+C     THIS IS A MODIFIED VERSION OF THE EISPACK ROUTINE IMTQL2.
+C     IT FINDS THE EIGENVALUES AND FIRST COMPONENTS OF THE
+C     EIGENVECTORS OF A SYMMETRIC TRIDIAGONAL MATRIX BY THE IMPLICIT QL
+C     METHOD.
+C
+C     .. Scalar Arguments ..
+      INTEGER IERR,N
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION D(N),E(N),Z(N)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION B,C,F,G,MACHEP,P,R,S
+      INTEGER I,II,J,K,L,M,MML
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC ABS,DABS,SIGN,SQRT
+C     ..
+C     .. Data statements ..
+C     DOUBLE PRECISION DSQRT, DABS, DSIGN
+C
+C     :::::::::: MACHEP IS A MACHINE DEPENDENT PARAMETER SPECIFYING
+C                THE RELATIVE PRECISION OF FLOATING POINT ARITHMETIC.
+C                MACHEP = 16.0D0**(-13) FOR LONG FORM ARITHMETIC
+C                ON IBM S360 ::::::::::
+      DATA MACHEP/1.D-15/
+C     ..
+C     DATA MACHEP/Z3410000000000000/
+C
+      IERR = 0
+      IF (N.EQ.1) GO TO 110
+C
+      E(N) = 0.0D0
+      DO 70 L = 1,N
+          J = 0
+C     :::::::::: LOOK FOR SMALL SUB-DIAGONAL ELEMENT ::::::::::
+   10     DO 20 M = L,N
+              IF (M.EQ.N) GO TO 30
+              IF (ABS(E(M)).LE.MACHEP* (DABS(D(M))+DABS(D(M+
+     +            1)))) GO TO 30
+   20     CONTINUE
+C
+   30     P = D(L)
+          IF (M.EQ.L) GO TO 70
+          IF (J.EQ.30) GO TO 100
+          J = J + 1
+C     :::::::::: FORM SHIFT ::::::::::
+          G = (D(L+1)-P)/ (2.0D0*E(L))
+          R = SQRT(G*G+1.0D0)
+          G = D(M) - P + E(L)/ (G+SIGN(R,G))
+          S = 1.0D0
+          C = 1.0D0
+          P = 0.0D0
+          MML = M - L
+C
+C     :::::::::: FOR I=M-1 STEP -1 UNTIL L DO -- ::::::::::
+          DO 60 II = 1,MML
+              I = M - II
+              F = S*E(I)
+              B = C*E(I)
+              IF (ABS(F).LT.ABS(G)) GO TO 40
+              C = G/F
+              R = SQRT(C*C+1.0D0)
+              E(I+1) = F*R
+              S = 1.0D0/R
+              C = C*S
+              GO TO 50
+
+   40         S = F/G
+              R = SQRT(S*S+1.0D0)
+              E(I+1) = G*R
+              C = 1.0D0/R
+              S = S*C
+   50         G = D(I+1) - P
+              R = (D(I)-G)*S + 2.0D0*C*B
+              P = S*R
+              D(I+1) = G + P
+              G = C*R - B
+C     :::::::::: FORM FIRST COMPONENT OF VECTOR ::::::::::
+              F = Z(I+1)
+              Z(I+1) = S*Z(I) + C*F
+              Z(I) = C*Z(I) - S*F
+   60     CONTINUE
+C
+          D(L) = D(L) - P
+          E(L) = G
+          E(M) = 0.0D0
+          GO TO 10
+
+   70 CONTINUE
+C
+C     :::::::::: ORDER EIGENVALUES AND EIGENVECTORS ::::::::::
+      DO 90 II = 2,N
+          I = II - 1
+          K = I
+          P = D(I)
+C
+          DO 80 J = II,N
+              IF (D(J).GE.P) GO TO 80
+              K = J
+              P = D(J)
+   80     CONTINUE
+C
+          IF (K.EQ.I) GO TO 90
+          D(K) = D(I)
+          D(I) = P
+          P = Z(I)
+          Z(I) = Z(K)
+          Z(K) = P
+   90 CONTINUE
+C
+      GO TO 110
+C     :::::::::: SET ERROR -- NO CONVERGENCE TO AN
+C                EIGENVALUE AFTER 30 ITERATIONS ::::::::::
+  100 IERR = L
+  110 RETURN
+
+      END
+      DOUBLE PRECISION FUNCTION DGAMMA(X)
+*
+* COMPUTES THE GAMMA FUNCTION VIA A SERIES EXPANSION FROM
+* ABRAMOWITZ & STEGUN
+*
+* L. N. TREFETHEN, 1/13/84
+*
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION X
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION FAC,G,Y
+      INTEGER I,II
+C     ..
+C     .. Local Arrays ..
+      DOUBLE PRECISION C(26)
+C     ..
+C     .. Data statements ..
+      DATA C/1.0000000000000000D0,.5772156649015329D0,
+     +     -.6558780715202538D0,-.0420026350340952D0,
+     +     .1665386113822915D0,-.0421977345555443D0,
+     +     -.0096219715278770D0,.0072189432466630D0,
+     +     -.0011651675918591D0,-.0002152416741149D0,
+     +     .0001280502823882D0,-.0000201348547807D0,
+     +     -.0000012504934821D0,.0000011330272320D0,
+     +     -.0000002056338417D0,.0000000061160950D0,.0000000050020075D0,
+     +     -.0000000011812746D0,.0000000001043427D0,.0000000000077823D0,
+     +     -.0000000000036968D0,.0000000000005100D0,
+     +     -.0000000000000206D0,-.0000000000000054D0,
+     +     .0000000000000014D0,.0000000000000001D0/
+C     ..
+*
+* ARGUMENT REDUCTION:
+      FAC = 1.D0
+      Y = X
+   10 IF (Y.LE.1.5D0) GO TO 20
+      Y = Y - 1.D0
+      FAC = FAC*Y
+      GO TO 10
+
+   20 IF (Y.GE.0.5D0) GO TO 30
+      FAC = FAC/Y
+      Y = Y + 1.D0
+      GO TO 20
+*
+* SERIES:
+   30 G = C(26)
+      DO 40 I = 1,25
+          II = 26 - I
+          G = Y*G + C(II)
+   40 CONTINUE
+      G = Y*G
+      DGAMMA = FAC/G
+      RETURN
+
+      END

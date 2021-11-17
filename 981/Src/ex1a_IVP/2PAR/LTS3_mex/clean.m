@@ -1,0 +1,3 @@
+% clean.m
+
+delete('*.mex*')

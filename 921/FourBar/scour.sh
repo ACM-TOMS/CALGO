@@ -1,0 +1,4 @@
+rm -f failed_paths midpath_data raw_solutions singular_solutions finite_solutions main_data nonsingular_solutions raw_data real_finite_solutions
+
+rm -f approxSolns constantValues distinctSolns isApproxSoln isDistinctSoln isRealSoln nonrealDistinctSolns realDistinctSolns redundantSolns refinedPoints summary unknownPoints 
+

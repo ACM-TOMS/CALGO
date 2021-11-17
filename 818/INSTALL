@@ -1,0 +1,83 @@
+#!/bin/sh
+######################################################
+# -> UNCOMMENT THE APPROPRIATE OF THE FOLLOWING LINES
+#
+#SB_ARCH='AIX'    #XL Fortran for IBM AIX
+#SB_ARCH='ALPHA'  #DIGITAL Fortran 90 compiler
+#SB_ARCH='CRAY'   #CF90 Fortran compiler
+#SB_ARCH='HP'     #HP Fortran 90 compiler
+#SB_ARCH='NAG'    #NAGWare Fortran 95 compiler
+#SB_ARCH='SGI'    #MIPSpro 7 Fortran 90 compiler
+SB_ARCH='SUN'    #Sun Performance WorkShop Fortran
+#
+# -> NOTHING SHOULD BE MODIFIED BELOW HERE
+######################################################
+if [ ! "$SB_ARCH" ]
+then 
+echo
+echo "Before the file INSTALL can be executed, it has to be edited slightly."
+echo "Open the file in a text editor and set the variable SB_ARCH correctly"
+echo "by uncommenting the appropriate line."
+echo
+exit 
+fi
+#
+DIR_ARITH='SPEC_ARITH'
+DIR_SOFT='SOURCE_FILES'
+DIR_TARGET='TARGET_FILES'
+DIR_NMODIF='NMODIF'
+DIR_CODE='SOFTWARE'
+DIR_WORK='tmp_workdir'
+DIR_TEST='TESTER'
+#
+echo Creating files...
+if [ ! -d $DIR_WORK ]
+then
+  mkdir $DIR_WORK
+fi
+##############################################################################
+##############################################################################
+for file in 'dense' 'info' 'link' 'lmbv_coo' 'lmbv_csc' 'lmbv_csr' 'lmbv_dia' 'lmbv_bco' 'lmbv_bsc' 'lmbv_bsr' 'lmbv_bdi' 'lmbv_vbr' 'lsbv_coo' 'lsbv_csc' 'lsbv_csr' 'lsbv_dia' 'lsbv_bco' 'lsbv_bsc' 'lsbv_bsr' 'lsbv_bdi' 'lsbv_vbr' 'rmbv_coo' 'rmbv_csc' 'rmbv_csr' 'rmbv_dia' 'rmbv_bco' 'rmbv_bsc' 'rmbv_bsr' 'rmbv_bdi' 'rmbv_vbr' 'rsbv_coo' 'rsbv_csc' 'rsbv_csr' 'rsbv_dia' 'rsbv_bco' 'rsbv_bsc' 'rsbv_bsr' 'rsbv_bdi' 'rsbv_vbr' 'uscr_coo' 'uscr_csc' 'uscr_csr' 'uscr_dia' 'uscr_bco' 'uscr_bsc' 'uscr_bsr' 'uscr_bdi' 'uscr_vbr' 'usds' 'usmm' 'usmv' 'ussm' 'ussv' 'usdot' 'usaxpy' 'usga' 'usgz' 'ussc' 'conv_tools' 'INSERTING' 'INS_ROUTINER' 'uscr_begin' 'uscr_block_begin' 'uscr_variable_block_begin' 'uscr_insert_entry' 'uscr_insert_entries' 'uscr_insert_col' 'uscr_insert_row' 'uscr_insert_clique' 'uscr_insert_block' 'uscr_end' 'usgp' 'ussp' 'usconv_bco2bdi' 'usconv_bdi2bco' 'usconv_coo2csr' 'usconv_coo2csc' 'usconv_bco2bsr' 'usconv_bco2bsc' 'usconv_coo2dia' 'usconv_dia2coo' 'usconv_csr2coo' 'usconv_csc2coo' 'usconv_bsc2bco' 'usconv_bsr2bco'
+##############################################################################
+##############################################################################
+do
+  sourcefile=$file'_source.F'
+  targetfile=$file'_target.F'
+  output=$file'.f90'
+  if [ ! -f $DIR_CODE/$output ]
+  then
+    cp $DIR_SOFT/$sourcefile $DIR_WORK
+    cp $DIR_TARGET/$targetfile $DIR_WORK
+    for arith in 'integer' 'doubleComplex' 'doublePrecision' 'singleComplex' 'singlePrecision'
+    do
+      cp $DIR_ARITH/$arith $DIR_WORK
+      cd $DIR_WORK
+      echo '#include "'$arith'"' > dummy.F
+      grep -v '#include' $sourcefile >> dummy.F
+      cpp -P dummy.F | egrep '[0-9]|[a-z]|[A-Z]|\*' | sed -e 's/,  ,//g' > $arith$sourcefile
+      rm -f $arith dummy.F
+      cd ..
+    done
+    cd $DIR_WORK
+    rm -f $sourcefile
+    cpp -P $targetfile | egrep '[0-9]|[a-z]|[A-Z]|\*' | sed -e 's/,  ,//g' > $output
+    echo $output created
+    rm -f $targetfile *_source*
+    cd ..
+    mv $DIR_WORK/$output $DIR_CODE
+  fi
+done
+for file in $DIR_NMODIF/* 
+  do
+  if [ ! -f $DIR_CODE/$file ]
+  then
+  cp $file $DIR_CODE
+  fi
+done
+rmdir $DIR_WORK
+##############################################################################
+cd $DIR_CODE
+make SBLAS_ARCH=$SB_ARCH
+cd ..
+cd $DIR_TEST
+make -f "Makefile.$SB_ARCH"

@@ -1,0 +1,347 @@
+***********************************************************************
+*                                                                     *
+*    PSEN - A BUNDLE VARIABLE METRIC ALGORITHM FOR OPTIMIZATION OF    *
+*           LARGE-SCALE NONSMOOTH PARTIALLY SEPARABLE FUNCTIONS.      *
+*                                                                     *
+***********************************************************************
+
+
+1. Introduction:
+----------------
+
+      The double-precision FORTRAN 77 basic subroutine PSEN is designed
+to find a close approximation to a local minimum of a partially separable
+objective function
+
+      F(X) =  FA_1(X) + FA_2(X) + ... + FA_NA(X).
+
+Here X is a vector of NF variables and FA_I(X), 1 <= I <= NA, are
+locally Lipschitz nonsmooth functions. We assume that NF and NA are
+large, but partial functions FA_I(X), 1 <= I <= NA, depend on a small
+number of variables. This implies that the nonsmooth mapping
+AF(X) = [FA_1(X), FA_2(X), ..., FA_NA(X)] has a sparse subdifferential
+containing generalized Jacobian matrices, which will be denoted by AG(X)
+(they have NA rows and NF columns). The sparsity pattern of the Jacobian
+matrix is stored in the coordinate form if ISPAS=1 or in the standard
+compressed row format if ISPAS=2 using arrays IAG and JAG. For example,
+if the Jacobian matrix has the following pattern
+
+                AG = | * * 0 * |
+                     | * * * 0 |
+                     | * 0 0 * |
+                     | 0 * * 0 |
+                     | * 0 * 0 |
+
+(asterisks denote nonzero elements) then arrays IAG and JAG contain
+elements
+
+IAG(1)=1, IAG(2)=1, IAG(3)=1, IAG(4)=2,  IAG(5)=2,  IAG(6)=2,
+IAG(7)=3, IAG(8)=3, IAG(9)=4, IAG(10)=4, IAG(11)=5, IAG(12)=5,
+JAG(1)=1, JAG(2)=2, JAG(3)=4, JAG(4)=1,  JAG(5)=2,  JAG(6)=3,
+JAG(7)=1, JAG(8)=4, JAG(9)=2, JAG(10)=3, JAG(11)=1, JAG(12)=3
+
+if ISPAS=1 or
+
+IAG(1)=1, IAG(2)=4, IAG(3)=7, IAG(4)=9,  IAG(5)=11, IAG(6)=13,
+JAG(1)=1, JAG(2)=2, JAG(3)=4, JAG(4)=1,  JAG(5)=2,  JAG(6)=3,
+JAG(7)=1, JAG(8)=4, JAG(9)=2, JAG(10)=3, JAG(11)=1, JAG(12)=3
+
+if ISPAS=2. In the first case, nonzero elements can be sorted in an
+arbitrary order (not only by rows as in the above example). Arrays
+IAG and JAG have to be declared with lengths NA+MA and MA at least,
+respectively, where MA is the number of nonzero elements. In the
+second case, nonzero elements can be sorted only by rows. Components
+of IAG contain total numbers of nonzero elements in all previous
+rows increased by 1 and elements of JAG contain corresponding column
+indices (note that IAG has NA+1 elements and the last element is
+equal to MA+1). Arrays IAG and JAG have to be declared with length
+NA+1 and MA at least, respectively.
+      To simplify user's work, an additional easy to use subroutine
+PSENU is added. It calls the basic general subroutine PSEN. All
+subroutines contain a description of formal parameters and extensive
+comments. Furthermore, test program TSENU is included, which contains
+several test problems (see e.g. [2]). This test program serves as an
+example for using the subroutine PSENU, verifies its correctness and
+demonstrates its efficiency.
+      In this short guide, we describe all subroutines which can be
+called from the user's program. A detailed description of the method is
+given in [1]. In the description of formal parameters, we introduce a
+type of the argument that specifies whether the argument must have a
+value defined on entry to the subroutine (I), whether it is a value
+which will be returned (O), or both (U), or whether it is an auxiliary
+value (A). Note that the arguments of the type I can be changed on
+output under some circumstances, especially if improper input values
+were given. Besides formal parameters, we can use a COMMON /STAT/ block
+containing statistical information. This block, used in each subroutine
+has the following form:
+
+      COMMON /STAT/ NRES,NDEC,NIN,NIT,NFV,NFG,NFH
+
+The arguments have the following meaning:
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NRES      O   Positive INTEGER variable that indicates the number of
+                restarts.
+  NDEC      O   Positive INTEGER variable that indicates the number of
+                matrix decompositions.
+  NIN       O   Positive INTEGER variable that indicates the number of
+                inner iterations (for solving linear systems).
+  NIT       O   Positive INTEGER variable that indicates the number of
+                iterations.
+  NFV       O   Positive INTEGER variable that indicates the number of
+                function evaluations.
+  NFG       O   Positive INTEGER variable that specifies the number of
+                gradient evaluations.
+  NFH       O   Positive INTEGER variable that specifies the number of
+                Hessian evaluations.
+
+
+2. Subroutine PSENU:
+--------------------
+
+The calling sequence is
+
+      CALL PSENU(NF,NA,MA,X,AF,IAG,JAG,IPAR,RPAR,F,GMAX,ISPAS,IPRNT,ITERM)
+
+The arguments have the following meaning.
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NF        I   Positive INTEGER variable that specifies the number of
+                variables of the partially separable function.
+  NA        I   Positive INTEGER variable that specifies the number of
+                partial functions.
+  MA        I   Number of nonzero elements in the Jacobian matrix. This
+                parameter is used as input only if ISPAS=1 (it defines
+                dimensions of arrays IAG and JAG in this case).
+  X(NF)     U   On input, DOUBLE PRECISION vector with the initial
+                estimate to the solution. On output, the approximation
+                to the minimum.
+  AF(NA)    O   DOUBLE PRECISION vector which contains values of partial
+                functions.
+  IAG(NA+1) I   INTEGER array which contains pointers of the first
+                elements in rows of the Jacobian matrix.
+  JAG(MA)   I   INTEGER array which contains column indices of the
+                nonzero elements.
+  IPAR(7)   I   INTEGER parameters:
+                  IPAR(1)=MIT,  IPAR(2)=MFV,  IPAR(3)-NONE,
+                  IPAR(4)=IEST, IPAR(5)-NONE, IPAR(6)=MB,
+                  IPAR(7)=IFIL.
+                Parameters MIT, MFV, IEST, MB are described in Section 3
+                together with other parameters of the subroutine PSEN.
+                Parameter IFIL specifies a relative size of the space
+                reserved for fill-in. The choice IFIL=0 causes that the
+                default value IFIL=1 will be taken.
+  RPAR(9)   I   DOUBLE PRECISION parameters:
+                  RPAR(1)=XMAX,  RPAR(2)=TOLX,  RPAR(3)=TOLF,
+                  RPAR(4)=TOLB,  RPAR(5)=TOLG,  RPAR(6)=FMIN,
+                  RPAR(7)-NONE,  RPAR(8)=ETA3,  RPAR(9)=ETA5.
+                Parameters XMAX, TOLX, TOLF, TOLB, TOLG, FMIN, ETA3, ETA5
+                are described in Section 3 together with other parameters
+                of the subroutine PSEN.
+  F         O   DOUBLE PRECISION value of the objective function at the
+                solution X.
+  GMAX      O   DOUBLE PRECISION maximum absolute value of a partial
+                derivative of the Lagrangian function.
+  ISPAS     I   INTEGER variable that specifies sparse structure of the
+                Jacobian matrix:
+                  ISPAS= 1 - the coordinate form is used,
+                  ISPAS= 2 - the standard row compresed format is used.
+  IPRNT     I   INTEGER variable that specifies PRINT:
+                  IPRNT= 0 - print is suppressed,
+                  IPRNT= 1 - basic print of final results,
+                  IPRNT=-1 - extended print of final results,
+                  IPRNT= 2 - basic print of intermediate and final
+                             results,
+                  IPRNT=-2 - extended print of intermediate and final
+                             results.
+  ITERM     O   INTEGER variable that indicates the cause of termination:
+                  ITERM= 1 - if |X - XO| was less than or equal to TOLX
+                             in two subsequent iterations,
+                  ITERM= 2 - if |F - FO| was less than or equal to TOLF
+                             in two subsequent iterations,
+                  ITERM= 3 - if F is less than or equal to TOLB,
+                  ITERM= 4 - if GMAX is less than or equal to TOLG,
+                  ITERM= 6 - if termination criterion was not satisfied,
+                             but the solution is probably acceptable,
+                  ITERM=11 - if NIT exceeded MIT,
+                  ITERM=12 - if NFV exceeded MFV,
+                  ITERM< 0 - if the method failed. Values ITERM<=-40
+                             detect a lack of space. In this case,
+                             parameter IPAR(7)=IFIL has to be increased
+                             (IFIL=2, IFIL=3, etc.).
+
+      The subroutine PSENU requires the user supplied subroutines FUN and
+DFUN that define partial functions and their subgradients and have the
+form
+
+      SUBROUTINE  FUN(NF,KA,X,FA)
+      SUBROUTINE DFUN(NF,KA,X,GA)
+
+The arguments of the user supplied subroutines have the following
+meaning.
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NF        I   Positive INTEGER variable that specifies the number of
+                variables of the objective function.
+  KA        I   INTEGER index of the partial function.
+  X(NF)     I   DOUBLE PRECISION an estimate to the solution.
+  FA        O   DOUBLE PRECISION value of the KA-th partial function at
+                the point X.
+  GA(NF)    O   DOUBLE PRECISION an arbitrary subgradient of the KA-th
+                partial function at the point X. Note that only nonzero
+                elements of this subgradient have to be assigned.
+
+
+3. Subroutine PSEN:
+-------------------
+
+      This general subroutine is called from all subroutines described
+in Section 2. The calling sequence is
+
+      CALL PSEN(NF,NA,MB,MMAX,X,IX,AF,AG,AGO,AH,GA,G,H,IH,JH,IAG,
+     & JAG,S,XO,GO,XS,GS,GP,AX,AY,AZ,PSL,PERM,INVP,WN11,WN12,WN13,
+     & WN14,XMAX,TOLX,TOLF,TOLB,TOLG,FMIN,ETA3,ETA5,GMAX,F,MIT,MFV,
+     & IEST,IPRNT,ITERM)
+
+The arguments NF, NA, X, AF, IAG, JAG, GMAX, F, IPRNT, ITERM have the
+same meaning as in Section 2. Other arguments have the following meaning:
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  MB         I   INTEGER dimension of a bundle used in the line search.
+  MMAX       I   INTEGER size of array H.
+  IX(NF)     A   INTEGER auxiliary array.
+  AG(MA)     A   DOUBLE PRECISION nonzero elements of the Jacobian
+                 matrix.
+  AGO(MA)    A   DOUBLE PRECISION auxiliary array.
+  AH(MH)     A   DOUBLE PRECISION approximation of the partitioned
+                 Hessian matrix.
+  GA(NF)     A   DOUBLE PRECISION gradient of the partial function.
+  G(NF)      A   DOUBLE PRECISION gradient of the objective function.
+  H(MMAX)    A   DOUBLE PRECISION nonzero elements of the approximation
+                 of the Hessian matrix and nonzero elements of the
+                 Choleski factor.
+  IH(NF+1)   I   INTEGER array which contains pointers of the diagonal
+                 elements in the upper part of the Hessian matrix.
+  JH(MMAX)   I   INTEGER array which contains column indices of the
+                 nonzero elements and additional working space for the
+                 Choleski factor.
+  S(NF)      A   DOUBLE PRECISION direction vector.
+  XO(NF)     A   DOUBLE PRECISION array which contains increments of
+                 variables.
+  GO(NF)     A   DOUBLE PRECISION array which contains increments of
+                 gradients.
+  XS(NF)     A   DOUBLE PRECISION auxiliary array.
+  GS(NF)     A   DOUBLE PRECISION auxiliary array.
+  GP(NF)     A   DOUBLE PRECISION auxiliary array.
+  AX(NF*MB)  A   DOUBLE PRECISION auxiliary array.
+  AY(NF*MB)  A   DOUBLE PRECISION auxiliary array.
+  AZ(4*MB)   A   DOUBLE PRECISION auxiliary array.
+  PSL(NF+1)  A   INTEGER pointer vector in the compact form of the
+                 Choleski factor.
+  PERM(NF)   A   INTEGER permutation vector.
+  INVP(NF)   A   INTEGER inverse permutation vector.
+  WN11(NF+1) A   INTEGER auxiliary array.
+  WN12(NF+1) A   INTEGER auxiliary array.
+  WN13(NF+1) A   INTEGER auxiliary array.
+  WN14(NF+1) A   INTEGER auxiliary array.
+  XMAX       I   DOUBLE PRECISION maximum stepsize; the choice XMAX=0
+                 causes that the default value 1.0D+16 will be taken.
+  TOLX       I   DOUBLE PRECISION tolerance for the change of the
+                 coordinate vector X; the choice TOLX=0 causes that the
+                 default value TOLX=1.0D-16 will be taken.
+  TOLF       I   DOUBLE PRECISION tolerance for the change of function
+                 values; the choice TOLF=0 causes that the default
+                 value TOLF=1.0D-12 will be taken.
+  TOLB       I   DOUBLE PRECISION minimum acceptable function value;
+                 the choice TOLB=0 causes that the default value
+                 TOLB=FMIN+1.0D-12 will be taken.
+  TOLG       I   DOUBLE PRECISION tolerance for the Lagrangian function
+                 gradient; the choice TOLG=0 causes that the default
+                 value TOLG=1.0D-8 will be taken.
+  FMIN       I   DOUBLE PRECISION lower bound for the minimum function
+                 value.
+  ETA3       I   DOUBLE PRECISION correction parameter; the choice ETA3=0
+                 causes that the default value ETA3=1.0D-12 will be taken.
+  ETA5       I   DOUBLE PRECISION parameter for subgradient locality
+                 measure; the choice ETA5=0 causes that the default value
+                 ETA5=1.0D-12 will be taken.
+  MIT        I   INTEGER variable that specifies the maximum number of
+                 iterations; the choice MIT=0 causes that the default
+                 value 9000 will be taken.
+  MFV        I   INTEGER variable that specifies the maximum number of
+                 function evaluations; the choice MFV=0 causes that
+                 the default value 9000 will be taken.
+  IEST       I   INTEGER estimation of the minimum functiom value for
+                 the line search:
+                  IEST=0 - estimation is not used,
+                  IEST=1 - lower bound FMIN is used as an estimation
+                           for the minimum function value.
+
+The choice of parameter XMAX can be sensitive in many cases. First, the
+objective function can be evaluated only in a relatively small region
+(if it contains exponentials) so that the maximum stepsize is necessary.
+Secondly, the problem can be very ill-conditioned far from the solution
+point so that large steps can be unsuitable. Finally, if the problem has
+more local solutions, a suitably chosen maximum stepsize can lead to
+obtaining a better local solution. A suitable choice of parameter ETA5
+can sometimes improve the efficiency of the method.
+      The subroutine PSEN requires the user supplied subroutines FUN
+and DFUN which are described in Section 2.
+
+4. Verification of the subroutines:
+-----------------------------------
+
+      Subroutine PSENU can be verified and tested using the program
+TSENU. This program calls the subroutines TIUB15 (initiation), TAFU15
+(function evaluation) and TAGU15 (gradient evaluation) containing
+22 unconstrained test problems with at most 200 variables [2]. The
+results obtained by the program TSENU on a PC computer with Microsoft
+Power Station Fortran compiler have the following form.
+
+NIT= 3124  NFV= 3134  NFG= 3134  F= 0.287703261E-08  G= 0.582E-08  ITERM=  4
+NIT=  286  NFV=  287  NFG=  287  F= 0.379499216E-08  G= 0.203E-06  ITERM=  2
+NIT=   71  NFV=   71  NFG=   71  F= 0.233196848E-09  G= 0.100E-07  ITERM=  4
+NIT=   40  NFV=   40  NFG=   40  F=  126.863549      G= 0.699E-08  ITERM=  4
+NIT=  282  NFV=  282  NFG=  282  F= 0.732927514E-07  G= 0.400E-08  ITERM=  4
+NIT=  344  NFV=  344  NFG=  344  F= 0.836329152E-08  G= 0.326E-08  ITERM=  4
+NIT=  286  NFV=  287  NFG=  287  F=  2391.16999      G= 0.673E-04  ITERM=  2
+NIT=  610  NFV=  611  NFG=  611  F= 0.317244739E-05  G= 0.548E-08  ITERM=  4
+NIT= 2514  NFV= 2516  NFG= 2516  F=  552.380551      G= 0.448E-08  ITERM=  4
+NIT=  907  NFV=  907  NFG=  907  F=  131.888476      G= 0.579E-08  ITERM=  4
+NIT=  269  NFV=  271  NFG=  271  F= 0.173668302E-09  G= 0.266E-08  ITERM=  4
+NIT= 1805  NFV= 1810  NFG= 1810  F=  621.128947      G= 0.906E-02  ITERM=  2
+NIT=  680  NFV=  681  NFG=  681  F=  2940.50943      G= 0.140E-03  ITERM=  2
+NIT=  370  NFV=  370  NFG=  370  F=  112.314954      G= 0.622E-08  ITERM=  4
+NIT=  364  NFV=  364  NFG=  364  F=  36.0935676      G= 0.986E-08  ITERM=  4
+NIT= 1004  NFV= 1004  NFG= 1004  F=  13.2000000      G= 0.904E-08  ITERM=  4
+NIT=  380  NFV=  380  NFG=  380  F= 0.268534232E-01  G= 0.871E-09  ITERM=  4
+NIT=15319  NFV=15321  NFG=15321  F= 0.589970806E-08  G= 0.925E-08  ITERM=  4
+NIT= 3972  NFV= 4056  NFG= 4056  F= 0.565862690E-08  G= 0.887E-08  ITERM=  4
+NIT=  774  NFV=  988  NFG=  988  F= 0.406495193E-08  G= 0.468E-08  ITERM=  4
+NIT=  247  NFV=  248  NFG=  248  F=  264.000000      G= 0.364E-03  ITERM=  2
+NIT= 1191  NFV= 1192  NFG= 1192  F=  593.360762      G= 0.145E-03  ITERM=  2
+NITER =34839    NFVAL =35164    NSUCC =   22
+TIME= 0:00:13.49
+
+
+The rows corresponding to individual test problems contain the number of
+iterations NIT, the number of function evaluations NFV, the number of
+gradient evaluations NFG, the final value of the objective function F,
+the norm of gradient G and the cause of termination ITERM.
+
+References:
+-----------
+
+[1] Luksan L., Matonoha C., Vlcek J.: LSA: Algorithms for large-scale
+    unconstrained and box constrained optimization Technical Report V-896.
+    Prague, ICS AS CR, 2004.
+
+[2] Luksan L., Vlcek J.: Sparse and partially separable test problems
+    for unconstrained and equality constrained optimization. Research
+    Report V-767, Institute of Computer Science, Academy of Sciences
+    of the Czech Republic, Prague, Czech Republic, 1998.
+

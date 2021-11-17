@@ -1,0 +1,1 @@
+%MEXPROXMONOTONICNEW  Solve an isotonic regression problem with total order

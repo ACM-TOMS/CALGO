@@ -1,0 +1,2653 @@
+        SUBROUTINE GMA(NPC,N,NTYPE,TN1,TN2,M,MTYPE,                     GMA00010
+     1      TM1,TM2,IBDIM,B,K,R,A)
+C           SUBROUTINE GMA IS AN IMPLEMENTATION OF THE GENERALIZED
+C       MARCHING ALGORITHM, WHICH MAY BE USED FOR SOLVING LINEAR
+C       SYSTEMS ARISING FROM 5 POINT DISCRETIZATIONS OF SEPARABLE
+C       OR CONSTANT COEFFICIENT ELLIPTIC BOUNDARY VALUE PROBLEMS
+C       ON RECTANGULAR DOMAINS.  A DIRICHLET, NEUMANN, OR MIXED
+C       BOUNDARY CONDITION MAY BE INDEPENDENTLY SPECIFIED ON EACH
+C       SIDE OF THE RECTANGLE, OR PERIODIC BOUNDARY CONDITIONS MAY
+C       BE SPECIFIED ON OPPOSING SIDES.
+C           THE LINEAR SYSTEM HAS THE FORM:
+C
+C       ( TM1(I) + TN1(J) ) * X(I,J)
+C           -  TM2(I+1) * X(I+1,J)  -  TM2(I) * X(I-1,J)
+C           -  TN2(J+1) * X(I,J+1)  -  TN2(J) * X(I,J-1)  =  B(I,J)
+C
+C       FOR I = 1,2,...,M, AND J = 1,2,...,N, WHERE TM2(M+1) IS
+C       INTERPRETED AS TM2(1),  TN2(N+1) AS TN2(1),  X(0,J) AS X(M,J),
+C       X(M+1,J) AS X(1,J),  X(I,0) AS X(I,N),  AND X(I,N+1) AS X(I,1).
+C
+C       THE PARAMETER LIST:
+C
+C       NPC IS AN INTEGER.  IF NPC = 0, GMA DOES NECESSARY
+C           PREPROCESSING CALCULATIONS.  IF NPC = 1, GMA SOLVES THE
+C           LINEAR SYSTEM.
+C       N IS AN INTEGER, AS DEFINED ABOVE. N MUST BE GREATER THAN 2.
+C       NTYPE IS AN INTEGER DESCRIBING THE ARRAYS TN1 AND TN2.
+C           NTYPE = 1: GENERAL SEPARABLE - DIRICHLET, NEUMANN, OR
+C           MIXED BOUNDARY CONDITIONS.
+C           TN1(I) IS ARBITRARY, I = 1,2,...,N.
+C           TN2(1) = 0.0; TN2(I) IS ARBITRARY, NONZERO, I = 2,3,...,N.
+C           NTYPE = 2: CONSTANT COEFFICIENT - DIRICHLET, NEUMANN,
+C           OR MIXED BOUNDARY CONDITIONS.
+C           TN1(I) = ALPHA, ALPHA AN ARBITRARY CONSTANT, I = 2,3,...N-1.
+C           TN2(1) = 0.0; TN2(I) = BETA, BETA AN ARBITRARY NONZERO
+C           CONSTANT, I = 3,...,N-1.
+C           TOP BOUNDARY CONDITION : ONE OF
+C           TN1(1) = ALPHA;  TN2(2) = BETA; (DIRICHLET)
+C           TN1(1) = ALPHA;  TN2(2) = SQRT(2) * BETA; (NEUMANN-CENTERED)
+C           TN1(1) = ALPHA - BETA;  TN2(2) = BETA;  (NEUMANN-STAGGERED)
+C           TN1(1) = RHO, RHO ARBITRARY; TN2(2) = ZETA, ZETA ARBITRARY,
+C           NONZERO; (MIXED).
+C           BOTTOM BOUNDARY CONDITION : ONE OF
+C           TN1(N) = ALPHA;  TN2(N) = BETA; (DIRICHLET)
+C           TN1(N) = ALPHA;  TN2(N) = SQRT(2) * BETA; (NEUMANN-CENTERED)
+C           TN1(N) = ALPHA - BETA;  TN2(N) = BETA;  (NEUMANN-STAGGERED)
+C           TN1(N) = CHI, CHI ARBITRARY; TN2(N) = ETA, ETA ARBITRARY,
+C           NONZERO; (MIXED).
+C           NTYPE = 3: GENERAL SEPARABLE - PERIODIC BOUNDARY CONDITIONS.
+C           TN1(I) IS ARBITRARY, I = 1,2,...,N.
+C           TN2(I) IS ARBITRARY, NONZERO, I = 1,2,...,N.
+C           NTYPE = 4: CONSTANT COEFFICIENT - PERIODIC BOUNDARY
+C           CONDITIONS.
+C           TN1(I) = ALPHA, ALPHA ARBITRARY, I = 1,2,...,N.
+C           TN2(I) = BETA, BETA ARBITRARY, NONZERO, I = 1,2,...,N.
+C           IF N = 3, GMA MAY RESPECIFY NTYPE.
+C       TN1 IS AN ARRARY OF LENGTH N+1, DEFINED ABOVE.
+C       TN2 IS AN ARRAY OF LENGTH N+1, DEFINED ABOVE.
+C       M IS AN INTEGER, AS DEFINED ABOVE. M MUST BE GREATER THAN 2.
+C       MTYPE IS AN INTEGER DESCRIBING THE ARRAYS TM1 AND TM2.
+C           MTYPE = 1: GENERAL SEPARABLE - DIRICHLET, NEUMANN, OR
+C           MIXED BOUNDARY CONDITIONS.
+C           MTYPE = 2: CONSTANT COEFFICIENT - DIRICHLET, NEUMANN,
+C           OR MIXED BOUNDARY CONDITIONS.
+C           MTYPE = 3: GENERAL SEPARABLE - PERIODIC BOUNDARY CONDITIONS.
+C           MTYPE = 4: CONSTANT COEFFICIENT - PERIODIC BOUNDARY
+C           CONDITIONS.
+C           RESTRICTIONS ON TM1 AND TM2 ARE ANALOGOUS TO THOSE ON
+C           TN1 AND TN2, RESPECTIVELY, FOR EACH GIVEN TYPE.
+C           IF M IS LESS THAN 6, GMA MAY RESPECIFY MTYPE.
+C       TM1 IS AN ARRAY OF LENGTH M+1, DEFINED ABOVE.
+C       TM2 IS AN ARRAY OF LENGTH M+1, DEFINED ABOVE.
+C       IBDIM IS THE ROW DIMENSION OF THE ARRAY B, AS IT APPEARS
+C           IN THE CALLING PROGRAM.
+C       B IS A TWO DIMENSIONAL ARRAY WITH AT LEAST M ROWS AND N
+C           COLUMNS. ON INPUT, B CONTAINS THE RIGHT HAND SIDE B(I,J)
+C           AS DEFINED ABOVE.  ON OUTPUT, FROM A CALL TO GMA WITH
+C           NPC = 1, B CONTAINS THE SOLUTION X(I,J), AS DEFINED ABOVE.
+C       K IS THE MARCHING PARAMETER.  MARCHING OCCURS IN THE
+C           N - DIRECTION.  ON INPUT, IF K IS LESS THAN 2, IT
+C           ASSUMES THE DEFAULT VALUE K = 2.
+C       R IS AN ARRAY OF LENGTH N * P + 3 * N + 2, WHERE P IS AN
+C           INTEGER GREATER THAN OR EQUAL TO LOG2( N / K ), AND K IS
+C           GREATER THAN OR EQUAL TO 2.  R CONTAINS THE OUTPUT FROM A
+C           CALL TO GMA WITH NPC = 0.
+C       A IS AN ARRAY OF LENGTH 4 * Q, WHERE Q = MAX( N+1, M+1 ).
+C           A IS USED AS A SCRATCHPAD ARRAY BY GMA.
+C
+C           SUBROUTINE GMA HAS ONE LABELED COMMON BLOCK, /MACHEP/,
+C       WITH ONE VARIABLE, TOL.  TOL IS A MACHINE DEPENDENT CONSTANT,
+C       EQUAL TO THE MACHINE EPSILON.  IT IS INITIALIZED IN GMA IN THE
+C       FIRST EXECUTABLE STATEMENT.
+C
+C           A CALL TO GMA WITH NPC = 0 MUST PRECEDE  A CALL TO GMA
+C       WITH NPC = 1.  IF THE SAME LINEAR SYSTEM IS TO BE SOLVED
+C       WITH SEVERAL RIGHT HAND SIDES, A SINGLE CALL TO GMA WITH
+C       NPC = 0 WILL SUFFICE, PROVIDED THAT THE CONTENTS OF THE
+C       ARRAY R ARE SAVED.
+C           SUBROUTINE GMA MAY FAIL TO GIVE CORRECT ANSWERS IF
+C       THE LINEAR SYSTEM IS NOT POSITIVE OR NEGATIVE DEFINITE.
+C       IF N, NTYPE, M, MTYPE, OR IBDIM ARE OUT OF RANGE, GMA RETURNS
+C       WITHOUT ATTEMPTING ANY COMPUTATIONS.
+C
+C       ADDRESS INQUIRIES TO:
+C           RANDOLPH E. BANK
+C           DEPARTMENT OF MATHEMATICS
+C           THE UNIVERSITY OF CHICAGO
+C           CHICAGO ILLINOIS 60637.
+C
+C       VERSION DATE: MARCH 1, 1977.
+            DIMENSION TN1(1),TN2(1),TM1(1),TM2(1),A(1),B(1),R(1)
+            COMMON /MACHEP/TOL
+        TOL=2.0E0**(-23)
+C       CHECK N, NTYPE, M, MTYPE, AND IBDIM.
+        IF((NTYPE.GT.4).OR.(NTYPE.LT.1)) RETURN
+        IF((MTYPE.GT.4).OR.(MTYPE.LT.1)) RETURN
+        IF((N.LT.2).OR.(M.LT.2)) RETURN
+        IF(IBDIM.LT.M) RETURN
+C       RESPECIFY NTYPE AND/OR MTYPE IF NECESSARY.
+        IF(NTYPE.EQ.2.AND.N.LE.3) NTYPE=1
+        IF(MTYPE.EQ.2.AND.M.LE.3) MTYPE=1
+        IF(NTYPE.EQ.4.AND.N.LE.3) NTYPE=3
+        IF(MTYPE.EQ.4.AND.M.LE.5) MTYPE=3
+        IF(N.LE.2) NTYPE=1
+        IF(M.LE.2) MTYPE=1
+        IF(NPC.NE.0) GO TO 15
+C       THE PREPROCESSING CALCULATIONS.
+        CALL PARTN(N,NTYPE,K,NE,ND,R(3))
+C       EPS IS ADDED TO ALL INTEGERS STORED IN THE REAL ARRAY R.
+C       THIS PREVENTS UNFORTUNATE ROUNDING ERRORS FORM OCCURRING WHEN
+C       THEY ARE CONVERTED BACK INTO INTEGERS.
+        EPS=0.25E0
+        R(1)=FLOAT(NE)+EPS
+        R(2)=FLOAT(ND)+EPS
+        IF(NTYPE.EQ.1.OR.NTYPE.EQ.3) CALL ROOTSG(N,NTYPE,
+     1      TN1,TN2,NE,ND,R(3),R(N+3),A)
+        IF(NTYPE.EQ.2.OR.NTYPE.EQ.4) CALL ROOTSC(N,NTYPE,
+     1      TN1,TN2,NE,ND,R(3),R(N+3),A)
+        J1=N+2
+        J2=J1+N+1
+        CALL SORT(N,NTYPE,NE,ND,R(3),R(N+3),A(1),A(J1),A(J2))
+        RETURN
+C       THE BACKSOLUTION CALCULATIONS.
+   15   TN2(N+1)=1.0E0
+        IF(NTYPE.LT.3) TN2(1)=1.0E0
+        NE=R(1)
+        ND=R(2)
+        CALL STEP1(N,NTYPE,TN1,TN2,M,MTYPE,TM1,TM2,
+     1      IBDIM,B,ND,R(3),R(N+3),A)
+        CALL STEP2(N,NTYPE,TN2,M,MTYPE,TM1,TM2,
+     1      IBDIM,B,NE,ND,R(3),R(N+3),A)
+        CALL STEP3(N,NTYPE,TN2,M,MTYPE,TM1,TM2,
+     1      IBDIM,B,NE,ND,R(3),R(N+3),A)
+        CALL STEP4(TN1,TN2,M,MTYPE,TM1,TM2,IBDIM,B,ND,R(3),R(N+3),A)
+        RETURN
+        END
+C
+        SUBROUTINE PARTN(N,NTYPE,K,NE,ND,ID)                            PRTN0010
+C           SUBROUTINE PARTN PARTITIONS THE GRID, IN THE N - DIRECTION,
+C       INTO ND+1 BLOCKS, EACH WITH K OR FEWER LINES.  POINTERS TO THE
+C       SEPARATING LINES ARE STORED IN THE ARRAY ID.  THE VALUE
+C       OF THE INTEGER NE, ROUGHLY EQUAL TO LOG2(ND), IS COMPUTED.
+C       EPS IS ADDED TO ALL INTEGERS STORED IN THE REAL ARRAY ID.
+C       THIS PREVENTS UNFORTUNATE ROUNDING ERRORS FORM OCCURRING WHEN
+C       THEY ARE CONVERTED BACK INTO INTEGERS.
+C       VERSION DATE: AUGUST 1, 1977.
+            REAL ID
+            DIMENSION ID(1)
+        EPS=0.25E0
+        NN=N
+        IF(NTYPE.GE.3) NN=N-1
+        ND=NN/MAX0(K,2)
+        NE=0
+        IF(2*ND.EQ.NN) ND=ND-1
+        IF(ND.EQ.0) GO TO 25
+C       COMPUTE THE VALUE OF NE.
+        J=ND
+    5   NE=NE+1
+        J=J/2
+        IF(J.NE.0) GO TO 5
+C       COMPUTE THE ARRAY ID.
+        I1=NN/(ND+1)
+        I2=NN-I1*(ND+1)
+        I3=0
+        DO 20 J=1,ND
+            IF(I3.LT.I2) I3=I3+1
+            J1=J*I1+I3
+   20       ID(J+1)=FLOAT(J1)+EPS
+   25   ID(1)=EPS
+        I1=ND+2
+        DO 30 J=I1,N
+   30       ID(J)=FLOAT(NN+1)+EPS
+        RETURN
+        END
+C
+        SUBROUTINE ROOTSC(N,NTYPE,TN1,TN2,NE,ND,ID,R,A)                 RTSC0010
+C           SUBROUTINE ROOTSC DOES THE NECESSARY EIGENVALUE
+C       CALCULATIONS FOR CONSTANT COEFFICIENT PROBLEMS.
+C       THE EIGENVALUES ARE STORED IN THE ARRAY R.
+C       VERSION DATE: FEBRUARY 1, 1977.
+            REAL ID
+            DIMENSION TN1(1),TN2(1),ID(1),R(1),A(1)
+        NP1=N+1
+        NEP1=NE+1
+        NDP1=ND+1
+        PI=3.1415926535897932384626433832795E0
+        T1=TN1(2)
+        T2=TN2(3)
+        T22=2.0E0*T2
+        S=ABS(T22)
+C       IN THE FOLLOWING SEGMENT OF CODE, SPECIAL EIGENVALUES FOR THE
+C       CASE NTYPE = 4 ARE COMPUTED.
+        IF(NTYPE.EQ.2) GO TO 130
+        LINE=N*NEP1
+        I2=LINE+N
+        R(I2)=T1-S
+        R(LINE+1)=T1+S
+        NM1=N-1
+        I2=2
+        Q=PI/FLOAT(N)
+        IF(T22.LT.0.0E0) GO TO 110
+        LINE=LINE+N
+        I2=-2
+  110   DO 115 I=2,NM1,2
+            LINE=LINE+I2
+            ARG=Q*FLOAT(I)
+            R(LINE)=T1-T22*COS(ARG)
+  115       R(LINE+1)=R(LINE)
+C       IN THE FOLLOWING SEGMENT OF CODE, EIGENVALUES RELEVANT TO ALL
+C       CONSTANT COEFFICIENT PROBLEMS ARE CALCULATED.
+  130   DO 140 I=1,NEP1
+            I2=2**(I-1)
+            J2=N*(I-1)
+        DO 140 LNINDX=1,NDP1,I2
+            LINE=ID(LNINDX)
+            ISPAN=LNINDX+I2
+            ISPAN=ID(ISPAN)
+            ISPAN=ISPAN-LINE-1
+            LINE=LINE+J2
+            Q=PI/FLOAT(ISPAN+1)
+            DO 135 J=1,ISPAN
+                LINE=LINE+1
+                ARG=Q*FLOAT(J)
+  135           R(LINE)=T1+S*COS(ARG)
+            R(LINE+1)=0.0E0
+  140       CONTINUE
+        IF(NTYPE.EQ.4) RETURN
+C       IN THE FOLLOWING SEGMENT OF CODE, WE CHECK FOR NEUMANN OR MIXED
+C       BOUNDARY CONDITIONS, AND MODIFY SOME EIGENVALUES IN THE
+C       APPROPRIATE FASHION.
+C       ICOUNT KEEPS TRACK OF THE BOUNDARY CONDITION COMBINATION.
+        ICOUNT=0
+        IA1=1
+        IA2=0
+        S2=SQRT(2.0E0)*T2
+        DO 270 L=1,2
+            I2=2*IA1+N*IA2
+            T2P=TN2(I2)
+            I2=I2-IA1
+            T1P=TN1(I2)
+            IF(T2P.EQ.T2.AND.T1P.EQ.T1) GO TO 265
+            NN=ID(ND+2)
+            NN=NN*IA2
+            IF(T1P.EQ.T1.AND.T2P.EQ.S2) GO TO 220
+            IF(T2P.EQ.T2.AND.T1P.EQ.(T1-T2)) GO TO 225
+C       THE LOOP FOR A MIXED BOUNDARY CONDITION
+            ICOUNT=ICOUNT+7
+            IF(NE.EQ.0) GO TO 265
+            DO 215 I=1,NE
+                I2=2**(I-1)
+                LINE=(ND/I2)*IA2*I2
+                LINE=ID(LINE+1)
+                ISPAN=ID(I2+1)
+                ISPAN=ISPAN*IA1+NN-LINE-1
+                LINE=LINE+N*(I-1)
+                J2=N
+                DO 205 J=1,ISPAN
+                    J2=J2+1
+                    A(J)=T1
+  205               A(J2)=-T2
+                A(J2)=0.0E0
+                A(1)=T1P
+                A(NP1)=-T2P
+                CALL QL(A(1),A(NP1),ISPAN,IERR)
+                J2=ISPAN+1
+                DO 210 J=1,ISPAN
+                    J2=J2-1
+                    LINE=LINE+1
+  210               R(LINE)=A(J2)
+  215       CONTINUE
+            GO TO 265
+C       THE LOOP FOR A NEUMANN BOUNDARY CONDITION
+  220       ICOUNT=ICOUNT+1
+            INS=0
+            GO TO 230
+  225       ICOUNT=ICOUNT+3
+            INS=1
+  230       IF(NE.EQ.0) GO TO 265
+            J1=0
+            J2=2
+            IF(T22.LT.0.0E0) GO TO 240
+            J1=2
+            J2=-2
+  240       DO 250 I=1,NE
+                I2=2**(I-1)
+                LINE=(ND/I2)*IA2*I2
+                LINE=ID(LINE+1)
+                ISPAN=ID(I2+1)
+                ISPAN=ISPAN*IA1+NN-LINE-1
+                LINE=LINE+N*(I-1)
+                Q=PI/FLOAT(2*ISPAN+INS)
+                J=J1*(ISPAN+1)-1
+                DO 245 JJ=1,ISPAN
+                    J=J+J2
+                    LINE=LINE+1
+                    ARG=Q*FLOAT(J)
+  245               R(LINE)=T1-T22*COS(ARG)
+  250       CONTINUE
+  265       IA1=0
+  270       IA2=1
+        IF(ICOUNT.EQ.0) RETURN
+        LINE=N*NE
+        IF(ICOUNT.GE.7) GO TO 400
+        GO TO (425,430,435,440,400,445),ICOUNT
+C       IN THE FOLLOWING SEGMENT, EIGENVALUES FOR THE CASE OF ONE
+C       OR MORE MIXED BOUNDARY CONDITIONS ARE CALCULATED.
+  400   J2=N
+        DO  405 J=1,N
+            J2=J2+1
+            A(J)=T1
+  405       A(J2)=-T2
+        A(1)=TN1(1)
+        A(N)=TN1(N)
+        A(NP1)=-TN2(2)
+        A(J2-1)=-TN2(N)
+        A(J2)=0.0E0
+        CALL QL(A(1),A(NP1),N,IERR)
+        J2=NP1
+        DO 410 J=1,N
+            LINE=LINE+1
+            J2=J2-1
+  410       R(LINE)=A(J2)
+        RETURN
+C       IN THE FOLLOWING SEGMENT, EIGENVALUES FOR THE CASE OF ONE
+C       NEUMANN AND ONE DIRICHLET BOUNDARY CONDITION ARE CALCULATED.
+  425   Q=PI/FLOAT(2*N)
+        T22=-S
+        J=-1
+        J2=2
+        GO TO 450
+C       IN THE FOLLOWING SEGMENT, EIGENVALUES FOR THE CASE OF TWO
+C       NEUMANN BOUNDARY CONDITIONS ARE CALCULATED.
+  430   Q=PI/FLOAT(N-1)
+        T22=-S
+        J=-1
+        J2=1
+        GO TO 450
+C       IN THE FOLLOWING SEGMENT, EIGENVALUES FOR THE CASE OF ONE
+C       STAGGERED AND ONE DIRICHLET BOUNDARY CONDITION ARE CALCULATED.
+  435   Q=PI/FLOAT(2*N+1)
+        J=-1
+        J2=2
+        IF(T22.LT.0.0E0) GO TO 450
+        J=2*N+1
+        J2=-2
+        GO TO 450
+C       IN THE FOLLOWING SEGMENT, EIGENVALUES FOR THE CASE OF ONE
+C       NEUMANN AND ONE STAGGERED BOUNDARY CONDITION ARE CALCULATED.
+  440   Q=PI/FLOAT(2*N-1)
+        J=-2
+        J2=2
+        IF(T22.LT.0.0E0) GO TO 450
+        J=2*N
+        J2=-2
+        GO TO 450
+C       IN THE FOLLOWING SEGMENT, EIGENVALUES FOR THE CASE OF TWO
+C       STAGGERED BOUNDARY CONDITIONS ARE CALCULATED.
+  445   Q=PI/FLOAT(N)
+        J=-1
+        J2=1
+        IF(T22.LT.0.0E0) GO TO 450
+        J=N
+        J2=-1
+  450   DO 455 JJ=1,N
+            J=J+J2
+            LINE=LINE+1
+            ARG=Q*FLOAT(J)
+  455       R(LINE)=T1-T22*COS(ARG)
+        RETURN
+        END
+C
+C
+        SUBROUTINE ROOTSG(N,NTYPE,TN1,TN2,NE,ND,ID,R,A)                 RTSG0010
+C           SUBROUTINE ROOTSG DOES THE NECESSARY EIGENVALUE
+C       CALCULATIONS FOR GENERAL SEPARABLE PROBLEMS.
+C       THE EIGENVALUES ARE STORED ON THE ARRAY R.
+C       VERSION DATE: FEBRUARY 1, 1977.
+            REAL ID
+            DIMENSION TN1(1),TN2(1),ID(1),R(1),A(1)
+        NP1=N+1
+        NEP1=NE+1
+        NDP1=ND+1
+C       IN THE FOLLOWING SEGMENT OF CODE, SPECIAL EIGENVALUES FOR THE
+C       CASE NTYPE = 3 ARE COMPUTED.
+        IF(NTYPE.EQ.1) GO TO 50
+        N2=(NP1)/2
+        NP2=NP1+NP1
+        NP3=NP1+NP2
+        DO 35 I=1,N2
+            II=2*I
+            I2=NP1-I
+            I1=NP3+II
+            A(I1-1)=TN1(I)
+            A(I1)=TN1(I2)
+            I1=NP2+II
+            A(I1-1)=0.0E0
+            A(I1)=0.0E0
+            I1=NP1+II
+            A(I1-1)=-TN2(I)
+   35       A(I1)=-TN2(I2+1)
+        A(NP2+2)=-TN2(1)
+        A(NP3-1)=-TN2(N2+1)
+        A(NP1+1)=0.0E0
+        A(NP1+2)=0.0E0
+        CALL BANDR(A(1),A(NP1+1),A(NP2+1),A(NP3+1),N)
+        CALL QL(A(1),A(NP1+1),N,IERR)
+        LINE=N*NEP1
+        J2=NP1
+        DO 40 I=1,N
+            LINE=LINE+1
+            J2=J2-1
+   40       R(LINE)=A(J2)
+C       IN THE FOLLOWING SEGMENT OF CODE, EIGENVALUES RELEVANT TO ALL
+C       GENERAL SEPARABLE PROBLEMS ARE CALCULATED.
+   50   DO 65 I=1,NEP1
+            I2=2**(I-1)
+            J2=N*(I-1)
+        DO 65 LNINDX=1,NDP1,I2
+            LINE=ID(LNINDX)
+            ISPAN=LNINDX+I2
+            ISPAN=ID(ISPAN)
+            ISPAN=ISPAN-LINE-1
+            J1=N
+            I1=LINE
+            DO 55 J=1,ISPAN
+                J1=J1+1
+                I1=I1+1
+                A(J)=TN1(I1)
+   55           A(J1)=-TN2(I1+1)
+            A(J1)=0.0E0
+            CALL QL(A(1),A(NP1),ISPAN,IERR)
+            LINE=LINE+J2
+            J1=ISPAN+1
+            DO 60 J=1,ISPAN
+                LINE=LINE+1
+                J1=J1-1
+   60           R(LINE)=A(J1)
+            R(LINE+1)=0.0E0
+   65       CONTINUE
+        RETURN
+        END
+C                                                                       RTSG0700
+C
+C
+        SUBROUTINE SORT(N,NTYPE,NE,ND,ID,R,A,IPI,KPI)                   SORT0010
+C           SUBROUTINE SORT ORDERS THE EIGENVALUES COMPUTED IN ROOTSC
+C       OR ROOTSG ACCORDING TO SIZE.  THIS MUST BE DONE TO INSURE THE
+C       NUMERICAL STABILITY OF THE ALGORITHM.  IN THE CASE OF CONSTANT
+C       COEFFICIENT PROBLEMS, SORTING THE EIGENVALUES ALLOWS SOME
+C       REDUCTION IN COMPUTIONS TO TAKE PLACE.
+C       THE ARRAY IPI KEEPS TRACK OF THE PERMUTATIONS.
+C       VERSION DATE: FEBRUARY 1, 1977.
+            REAL ID,IPI,KPI
+            DIMENSION IPI(1),KPI(1),A(1),R(1),ID(1)
+        IF(NE.EQ.0) RETURN
+        NP1=N+1
+        NN=NP1
+        IF(NTYPE.GE.3) NN=N
+        LINET=N*NE+1
+        LINEB=LINET+NN-2
+        RMIN=AMIN1(R(LINET),R(LINEB))-2.0E0
+C       EPS IS ADDED TO ALL INTEGERS STORED IN THE REAL ARRAY IPI.
+C       THIS PREVENTS UNFORTUNATE ROUNDING ERRORS FORM OCCURRING WHEN
+C       THEY ARE CONVERTED BACK INTO INTEGERS.
+        EPS=0.25E0
+        DO 505 I=1,N
+            A(I)=R(I)
+            IPI(I)=FLOAT(I)+EPS
+  505       KPI(I)=IPI(I)
+        DO 530 I=1,NE
+            I2=2**I
+            I1=I2/2
+            DO 510 LNINDX=I1,ND,I1
+                LINE=ID(LNINDX+1)
+  510           A(LINE)=RMIN
+            A(NN)=RMIN
+            DO 520 LNINDX=I1,ND,I2
+                LINET=LNINDX-I1+1
+                LINET=ID(LINET)
+                LINET=LINET+1
+                LINEB=ID(LNINDX+1)
+                LINEB=LINEB+1
+                LINE=LINET+1
+                ISPAN=LNINDX+I1+1
+                ISPAN=ID(ISPAN)
+                ISPAN=ISPAN-1
+                KPI(LINET)=IPI(LINEB-1)
+            DO 520 J=LINE,ISPAN
+                IF(A(LINET).GT.A(LINEB)) GO TO 515
+                KPI(J)=IPI(LINEB)
+                LINEB=LINEB+1
+                GO TO 520
+  515           KPI(J)=IPI(LINET)
+                LINET=LINET+1
+  520       CONTINUE
+            LINE=N*I
+            JPI=LINE
+            DO 525 J=1,N
+                IPI(J)=KPI(J)
+                JPI=JPI+1
+  525           A(J)=R(JPI)
+            DO 530 J=1,N
+                JPI=IPI(J)
+                JPI=JPI+LINE
+  530           R(JPI)=A(J)
+C       THE FOLLOWING SEGMENT OF CODE SORTS THE SPECIAL EIGENVALUES
+C       WHICH ARISE IN THE CASE OF PERIODIC BOUNDARY CONDITIONS.
+        IF(NTYPE.LT.3) RETURN
+        LINE=N*(NE+1)
+        JPI=LINE
+        DO 540 J=1,N
+            JPI=JPI+1
+  540       A(J)=R(JPI)
+        DO 545 J=1,N
+            JPI=IPI(J)
+            JPI=JPI+LINE
+  545       R(JPI)=A(J)
+        RETURN
+        END
+C
+C
+        SUBROUTINE QL(D,E,N,IERR)                                       QL000010
+C           SUBROUTINE QL FINDS ALL THE EIGENVALUES OF A SYMMETRIC
+C       TRIDIAGONAL MATRIX.  THE RATIONAL (SQUARE ROOT FREE) QL
+C       ALGORITHM IS USED.  QL IS CALLED IN CONNECTION WITH FINDING
+C       EIGENVALUES FOR GENERAL SEPARABLE PROBLEMS, AND CONSTANT
+C       COEFFICIENT PROBLEMS WHERE ONE OR MORE MIXED BOUNDARY CONDITIONS
+C       ARE PRESENT.  SUBROUTINE QL IS AN ADAPTATION OF SUBROUTINE
+C       TQLRAT FROM THE EISPACK SUBROUTINE LIBRARY.
+C       THE DIAGONAL OF THE TRIDIAGONAL MATRIX IS STORED IN THE ARRAY
+C       D, THE CODIAGONAL IN E.  THE EIGENVALUES ARE WRITTEN IN D.
+C       VERSION DATE: MARCH 1, 1977.
+            COMMON /MACHEP/TOL
+            DIMENSION D(1),E(1)
+        IERR=0
+        IF(N.EQ.1) RETURN
+        NM1=N-1
+        DO 100 I=1,NM1
+  100       E(I) =E(I)* E(I)
+        F=0.0E0
+        B=0.0E0
+        C=0.0E0
+        E(N)=0.0E0
+        DO 290 L=1, N
+            J=0
+            H=TOL*(ABS(D(L))+SQRT(E(L)))
+            IF(B.GT.H) GO TO 105
+            B=H
+            C=B*B
+  105       DO 110 M=L, N
+                IF(E(M).LE.C) GO TO 120
+  110           CONTINUE
+            M=N
+  120       IF(M.EQ.L) GO TO 210
+  130       IF(J.EQ.30) GO TO 1000
+            J=J+1
+            L1=L+1
+            S=SQRT(E(L))
+            G=D(L)
+            P=(D(L1)-G)/(2.0E0*S)
+            R=SQRT(P*P+1.0E0)
+            D(L)=S/(P+SIGN(R,P))
+            H=G-D(L)
+            DO 140 I=L1, N
+  140           D(I)=D(I)-H
+            F=F+H
+            G=D(M)
+            IF(G.EQ.0.0E0) G=B
+            H=G
+            S=0.0E0
+            MML=M-L
+            DO 200 II=1, MML
+                I=M-II
+                P=G*H
+                R=P+E(I)
+                E(I+1)=S*R
+                S=E(I)/R
+                D(I+1)=H+S*(H+D(I))
+                G=D(I)-E(I)/G
+                IF(G.EQ.0.0E0) G=B
+                H=G*P/R
+  200           CONTINUE
+            E(L)=S*G
+            D(L)=H
+            IF(H.EQ.0.0E0) GO TO 210
+            IF(ABS(E(L)).LE.ABS(C/H)) GO TO 210
+            E(L)=H*E(L)
+            IF(E(L).NE.0.0E0) GO TO 130
+  210       P=D(L)+F
+            IF(L.EQ.1) GO TO 250
+            DO 230 II=2, L
+                I=L+2-II
+                IF(P.GE.D(I-1)) GO TO 270
+                D(I)=D(I-1)
+  230           CONTINUE
+  250       I=1
+  270       D(I)=P
+  290       CONTINUE
+        GO TO 1001
+ 1000   IERR=L
+ 1001   RETURN
+        END
+C
+C
+        SUBROUTINE BANDR(D,E,W,V,N)                                     BNDR0010
+C           SUBROUTINE BANDR IS USED TO REDUCE A SYMMETRIC PENTA-
+C       DIAGONAL MATRIX TO A SYMMETRIC TRIDIAGONAL MATRIX. BANDR IS
+C       ENTERED ONLY IN THE CASE NTYPE = 3, AND IS CALLED IN
+C       CONNECTION WITH FINDING THE SPECIAL EIGENVALUES ASSOCIATED
+C       WITH THE PERIODIC BOUNDARY CONDITIONS.  BANDR IS AN ADAPTATION
+C       OF SUBROUTINE BANDR FROM THE EISPACK SUBROUTINE LIBRARY.
+C       THE DIAGONAL OF THE PENTADIAGONAL MATRIX IS STORED IN V,
+C       THE FIRST CO-DIAGONAL IN W, AND THE SECOND CO-DIAGONAL IN E.
+C       THE DIAGONAL OF THE TRIDIAGONAL MATRIX IS WRITTEN IN D, AND
+C       THE CO-DIAGONAL IS WRITTEN IN E.
+C       VERSION DATE: FEBRUARY 1, 1977.
+            DIMENSION D(1),E(1),V(1),W(1)
+        DO 30 J=1, N
+   30       D(J)=1.0E0
+        NM2=N-2
+        DO 700 K=1, NM2
+            KP2=K+2
+            G=E(KP2)
+            E(K+1)=W(K+1)
+            DO 500 J=KP2, N, 2
+                JM1=J-1
+                JP1=J+1
+                JP2=J+2
+                IF (G.EQ.0.0E0) GO TO 700
+                B1=E(JM1)/G
+                B2=B1*D(JM1)/D(J)
+                S2=1.0E0/(1.0E0+B1*B2)
+                IF (S2.GE.0.5E0 ) GO TO 450
+                B1=G/E(JM1)
+                B2=B1*D(J)/D(JM1)
+                C2=1.0E0-S2
+                D(JM1)=C2*D(JM1)
+                D(J)=C2*D(J)
+                F1=2.0E0*W(J)
+                F2=B1*V(JM1)
+                W(J)=-B2*(B1*W(J)-V(J))-F2+W(J)
+                V(JM1)=B2*(B2*V(J)+F1)+V(JM1)
+                V(J)=B1*(F2-F1)+V(J)
+                U=W(JM1)+B2*E(J)
+                E(J)=-B1*W(JM1)+E(J)
+                W(JM1)=U
+                E(JM1)=E(JM1)+B2*G
+                IF (J.EQ.N) GO TO 500
+                U=E(JP1)+B2*W(JP1)
+                W(JP1)=-B1*E(JP1)+W(JP1)
+                E(JP1)=U
+                IF (JP2.GT.N) GO TO 500
+                G=B2*E(JP2)
+                GO TO 500
+  450           U=D(JM1)
+                D(JM1)=S2*D(J)
+                D(J)=S2*U
+                F1=2.0E0*W(J)
+                F2=B1*V(J)
+                U=B1*(F2-F1)+V(JM1)
+                W(J)=B2*(B1*W(J)-V(JM1))+F2-W(J)
+                V(JM1)=B2*(B2*V(JM1)+F1)+V(J)
+                V(J)=U
+                U=B2*W(JM1)+E(J)
+                E(J)=-W(JM1)+B1*E(J)
+                W(JM1)=U
+                E(JM1)=B2*E(JM1)+G
+                IF (J.EQ.N) GO TO 500
+                U=B2*E(JP1)+W(JP1)
+                W(JP1)=-E(JP1)+B1*W(JP1)
+                E(JP1)=U
+                IF (JP2.GT.N) GO TO 500
+                G=E(JP2)
+                E(JP2)=B1*E(JP2)
+  500           CONTINUE
+  700   CONTINUE
+        U=1.0E0
+        DO 850 J=2, N
+            E(J)=SQRT(D(J))
+            D(J)=D(J)*V(J)
+            E(J-1)=U*E(J)*W(J)
+  850       U=E(J)
+        D(1)=V(1)
+        E(N)=0.0E0
+        RETURN
+        END
+C
+C
+        SUBROUTINE STEP1(N,NTYPE,TN1,TN2,M,MTYPE,TM1,TM2,               STP10010
+     1      IBDIM,B,ND,ID,R,A)
+C           SUBROUTINE STEP1 CARRIES OUT THE INITIAL MARCHING PHASE OF
+C       THE GENERALIZED MARCHING ALGORITHM.  THE SYSTEM OF EQUATIONS
+C       IS REDUCED TO AN EQUIVALENT SET FOR THE UNKNOWNS ON THE ND
+C       SEPARATING LINES.
+C       VERSION DATE: MARCH 1, 1977.
+            REAL ID
+            DIMENSION TN1(1),TN2(1),TM1(1),TM2(1),A(1),B(1),R(1),ID(1)
+        NN=ND
+        IF(NTYPE.GE.3) NN=ND+1
+        IF(NN.LT.1) RETURN
+        M1=M+1
+        M2=M1+M
+        ITYPE=NTYPE-(NTYPE/2)*2
+        ID2=ID(2)
+        DO 130 LNINDX=1,NN
+            LINE=ID(LNINDX+1)
+            LINEA=ID(LNINDX+2)
+            LINEB=ID(LNINDX)
+            LINEC=LINE
+            IF(LINE.EQ.N) LINEC=0
+            ISPANA=LINEA-LINE-1
+            IF(ISPANA.LE.0) ISPANA=ID2-1
+            ISPANB=LINE-LINEB-1
+C           CHECK FOR POSSIBLE REDUCTION IN COMPUTATION IN THE
+C           CONSTANT COEFFICIENT CASE.
+            IF((ITYPE.EQ.1).OR.(ISPANA.NE.ISPANB)) GO TO 105
+            IF((TN1(LINEB+1).EQ.TN1(LINEA-1)).AND.
+     1          (TN2(LINEB+2).EQ.TN2(LINEA-1))) GO TO 120
+C           THE FOLLOWING CODE IS EXECUTED WHEN NO REDUCTION
+C           IN COMPUTATION IS POSSIBLE.
+  105       CALL MARCH1(M,MTYPE,TM1,TM2,TN1,TN2,IBDIM,B,
+     1          ISPANB,LINE,-1,A(1),A(M1))
+            INDXRT=LINEB+1
+            CALL TRI1(M,MTYPE,TM1,TM2,ISPANB,R(INDXRT),TN2(INDXRT),
+     1          A(1),A(M1),A(M2))
+            T1=TN2(LINE)
+            LNPTR=(LINE-1)*IBDIM
+            DO 110 ICOMP=1,M
+                LNPTR=LNPTR+1
+  110           B(LNPTR)=B(LNPTR)-T1*A(ICOMP)
+            CALL MARCH1(M,MTYPE,TM1,TM2,TN1,TN2,IBDIM,B,
+     1          ISPANA,LINEC,1,A(1),A(M1))
+            INDXRT=LINEC+1
+            CALL TRI1(M,MTYPE,TM1,TM2,ISPANA,R(INDXRT),TN2(INDXRT),
+     1          A(1),A(M1),A(M2))
+            INDXRT=INDXRT+ISPANA
+            T1=TN2(INDXRT)
+            LNPTR=(LINE-1)*IBDIM
+            DO 115 ICOMP=1,M
+                LNPTR=LNPTR+1
+  115           B(LNPTR)=B(LNPTR)-T1*A(ICOMP)
+            GO TO 130
+C           THE FOLLOWING CODE IS EXECUTED FOR CONSTANT COEFFICIENT
+C           PROBLEMS IN WHICH A REDUCTION IN COMPUTATION IS POSSIBLE.
+  120       CALL MARCH3(M,MTYPE,TM1,TM2,TN1,TN2,IBDIM,B,
+     1          ISPANB,LINE,LINEC,A(1),A(M1))
+            INDXRT=LINEB+1
+            CALL TRI1(M,MTYPE,TM1,TM2,ISPANB,R(INDXRT),TN2(INDXRT),
+     1          A(1),A(M1),A(M2))
+            T1=TN2(LINE)
+            LNPTR=(LINE-1)*IBDIM
+            DO 125 ICOMP=1,M
+                LNPTR=LNPTR+1
+  125           B(LNPTR)=B(LNPTR)-T1*A(ICOMP)
+  130       CONTINUE
+        RETURN
+        END
+C
+C
+        SUBROUTINE STEP2(N,NTYPE,TN2,M,MTYPE,TM1,TM2,                   STP20010
+     1      IBDIM,B,NE,ND,ID,R,A)
+C           SUBROUTINE STEP2 USES NE-1 2-REDUCTION STEPS TO REDUCE
+C       THE SET OF EQUATIONS FOR THE ND SEPARATING LINES TO A MATRIX
+C       EQUATION FOR A SINGLE LINE OF UNKNOWNS.  APPROXIMATELY
+C       HALF OF THE REMAINING LINES ARE ELIMINATED AT EACH RECURSIVE
+C       STEP.
+C       VERSION DATE: MARCH 1, 1977.
+            REAL ID
+            DIMENSION TN2(1),TM1(1),TM2(1),A(1),B(1),R(1),ID(1)
+        NN=NE-1
+        IF(NTYPE.GE.3) NN=NE
+        IF(NN.LT.1) RETURN
+        M1=M+1
+        M2=M1+M
+        M3=M2+M
+        ITYPE=NTYPE-(NTYPE/2)*2
+        DO 240 I=1,NN
+            I2=2**I
+            I1=I2/2
+            J1=(I-1)*N+1
+            J2=I*N+1
+        DO 240 LNINDX=I1,ND,I2
+            LINE=ID(LNINDX+1)
+            LINEA=LNINDX+1+I1
+            LINEA=ID(LINEA)
+            LINEB=LNINDX+1-I1
+            LINEB=ID(LINEB)
+            ISPANA=LINEA-LINE
+            ISPANB=LINE-LINEB
+            IF((LINEB.EQ.0).AND.(NTYPE.LT.3)) GO TO 215
+            LNPTR=(LINE-1)*IBDIM
+            DO 205 ICOMP=1,M
+                LNPTR=LNPTR+1
+  205           A(ICOMP)=B(LNPTR)
+            INDXRT=LINEB+J2
+            INDXTN=LINEB+1
+            CALL TRI1(M,MTYPE,TM1,TM2,ISPANB,R(INDXRT),TN2(INDXTN),
+     1          A(1),A(M1),A(M2))
+            IRTDIF=LINE+J1
+            INDXRT=INDXRT+ISPANB
+            ISPAN=ISPANA-1
+            CALL TRI2(M,MTYPE,TM1,TM2,ISPAN,R(INDXRT),R(IRTDIF),
+     1          A(1),A(M1),A(M2),A(M3))
+            ISPAN=LINEB
+            IF(LINEB.EQ.0) ISPAN=N
+            LNPTR=(ISPAN-1)*IBDIM
+            DO 210 ICOMP=1,M
+                LNPTR=LNPTR+1
+  210           B(LNPTR)=B(LNPTR)+A(ICOMP)
+C           CHECK FOR POSSIBLE REDUCTION IN COMPUTATION IN THE
+C           CONSTANT COEFFICIENT CASE.
+            IF(LINEA.GT.N) GO TO 240
+            IF((ITYPE.EQ.0).AND.(ISPANA.EQ.ISPANB)) GO TO 225
+C           THE FOLLOWING CODE IS EXECUTED WHEN NO REDUCTION
+C           IN COMPUTATION IS POSSIBLE.
+  215       LNPTR=(LINE-1)*IBDIM
+            DO 220 ICOMP=1,M
+                LNPTR=LNPTR+1
+  220           A(ICOMP)=B(LNPTR)
+            INDXRT=LINEB+J2
+            INDXTN=LINE+1
+            CALL TRI1(M,MTYPE,TM1,TM2,ISPANA,R(INDXRT),TN2(INDXTN),
+     1          A(1),A(M1),A(M2))
+            INDXRT=INDXRT+ISPANA
+            IRTDIF=LINEB+J1
+            ISPAN=ISPANB-1
+            CALL TRI2(M,MTYPE,TM1,TM2,ISPAN,R(INDXRT),R(IRTDIF),
+     1          A(1),A(M1),A(M2),A(M3))
+  225       LNPTR=(LINEA-1)*IBDIM
+            DO 230 ICOMP=1,M
+                LNPTR=LNPTR+1
+  230           B(LNPTR)=B(LNPTR)+A(ICOMP)
+  240       CONTINUE
+        RETURN
+        END
+C
+C
+        SUBROUTINE STEP3(N,NTYPE,TN2,M,MTYPE,TM1,TM2,                   STP30010
+     1      IBDIM,B,NE,ND,ID,R,A)
+C           IN SUBROUTINE STEP3, THE UNKNOWNS ON THE ND SEPARATING
+C       LINES ARE DETERMINED. THE LINES ARE DETERMINED IN THE
+C       REVERSE ORDER THAT THEY WERE ELIMINATED IN STEP2.
+C       VERSION DATE: MARCH 1, 1977.
+            REAL ID
+            DIMENSION TN2(1),TM1(1),TM2(1),A(1),B(1),R(1),ID(1)
+        NP1=N+1
+        M1=M+1
+        M2=M1+M
+        M3=M2+M
+        ITYPE=NTYPE-(NTYPE/2)*2
+C       IN THE FOLLOWING SEGMENT OF CODE, THE SPECIAL LINE OF UNKNOWNS
+C       ASSOCIATED WITH PERIODIC BOUNDARY CONDITIONS IS DETERMINED.
+  250   IF(NTYPE.LT.3) GO TO 270
+        NM1=N-1
+        LNPTR=NM1*IBDIM
+        DO 255 ICOMP=1,M
+            LNPTR=LNPTR+1
+  255       A(ICOMP)=B(LNPTR)
+        INDXRT=(NE+1)*N+1
+        IRTDIF=NE*N+1
+        CALL TRI2(M,MTYPE,TM1,TM2,NM1,R(INDXRT),R(IRTDIF),
+     1      A(1),A(M1),A(M2),A(M3))
+        INDXRT=INDXRT+NM1
+        CALL TRI1(M,MTYPE,TM1,TM2,1,R(INDXRT),TN2(NP1),
+     1      A(1),A(M1),A(M2))
+        LNPTR=NM1*IBDIM
+        L2=LNPTR-IBDIM
+        T1=TN2(1)
+        T2=TN2(N)
+        DO 265 ICOMP=1,M
+            LNPTR=LNPTR+1
+            L2=L2+1
+            X=A(ICOMP)
+            B(LNPTR)=X
+            B(L2)=B(L2)+T2*X
+  265       B(ICOMP)=B(ICOMP)+T1*X
+  270   IF(NE.EQ.0) RETURN
+C       IN THE FOLLOWING SEGMENT OF CODE, THE UNKNOWNS ON THE
+C       REMAINING SEPARATING LINES ARE DETERMINED.
+        DO 345 II=1,NE
+            I=NE+1-II
+            I2=2**I
+            I1=I2/2
+            J1=(I-1)*N+1
+            J2=I*N+1
+        DO 345 LNINDX=I1,ND,I2
+            LINE=ID(LNINDX+1)
+            LINEA=LNINDX+1+I1
+            LINEA=ID(LINEA)
+            LINEB=LNINDX+1-I1
+            LINEB=ID(LINEB)
+            ISPANA=LINEA-LINE-1
+            ISPANB=LINE-LINEB-1
+C       IN THE FOLLOWING SEGMENT OF CODE, THE RIGHT HAND SIDE IS
+C       MODIFIED USING UNKNOWNS WHICH WERE SOLVED FOR ON A PREVIOUS
+C       STEP OF THE RECURSION.
+            ISPAN=LINEB
+            IF(LINEB.EQ.0) ISPAN=ID(ND+2)
+            IF(ISPAN.GT.N) GO TO 295
+            LNPTR=(ISPAN-1)*IBDIM
+            DO 275 ICOMP=1,M
+                LNPTR=LNPTR+1
+  275           A(ICOMP)=B(LNPTR)
+C           CHECK FOR POSSIBLE REDUCTION IN COMPUTATION IN THE
+C           CONSTANT COEFFICIENT CASE.
+            IF((ITYPE.EQ.1).OR.(LINEA.GT.N)) GO TO 285
+            IF(ISPANA.NE.ISPANB) GO TO 285
+            LNPTR=(LINEA-1)*IBDIM
+            DO 280 ICOMP=1,M
+                LNPTR=LNPTR+1
+  280           A(ICOMP)=A(ICOMP)+B(LNPTR)
+            GO TO 305
+C           THE FOLLOWING CODE IS EXECUTED WHEN NO REDUCTION
+C           IN COMPUTATION IS POSSIBLE.
+  285       INDXRT=LINEB+J1
+            INDXTN=LINEB+1
+            CALL TRI1(M,MTYPE,TM1,TM2,ISPANB,R(INDXRT),TN2(INDXTN),
+     1          A(1),A(M1),A(M2))
+            T1=TN2(LINE)
+            LNPTR=(LINE-1)*IBDIM
+            DO 290 ICOMP=1,M
+                LNPTR=LNPTR+1
+  290           B(LNPTR)=B(LNPTR)+T1*A(ICOMP)
+  295       IF(LINEA.GT.N) GO TO 315
+            LNPTR=(LINEA-1)*IBDIM
+            DO 300 ICOMP=1,M
+                LNPTR=LNPTR+1
+  300           A(ICOMP)=B(LNPTR)
+  305       INDXRT=LINE+J1
+            INDXTN=LINE+1
+            CALL TRI1(M,MTYPE,TM1,TM2,ISPANA,R(INDXRT),TN2(INDXTN),
+     1          A(1),A(M1),A(M2))
+            T1=TN2(LINEA)
+            LNPTR=(LINE-1)*IBDIM
+            DO 310 ICOMP=1,M
+                LNPTR=LNPTR+1
+  310           B(LNPTR)=B(LNPTR)+T1*A(ICOMP)
+C       IN THE FOLLOWING SEGMENT OF CODE, WE SOLVE FOR THE NEW LINE
+C       OF UNKNOWNS, AND THEN MODIFY THE RIGHT HAND SIDES OF THE
+C       ND+1 SMALLER BLOCKS IN THE APPROPRIATE FASHION.
+  315       LNPTR=(LINE-1)*IBDIM
+            DO 330 ICOMP=1,M
+                LNPTR=LNPTR+1
+  330           A(ICOMP)=B(LNPTR)
+            INDXRT=LINEB+J2
+            IRTDIF=LINEB+J1
+            CALL TRI2(M,MTYPE,TM1,TM2,ISPANB,R(INDXRT),R(IRTDIF),
+     1          A(1),A(M1),A(M2),A(M3))
+            INDXRT=LINE+J2
+            IRTDIF=LINE+J1
+            CALL TRI1(M,MTYPE,TM1,TM2,1,R(INDXRT-1),TN2(NP1),
+     1          A(1),A(M1),A(M2))
+            CALL TRI2(M,MTYPE,TM1,TM2,ISPANA,R(INDXRT),R(IRTDIF),
+     1          A(1),A(M1),A(M2),A(M3))
+            LNPTR=(LINE-1)*IBDIM
+            L2=LNPTR-IBDIM
+            L1=LNPTR+IBDIM
+            T1=TN2(LINE+1)
+            T2=TN2(LINE)
+            DO 345 ICOMP=1,M
+                LNPTR=LNPTR+1
+                L1=L1+1
+                L2=L2+1
+                X=A(ICOMP)
+                B(LNPTR)=X
+                B(L1)=B(L1)+T1*X
+  345           B(L2)=B(L2)+T2*X
+        RETURN
+        END
+C
+C
+        SUBROUTINE STEP4(TN1,TN2,M,MTYPE,TM1,TM2,IBDIM,B,ND,ID,R,A)     STP40010
+C           IN SUBROUTINE STEP4, THE ND+1 SMALLER PROBLEMS ARE
+C       SOLVED USING THE MARCHING ALGORITHM. THIS COMPLETES
+C       THE BACKSOLUTION PHASE OF THE GENERALIZED MARCHING ALGORITHM.
+C       VERSION DATE: MARCH 1, 1977.
+            REAL ID
+            DIMENSION TN1(1),TN2(1),TM1(1),TM2(1),A(1),B(1),R(1),ID(1)
+        M1=M+1
+        M2=M1+M
+        NDP1=ND+1
+        DO 440 LNINDX=1,NDP1
+            LINE=ID(LNINDX)
+            ISPAN=ID(LNINDX+1)
+            ISPAN=ISPAN-LINE-1
+            CALL MARCH1(M,MTYPE,TM1,TM2,TN1,TN2,IBDIM,B,
+     1          ISPAN,LINE,1,A(1),A(M1))
+            INDXRT=LINE+1
+            INDXTN=INDXRT+1
+            CALL TRI1(M,MTYPE,TM1,TM2,ISPAN,R(INDXRT),TN2(INDXTN),
+     1          A(1),A(M1),A(M2))
+            CALL MARCH2(M,MTYPE,TM1,TM2,TN1,TN2,IBDIM,B,
+     1          ISPAN,LINE,A(1),A(M1))
+  440       CONTINUE
+        RETURN
+        END
+C
+C
+        SUBROUTINE TRI1(M,MTYPE,TM1,TM2,ISPAN,R,S,V,U,E)                TRI10010
+C           SUBROUTINE TRI1 SOLVES A LINEAR SYSTEM WHICH INVOLVES
+C       A POLYNOMIAL OF DEGREE ISPAN IN THE MATRIX TM.  THE ZEROES OF
+C       THE POLYNOMIAL ARE A SUBSET OF THE SET OF EIGENVALUES
+C       COMPUTED DURING THE PREPROCESSING PHASE. THE LEADING COEFFICIENT
+C       IS GIVEN AS A PRODUCT OF ISPAN SCALARS STORED IN S.
+C       THE RIGHT HAND SIDE IS STORED IN V.  THE SOLUTION IS COMPUTED
+C       BY SOLVING ISPAN LINEAR SYSTEMS INVOLVING THE FACTORS OF THE
+C       POLYNOMIAL.  FOUR COMPLETE LOOPS ARE INCLUDED; THE CORRECT LOOP
+C       FOR A GIVEN PROBLEM IS DETERMINED BY THE VALUE OF MTYPE.
+C       VERSION DATE: FEBRUARY 1, 1977.
+            DIMENSION TM1(1),TM2(1),U(1),V(1),E(1),R(1),S(1)
+        MM1=M-1
+        GO TO (3,50,20,75),MTYPE
+C       THE LOOP FOR MTYPE = 1.
+    3   DO 15 J=1,ISPAN
+            D=R(J)
+            DS=S(J)
+            U(1)=TM1(1)+D
+            DO 5 ICOMP=2,M
+                ICM1=ICOMP-1
+                Q=TM2(ICOMP)/U(ICM1)
+                V(ICOMP)=V(ICOMP)+V(ICM1)*Q
+    5           U(ICOMP)=TM1(ICOMP)+D-Q*TM2(ICOMP)
+            Q=V(M)/U(M)
+            V(M)=Q*DS
+            DO 10 II=1,MM1
+                ICOMP=M-II
+                Q=(V(ICOMP)+TM2(ICOMP+1)*Q)/U(ICOMP)
+   10           V(ICOMP)=Q*DS
+   15       CONTINUE
+        RETURN
+C       THE LOOP FOR MTYPE = 3.
+   20   DO 40 J=1,ISPAN
+            D=R(J)
+            DS=S(J)
+            U(1)=TM1(1)+D
+            E(1)=TM2(1)
+            DO 25 ICOMP=2,MM1
+                ICM1=ICOMP-1
+                Q=TM2(ICOMP)/U(ICM1)
+                V(ICOMP)=V(ICOMP)+V(ICM1)*Q
+                U(ICOMP)=TM1(ICOMP)+D-Q*TM2(ICOMP)
+   25           E(ICOMP)=Q*E(ICM1)
+            E(MM1)=(E(MM1)+TM2(M))/U(MM1)
+            V(MM1)=V(MM1)/U(MM1)
+            DO 30 II=2,MM1
+                ICOMP=M-II
+                ICP1=ICOMP+1
+                V(ICOMP)=(V(ICOMP)+TM2(ICP1)*V(ICP1))/U(ICOMP)
+   30           E(ICOMP)=(E(ICOMP)+TM2(ICP1)*E(ICP1))/U(ICOMP)
+            Q=TM1(M)+D-TM2(1)*E(1)-TM2(M)*E(MM1)
+            Q=(V(M)+TM2(1)*V(1)+TM2(M)*V(MM1))/Q
+            V(M)=Q*DS
+            DO 35 ICOMP=1,MM1
+   35           V(ICOMP)=(V(ICOMP)+E(ICOMP)*Q)*DS
+   40       CONTINUE
+        RETURN
+C       THE LOOP FOR MTYPE = 2.
+   50   MM2=M-2
+        T3=1.0E0/TM2(3)
+        T2=TM2(2)*T3
+        T4=TM2(M)*T3
+        DO 65 J=1,ISPAN
+            D=R(J)
+            DS=S(J)*T3
+            U(1)=TM2(3)/(TM1(1)+D)
+            T1=(TM1(2)+D)*T3
+            Q=T2*U(1)
+            V(2)=V(2)+V(1)*Q
+            U(2)=1.0E0/(T1-Q*T2)
+            DO 55 ICOMP=3,MM1
+                ICM1=ICOMP-1
+                V(ICOMP)=V(ICOMP)+V(ICM1)*U(ICM1)
+   55           U(ICOMP)=1.0E0/(T1-U(ICM1))
+            Q=T4*U(MM1)
+            V(M)=V(M)+V(MM1)*Q
+            U(M)=(TM1(M)+D)*T3-Q*T4
+            Q=V(M)/U(M)
+            V(M)=Q*DS
+            Q=(V(MM1)+Q*T4)*U(MM1)
+            V(MM1)=Q*DS
+            DO 60 II=2,MM2
+                ICOMP=M-II
+                Q=(V(ICOMP)+Q)*U(ICOMP)
+   60           V(ICOMP)=Q*DS
+            Q=(V(1)+T2*Q)*U(1)
+            V(1)=Q*DS
+   65       CONTINUE
+        RETURN
+C       THE LOOP FOR MTYPE = 4.
+   75   T2=1.0E0/TM2(2)
+        M1=MM1/2
+        M1P1=M1+1
+        M1P2=M1+2
+        M1P3=M1+3
+        MSW=M-(M/2)*2
+        M2=M1-MSW
+        RM=1.0E0
+        RA=1.0E0
+        IF(MSW.EQ.1) GO TO 80
+        RM=2.0E0
+        RA=0.0E0
+   80   DO 85 ICOMP=1,M1
+            JCOMP=M+MSW-ICOMP
+            Q=(V(JCOMP)-V(ICOMP))/2.0E0
+            V(JCOMP)=(V(JCOMP)+V(ICOMP))/2.0E0
+   85       V(ICOMP)=Q
+        DO 115 J=1,ISPAN
+            D=R(J)
+            DS=S(J)*T2
+            T1=(TM1(1)+D)*T2
+            U(1)=1.0E0/(T1+RA)
+            DO 90 ICOMP=2,M1
+                ICM1=ICOMP-1
+                V(ICOMP)=V(ICOMP)+V(ICM1)*U(ICM1)
+   90           U(ICOMP)=1.0E0/(T1-U(ICM1))
+            U(M1P1)=1.0E0/T1
+            V(M1P2)=V(M1P2)+V(M1P1)*U(M1P1)
+            U(M1P2)=1.0E0/(T1-2.0E0*U(M1P1))
+            DO 95 ICOMP=M1P3,MM1
+                ICM1=ICOMP-1
+                V(ICOMP)=V(ICOMP)+V(ICM1)*U(ICM1)
+   95           U(ICOMP)=1.0E0/(T1-U(ICM1))
+            V(M)=V(M)+V(MM1)*U(MM1)*RM
+            U(M)=T1-RM*U(MM1)-RA
+            Q=V(M)/U(M)
+            V(M)=Q*DS
+            DO 105 II=1,M2
+                ICOMP=M-II
+                Q=(V(ICOMP)+Q)*U(ICOMP)
+  105           V(ICOMP)=Q*DS
+            Q=(V(M1P1)+2.0E0*Q)*U(M1P1)
+            V(M1P1)=Q*DS
+            Q=V(M1)*U(M1)
+            V(M1)=Q*DS
+            DO 110 II=2,M1
+                ICOMP=M1P1-II
+                Q=(V(ICOMP)+Q)*U(ICOMP)
+  110           V(ICOMP)=Q*DS
+  115         CONTINUE
+        DO 120 ICOMP=1,M1
+            JCOMP=M+MSW-ICOMP
+            Q=V(JCOMP)-V(ICOMP)
+            V(JCOMP)=V(JCOMP)+V(ICOMP)
+  120       V(ICOMP)=Q
+        RETURN
+        END
+C
+C
+        SUBROUTINE TRI2(M,MTYPE,TM1,TM2,ISPAN,R1,R2,V,W,U,E)            TRI20010
+C           SUBROUTINE TRI2 SOLVES A LINEAR SYSTEM WHICH INVOLVES
+C       A RATIONAL FUNCTION OF THE MATRIX TM.  THE DEGREE OF BOTH THE
+C       NUMERATOR AND THE DENOMINATOR IS ISPAN. THE ZEROES OF BOTH
+C       POLYNOMIALS ARE SUBSETS OF THE EIGENVALUES CALCULATED DURING
+C       THE PREPROCESSING PHASE. THE ZEROES OF THE NUMERATOR ARE
+C       STORED IN R1; THE ZEROES OF THE DENOMINATOR ARE STORED IN R2.
+C       THE LEADING COEFFICIENT OF BOTH POLYNOMIALS IS 1.0.  THE
+C       RIGHT HAND SIDE IS STORED IN V.  THE SOLUTION IS COMPUTED BY
+C       SOLVING ISPAN LINEAR SYSTEMS INVOLVING THE FACTORS OF THE
+C       POLYNOMIAL WHICH APPEARS IN THE NUMERATOR.  A CHECK FOR
+C       COMMON FACTORS IS CARRIED OUT, AND THEY ARE CANCELLED IF
+C       FOUND.    FOUR COMPLETE LOOPS ARE PROVIDED; THE CORECT LOOP
+C       FOR A GIVEN PROBLEM IS DETERMINED BY THE VALUE OF MTYPE.
+C       VERSION DATE: FEBRUARY 1, 1977.
+            DIMENSION TM1(1),TM2(1),V(1),U(1),W(1),E(1),R1(1),R2(1)
+            COMMON /MACHEP/TOL
+        TOL2=8.0E0*TOL
+        MM1=M-1
+        GO TO (3,50,20,75),MTYPE
+C       THE LOOP FOR MTYPE = 1.
+    3   DO 15 J=1,ISPAN
+            D=R1(J)
+            DR=R2(J)-D
+            U(1)=TM1(1)+D
+            Q=ABS(DR/U(1))
+            IF(Q.LE.TOL2) GO TO 15
+            W(1)=V(1)
+            DO 5 ICOMP=2,M
+                ICM1=ICOMP-1
+                Q=TM2(ICOMP)/U(ICM1)
+                W(ICOMP)=V(ICOMP)+W(ICM1)*Q
+    5           U(ICOMP)=TM1(ICOMP)+D-Q*TM2(ICOMP)
+            Q=W(M)/U(M)
+            V(M)=V(M)+DR*Q
+            DO 10 II=1,MM1
+                ICOMP=M-II
+                Q=(W(ICOMP)+TM2(ICOMP+1)*Q)/U(ICOMP)
+   10           V(ICOMP)=V(ICOMP)+DR*Q
+   15       CONTINUE
+        RETURN
+C       THE LOOP FOR MTYPE = 3.
+   20   DO 40 J=1,ISPAN
+            D=R1(J)
+            DR=R2(J)-D
+            U(1)=TM1(1)+D
+            Q=ABS(DR/U(1))
+            IF(Q.LE.TOL2) GO TO 40
+            W(1)=V(1)
+            E(1)=TM2(1)
+            DO 25 ICOMP=2,MM1
+                ICM1=ICOMP-1
+                Q=TM2(ICOMP)/U(ICM1)
+                W(ICOMP)=V(ICOMP)+W(ICM1)*Q
+                U(ICOMP)=TM1(ICOMP)+D-Q*TM2(ICOMP)
+   25           E(ICOMP)=Q*E(ICM1)
+            E(MM1)=(E(MM1)+TM2(M))/U(MM1)
+            W(MM1)=W(MM1)/U(MM1)
+            DO 30 II=2,MM1
+                ICOMP=M-II
+                ICP1=ICOMP+1
+                W(ICOMP)=(W(ICOMP)+TM2(ICP1)*W(ICP1))/U(ICOMP)
+   30           E(ICOMP)=(E(ICOMP)+TM2(ICP1)*E(ICP1))/U(ICOMP)
+            Q=TM1(M)+D-TM2(1)*E(1)-TM2(M)*E(MM1)
+            Q=(V(M)+TM2(1)*W(1)+TM2(M)*W(MM1))/Q
+            V(M)=V(M)+DR*Q
+            DO 35 ICOMP=1,MM1
+   35           V(ICOMP)=V(ICOMP)+DR*(W(ICOMP)+E(ICOMP)*Q)
+   40       CONTINUE
+        RETURN
+C       THE LOOP FOR MTYPE = 2.
+   50   MM2=M-2
+        T3=1.0E0/TM2(3)
+        T2=TM2(2)*T3
+        T4=TM2(M)*T3
+        DO 65 J=1,ISPAN
+            D=R1(J)
+            DR=(R2(J)-D)*T3
+            U(1)=TM2(3)/(TM1(1)+D)
+            Q=ABS(DR*U(1))
+            IF(Q.LE.TOL2) GO TO 65
+            W(1)=V(1)
+            T1=(TM1(2)+D)*T3
+            Q=T2*U(1)
+            W(2)=V(2)+W(1)*Q
+            U(2)=1.0E0/(T1-Q*T2)
+            DO 55 ICOMP=3,MM1
+                ICM1=ICOMP-1
+                W(ICOMP)=V(ICOMP)+W(ICM1)*U(ICM1)
+   55           U(ICOMP)=1.0E0/(T1-U(ICM1))
+            Q=T4*U(MM1)
+            W(M)=V(M)+W(MM1)*Q
+            U(M)=(TM1(M)+D)*T3-Q*T4
+            Q=W(M)/U(M)
+            V(M)=V(M)+DR*Q
+            Q=(W(MM1)+Q*T4)*U(MM1)
+            V(MM1)=V(MM1)+DR*Q
+            DO 60 II=2,MM2
+                ICOMP=M-II
+                Q=(W(ICOMP)+Q)*U(ICOMP)
+   60           V(ICOMP)=V(ICOMP)+DR*Q
+            Q=(W(1)+T2*Q)*U(1)
+            V(1)=V(1)+DR*Q
+   65       CONTINUE
+        RETURN
+C       THE LOOP FOR MTYPE = 4.
+   75   T2=1.0E0/TM2(2)
+        M1=MM1/2
+        M1P1=M1+1
+        M1P2=M1+2
+        M1P3=M1+3
+        MSW=M-(M/2)*2
+        M2=M1-MSW
+        RM=1.0E0
+        RA=1.0E0
+        IF(MSW.EQ.1) GO TO 80
+        RM=2.0E0
+        RA=0.0E0
+   80   DO 85 ICOMP=1,M1
+            JCOMP=M+MSW-ICOMP
+            Q=(V(JCOMP)-V(ICOMP))/2.0E0
+            V(JCOMP)=(V(JCOMP)+V(ICOMP))/2.0E0
+   85       V(ICOMP)=Q
+        DO 115 J=1,ISPAN
+            D=R1(J)
+            DR=(R2(J)-D)*T2
+            T1=(TM1(1)+D)*T2
+            U(1)=1.0E0/(T1+RA)
+            Q=ABS(DR*U(1))
+            IF(Q.LE.TOL2) GO TO 115
+            W(1)=V(1)
+            DO 90 ICOMP=2,M1
+                ICM1=ICOMP-1
+                W(ICOMP)=V(ICOMP)+W(ICM1)*U(ICM1)
+   90           U(ICOMP)=1.0E0/(T1-U(ICM1))
+            U(M1P1)=1.0E0/T1
+            W(M1P1)=V(M1P1)
+            W(M1P2)=V(M1P2)+W(M1P1)*U(M1P1)
+            U(M1P2)=1.0E0/(T1-2.0E0*U(M1P1))
+            DO 95 ICOMP=M1P3,MM1
+                ICM1=ICOMP-1
+                W(ICOMP)=V(ICOMP)+W(ICM1)*U(ICM1)
+   95           U(ICOMP)=1.0E0/(T1-U(ICM1))
+            W(M)=V(M)+W(MM1)*U(MM1)*RM
+            U(M)=T1-RM*U(MM1)-RA
+            Q=W(M)/U(M)
+            V(M)=V(M)+DR*Q
+            DO 105 II=1,M2
+                ICOMP=M-II
+                Q=(W(ICOMP)+Q)*U(ICOMP)
+  105           V(ICOMP)=V(ICOMP)+DR*Q
+            Q=(W(M1P1)+2.0E0*Q)*U(M1P1)
+            V(M1P1)=V(M1P1)+DR*Q
+            Q=W(M1)*U(M1)
+            V(M1)=V(M1)+DR*Q
+            DO 110 II=2,M1
+                ICOMP=M1P1-II
+                Q=(W(ICOMP)+Q)*U(ICOMP)
+  110           V(ICOMP)=V(ICOMP)+DR*Q
+  115         CONTINUE
+        DO 120 ICOMP=1,M1
+            JCOMP=M+MSW-ICOMP
+            Q=V(JCOMP)-V(ICOMP)
+            V(JCOMP)=V(JCOMP)+V(ICOMP)
+  120       V(ICOMP)=Q
+        RETURN
+        END
+C
+C
+        SUBROUTINE MARCH1(M,MTYPE,TM1,TM2,TN1,TN2,IBDIM,B,              MCH10010
+     1      ISPAN,LINE0,IALPHA,V1,V2)
+C           IN SUBROUTINE MARCH1, THE INITIAL MARCHING PHASE OF THE
+C       MARCHING ALGORITHM IS CARRIED OUT.  ISPAN IS THE NUMBER OF LINES
+C       PRESENT. INFORMATION ABOUT THE DIRECTION OF THE MARCH, AND
+C       THE SCALARS WHICH MULTIPLY THE MARCHING VECTORS AT EACH STAGE
+C       IS STORED IN IALPHA.  THE BOUNDARY LINE FOR THE MARCH IS LINE0.
+C       THE MARCHING VECTORS ARE V1 AND V2.  THE RESULT IS RETURNED IN
+C       THE VECTOR V1.
+C       VERSION DATE: MARCH 1, 1977.
+            DIMENSION TM1(1),TM2(1),TN1(1),TN2(1),B(1),V1(1),V2(1)
+        LINE=LINE0+IALPHA
+        IBETA=(IALPHA+1)/2
+        IBETA=LINE+IBETA
+        BETA=TN2(IBETA)
+        BETA1=-1.0E0/BETA
+        LNPTR=(LINE-1)*IBDIM
+        DO 5 ICOMP=1,M
+            LNPTR=LNPTR+1
+            V1(ICOMP)=B(LNPTR)*BETA1
+    5       V2(ICOMP)=0.0E0
+        IF(ISPAN.EQ.1) RETURN
+        MM1=M-1
+        TC=0.0E0
+        IF(MTYPE.GE.3) TC=TM2(1)
+        DO 20 I=2,ISPAN
+            LINE=LINE+IALPHA
+            IBETA=IBETA+IALPHA
+            LNPTR=(LINE-1)*IBDIM
+            ALPHA=TN1(LINE)
+            BETA2=BETA
+            BETA=TN2(IBETA)
+            BETA1=1.0E0/BETA
+            XM=V1(M)
+            XB=V1(1)
+            XC=XB
+            TB=TC
+            DO 15 ICOMP=1,MM1
+                LNPTR=LNPTR+1
+                XT=XM
+                XM=XB
+                XB=V1(ICOMP+1)
+                TT=TB
+                TB=TM2(ICOMP+1)
+                Q=B(LNPTR)+BETA2*V2(ICOMP)+TT*XT+TB*XB
+                V1(ICOMP)=((TM1(ICOMP)+ALPHA)*XM-Q)*BETA1
+   15           V2(ICOMP)=XM
+            Q=B(LNPTR+1)+BETA2*V2(M)+TB*XM+TC*XC
+            V1(M)=((TM1(M)+ALPHA)*XB-Q)*BETA1
+   20       V2(M)=XB
+        RETURN
+        END
+C
+C
+        SUBROUTINE MARCH2(M,MTYPE,TM1,TM2,TN1,TN2,IBDIM,B,              MCH20010
+     1      ISPAN,LINE0,V1,V2)
+C           IN SUBROUTINE MARCH2, THE FINAL MARCHING PHASE OF THE
+C       MARCHING ALGORITHM IS CARRIED OUT.  ISPAN IS THE NUMBER OF LINES
+C       PRESENT.  THE BOUNDARY LINE FOR THE MARCH IS LINE0. THE MARCHING
+C       VECTORS ARE V1 AND V2. AS THE MARCHING PROCEEDS, THE SOLUTION IS
+C       WRITTEN OVER THE RIGHT HAND SIDE B.
+C       VERSION DATE: MARCH 1, 1977.
+            DIMENSION TM1(1),TM2(1),TN1(1),TN2(1),B(1),V1(1),V2(1)
+        LINE=LINE0
+        DO 5 ICOMP=1,M
+            V1(ICOMP)=-V1(ICOMP)
+    5       V2(ICOMP)=0.0E0
+        IF(ISPAN.EQ.1) GO TO 25
+        MM1=M-1
+        BETA=TN2(LINE+1)
+        TC=0.0E0
+        IF(MTYPE.GE.3) TC=TM2(1)
+        DO 20 I=2,ISPAN
+            LINE=LINE+1
+            LNPTR=(LINE-1)*IBDIM
+            ALPHA=TN1(LINE)
+            BETA2=BETA
+            BETA=TN2(LINE+1)
+            BETA1=1.0E0/BETA
+            XM=V1(M)
+            XB=V1(1)
+            XC=XB
+            TB=TC
+            DO 15 ICOMP=1,MM1
+                LNPTR=LNPTR+1
+                XT=XM
+                XM=XB
+                XB=V1(ICOMP+1)
+                TT=TB
+                TB=TM2(ICOMP+1)
+                Q=B(LNPTR)+BETA2*V2(ICOMP)+TT*XT+TB*XB
+                V1(ICOMP)=((TM1(ICOMP)+ALPHA)*XM-Q)*BETA1
+                V2(ICOMP)=XM
+   15           B(LNPTR)=XM
+            Q=B(LNPTR+1)+BETA2*V2(M)+TB*XM+TC*XC
+            V1(M)=((TM1(M)+ALPHA)*XB-Q)*BETA1
+            V2(M)=XB
+   20       B(LNPTR+1)=XB
+   25   LNPTR=LINE*IBDIM
+        DO 30 ICOMP=1,M
+            LNPTR=LNPTR+1
+   30       B(LNPTR)=V1(ICOMP)
+        RETURN
+        END
+C
+C
+        SUBROUTINE MARCH3(M,MTYPE,TM1,TM2,TN1,TN2,IBDIM,B,              MCH30010
+     1      ISPAN,LINE0,LINEC,V1,V2)
+C           IN SUBROUTINE MARCH3, THE INITIAL MARCHING PAHSE OF THE
+C       MARCHING ALGORITHM IS CARRIED OUT, FOR CONSTANT COEFFICIENT
+C       PROBLEMS MEETING CERTAIN REQUIREMENTS.  ISPAN IS THE NUMBER OF
+C       LINES PRESENT.  MARCHING OCCURS IN BOTH DRRECTIONS FROM THE
+C       BOUNDARY LINE LINE0.  THE MARCHING VECTORS ARE V1 AND V2.
+C       VERSION DATE: MARCH 1, 1977.
+            DIMENSION TM1(1),TM2(1),TN1(1),TN2(1),B(1),V1(1),V2(1)
+        LINE=LINE0-1
+        LINN=LINEC+1
+        BETA=TN2(LINE)
+        BETA1=-1.0E0/BETA
+        LNPTR=(LINE-1)*IBDIM
+        NNPTR=(LINN-1)*IBDIM
+        DO 5 ICOMP=1,M
+            LNPTR=LNPTR+1
+            NNPTR=NNPTR+1
+            V1(ICOMP)=(B(LNPTR)+B(NNPTR))*BETA1
+    5       V2(ICOMP)=0.0E0
+        IF(ISPAN.EQ.1) RETURN
+        MM1=M-1
+        TC=0.0E0
+        IF(MTYPE.GE.3) TC=TM2(1)
+        DO 20 I=2,ISPAN
+            LINE=LINE-1
+            LINN=LINN+1
+            LNPTR=(LINE-1)*IBDIM
+            NNPTR=(LINN-1)*IBDIM
+            ALPHA=TN1(LINE)
+            BETA2=BETA
+            BETA=TN2(LINE)
+            BETA1=1.0E0/BETA
+            XM=V1(M)
+            XB=V1(1)
+            XC=XB
+            TB=TC
+            DO 15 ICOMP=1,MM1
+                LNPTR=LNPTR+1
+                NNPTR=NNPTR+1
+                XT=XM
+                XM=XB
+                XB=V1(ICOMP+1)
+                TT=TB
+                TB=TM2(ICOMP+1)
+                Q=B(LNPTR)+B(NNPTR)+BETA2*V2(ICOMP)+TT*XT+TB*XB
+                V1(ICOMP)=((TM1(ICOMP)+ALPHA)*XM-Q)*BETA1
+   15           V2(ICOMP)=XM
+            Q=B(LNPTR+1)+B(NNPTR+1)+BETA2*V2(M)+TB*XM+TC*XC
+            V1(M)=((TM1(M)+ALPHA)*XB-Q)*BETA1
+   20       V2(M)=XB
+        RETURN
+        END
+C
+C
+        SUBROUTINE GMAS(NPC,N,NTYPE,TN1,TN2,M,MTYPE,TM1,TM2,            GMAS0010
+     1      IBDIM,B,VN,VM,K,R,A)
+C           SUBROUTINE GMAS IS USED IN PLACE OF SUBROUTINE GMA FOR
+C       SOLVING, IN THE LEAST SQUARES SENSE, LINEAR SYSTEMS IN WHICH
+C       THE MATRIX IS POSITIVE OR NEGATIVE SEMI-DEFINITE HAVING
+C       ZERO AS AN EIGENVALUE OF MULTIPLICITY ONE.
+C           THE LINEAR SYSTEM HAS THE FORM:
+C
+C       ( TM1(I) + TN1(J) ) * X(I,J)
+C           -  TM2(I+1) * X(I+1,J)  -  TM2(I) * X(I-1,J)
+C           -  TN2(J+1) * X(I,J+1)  -  TN2(J) * X(I,J-1)  =  B(I,J)
+C
+C       FOR I = 1,2,...,M, AND J = 1,2,...,N, WHERE TM2(M+1) IS
+C       INTERPRETED AS TM2(1),  TN2(N+1) AS TN2(1),  X(0,J) AS X(M,J),
+C       X(M+1,J) AS X(1,J),  X(I,0) AS X(I,N),  AND X(I,N+1) AS X(I,1).
+C
+C       THE PARAMETER LIST:
+C
+C       NPC IS AN INTEGER.  IF NPC = 0, GMAS DOES NECESSARY
+C           PREPROCESSING CALCULATIONS.  IF NPC = 1, GMAS SOLVES THE
+C           LINEAR SYSTEM.
+C       N IS AN INTEGER, AS DEFINED ABOVE. N MUST BE GREATER THAN 2.
+C       NTYPE IS AN INTEGER DESCRIBING THE ARRAYS TN1 AND TN2.
+C           NTYPE = 1: GENERAL SEPARABLE - DIRICHLET, NEUMANN, OR
+C           MIXED BOUNDARY CONDITIONS.
+C           TN1(I) IS ARBITRARY, I = 1,2,...,N.
+C           TN2(1) = 0.0; TN2(I) IS ARBITRARY, NONZERO, I = 2,3,...,N.
+C           NTYPE = 2: CONSTANT COEFFICIENT - DIRICHLET, NEUMANN,
+C           OR MIXED BOUNDARY CONDITIONS.
+C           TN1(I) = ALPHA, ALPHA AN ARBITRARY CONSTANT, I = 2,3,...N-1.
+C           TN2(1) = 0.0; TN2(I) = BETA, BETA AN ARBITRARY NONZERO
+C           CONSTANT, I = 3,...,N-1.
+C           TOP BOUNDARY CONDITION : ONE OF
+C           TN1(1) = ALPHA;  TN2(2) = BETA; (DIRICHLET)
+C           TN1(1) = ALPHA;  TN2(2) = SQRT(2) * BETA; (NEUMANN-CENTERED)
+C           TN1(1) = ALPHA - BETA;  TN2(2) = BETA;  (NEUMANN-STAGGERED)
+C           TN1(1) = RHO, RHO ARBITRARY; TN2(2) = ZETA, ZETA ARBITRARY,
+C           NONZERO; (MIXED).
+C           BOTTOM BOUNDARY CONDITION : ONE OF
+C           TN1(N) = ALPHA;  TN2(N) = BETA; (DIRICHLET)
+C           TN1(N) = ALPHA;  TN2(N) = SQRT(2) * BETA; (NEUMANN-CENTERED)
+C           TN1(N) = ALPHA - BETA;  TN2(N) = BETA;  (NEUMANN-STAGGERED)
+C           TN1(N) = CHI, CHI ARBITRARY; TN2(N) = ETA, ETA ARBITRARY,
+C           NONZERO; (MIXED).
+C           NTYPE = 3: GENERAL SEPARABLE - PERIODIC BOUNDARY CONDITIONS.
+C           TN1(I) IS ARBITRARY, I = 1,2,...,N.
+C           TN2(I) IS ARBITRARY, NONZERO, I = 1,2,...,N.
+C           NTYPE = 4: CONSTANT COEFFICIENT - PERIODIC BOUNDARY
+C           CONDITIONS.
+C           TN1(I) = ALPHA, ALPHA ARBITRARY, I = 1,2,...,N.
+C           TN2(I) = BETA, BETA ARBITRARY, NONZERO, I = 1,2,...,N.
+C           IF N = 3, GMAS MAY RESPECIFY NTYPE.
+C       TN1 IS AN ARRARY OF LENGTH N+1, DEFINED ABOVE.
+C       TN2 IS AN ARRAY OF LENGTH N+1, DEFINED ABOVE.
+C       M IS AN INTEGER, AS DEFINED ABOVE. M MUST BE GREATER THAN 2.
+C       MTYPE IS AN INTEGER DESCRIBING THE ARRAYS TM1 AND TM2.
+C           MTYPE = 1: GENERAL SEPARABLE - DIRICHLET, NEUMANN, OR
+C           MIXED BOUNDARY CONDITIONS.
+C           MTYPE = 2: CONSTANT COEFFICIENT - DIRICHLET, NEUMANN,
+C           OR MIXED BOUNDARY CONDITIONS.
+C           MTYPE = 3: GENERAL SEPARABLE - PERIODIC BOUNDARY CONDITIONS.
+C           MTYPE = 4: CONSTANT COEFFICIENT - PERIODIC BOUNDARY
+C           CONDITIONS.
+C           RESTRICTIONS ON TM1 AND TM2 ARE ANALOGOUS TO THOSE ON
+C           TN1 AND TN2, RESPECTIVELY, FOR EACH GIVEN TYPE.
+C           IF M IS LESS THAN 6, GMAS MAY RESPECIFY MTYPE.
+C       TM1 IS AN ARRAY OF LENGTH M+1, DEFINED ABOVE.
+C       TM2 IS AN ARRAY OF LENGTH M+1, DEFINED ABOVE.
+C       IBDIM IS THE ROW DIMENSION OF THE ARRAY B, AS IT APPEARS
+C           IN THE CALLING PROGRAM.
+C       B IS A TWO DIMENSIONAL ARRAY WITH AT LEAST M ROWS AND N
+C           COLUMNS. ON INPUT, B CONTAINS THE RIGHT HAND SIDE B(I,J)
+C           AS DEFINED ABOVE.  ON OUTPUT, FROM A CALL TO GMAS WITH
+C           NPC = 1, B CONTAINS THE SOLUTION X(I,J), AS DEFINED ABOVE.
+C       VN IS AN ARRAY OF LENGTH N+1.  ON OUTPUT FROM A CALL TO GMAS
+C           WITH NPC = 0, VN CONTAINS THE EIGENVECTOR OF THE
+C           MATRIX TN CORRESPONDING TO THE ZERO EIGENVALUE.
+C       VM IS AN ARRAY OF LENGTH M+1.  ON OUTPUT FROM A CALL TO GMAS
+C           WITH NPC = 0, VM CONTAINS THE EIGENVECTOR OF THE
+C           MATRIX TM CORRESPONDING TO THE ZERO EIGENVALUE.
+C       K IS THE MARCHING PARAMETER.  MARCHING OCCURS IN THE
+C           N - DIRECTION.  ON INPUT, IF K IS LESS THAN 2, IT
+C           ASSUMES THE DEFAULT VALUE K = 2.
+C       R IS AN ARRAY OF LENGTH N * P + 3 * N + 2, WHERE P IS AN
+C           INTEGER GREATER THAN OR EQUAL TO LOG2( N / K ), AND K IS
+C           GREATER THAN OR EQUAL TO 2.  R CONTAINS OUTPUT FROM A
+C           CALL TO GMAS WITH NPC = 0.
+C       A IS AN ARRAY OF LENGTH 5 * Q, WHERE Q = MAX( N+1, M+1 ).
+C           A IS USED AS A SCRATCHPAD ARRAY BY GMAS.
+C
+C       NOTE THAT NPC, N, NTYPE, TN1, TN2, M, MTYPE, TM1, TM2  IBDIM,
+C           B, K, AND R ARE IDENTICAL TO THE CORRESPONDING PARAMETERS
+C           IN THE CALLING SEQUENCE FOR SUBROUTINE GMA.
+C           THE PARAMETERS VN, VM, AND A ARE DIFFERENT.
+C
+C           GMAS CONTAINS ONE LABELED COMMON BLOCK, /MACHEP/,
+C       CONTAINING ON VARIABLE, TOL.  TOL IS A MACHINE DEPENDENT
+C       CONSTANT EQUAL TO THE MACHINE EPSILON.  IT IS INITIALIZED IN
+C       GMAS IN THE FIRST EXECUTABLE STATEMENT.
+C
+C           A CALL TO GMAS WITH NPC = 0 REPLACES A CALL TO GMA WITH
+C       NPC = 0.
+C
+C           A CALL TO GMAS WITH NPC = 1 REPLACES A CALL TO GMA WITH
+C       WITH NPC = 1.  THE RIGHT HAND SIDE B IS PROJECTED INTO THE
+C       SUBSPACE ORTHOGONAL TO THE VECTOR V, WHERE V(I,J) =
+C       VM(I) * VN(J).  THIS IS NECESSARY TO INSURE THAT THE LINEAR
+C       SYSTEM IS CONSISTENT.  THE SOLUTION X IS ALSO PROJECTED INTO
+C       THE SUBSPACE ORTHOGONAL TO V.  ALL OTHER SOLUTIONS CAN BE
+C       OBTAINED BY ADDING AN ARBITRARY SCALAR MULTIPLE OF V TO X.
+C
+C       ADDRESS INQUIRIES TO:
+C           RANDOLPH E. BANK
+C           DEPARTMENT OF MATHEMATICS
+C           THE UNIVERSITY OF CHICAGO
+C           CHICAGO, ILLINOIS 60637
+C
+C       VERSION DATE: MARCH 1, 1977.
+            DIMENSION TN1(1),TN2(1),TM1(1),TM2(1)
+            DIMENSION VN(1),VM(1),A(1),B(1),R(1)
+            COMMON /MACHEP/TOL
+        TOL=2.0E0**(-23)
+C       CHECK N, NTYPE, M, MTYPE, AND IBDIM.
+        IF((NTYPE.GT.4).OR.(NTYPE.LT.1)) RETURN
+        IF((MTYPE.GT.4).OR.(MTYPE.LT.1)) RETURN
+        IF((N.LT.2).OR.(M.LT.2)) RETURN
+        IF(IBDIM.LT.M) RETURN
+C       RESPECIFY NTYPE AND/OR MTYPE IF NECESSARY.
+        IF(NTYPE.EQ.2.AND.N.LE.3) NTYPE=1
+        IF(MTYPE.EQ.2.AND.M.LE.3) MTYPE=1
+        IF(NTYPE.EQ.4.AND.N.LE.3) NTYPE=3
+        IF(MTYPE.EQ.4.AND.M.LE.5) MTYPE=3
+        IF(N.LE.2) NTYPE=1
+        IF(M.LE.2) MTYPE=1
+        IF(NPC.NE.0) GO TO 15
+C       THE PREPROCESSING CALCULATIONS.
+        KK=MIN0(K,N)
+        CALL PARTN(N,NTYPE,KK,NE,ND,R(3))
+C       EPS IS ADDED TO ALL INTEGERS STORED IN THE REAL ARRAY R.
+C       THIS PREVENTS UNFORTUNATE ROUNDING ERRORS FORM OCCURRING WHEN
+C       THEY ARE CONVERTED BACK INTO INTEGERS.
+        EPS=0.25E0
+        R(1)=FLOAT(NE)+EPS
+        R(2)=FLOAT(ND)+EPS
+        IF(NTYPE.EQ.1.OR.NTYPE.EQ.3) CALL ROOTSG(N,NTYPE,
+     1      TN1,TN2,NE,ND,R(3),R(N+3),A)
+        IF(NTYPE.EQ.2.OR.NTYPE.EQ.4) CALL ROOTSC(N,NTYPE,
+     1      TN1,TN2,NE,ND,R(3),R(N+3),A)
+        CALL SVALUE(N,NTYPE,M,MTYPE,TM1,TM2,NE,R(N+3),TMIN)
+        J1=N+2
+        J2=J1+N+1
+        CALL SORT(N,NTYPE,NE,ND,R(3),R(N+3),A(1),A(J1),A(J2))
+        J=MAX0(N,M)+1
+        J1=J+1
+        J2=J1+J
+        J3=J2+J
+        J4=J3+J
+        IF(NTYPE.LT.3) CALL TINVIT(N,TN1,TN2,TMIN,VN,
+     1      A(1),A(J1),A(J2),A(J3),IFLAG)
+        IF(NTYPE.GE.3) CALL PINVIT(N,TN1,TN2,TMIN,VN,
+     1      A(1),A(J1),A(J2),A(J3),A(J4),IFLAG)
+        TMIN=-TMIN
+        IF(MTYPE.LT.3) CALL TINVIT(M,TM1,TM2,TMIN,VM,
+     1      A(1),A(J1),A(J2),A(J3),IFLAG)
+        IF(MTYPE.GE.3) CALL PINVIT(M,TM1,TM2,TMIN,VM,
+     1      A(1),A(J1),A(J2),A(J3),A(J4),IFLAG)
+        RETURN
+C       THE BACKSOLUTION CALCULATIONS.
+   15   TN2(N+1)=1.0E0
+        IF(NTYPE.LT.3) TN2(1)=1.0E0
+        NE=R(1)
+        ND=R(2)
+        CALL PROJ(1,N,NTYPE,VN,M,VM,IBDIM,B,NE,ND,R(3),COEFF)
+        CALL STEP1(N,NTYPE,TN1,TN2,M,MTYPE,TM1,TM2,
+     1      IBDIM,B,ND,R(3),R(N+3),A)
+        CALL PROJ(2,N,NTYPE,VN,M,VM,IBDIM,B,NE,ND,R(3),COEFF)
+        CALL STEP2(N,NTYPE,TN2,M,MTYPE,TM1,TM2,
+     1      IBDIM,B,NE,ND,R(3),R(N+3),A)
+        CALL PROJ(3,N,NTYPE,VN,M,VM,IBDIM,B,NE,ND,R(3),COEFF)
+        CALL STEP3(N,NTYPE,TN2,M,MTYPE,TM1,TM2,
+     1      IBDIM,B,NE,ND,R(3),R(N+3),A)
+        CALL STEP4(TN1,TN2,M,MTYPE,TM1,TM2,IBDIM,B,ND,R(3),R(N+3),A)
+        CALL PROJ(1,N,NTYPE,VN,M,VM,IBDIM,B,NE,ND,R(3),COEFF)
+        RETURN
+        END
+C
+C
+        SUBROUTINE SVALUE(N,NTYPE,M,MTYPE,TM1,TM2,NE,R,TMIN)            SVAL0010
+C           SUBROUTINE SVALUE DETERMINES TMIN, THE ROOT ASSOCIATED
+C       WITH THE ZERO EIGENVALUE.  THIS ROOT IS PERTURBED TO PREVENT
+C       POSSIBLE DIVIDE CHECKS DURING THE BACKSOLUTION PROCESS.
+C       VERSION DATE: FEBRUARY 1, 1977.
+            DIMENSION TM1(1),TM2(1),R(1)
+            COMMON /MACHEP/TOL
+        IF(MTYPE.LT.3) TM2(1)=0.0E0
+        TM2(M+1)=TM2(1)
+        T=0.0E0
+        Q=ABS(TM2(1))
+        DO 5 I=1,M
+            S=Q
+            Q=ABS(TM2(I+1))
+            T=AMAX1(T,ABS(TM1(I))+Q+S)
+    5       CONTINUE
+        L=N*NE
+        IF(NTYPE.GE.3) L=L+N
+        JMIN=L+1
+        IF((TM1(1)+R(JMIN)).LT.0.0E0) T=-T
+        L=L+N
+        IF(ABS(T+R(JMIN)).GT.ABS(T+R(L))) JMIN=L
+        TMIN=R(JMIN)
+        R(JMIN)=TMIN+(T+TMIN)*FLOAT(M)*TOL
+        RETURN
+        END
+C
+C
+        SUBROUTINE TINVIT(N,D,E,EIGEN,V,A,B,C,F,IFLAG)                  TINV0010
+C           SUBROUTINE TINVIT COMPUTES THE EIGENVECTOR OF A
+C       SYMMETRIC TRIDIAGONAL MATRIX CORRESPONDING TO THE EIGENVALUE
+C       EIGEN. INVERSE ITERATION AND GAUSSIAN ELIMINATION WITH
+C       PARTIAL PIVOTING IS EMPLOYED.  D AND E CONTAIN THE
+C       TRIDIAGONAL MATRIX.  A, B, AND C CONTAIN THE UPPER TRIANGULAR
+C       MATRIX.  F CONTAINS THE LOWER TRIANGULAR MATRIX.
+C       V CONTAINS THE EIGENVECTOR.
+C       VERSION DATE: FEBRUARY 1, 1977.
+            DIMENSION A(1),B(1),C(1),D(1),E(1),F(1),V(1)
+            COMMON /MACHEP/TOL
+        IFLAG=0
+        Q=ABS(D(1))
+        DO 5 I=2,N
+    5       Q=Q+ABS(D(I))+ABS(E(I))
+        EPS=TOL*Q*FLOAT(N)
+        Z=TOL*Q*SQRT(FLOAT(N))
+        E(N+1)=0.0E0
+        R=E(2)
+        U=D(1)-EIGEN
+        V(1)=Z
+        DO 15 I=2,N
+            IM1=I-1
+            V(I)=Z
+            IF(ABS(E(I)).GT.ABS(U)) GO TO 10
+            Q=E(I)/U
+            F(I)=Q
+            A(IM1)=U
+            B(IM1)=R
+            C(IM1)=0.0E0
+            U=D(I)-EIGEN-Q*R
+            R=E(I+1)
+            GO TO 15
+   10       Q=U/E(I)
+            F(I)=Q
+            A(IM1)=-E(I)
+            B(IM1)=EIGEN-D(I)
+            C(IM1)=E(I+1)
+            U=-R-Q*B(IM1)
+            R=Q*C(IM1)
+   15       CONTINUE
+        IF(U.EQ.0.0E0) U=EPS/FLOAT(N)
+        A(N)=U
+        B(N)=0.0E0
+        C(N)=0.0E0
+        L=1
+        DO 50 J=1,5
+            DO 25 I=2,N
+                IM1=I-1
+                Q=V(I)
+                R=-E(I)
+                IF(A(IM1).NE.R) GO TO 25
+                Q=V(IM1)
+                V(IM1)=V(I)
+   25           V(I)=Q+F(I)*V(IM1)
+            Q=0.0E0
+            R=0.0E0
+            Z=0.0E0
+            DO 30 II=1,N
+                I=N+1-II
+                V(I)=(V(I)+Q*B(I)+R*C(I))/A(I)
+                R=Q
+                Q=V(I)
+   30           Z=Z+ABS(Q)
+            IF(Z.GT.1.0E0) GO TO 60
+            IF(Z.NE.0.0E0) GO TO 40
+            V(L)=EPS
+            L=L+1
+            IF(L.GT.N) L=1
+            GO TO 50
+   40       Z=EPS/Z
+            DO 45 I=1,N
+   45           V(I)=V(I)*Z
+   50       CONTINUE
+        IFLAG=1
+   60   Z=0.0E0
+        DO 65 I=1,N
+   65       Z=Z+V(I)*V(I)
+        Z=1.0E0/SQRT(Z)
+        DO 70 I=1,N
+   70       V(I)=V(I)*Z
+        RETURN
+        END
+C
+C
+        SUBROUTINE PINVIT(N,D,E,EIGEN,V,A,B,C,F,G,IFLAG)                PINV0010
+C           SUBROUTINE PINVIT COMPUTES THE EIGENVECTOR OF A
+C       SYMMETRIC MATRIX ASSOCIATED WITH PERIODIC BOUNDARY CONDITIONS,
+C       CORRESPONDING THE THE EIGENVALUE EIGEN.  INVERSE ITERATION
+C       AND GAUSSIAN ELIMINATION WITH PARTIAL PIVOTING ARE EMPLOYED.
+C       D AND E CONTAIN THE MATRIX WITH PERIODIC BOUNDARY CONDITIONS.
+C       A, B, C, AND G CONTAIN THE UPPER TRIANGULAR MATRIX.
+C       F CONTAINS THE LOWER TRIANGULAR MATRIX.  V CONTAINS THE
+C       EIGENVECTOR.
+C       VERSION DATE: FEBRUARY 1, 1977.
+            DIMENSION A(1),B(1),C(1),D(1),E(1),F(1),G(1),V(1)
+            COMMON /MACHEP/TOL
+        IFLAG=0
+        NM1=N-1
+        Q=0.0E0
+        DO 5 I=1,N
+            G(I)=0.0E0
+    5       Q=Q+ABS(D(I))+ABS(E(I))
+        EPS=TOL*Q*FLOAT(N)
+        Z=TOL*Q*SQRT(FLOAT(N))
+        R=E(2)
+        U=D(1)-EIGEN
+        V(1)=Z
+        V(N)=Z
+        G(1)=E(1)
+        G(NM1)=E(N)
+        DO 15 I=2,NM1
+            IM1=I-1
+            V(I)=Z
+            IF(ABS(E(I)).GT.ABS(U)) GO TO 10
+            Q=E(I)/U
+            F(I)=Q
+            A(IM1)=U
+            B(IM1)=R
+            C(IM1)=0.0E0
+            U=D(I)-EIGEN-Q*R
+            R=E(I+1)
+            G(I)=G(I)+Q*G(IM1)
+            GO TO 15
+   10       Q=U/E(I)
+            F(I)=Q
+            A(IM1)=-E(I)
+            B(IM1)=EIGEN-D(I)
+            C(IM1)=E(I+1)
+            U=-R-Q*B(IM1)
+            R=G(IM1)
+            G(IM1)=G(I)
+            G(I)=R+Q*G(IM1)
+            R=Q*C(IM1)
+   15       CONTINUE
+        IF(U.EQ.0.0E0) U=EPS/FLOAT(N)
+        A(NM1)=U
+        B(NM1)=0.0E0
+        C(NM1)=0.0E0
+        C(N-2)=0.0E0
+        Q=0.0E0
+        R=0.0E0
+        DO 20 II=1,NM1
+            I=N-II
+            G(I)=(G(I)+Q*B(I)+R*C(I))/A(I)
+            R=Q
+   20       Q=G(I)
+        U=D(N)-EIGEN-E(1)*G(1)-E(N)*G(NM1)
+        IF(U.EQ.0.0E0) U=EPS/FLOAT(N)
+        A(N)=U
+        L=1
+        DO 50 J=1,5
+            DO 25 I=2,NM1
+                IM1=I-1
+                Q=V(I)
+                R=-E(I)
+                IF(A(IM1).NE.R) GO TO 25
+                Q=V(IM1)
+                V(IM1)=V(I)
+   25           V(I)=Q+F(I)*V(IM1)
+            Q=0.0E0
+            R=0.0E0
+            DO 30 II=1,NM1
+                I=N-II
+                V(I)=(V(I)+Q*B(I)+R*C(I))/A(I)
+                R=Q
+   30           Q=V(I)
+            Q=(V(N)+E(1)*V(1)+E(N)*V(NM1))/A(N)
+            V(N)=Q
+            Z=ABS(Q)
+            DO 35 I=1,NM1
+                V(I)=V(I)+G(I)*Q
+   35           Z=Z+ABS(V(I))
+            IF(Z.GT.1.0E0) GO TO 60
+            IF(Z.NE.0.0E0) GO TO 40
+            V(L)=EPS
+            L=L+1
+            IF(L.GT.N) L=1
+            GO TO 50
+   40       Z=EPS/Z
+            DO 45 I=1,N
+   45           V(I)=V(I)*Z
+   50       CONTINUE
+        IFLAG=1
+   60   Z=0.0E0
+        DO 65 I=1,N
+   65       Z=Z+V(I)*V(I)
+        Z=1.0E0/SQRT(Z)
+        DO 70 I=1,N
+   70       V(I)=V(I)*Z
+        RETURN
+        END
+C
+C
+        SUBROUTINE PROJ(ITYPE,N,NTYPE,VN,M,VM,IBDIM,B,NE,ND,ID,COEFF)   PROJ0010
+C           SUBROUTINE PROJ COMPUTES THE PROJECTIONS NECESSARY TO
+C       INSURE THAT THE LINEAR SYSTEM IS CONSISTENT.
+C       VERSION DATE: FEBRUARY 1, 1977.
+            REAL ID
+            DIMENSION VN(1),VM(1),B(1),ID(1)
+        COEFF=0.0E0
+        GO TO (5,30,55),ITYPE
+    5   DO 15 I=1,N
+            T=0.0E0
+            LNPTR=(I-1)*IBDIM
+            DO 10 J=1,M
+                LNPTR=LNPTR+1
+   10           T=T+VM(J)*B(LNPTR)
+   15       COEFF=COEFF+VN(I)*T
+        DO 25 I=1,N
+            T=COEFF*VN(I)
+            LNPTR=(I-1)*IBDIM
+            DO 20 J=1,M
+                LNPTR=LNPTR+1
+   20           B(LNPTR)=B(LNPTR)-T*VM(J)
+   25       CONTINUE
+        RETURN
+   30   NN=ND
+        IF(NTYPE.GE.3) NN=ND+1
+        ID2=ID(2)
+        IF((NN.LE.1).OR.(ID2.EQ.2)) RETURN
+        Q=0.0E0
+        DO 40 I=1,NN
+            LINE=ID(I+1)
+            T=0.0E0
+            LNPTR=(LINE-1)*IBDIM
+            DO 35 J=1,M
+                LNPTR=LNPTR+1
+   35           T=T+VM(J)*B(LNPTR)
+            Q=Q+VN(LINE)*VN(LINE)
+   40       COEFF=COEFF+VN(LINE)*T
+        COEFF=COEFF/Q
+        DO 50 I=1,NN
+            LINE=ID(I+1)
+            T=COEFF*VN(LINE)
+            LNPTR=(LINE-1)*IBDIM
+            DO 45 J=1,M
+                LNPTR=LNPTR+1
+   45           B(LNPTR)=B(LNPTR)-T*VM(J)
+   50       CONTINUE
+        RETURN
+   55   NN=NE-1
+        IF(NTYPE.GE.3) NN=NE
+        IF(NN.LT.0) RETURN
+        I=2**NN+1
+        I=ID(I)
+        LNPTR=(I-1)*IBDIM
+        DO 60 J=1,M
+            LNPTR=LNPTR+1
+   60       COEFF=COEFF+VM(J)*B(LNPTR)
+        LNPTR=(I-1)*IBDIM
+        DO 65 J=1,M
+            LNPTR=LNPTR+1
+   65       B(LNPTR)=B(LNPTR)-COEFF*VM(J)
+        RETURN
+        END
+C       PROGRAM DRIVER                                                  DRVR0010
+C                                                                       DRVR0020
+C           THIS DRIVER GENERATES RANDOM PROBLEMS TO TEST SUBROUTINES   DRVR0030
+C       KPICK, GMA, AND GMAS.                                           DRVR0040
+C       THE USER MAY SPECIFY THE FOLLOWING PARAMETERS, WHICH APPEAR     DRVR0050
+C       AS THE FIRST FIVE EXECUTABLE STATEMENTS:                        DRVR0060
+C                                                                       DRVR0070
+C       ITMAX = THE NUMBER OF RANDOM PROBLEMS TO BE SOLVED.             DRVR0080
+C       NMAX = THE MAXIMUM VALUE OF N ALLOWED.                          DRVR0090
+C       MMAX = THE MAXIMUM VALUE OF M ALLOWED.                          DRVR0100
+C       IBDIM = THE ROW DIMENSION OF THE ARRAY B.                       DRVR0110
+C       TOL = THE MACHINE EPSILON.                                      DRVR0120
+C                                                                       DRVR0130
+C       MINIMUM DIMENSIONS FOR THE ARRAYS ARE AS FOLLOWS:               DRVR0140
+C       A: 5 * MAX( NMAX+1, MMAX+1 )                                    DRVR0150
+C       B: MMAX + 2   X   NMAX + 2                                      DRVR0160
+C       R: NMAX * INT( LOG2( NMAX ) ) + 3 * NMAX + 2                    DRVR0170
+C       TN1, TN2, VN: NMAX + 1                                          DRVR0180
+C       TM1, TM2, VM: MMAX + 1                                          DRVR0190
+C                                                                       DRVR0200
+C       THE PROGRAM IS COMPLETE EXCEPT FOR THE TIMER, WHICH IS          DRVR0210
+C       REFERRED TO AS THE INTEGER FORTRAN FUNCTION ITIMER(I).          DRVR0220
+C                                                                       DRVR0230
+C       VERSION DATE: MARCH 1, 1977.                                    DRVR0240
+        COMMON /RAN1/INIT,IINIT,ISAVE                                   DRVR0250
+        COMMON /MACHEP/TOL                                              DRVR0260
+        DIMENSION A(160),B(33,33),R(226)                                DRVR0270
+        DIMENSION TN1(32),TN2(32),VN(32),TM1(32),TM2(32),VM(32)         DRVR0280
+        ITMAX=100                                                       DRVR0290
+        NMAX=31                                                         DRVR0300
+        MMAX=31                                                         DRVR0310
+        IBDIM=33                                                        DRVR0320
+        TOL=2.0E0**(-23)                                                DRVR0330
+        INIT=1367                                                       DRVR0340
+        IINIT=INIT                                                      DRVR0350
+        D1=-ALOG10(TOL)-1.0E0                                           DRVR0360
+        DO 20 I=1,ITMAX                                                 DRVR0370
+            N=INTRAN(3,NMAX)                                            DRVR0380
+            M=INTRAN(3,MMAX)                                            DRVR0390
+            NTYPE=INTRAN(1,4)                                           DRVR0400
+            MTYPE=INTRAN(1,4)                                           DRVR0410
+            ITYPE=0                                                     DRVR0420
+            JTYPE=0                                                     DRVR0430
+            IF(NTYPE.EQ.2) ITYPE=INTRAN(1,9)                            DRVR0440
+            IF(MTYPE.EQ.2) JTYPE=INTRAN(1,9)                            DRVR0450
+            IDEF=INTRAN(0,3)                                            DRVR0460
+            DEMAND=RAN(1.0E0,D1)                                        DRVR0470
+            CALL TEVAL(N,NTYPE,ITYPE,TN1,TN2,IDEF)                      DRVR0480
+            CALL TEVAL(M,MTYPE,JTYPE,TM1,TM2,IDEF)                      DRVR0490
+            ITK=ITIMER(0)                                               DRVR0500
+            CALL KPICK(0,N,NTYPE,TN1,TN2,M,MTYPE,TM1,TM2,               DRVR0510
+     1          DEMAND,K,COND,EMARCH,DIGITS,IFLAG)                      DRVR0520
+            ITK=ITIMER(0)-ITK                                           DRVR0530
+            IF(IDEF.GT.1) GO TO 5                                       DRVR0540
+            ITR=ITIMER(0)                                               DRVR0550
+            CALL GMA(0,N,NTYPE,TN1,TN2,M,MTYPE,TM1,TM2,IBDIM,B,         DRVR0560
+     1          K,R,A)                                                  DRVR0570
+            ITR=ITIMER(0)-ITR                                           DRVR0580
+            CALL RHS(N,NTYPE,TN1,TN2,M,MTYPE,TM1,TM2,IBDIM,B,           DRVR0590
+     1          IDEF,VN,VM,COEFF)                                       DRVR0600
+            ITS=ITIMER(0)                                               DRVR0610
+            CALL GMA(1,N,NTYPE,TN1,TN2,M,MTYPE,TM1,TM2,IBDIM,B,         DRVR0620
+     1          K,R,A)                                                  DRVR0630
+            ITS=ITIMER(0)-ITS                                           DRVR0640
+            GO TO 10                                                    DRVR0650
+    5       ITR=ITIMER(0)                                               DRVR0660
+            CALL GMAS(0,N,NTYPE,TN1,TN2,M,MTYPE,TM1,TM2,IBDIM,B,        DRVR0670
+     1          VN,VM,K,R,A)                                            DRVR0680
+            ITR=ITIMER(0)-ITR                                           DRVR0690
+            CALL RHS(N,NTYPE,TN1,TN2,M,MTYPE,TM1,TM2,IBDIM,B,           DRVR0700
+     1          IDEF,VN,VM,COEFF)                                       DRVR0710
+            ITS=ITIMER(0)                                               DRVR0720
+            CALL GMAS(1,N,NTYPE,TN1,TN2,M,MTYPE,TM1,TM2,IBDIM,B,        DRVR0730
+     1          VN,VM,K,R,A)                                            DRVR0740
+            ITS=ITIMER(0)-ITS                                           DRVR0750
+   10       ITG=ITR+ITS                                                 DRVR0760
+            CALL NORM(ACTUAL,N,M,IBDIM,B,IDEF,VN,VM,COEFF)              DRVR0770
+            IF(MOD(I,50).EQ.1) WRITE(6,50)                              DRVR0780
+            WRITE(6,55) I,N,NTYPE,ITYPE,M,MTYPE,JTYPE,K,IFLAG,IDEF,     DRVR0790
+     1          COND,EMARCH,DEMAND,DIGITS,ACTUAL,ITK,ITG,ITR,ITS        DRVR0800
+   20       CONTINUE                                                    DRVR0810
+   50   FORMAT(1H1 / 46X,34HTHE GENERALIZED MARCHING ALGORITHM //       DRVR0820
+     1  14X,18HPROBLEM PARAMETERS,17X,6HERRORS,13X,14HCORRECT DIGITS,   DRVR0830
+     2  21X,7HTIMINGS / 4X,36HI   N  NTYPE   M  MTYPE     K    DEF,5X,  DRVR0840
+     3  40HCOND       EMARCH   DEMAND DIGITS ACTUAL,4X,                 DRVR0850
+     3  35HKPICK       GMA     ROOTS     SOLVE)                         DRVR0860
+   55   FORMAT(2X,I3,1X,I3,2X,I1,2H (,I1,1H),1X,I3,2X,I1,2H (,I1,1H),   DRVR0870
+     1  2X,I2,2H (,I1,1H),2X,I2,2X,E10.3,2X,E10.3,2X,F5.2,2X,F5.2,2X,   DRVR0880
+     2  F5.2,2X,I8,2X,I8,2X,I8,2X,I8)                                   DRVR0890
+        STOP                                                            DRVR0900
+        END                                                             DRVR0910
+C
+C
+        FUNCTION RAN(XL,XU)                                             RAN00010
+C       FUNCTION RAN(XL,XU) GENERATES PSUEDO-RANDOM REAL NUMBERS
+C       ON THE CLOSED INTERVAL (XL,XU)
+C       VERSION DATE: FEBRUARY 1, 1977.
+            COMMON /RAN1/INIT,IINIT,ISAVE
+        INIT=MOD(3125*INIT,65536)
+        RAN=XL+(XU-XL)*FLOAT(INIT)*(2.0E0**(-16))
+         RETURN
+         END
+C
+C
+        INTEGER FUNCTION INTRAN(IL,IU)                                  IRAN0010
+C       FUNCTION INTRAN(IL,IU) GENERATES PSUEDO-RANDOM INTEGERS
+C       ON THE CLOSED INTERVAL (IL,IU)
+C       VERSION DATE: FEBRUARY 1, 1977.
+            COMMON /RAN1/IINIT,INIT,ISAVE
+        INIT=MOD(3125*INIT,65536)
+        Q=FLOAT(INIT*(IU-IL+1))*(2.0E0**(-16))
+        INTRAN=IL+INT(Q)
+        RETURN
+        END
+C
+C
+        SUBROUTINE TEVAL(N,NTYPE,ITYPE,D,E,IDEF)                        TEVL0010
+C           SUBROUTINE TEVAL GENERATES A MATRIX OF ALLOWABLE TYPE
+C       USING PSUEDO-RANDOM NUMBERS FOR MATRIX ELEMENTS.
+C       VERSION DATE: FEBRUARY 1, 1977.
+            DIMENSION D(1),E(1)
+        Q=1.0E0
+        IF((IDEF.EQ.1).OR.(IDEF.EQ.3)) Q=-Q
+        H=Q/FLOAT(N+1)
+        IF(IDEF.GT.1) H=0.0E0
+        H2=H*H*Q
+        X0=0.0E0
+        XL=Q*1.E-3
+        XU=Q
+        NP1=N+1
+        IF(NTYPE.EQ.2.OR.NTYPE.EQ.4) GO TO 15
+        DO 5 I=1,NP1
+    5       E(I)=RAN(XL,XU)
+        IF(NTYPE.EQ.3) E(NP1)=E(1)
+        DO 10 I=1,N
+   10       D(I)=E(I)+E(I+1)+RAN(X0,H2)
+        IF((IDEF.LE.1).OR.(NTYPE.EQ.3)) RETURN
+        D(1)=E(2)
+        D(N)=E(N)
+        RETURN
+   15   T1=RAN(XL,XU)
+        T2=2.0E0*T1+RAN(X0,H2)
+        DO 20 I=1,NP1
+            D(I)=T2
+   20       E(I)=T1
+        IF(NTYPE.EQ.4) RETURN
+        S2=SQRT(2.0E0)*T1
+        IF(IDEF.GT.1) ITYPE=5
+        IF(ITYPE.LE.3) GO TO 30
+        IF(ITYPE.GT.6) GO TO 25
+        L=INTRAN(0,1)
+        IF(L.EQ.0) E(2)=S2
+        IF(L.EQ.1) D(1)=T2-T1
+        GO TO 30
+   25   E(2)=S2
+        D(1)=T2+RAN(X0,H)
+   30   I=ITYPE-(ITYPE/3)*3
+        IF(I.EQ.1) RETURN
+        IF(I.EQ.0) GO TO 40
+        L=INTRAN(0,1)
+        IF(L.EQ.0) E(N)=S2
+        IF(L.EQ.1) D(N)=T2-T1
+        RETURN
+   40   E(N)=S2
+        D(N)=T2+RAN(X0,H)
+        RETURN
+        END
+C                                                                       TEVL0520
+C
+C
+        SUBROUTINE RHS(N,NTYPE,TN1,TN2,M,MTYPE,TM1,TM2,IBDIM,B,         RHS00010
+     1      IDEF,VN,VM,COEFF)
+C           SUBROUTINE RHS GENERATES A RIGHT HAND SIDE FOR SUBROUTINE
+C       GMA USING PSUEDO-RANDOM NUMBERS.  ISAVE STORES THE CURRENT VALUE
+C       OF INIT, SO THAT SUBROUTINE NORM CAN REGENERATE THE EXACT
+C       SOLUTION.
+C       VERSION DATE: FEBRUARY 1, 1977.
+            DIMENSION TN1(1),TN2(1),TM1(1),TM2(1),B(IBDIM,1),VN(1),VM(1)
+            COMMON /RAN1/INIT,IINIT,ISAVE
+            DOUBLE PRECISION S
+        ISAVE=INIT
+        XL=-1.0E0
+        XU=1.0E0
+        NP1=N+1
+        MP1=M+1
+        DO 5 I=2,MP1
+        DO 5 J=2,NP1
+    5       B(I,J)=RAN(XL,XU)
+        IF(MTYPE.GT.2) GO TO 15
+        TM2(1)=0.0E0
+        DO 10 I=2,NP1
+            B(1,I)=0.0E0
+   10       B(M+2,I)=0.0E0
+        GO TO 25
+   15   DO 20 I=2,NP1
+            B(1,I)=B(MP1,I)
+   20       B(M+2,I)=B(2,I)
+   25   IF(NTYPE.GT.2) GO TO 35
+        TN2(1)=0.0E0
+        DO 30 I=2,MP1
+            B(I,1)=0.0E0
+   30       B(I,N+2)=0.0E0
+        GO TO 45
+   35   DO 40 I=2,MP1
+            B(I,1)=B(I,NP1)
+   40       B(I,N+2)=B(I,2)
+   45   IF(IDEF.LE.1) GO TO 60
+        COEFF=0.0E0
+        DO 55 J=2,NP1
+            T=0.0E0
+            DO 50 I=2,MP1
+   50           T=T+VM(I-1)*B(I,J)
+   55       COEFF=COEFF+T*VN(J-1)
+   60   TN2(NP1)=TN2(1)
+        TM2(MP1)=TM2(1)
+        DO 70 J=2,NP1
+        DO 70 I=2,MP1
+            S=(DBLE(TM1(I-1))+DBLE(TN1(J-1)))*DBLE(B(I,J))
+     1      -DBLE(TM2(I-1))*DBLE(B(I-1,J))
+     2      -DBLE(TM2(I))*DBLE(B(I+1,J))
+     3      -DBLE(TN2(J-1))*DBLE(B(I,J-1))
+     4      -DBLE(TN2(J))*DBLE(B(I,J+1))
+   70       B(I-1,J-1)=S
+        RETURN
+        END
+C
+C
+        SUBROUTINE NORM(DIGITS,N,M,IBDIM,B,IDEF,VN,VM,COEFF)            NORM0010
+C           SUBROUTINE NORM CALCULATES THE NUMBER OF SIGNIFICANT
+C       DIGITS IN THE COMPUTED SOLUTION, MEASURED IN THE 2-NORM.
+C       THE EXACT SOLUTION IS GENERATED AS REQUIRED USING THE VALUE
+C       OF ISAVE.
+C       VERSION DATE: FEBRUARY 1, 1977.
+            DIMENSION B(IBDIM,1),VN(1),VM(1)
+            COMMON /RAN1/INIT,IINIT,ISAVE
+            DOUBLE PRECISION S
+        INIT=ISAVE
+        XL=-1.0E0
+        XU=1.0E0
+        DIGITS=0.0E0
+        E1=0.0E0
+        E2=0.0E0
+        IF(IDEF.GT.1) GO TO 15
+        DO 10 I=1,M
+        DO 10 J=1,N
+            U=RAN(XL,XU)
+            S=DBLE(B(I,J))-DBLE(U)
+            E1=E1+S*S
+   10       E2=E2+U*U
+        GO TO 25
+   15   DO 20 I=1,M
+            T=VM(I)*COEFF
+        DO 20 J=1,N
+            U=RAN(XL,XU)-T*VN(J)
+            S=DBLE(B(I,J))-DBLE(U)
+            E1=E1+S*S
+   20       E2=E2+U*U
+   25   E1=E1/E2
+        IF(E1.LT.1.0E0) DIGITS=-ALOG10(E1)/2.0E0
+        RETURN
+        END
+C
+C
+        SUBROUTINE KPICK(NPC,N,NTYPE,TN1,TN2,M,MTYPE,TM1,TM2,           KPIK0010
+     1      DEMAND,K,COND,EMARCH,DIGITS,IFLAG)
+C            SUBROUTINE KPICK IS DESIGNED TO AID THE USER IN SELECTING
+C       THE MARCHING PARAMETER K TO BE USED AS INPUT FOR SUBROUTINES
+C       GMA AND GMAS.
+C
+C       THE PARAMETER LIST:
+C
+C       NPC IS AN INTEGER.  IF NPC = 0, SUBROUTINE KPICK DETERMINES K
+C           SUCH THAT THE SOLUTIONS COMPUTED USING SUBROUTINE GMA (GMAS)
+C           WILL HAVE APPROXIMATELY 'DEMAND' SIGNIFICANT DIGITS.
+C           IF NPC = 1, SUBROUTINE KPICK WILL TEST THE INPUT VALUE
+C           OF K.
+C       N,NTYPE,TN1,TN2,M,MTYPE,TM1,TM2 ARE IDENTICAL TO THE
+C           CORRESPONDING PARAMETERS IN THE CALLING SEQUENCE FOR
+C           SUBROUTINE GMA (GMAS).
+C       DEMAND IS A REAL NUMBER, STATING THE NUMBER OF SIGNIFICANT
+C           DIGITS DESIRED IN THE COMPUTED SOLUTION.  IT MUST BE
+C           SPECIFIED ON INPUT IF NPC = 0.
+C       K IS AN INTEGER.  IF NPC = 0, ON OUTPUT K IS EQUAL TO THE
+C           MARCHING PARAMETER DETERMINED BY KPICK.  IF NPC = 1, THE
+C           USER MUST SPECIFY THE VALUE OF K TO BE TESTED AS AN
+C           INPUT PARAMETER.
+C       COND IS A REAL NUMBER, NORMALLY RETURNING THE CONDITION
+C           NUMBER OF THE LINEAR SYSTEM.
+C       EMARCH IS A REAL NUMBER, NORMALLY RETURNING AN ESTIMATE OF
+C           THE ERROR DUE TO MARCHING FOR THE OUTPUT VALUE OF THE
+C           MARCHING PARAMETER K.
+C       DIGITS IS A REAL NUMBER, NORMALLY RETURNING A VALUE OF
+C           MAX( 0.0, -ALOG10( ( COND + EMARCH ) * TOL ), WHERE TOL
+C           IS EQUAL TO THE MACHINE EPSILON.  THIS IS TYPICALLY THE
+C           NUMBER OF SIGNIFICANT DIGITS (IN THE 2 - NORM) ONE MAY
+C           EXPECT IN THE COMPUTED SOLUTION FOR THE GIVEN VALUE OF K.
+C       IFLAG IS AN INTEGER DESCRIBING ERROR RETURNS.
+C           IFLAG = 0: NORMAL RETURN.
+C           IFLAG = 1: KPICK FAILED TO SUCCESSFULLY COMPUTE COND. THE
+C               ALGORITHM USED BY KPICK ASSUMES THAT THE LINEAR
+C               SYSTEM IS EITHER POSITIVE OR NEGATIVE DEFINITE.
+C               IF THE LINEAR SYSTEM IS POSITIVE OR NEGATIVE
+C               SEMI-DEFINITE WITH A ZERO EIGENVALUE OF MULTIPLICITY
+C               ONE, KPICK COMPUTES THE CONDITION NUMBER RELATIVE TO
+C               THE SUBSPACE ORTHOGONAL TO THE EIGENVECTOR ASSOCIATED
+C               WITH THE ZERO EIGENVALUE.  OTHERWISE, KPICK RETURNS
+C               THE DEFAULT VALUES COND = EMARCH = DIGITS = 0.0,
+C               AND K = 2 IF NPC = 0.
+C           IFLAG = 2: KPICK HAS DETERMINED THAT THE MARCHING ERROR MAY
+C               NOT SATISFY THE ASSUMPTIONS UNDERLYING THE ALGORITHM
+C               USED TO COMPUTE EMARCH, AND THUS THE COMPUTED VALUE
+C               OF DIGITS MAY BE IN DOUBT.  IF NPC = 0, KPICK RETURNS
+C               ESTIMATES FOR K = 2.  IF NPC = 1, KPICK RETURNS
+C               ESTIMATES FOR THE INPUT VALUE OF K.
+C           IFLAG = 3: CONDITIONS 1 AND 2 EXIST.
+C           IFLAG = 4: THE REQUESTED DEMAND CANNOT BE SATISFIED BY ANY
+C               VALUE OF K GREATER THAN OR EQUAL TO 2.  KPICK RETURNS
+C               ESTIMATES FOR K = 2.   THIS ERROR RETURN CAN OCCUR ONLY
+C               IF NPC = 0.
+C           IFLAG = 5: CONDITIONS 1 AND 4 EXIST.
+C           IFLAG = 6: CONDITIONS 2 AND 4 EXIST.
+C           IFLAG = 7: CONDITIONS 1, 2, AND 4 EXIST.
+C           IFLAG = 8: THE PARAMETERS N, NTYPE, TN1, AND/OR TN2 ARE
+C               INCORRECTLY SPECIFIED.
+C           IFLAG = 9: THE PARAMETERS M, MTYPE, TM1, AND/OR TM2 ARE
+C               INCORRECTLY SPECIFIED.
+C           IFLAG = 10: CONDITIONS 8 AND 9 EXIST.
+C
+C           IF IFLAG = 0, 2, 4, 6, THEN THE LINEAR SYSTEM IS SUITABLE
+C       FOR SUBROUTINE GMA, WITH THE QUALIFICATIONS NOTED ABOVE.
+C       IF IFLAG = 1, 3, 5, 7, WITH OTHER THAN DEFAULT VALUES FOR
+C       COND, EMARCH, AND DIGITS, THEN THE LINEAR SYSTEM IS SUITABLE
+C       FOR SUBROUTINE GMAS, WITH THE QUALIFICATIONS NOTED ABOVE.
+C
+C           KPICK CONTAINS ONE LABELED COMMON BLOCK, /MACHEP/,
+C       CONTAINING ON VARIABLE, TOL.  TOL IS A MACHINE DEPENDENT
+C       CONSTANT EQUAL TO THE MACHINE EPSILON.  IT IS INITIALIZED IN
+C       KPICK IN THE FIRST EXECUTABLE STATEMENT.
+C
+C       ADDRESS INQUIRIES TO:
+C           RANDOLPH E. BANK
+C           DEPARTMENT OF MATHEMATICS
+C           THE UNIVERSITY OF CHICAGO
+C           CHICAGO, ILLINOIS 60637
+C
+C       VERSION DATE: FEBRUARY 1, 1977.
+            DIMENSION TN1(1),TN2(1),TM1(1),TM2(1)
+            COMMON /MACHEP/TOL
+        TOL=2.0E0**(-23)
+C       ESTABLISH DEFAULT VALUES
+        IFLAG=0
+        IF(NPC.NE.1) K=2
+        COND=0.0E0
+        EMARCH=0.0E0
+        DIGITS=0.0E0
+        NN=N
+        IF(NTYPE.GE.3) NN=N-1
+C       CHECK MATRIX SPECIFICATIONS.
+        JFLAG=8
+        CALL TCHECK(N,NTYPE,TN1,TN2,IFLAG,JFLAG)
+        JFLAG=9+IFLAG/8
+        CALL TCHECK(M,MTYPE,TM1,TM2,IFLAG,JFLAG)
+        IF(IFLAG.NE.0) RETURN
+C       DETERMINE IF THE SYSTEM IS POSITIVE OR NEGATIVE DEFINITE.
+        NS=2
+        MS=2
+        CALL EIGEN(N,NTYPE,TN1,TN2,1,TNMIN)
+        CALL EIGEN(N,NTYPE,TN1,TN2,N,TNMAX)
+        CALL EIGEN(M,MTYPE,TM1,TM2,1,TMMIN)
+        CALL EIGEN(M,MTYPE,TM1,TM2,M,TMMAX)
+        IF(ABS(TMMAX+TNMAX).GT.ABS(TMMIN+TNMAX)) GO TO 5
+        MS=M-1
+        T1=TMMAX
+        TMMAX=TMMIN
+        TMMIN=T1
+    5   IF(ABS(TMMAX+TNMAX).GT.ABS(TMMAX+TNMIN)) GO TO 10
+        NS=N-1
+        T1=TNMAX
+        TNMAX=TNMIN
+        TNMIN=T1
+   10   T1=TMMAX+TNMAX
+        T2=TMMIN+TNMIN
+        IF(T2/T1.GT.TOL) GO TO 15
+C       IF THE MATRIX IS NOT POSITIVE OR NEGATIVE DEFINITE,
+C       DETERMINE IF IT IS POSITIVE OR NEGATIVE SEMI-DEFINITE
+C       WITH A ZERO EIGENVALUE OF MULTIPLICITY ONE.
+        IFLAG=1
+        IF(ABS(T2).GT.ABS(T1)*TOL) RETURN
+        CALL EIGEN(N,NTYPE,TN1,TN2,NS,TNSNG)
+        CALL EIGEN(M,MTYPE,TM1,TM2,MS,TMSNG)
+        T2=TMMIN+TNSNG
+        T3=TMSNG+TNMIN
+        IF(ABS(T2).GT.ABS(T3)) T2=T3
+        IF(T2/T1.LE.TOL) RETURN
+C       DETERMINE THE CONDITION NUMBER OF THE LINEAR SYSTEM.
+C       THE VALUE GF + SQRT( GF * GF - 1. ) IS AN ESTIMATE OF THE
+C       EXPONENTIAL GROWTH PER MARCHING STEP.
+   15   COND=T1/T2
+        GF=(2.0E0*TMMAX+TNMAX+TNMIN)/(TNMAX-TNMIN)
+        BIG=COND/TOL
+        IF(NPC.EQ.1) GO TO 50
+C       ESTIMATE AN UPPER BOUND FOR K, KMAX, BASED ON AN EXPONENTIAL
+C       GROWTH OF 2.5 PER MARCHING STEP.
+C       IF KEST SATISFIES DEMAND, CHECK THE VALUE OF GF.  IF THE GROWTH
+C       IS LESS THAN 2.5 SET IFLAG = 2.  OTHERWISE ACCEPT
+C       KEST AS A SUITABLE VALUE FOR K.
+        IF(DEMAND.LE.0.0E0) GO TO 45
+        TARGET=(10.0E0**(-DEMAND))/TOL-COND
+        IF(TARGET.LE.15.625E0) GO TO 45
+        KEST=ALOG10(TARGET)/ALOG10(2.5E0)
+        IF(IFLAG.EQ.1) KEST=MIN0(KEST,N)
+        CALL ERROR(EMARCH,BIG,TMMAX,NN,TN1,TN2,KEST,ND)
+        IF(EMARCH.GT.TARGET) GO TO 20
+        IF(GF.LE.1.45E0) GO TO 50
+        GO TO 40
+   20   KMAX=NN/(ND+1)+1
+C       CHECK IF KMIN = 2 IS A LOWER BOUND FOR K.  IF NOT SET IFLAG = 4.
+        KMIN=2
+        CALL ERROR(EMARCH,BIG,TMMAX,NN,TN1,TN2,KMIN,ND)
+        IF(TARGET.LT.EMARCH) GO TO 45
+C       FIND K USING THE METHOD OF BISECTION.
+   25   KEST=(KMAX+KMIN)/2
+        CALL ERROR(EMARCH,BIG,TMMAX,NN,TN1,TN2,KEST,ND)
+        IF(KEST.EQ.KMIN) GO TO 40
+        IF(TARGET-EMARCH) 30,40,35
+   30   KMAX=NN/(ND+1)+1
+        GO TO 25
+   35   IF(ND.EQ.0) GO TO 40
+        KMIN=NN/ND
+        GO TO 25
+   40   K=KEST
+        IF(K.NE.2) K=NN/(ND+1)+1
+        T1=(COND+EMARCH)*TOL
+        IF(T1.LT.1.0E0) DIGITS=-ALOG10(T1)
+        RETURN
+C       IF NPC = 1, TEST THE INPUT VALUE OF K.  IF NPC = 0,
+C       TEST THE VALUE K = 2 FOR ERROR RETURNS.
+   45   IFLAG=IFLAG+4
+   50   KEST=K
+        IF(IFLAG.EQ.1) KEST=MIN0(KEST,N)
+        CALL ERROR(EMARCH,BIG,TMMAX,NN,TN1,TN2,KEST,ND)
+        IF(GF.LE.1.45E0) IFLAG=IFLAG+2
+        T1=(COND+EMARCH)*TOL
+        IF(T1.LT.1.0E0) DIGITS=-ALOG10(T1)
+        RETURN
+        END
+C
+C
+        SUBROUTINE TCHECK(N,NTYPE,D,E,IFLAG,JFLAG)                      TCHK0010
+C           SUBROUTINE TCHECK DETERMINES IF THE INPUT DATA HAS BEEN
+C       CORRECTLY SPECIFIED BY THE USER.
+C       VERSION DATE: FEBRUARY 1, 1977.
+            DIMENSION D(1),E(1)
+            COMMON /MACHEP/TOL
+        IF(N.LT.3) GO TO 50
+        IF(NTYPE.LT.1) GO TO 50
+        IF(NTYPE.GT.4) GO TO 50
+        GO TO (5,25,10,30),NTYPE
+    5   I1=2
+        GO TO 15
+   10   I1=1
+   15   DO 20 I=I1,N
+            IF(E(I).EQ.0.0E0) GO TO 50
+   20   CONTINUE
+        RETURN
+   25   IF(N.EQ.3) GO TO 5
+        I1=3
+        I2=N-1
+        GO TO 35
+   30   I1=1
+        I2=N
+   35   D1=D(2)
+        D2=ABS(D1)*10.0E0*TOL
+        IF(D1.EQ.0.0E0) D2=10.0E0*TOL
+        E1=E(3)
+        E2=ABS(E1)*10.0E0*TOL
+        IF(E1.EQ.0.0E0) GO TO 50
+        DO 40 I=I1,I2
+            IF(ABS(D1-D(I)).GT.D2) GO TO 50
+            IF(ABS(E1-E(I)).GT.E2) GO TO 50
+   40   CONTINUE
+        IF(E(2).EQ.0.0E0) GO TO 50
+        IF(E(N).EQ.0.0E0) GO TO 50
+        RETURN
+   50   IFLAG=JFLAG
+        RETURN
+        END
+C
+C
+        SUBROUTINE EIGEN(N,NTYPE,D,E,K,EIG)                             EIGN0010
+C           SUBROUTINE EIGEN COMPUTES THE K TH EIGENVALUE FOR
+C       MATRICES OF THE TYPE ALLOWED BY SUBROUTINE GMA.
+C       VERSION DATE: FEBRUARY 1, 1977.
+            DIMENSION D(1),E(1)
+        PI=3.1415926535897932384626433832795E0
+        E(N+1)=E(N)
+        IF(NTYPE.LT.3) E(1)=E(2)
+        GO TO (10,15,50,60),NTYPE
+   10   CALL TRIEIG(N,D,E,K,EIG)
+        RETURN
+   15   IF(N.LE.3) GO TO 10
+        I=15
+        T1=D(2)
+        T2=E(3)
+        S2=SQRT(2.0E0)*T2
+        Q1=D(1)
+        Q2=E(2)
+        IF(Q1.EQ.T1.AND.Q2.EQ.T2) I=I-7
+        IF(Q1.EQ.T1.AND.Q2.EQ.S2) I=I-6
+        IF(Q1.EQ.(T1-T2).AND.Q2.EQ.T2) I=I-4
+        Q1=D(N)
+        Q2=E(N)
+        IF(Q1.EQ.T1.AND.Q2.EQ.T2) I=I-7
+        IF(Q1.EQ.T1.AND.Q2.EQ.S2) I=I-6
+        IF(Q1.EQ.(T1-T2).AND.Q2.EQ.T2) I=I-4
+        IF(I.GT.7) GO TO 10
+        GO TO (20,25,30,35,40,10,45),I
+   20   EIG=T1-T2*2.0E0*COS(FLOAT(K)*PI/FLOAT(N+1))
+        RETURN
+   25   EIG=T1-T2*2.0E0*COS(FLOAT(2*K-1)*PI/FLOAT(2*N))
+        RETURN
+   30   EIG=T1-T2*2.0E0*COS(FLOAT(K-1)*PI/FLOAT(N-1))
+        RETURN
+   35   EIG=T1-T2*2.0E0*COS(FLOAT(2*K-1)*PI/FLOAT(2*N+1))
+        RETURN
+   40   EIG=T1-T2*2.0E0*COS(FLOAT(2*(K-1))*PI/FLOAT(2*N-1))
+        RETURN
+   45   EIG=T1-T2*2.0E0*COS(FLOAT(K-1)*PI/FLOAT(N))
+        RETURN
+   50   CALL PEREIG(N,D,E,K,EIG)
+        RETURN
+   60   I=(K/2)*2
+        EIG=D(1)-E(3)*2.0E0*COS(FLOAT(I)*PI/FLOAT(N))
+        RETURN
+        END
+C
+C
+        SUBROUTINE ERROR(EMARCH,BIG,TMMAX,N,TN1,TN2,K,ND)               EROR0010
+C           SUBROUTINE ERROR PARTITIONS THE LINEAR SYSTEM USING THE
+C       SAME ALGORITHM AS SUBROUTINE GMA.  EMARCH IS DETERMINED BY
+C       USING A ONE DIMENSIONAL MARCH WITH THE SCALAR TMMAX PLAYING THE
+C       ROLE OF THE MATRIX TM.
+C       VERSION DATE: FEBRUARY 1, 1977.
+            DIMENSION TN1(1),TN2(1)
+        EMARCH=0.0E0
+        ND=N/MAX0(2,K)
+        IF(ND*2.EQ.N) ND=ND-1
+        NDP1=ND+1
+        I1=N/NDP1
+        I2=N-I1*NDP1
+        I3=0
+        ID=0
+        DO 65 LNINDX=1,NDP1
+            LINE=ID+1
+            IF(I3.LT.I2) I3=I3+1
+            ID=I1*LNINDX+I3
+            IF(LNINDX.EQ.NDP1) ID=N+1
+            ISPAN=ID-1
+            R1=1.0E0
+            R2=0.0E0
+            DO 55 J=LINE,ISPAN
+                IF(ABS(R1).GT.BIG) GO TO 100
+                T=((TMMAX+TN1(J))*R1-TN2(J)*R2)/TN2(J+1)
+                R2=R1
+   55           R1=T
+            R1=ABS(R1)
+            R2=ABS(TN2(ID)/TN2(LINE))*R1
+            T=AMAX1(R1,R2)
+            EMARCH=AMAX1(T,EMARCH)
+   65       CONTINUE
+        RETURN
+  100   EMARCH=BIG
+        RETURN
+        END
+C
+C
+        SUBROUTINE TRIEIG(N,D,E,K,EIGEN)                                TEIG0010
+C           SUBROUTINE TRIEIG COMPUTES THE K TH EIGENVALUE OF AN
+C       IRREDUCIBLE SYMMETRIC TRIDIAGONAL MATRIX USING BISECTION
+C       AND THE STURM SEQUENCE PROPERTY.  INITIAL UPPER AND LOWER
+C       BOUNDS ARE DETERMINED FROM GERSCHGORIN ESTIMATES.
+C       VERSION DATE: FEBRUARY 1, 1977.
+            DIMENSION D(1),E(1)
+            COMMON /MACHEP/TOL
+        E(N+1)=0.0E0
+        T=0.0E0
+        XU=D(1)
+        XL=D(1)
+        DO 5 I=1,N
+            X=T
+            T=ABS(E(I+1))
+            XU=AMAX1(XU,D(I)+(X+T))
+    5       XL=AMIN1(XL,D(I)-(X+T))
+        EPS=AMAX1(ABS(XU),ABS(XL))*TOL
+        XU=XU+EPS
+        XL=XL-EPS
+        E(N+1)=E(N)
+        E(1)=0.0E0
+   10   X=(XL+XU)/2.0E0
+        T=EPS+4.0E0*TOL*(ABS(XL)+ABS(XU))
+        IF((XU-XL).LE.T) GO TO 50
+        KCOUNT=0
+        T=1.0E0
+        DO 20 I=1,N
+            IF(T.EQ.0.0E0) T=TOL*ABS(E(I))
+            T=D(I)-X-E(I)*E(I)/T
+            IF(T.LT.0.0E0) KCOUNT=KCOUNT+1
+   20       CONTINUE
+        IF(KCOUNT-K) 30,35,35
+   30   XL=X
+        GO TO 10
+   35   XU=X
+        GO TO 10
+   50   EIGEN=X
+        E(1)=E(2)
+        RETURN
+        END
+C
+C
+        SUBROUTINE PEREIG(N,D,E,K,EIGEN)                                PEIG0010
+C           SUBROUTINE PEREIG COMPUTES THE K TH EIGENVALUE OF THE
+C       IRREDUCIBLE SYMMETRIC MATRIX WHICH ARISES IN THE CASE OF
+C       PERIODIC BOUNDARY CONDITIONS.  BISECTION AND THE STURM
+C       SEQUENCE PROPERTY ARE USED.  INITIAL UPPER AND LOWER BOUNDS
+C       ARE DETERMINED FROM GERSCHGORIN ESTIMATES.
+C       VERSION DATE: FEBRUARY 1, 1977.
+            DIMENSION D(1),E(1)
+            COMMON /MACHEP/TOL
+        E(N+1)=E(1)
+        NM1=N-1
+        T=ABS(E(1))
+        XU=D(1)
+        XL=D(1)
+        DO 5 I=1,N
+            X=T
+            T=ABS(E(I+1))
+            XU=AMAX1(XU,D(I)+(X+T))
+    5       XL=AMIN1(XL,D(I)-(X+T))
+        EPS=AMAX1(ABS(XU),ABS(XL))
+        EPS1=1.E-2*EPS
+        EPS=EPS*TOL
+        XU=XU+EPS
+        XL=XL-EPS
+   10   X=(XL+XU)/2.0E0
+        T=EPS+4.0E0*TOL*(ABS(XL)+ABS(XU))
+        IF((XU-XL).LE.T) GO TO 60
+        KCOUNT=0
+        ITEST=0
+        Q=D(1)-X
+        T=E(1)
+        C=D(N)-X
+        IF(Q.LT.0.0E0) KCOUNT=1
+        DO 30 I=2,NM1
+            Q1=Q
+            T1=T
+            IF(Q1.EQ.0.0E0) Q1=TOL*ABS(E(I))
+            V=E(I)/Q1
+            Q=D(I)-X-E(I)*V
+            T=T1*V
+            IF(Q.LT.0.0E0) KCOUNT=KCOUNT+1
+            IF(ITEST.EQ.1) GO TO 25
+            IF(T1+C.EQ.C) GO TO 30
+            IF(ABS(Q1).LE.EPS1) GO TO 20
+            C=C-T1*T1/Q1
+            GO TO 30
+   20       C=C-T1*T1*(D(I)-X)/(Q1*Q)
+            ITEST=1
+            GO TO 30
+   25       ITEST=0
+   30       CONTINUE
+        IF(Q.EQ.0.0E0) Q=TOL*ABS(E(N))
+        IF (ITEST) 35,35,40
+   35   Q=C-(E(N)+T)*((E(N)+T)/Q)
+        GO TO 45
+   40   Q=C-E(N)*((E(N)+2.0E0*T)/Q)
+   45   IF(Q.LT.0.0E0) KCOUNT=KCOUNT+1
+        IF(KCOUNT-K) 50,55,55
+   50   XL=X
+        GO TO 10
+   55   XU=X
+        GO TO 10
+   60   EIGEN=X
+        RETURN
+        END

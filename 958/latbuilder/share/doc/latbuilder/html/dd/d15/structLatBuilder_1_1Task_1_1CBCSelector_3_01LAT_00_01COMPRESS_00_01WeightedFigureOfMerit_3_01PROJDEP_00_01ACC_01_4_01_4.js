@@ -1,0 +1,4 @@
+var structLatBuilder_1_1Task_1_1CBCSelector_3_01LAT_00_01COMPRESS_00_01WeightedFigureOfMerit_3_01PROJDEP_00_01ACC_01_4_01_4 =
+[
+    [ "CBC", "dd/d15/structLatBuilder_1_1Task_1_1CBCSelector_3_01LAT_00_01COMPRESS_00_01WeightedFigureOfMerit_3_01PROJDEP_00_01ACC_01_4_01_4.html#a545075f91a4d32acafbadecfb228bbfc", null ]
+];

@@ -1,0 +1,358 @@
+\documentclass[10pt]{article}
+\usepackage{comment}
+\usepackage{listings}
+\usepackage{graphicx}
+\usepackage{psfrag}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{algorithm2e}
+\usepackage{caption}
+\usepackage{epstopdf}
+\usepackage{url}
+\usepackage{fullpage}
+
+\usepackage{float}
+\floatplacement{figure}{H}
+
+\input{defs.tex}
+
+%opening
+\title{EASAL User/Developer Manual}
+
+\author{Aysegul Ozkan, Rahul Prabhu, Troy Baker, \\James Pence, Jorg
+Peters, Meera Sitharam \\ University of Florida}
+
+ 
+\begin{document}
+
+\maketitle
+This is a user/developer guide for the EASAL software described in the
+accompanying TOMS paper.
+EASAL generates, describes the topology, and explores the configuration space 
+of two point sets in $\mathbb{R}^3$ that are mutually constrained by
+distance intervals. Technical concepts and definitions that are required to use
+this software can be found in the main paper.
+
+
+\section{Introduction}
+\label{sec:intro}
+EASAL generates the assembly configuration space of two point sets in $\mathbb{R}^3$
+and describes the key aspects of the topology and geometry of of this space
+~\cite{Sitharam:2012:EASAL, Ozkan2014MainEasal, Wu2014Virus}.
+EASAL implements
+algorithms that use new theoretical results, some of which are presented in
+~\cite{Ozkan2014MainEasal, SiGa:2010, Sitharam:2012:EASAL}.  
+EASAL is opensource and can be downloaded from
+\url{https://www.bitbucket.org/geoplexity/EASAL}.  
+
+This user guide describes the TOMS version of EASAL.
+The TOMS version is the backend of EASAL
+without the GUI and with text input and output. Only this version of
+EASAL is part of the TOMS submission. 
+The experimental results in Section 4.1 of the paper can be reproduced
+with this version using the sample input files given in the files directory 
+(see Section \ref{sec:test} for instructions).
+
+
+This user guide describes in depth the key conceptual functionalities,
+dependencies and installation, and the major classes and methods in EASAL.  
+A video presenting the theory, applications, and software components of
+EASAL is available at \url{http://www.cise.ufl.edu/~rprabhu/EASALvideo.mpg}.
+
+An optional GUI (not part of TOMS submission) has been included for intuitive
+visual verification of the results.  Instructions on how to install, how to use
+and major functionalities offered by the GUI have been detailed in the
+`Complete User Guide'. The source code and the `Complete User Guide' are
+present in the EASAL github respository which can be found at
+\url{https://www.bitbucket.org/geoplexity/EASAL}.\\ 
+
+
+\noindent\textbf{Organization:} 
+The rest of the user guide is organized as follows.
+Section \ref{sec:dependency} discusses the software dependencies and
+installation instructions, Section \ref{sec:io} discusses the input and output,
+Section \ref{sec:functionalities} discusses the functionalities offered by the
+backend. Section \ref{sec:test} gives an example test driver and Section
+\ref{sec:classes} describes the major classes and methods in EASAL to help
+developers gain an insight into how EASAL has been implemented.
+
+\section{Dependencies and installation}
+\label{sec:dependency}
+\subsection{Dependencies}
+This section discusses the software dependencies of EASAL and gives installation instructions.
+
+\begin{itemize} 
+  \item Operating System: EASAL has been tested only on the following platforms:
+	\begin{itemize}
+	\item Ubuntu 12.04 or higher.
+	\item Fedora 22 or higher.
+	\item OS X 10.8 Mountain Lion.
+	\end{itemize}
+	  EASAL should work on any UNIX variant platform with little to no modifications.
+
+  \item We use Version 2.0 of the \emph{Eigen} library for linear algebra
+		  computations. All necessary files pertaining to Eigen required by
+		  EASAL are provided with the source code in the \emph{include}
+		  directory.  
+   
+  \item We use \emph{simpleini} to read the settings from the
+		  settings.ini file. All necessary files pertaining to simpleini are
+		  provided with the source code in the include directory.
+   
+  \item C++ compiler: EASAL requires one of the following compilers
+		  \begin{itemize}
+		  	\item g++ Version 4.8 or higher.
+		  	\item clang++ Version 3.8 or higher.
+		  \end{itemize}
+		  
+  \item EASAL uses the GNU Make utility to compile the source files. Make
+		  Version 4.1 is required.
+\end{itemize}
+
+ 
+\subsection{Installation}
+\label{sec:installation}
+\begin{itemize}
+	 \item Install GNU Make
+	   \begin{itemize}
+	   	   \item On Ubuntu 
+	   	   \begin{itemize}
+			\item sudo apt-get install make
+		   \end{itemize}	
+		   \item On Fedora
+		   \begin{itemize}
+			\item yum install make
+		   \end{itemize}
+		   \item On OSX
+		   \begin{itemize}
+		   \item sudo xcode-select -switch /Applications/Xcode.app/Contents/Developer
+		   \end{itemize}
+		   \end{itemize}
+	 
+	 \item To build the software, run \emph{``make backend"} in the build/root directory.
+	 \item To run EASAL run \emph{``bin/EASAL''} in a terminal from the root/build directory.
+\end{itemize}% subsubsection  (end)
+
+\emph{Before giving the test driver details in Section \ref{sec:test}, we first describe
+the input, output and software functionalities.}
+
+\section{Input/Output}
+\label{sec:io}
+\subsection{Input}
+Input to EASAL is specified using the settings.ini file. The main input features are the following:
+
+\begin{itemize}
+\item \textbf{Two rigid point sets}: \emph{[PointSet(A/B)]} 
+fields are used to specify the two point sets. The file subfield
+points to a file that specifies the input data in the pdb format.
+		
+
+\item \textbf{Constraints}:
+\begin{itemize}
+\item \textbf{Active threshold}: This specifies the range of distances where
+constraints are considered active.  This is given as $\lambda*(r_i+r_j) \pm
+\delta$.  Here, $\lambda$ is specified by the \emph{activeLowerLambda} subfield
+and $\delta$ is specified by the delta text box in the input window. $r_i$ and
+$r_j$ are the radii of the spheres in the point sets. 
+
+\item \textbf{Collision threshold}: This is the minimum distance between the
+points. This too is given as $\lambda*(r_i+r_j) \pm \delta$.  The subfields
+\emph{collisionLambda} and \emph{collisionDelta} specify these values.
+
+\item \textbf{Distance Data}: Only when the constraints between these pairs are
+active, are the corresponding configuration space regions explored.
+
+\end{itemize}
+\end{itemize}
+
+\subsection{Output}
+
+The following are the output:
+\begin{itemize}
+\item The \emph{Roadmap}, which stores the atlas, i.e., a topologically
+stratified set of sample feasible realizations or configurations of the two
+rigid point sets. This can be found in the `RoadMap.txt' file in the data
+folder.
+
+\item The \emph{Node} files which contain sampling information, Cayley
+parameter values, and realizations of the point sets. Each `Node*.txt' file
+contains samples for a particular active constraint region.
+
+\item The \emph{paths} file which contains the one degree of freedom motion
+path between all pairs of lowest energy configuration regions. This can be
+found in the `paths.txt' file in the data folder.
+
+\item The \emph{path matrix}, which contains a path matrix where the rows and
+columns correspond to 0D and 1D nodes. The $\{ij\}^{th}$ entry indicates the
+number of paths between nodes $i$ and $j$. This can be found in the
+`path\_matrix.txt' file in the data folder.
+
+\end{itemize}
+
+\section{Software Functionalities}
+\label{sec:functionalities}
+\subsection{Active Constraint Graph} 
+The active constraint graph for each node in the atlas can be found in the
+`RoadMap.txt' file. This active constraint graph shows only the participating
+points from each set. A `c' before two points indicates a constraint and a `p'
+indicates a parameter between two points belonging to different sets. It has to
+be noted that the points in the same set already form a clique.
+
+\subsection{Finding Boundary Regions} The boundary regions of a particular
+node of the atlas can be found in the `Roadmap.txt' file. In terms of the
+atlas, it depicts the the ancestors and descendants of that node. Since and
+edge in the graph represents boundary relationship, this feature allows us to
+inspect the boundary regions of an active constraint region.
+
+
+\subsection{Finding Paths Between Nodes with 6 Active constraints} The atlas
+output by EASAL can be used to generate all the paths between any two active
+constraint regions along with their energies. Once the atlas has been
+generated, finding paths is extremely fast. In the context of molecular
+assembly, the path topology of the configuration space is crucial for
+understanding assembly kinetics.
+
+Of particular interest is finding paths between two lowest energy
+configurations with 6 active constraints or 0D nodes of the atlas with
+effectively rigid configurations. We are mainly interested in paths through
+active constraint regions that have 5 or 6 active constraints.
+One fewer constraint implies one step higher energy and such paths 
+represent a continuous one degree-of-freedom motion.
+
+EASAL finds the shortest paths between all pairs of 0D nodes, if they exist.
+EASAL writes this path as a series of nodes to the `paths.txt' file.  Once the
+sampling has been completed, EASAL computes the total number of paths of a
+particular length between every pair of vertices and writes the entire matrix
+to the `path matrix.txt' file. The user can specify lengths by setting the
+`path length' parameter in the `settings.ini' file.
+
+\subsection{Sampling Options} 
+There are two options available:
+\begin{itemize}
+\item \textbf{Default}: The default mode of sampling is the auto-solve mode,
+which samples the atlas in a depth-first fashion. EASAL generates,
+depending on the user input, all possible 4D and 5D root nodes. 
+EASAL then recursively samples these nodes till the atlas generation
+is complete.
+
+\item \textbf{BFS}: Setting the \emph{breadthFirst} subfield under
+`[AtlasBuilding]' to true forces EASAL to explore the atlas in a breadth-first
+fashion. Otherwise depth-first is used.
+
+\end{itemize}
+
+\subsection{Dimension of the root node}
+By default, the dimension of the root node of the atlas is 5, which means that
+the root node has one bond and 5 parameters. The \emph{initialContactGraphs}
+option under `[RootNodeCreation]' allows the user to change this and make the
+root node a 4D node. With a 4D root node, there are 2 bonds and 4 parameters in
+the root node.
+
+\subsection{Step Size}
+EASAL uses Cayley grid sampling to sample the Cayley space. The user can
+specify this using the \emph{stepSize} option under `[Sampling]' in the
+settings file. Another option available to the user is to choose dynamic step
+size. This option can be selected by setting the \emph{dynamicStepSizeAmong}
+under `[Sampling]' to true. Doing so tells EASAL to run the different dynamic
+step size variants of EASAL. Setting \emph{dynamicStepSizeWithin} to 0 runs
+EASAL-1, setting it to 2 runs EASAL-2 and setting it to 1 runs EASAL-3.
+
+\section{Test Driver}
+\label{sec:test}
+
+To run the software, run the following command from the top directory:
+`bin/EASAL -settings $<$settings file name$>$'.  Where $<$settings file name$>$
+is the path to the settings.ini file in which the input has been specified. All
+input to the backend version of EASAL is specified using this settings.ini text
+file.
+
+We have included two example test drivers and all necessary files for the
+reviewers to run and test the program. To run these, just run the following
+commands from the top directory.\\
+
+
+`bin/EASAL -settings settings example 1.ini'\\
+
+
+`bin/EASAL -settings settings example 2.ini'\\
+
+Using the test drivers, the results corresponding to `Atlasing and Paths' 
+(Section 4.1 in the accompanying TOMS paper) can be
+reproduced. The `settings example 1.ini' test driver runs the experiment with n
+= 6 example with step set to 0.5 times the smallest radius and the tolerance
+set to (1.0 - 0.75) * sum of radii. This corresponds to the third row in Table
+I in the TOMS paper. The `settings example 2.ini' runs the experiment with n =
+20 with tolerance set to (1.0 - 0.75) * sum of radii and the step size set to
+0.25 times the smallest radius. This corresponds to the fourth row in Table I
+in the TOMS paper.\\ 
+
+
+The output of the run can be found in the 'dataDirectory' specified in the
+input settings file. For instance, this directory is `Driver1data' for example 1 
+and `Driver2data' for example 2. The results are as explained below.
+
+
+\begin{enumerate}
+\item Generating the atlas: The number of samples and the time required for
+sampling the entire atlas can be found in the `Samples.txt' file in the data
+directory.
+
+\item Finding paths between active constraint regions: As mentioned earlier
+EASAL finds the shortest path between all pairs of 0D nodes, if it exists, and
+writes this path as a series of nodes to the paths.txt file in the data folder.
+Once the sampling has been completed, EASAL computes the total number of paths
+of a particular length between every pair of OD regions and writes the entire
+matrix to the path matrix.txt file in the data folder. The user can specify
+lengths by setting the path length parameter in the settings.ini file. These
+results correspond to table II in the TOMS paper.
+
+\item Finding Boundary Regions: The boundary regions of any active constraint
+region can be found using the `RoadMap.txt file in the data folder. The `Nodes
+this node is connected to' filed in this file lists all the boundary regions.
+\end{enumerate}
+
+Sample results for these test drivers have been included in the `SampleOutput'
+folder in the top directory.  They contain the following files:
+\begin{enumerate}
+\item RoadMap.txt - Contains information about the stratification and the
+boundary regions.
+
+\item paths.txt - Contains the shortest paths between every pair of 0D nodes,
+if it exists.
+
+\item path matrix.txt - Contains the number of paths between 0D and 1D nodes.
+
+\item Samples.txt - Information about number of samples and time required for
+sampling.
+
+\item Node0.txt - One typical randomly selected node file containing sampling
+information along with realizations.
+
+\end{enumerate}
+
+Once the test drivers have been run, the optional GUI (not part of the TOMS
+submission) can be used to visualize the results.  See Section 2.4 of the
+complete user guide for instructions on how to visualize the results using the
+GUI.  For full use of the GUI, see Section 3 of the `Complete User Guide' which
+can be found at \url{https://www.bitbucket.org/geoplexity/EASAL}.  
+
+
+
+%WHERE CAN THEY FIND THE COMPLETE USER GUIDE??XXXXXXXXXX
+
+%See Section 3.1 of the complete user guide for the dependencies and installation
+%instruction for compiling and running the GUI. To visualize the output of each
+%of the drivers, enter the location of the data directory used for each of the
+%test drivers in the input window. Click on accept and when prompted to load an
+%already sampled atlas, click on yes (See Section 3.3.5 for further details).
+%Further GUI functionalities have been described in Section 3.3 and sample GUI
+%walkthrough is demonstrated in Section 3.4.
+
+
+\input{major_classes}
+
+
+\bibliographystyle{plain}
+\bibliography{easal}
+
+\end{document}

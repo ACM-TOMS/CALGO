@@ -1,0 +1,29 @@
+#!/bin/sh
+while read a b; do sub -w $a "$b" drotmg1.f; done << EOF
+REAL DOUBLE PRECISION
+SD1 DD1
+SD2 DD2
+SX1 DX1
+SY1 DY1
+SPARAM DPARAM
+SFLAG DFLAG
+SH11 DH11
+SH12 DH12
+SH21 DH21
+SH22 DH22
+SP1 DP1
+SP2 DP2
+SQ1 DQ1
+SQ2 DQ2
+STEMP DTEMP
+SU DU
+ABS DABS
+SY2 DY2
+SQRT DSQRT
+EOF
+while read a b; do sub $a $b drotmg1.f; done << EOF
+E0 D0
+E7 D7
+E-8 D-8
+SROTMG( DROTMG(
+EOF
