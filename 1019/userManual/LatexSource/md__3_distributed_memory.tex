@@ -1,0 +1,228 @@
+The \mbox{\hyperlink{group__starneig__node_ga3c59d6d34eba90c254f4e34e44700ab4}{S\+T\+A\+R\+N\+E\+I\+G\+\_\+\+H\+I\+N\+T\+\_\+\+DM}} initialization flag tells the library to configure itself for distributed memory computation. The flag is indented to be only a hint and the library will automatically reconfigure itself for the correct computation mode. A user is allowed to mix shared memory and distributed memory functions without reninitializing the library. The library is intended to be run in a {\bfseries{hybrid configuration}} (each M\+PI rank is mapped to several C\+PU cores). Failing to do so leads to C\+PU core oversubscription. It is generally a good idea to map each M\+PI rank to a full node or a N\+U\+MA island / C\+PU socket\+: 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{\# OpenMPI / one rank per node:}
+\DoxyCodeLine{\$ mpirun -\/n RANKS -\/-\/map-\/by ppr:1:node -\/-\/bind-\/to none ...}
+\DoxyCodeLine{}
+\DoxyCodeLine{\# OpenMPI / one rank per socket:}
+\DoxyCodeLine{\$ mpirun -\/n RANKS -\/-\/map-\/by ppr:1:socket -\/-\/bind-\/to socket ...}
+\DoxyCodeLine{}
+\DoxyCodeLine{\# Intel MPI / one rank per node:}
+\DoxyCodeLine{\$ mpirun -\/n RANKS -\/binding "pin=on;domain=node" ...}
+\DoxyCodeLine{}
+\DoxyCodeLine{\# Intel MPI / one rank per socket:}
+\DoxyCodeLine{\$ mpirun -\/n RANKS -\/binding "pin=on;domain=socket" ...}
+\end{DoxyCode}
+
+
+\begin{DoxyAttention}{Attention}
+Star\+PU attempts to bind the worker threads to the available C\+PU cores. This may sometimes conflict with the M\+PI library and/or the batch system C\+PU core allocation. Star\+N\+Eig library attempts to correct for by factoring in the C\+PU core binding mask. However, if neither the M\+PI library nor the batch system enforces such a binding mask, it is possible that several Star\+PU worker threads end up bound to a same C\+PU core. In such a situation, it is recommended that a user disables the Star\+PU thread binding explicitly\+: 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{STARPU\_WORKERS\_NOBIND=1 mpirun ...}
+\end{DoxyCode}
+
+\end{DoxyAttention}
+This is particularly important when several ranks / processes are mapped to a same node.
+
+The library assumes that the M\+PI library is already initialized when the \mbox{\hyperlink{group__starneig__node_ga4d6386652685ba5c5706e72ebbb7cb3a}{starneig\+\_\+node\+\_\+init()}} interface function is called with the \mbox{\hyperlink{group__starneig__node_ga3c59d6d34eba90c254f4e34e44700ab4}{S\+T\+A\+R\+N\+E\+I\+G\+\_\+\+H\+I\+N\+T\+\_\+\+DM}} flag or when the library reconfigures itself for distributed memory after a user has called a distributed memory interface function. The M\+PI library should be initialized either in the serialized mode\+: 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{\textcolor{keywordtype}{int} thread\_support;}
+\DoxyCodeLine{MPI\_Init\_thread(}
+\DoxyCodeLine{    \&argc, (\textcolor{keywordtype}{char} ***)\&argv, MPI\_THREAD\_SERIALIZED, \&thread\_support);}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{keywordflow}{if} (thread\_support < MPI\_THREAD\_SERIALIZED) \{}
+\DoxyCodeLine{    fprintf(stderr,}
+\DoxyCodeLine{        \textcolor{stringliteral}{"MPI\_THREAD\_SERIALIZED is not supported. Aborting...\(\backslash\)n"});}
+\DoxyCodeLine{    abort();}
+\DoxyCodeLine{\}}
+\end{DoxyCode}
+ Or in the multi-\/threaded mode\+: 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{\textcolor{keywordtype}{int} thread\_support;}
+\DoxyCodeLine{MPI\_Init\_thread(}
+\DoxyCodeLine{    \&argc, (\textcolor{keywordtype}{char} ***)\&argv, MPI\_THREAD\_MULTIPLE, \&thread\_support);}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{keywordflow}{if} (thread\_support < MPI\_THREAD\_SERIALIZED) \{}
+\DoxyCodeLine{    fprintf(stderr,}
+\DoxyCodeLine{        \textcolor{stringliteral}{"MPI\_THREAD\_SERIALIZED is not supported. Aborting...\(\backslash\)n"});}
+\DoxyCodeLine{    abort();}
+\DoxyCodeLine{\} \textcolor{keywordflow}{else} \textcolor{keywordflow}{if} (thread\_support < MPI\_THREAD\_MULTIPLE) \{}
+\DoxyCodeLine{    fprintf(stderr,}
+\DoxyCodeLine{        \textcolor{stringliteral}{"Warning: MPI\_THREAD\_MULTIPLE is not supported.\(\backslash\)n"});}
+\DoxyCodeLine{\}}
+\end{DoxyCode}
+
+
+A user is allowed to change the library M\+PI communicator with the \mbox{\hyperlink{group__starneig__distr__helpers_ga198baa0b0a4814a3031d855e37b88719}{starneig\+\_\+mpi\+\_\+set\+\_\+comm()}} interface function. This interface function should be called {\bfseries{before}} the library is initialized.
+
+\doxysection*{Data distribution}
+
+Distributed matrices are represented using two opaque objects\+:
+
+
+\begin{DoxyItemize}
+\item {\itshape Data distribution} (\mbox{\hyperlink{group__starneig__dm__matrix_ga752a8405b28dfae3b2c85202887a250d}{starneig\+\_\+distr\+\_\+t}})
+\item {\itshape Distributed matrix} (\mbox{\hyperlink{group__starneig__dm__matrix_gafe12044a51d121d0c3d8544eede44512}{starneig\+\_\+distr\+\_\+matrix\+\_\+t}})
+\end{DoxyItemize}
+
+Each matrix is divided into rectangular blocks of uniform size (excluding the last block row and column)\+:
+
+ 
+\begin{DoxyImage}
+\includegraphics[width=0.4\textwidth]{distr_matrix}
+\doxyfigcaption{A matrix divided into rectangular blocks of uniform size.}
+\end{DoxyImage}
+
+
+The blocks are indexed using a two-\/dimensional index space. A data distribution encapsulates an arbitrary mapping from this two-\/dimensional block index space to the one-\/dimensional M\+PI rank space\+:
+
+ 
+\begin{DoxyImage}
+\includegraphics[width=0.4\textwidth]{distr_matrix2}
+\doxyfigcaption{An example of a block mapping.}
+\end{DoxyImage}
+
+
+In the above example, the rank 0 owns the blocks (0,1), (1,2), (1,5), (1,6), (2,6), (3,0) and (3,5). Naturally, a data distribution can describe a two-\/dimensional block cyclic distribution that is very common with Sca\+L\+A\+P\+A\+CK subroutines\+:
+
+ 
+\begin{DoxyImage}
+\includegraphics[width=0.4\textwidth]{distr_matrix3}
+\doxyfigcaption{An example of a row-\/major ordered two-\/dimensional block cyclic mapping.}
+\end{DoxyImage}
+
+
+A data distribution can be created using one of the following interface functions\+:
+
+
+\begin{DoxyItemize}
+\item \mbox{\hyperlink{group__starneig__dm__matrix_gaf2358ba6cd6bdd8a985d17f1f2d75427}{starneig\+\_\+distr\+\_\+init()}} creates a default distribution (row-\/major ordered two-\/dimensional block cyclic distribution with a squarish mesh).
+\item \mbox{\hyperlink{group__starneig__dm__matrix_ga8238518d3fec830454e78c59b561c2d2}{starneig\+\_\+distr\+\_\+init\+\_\+mesh()}} creates a row-\/major or column-\/major ordered two-\/dimensional block cyclic distribution with desired number of rows and columns in the mesh.
+\item \mbox{\hyperlink{group__starneig__dm__matrix_gade87e091936a7aab0c576e278a4b8929}{starneig\+\_\+distr\+\_\+init\+\_\+func()}} creates an arbitrary distribution defined by a function.
+\end{DoxyItemize}
+
+Fox example, 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{\mbox{\hyperlink{group__starneig__dm__matrix_ga752a8405b28dfae3b2c85202887a250d}{starneig\_distr\_t}} distr = \mbox{\hyperlink{group__starneig__dm__matrix_ga8238518d3fec830454e78c59b561c2d2}{starneig\_distr\_init\_mesh}}(4, 6, \mbox{\hyperlink{group__starneig__dm__matrix_gga5a0f09f962b09e0858bbbc7986e3964aabef644e09e36ecdb49a45aae76dfb147}{STARNEIG\_ORDER\_DEFAULT}});}
+\end{DoxyCode}
+ would create a two-\/dimensional block cyclic distribution with 4 rows and 6 columns in the mesh. Alternatively, a user can create an equivalent data distribution using the \mbox{\hyperlink{group__starneig__dm__matrix_gade87e091936a7aab0c576e278a4b8929}{starneig\+\_\+distr\+\_\+init\+\_\+func()}} interface function\+: 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{\textcolor{comment}{// additional distribution function argument structure}}
+\DoxyCodeLine{\textcolor{keyword}{struct }block\_cyclic\_arg \{}
+\DoxyCodeLine{    \textcolor{keywordtype}{int} rows;   \textcolor{comment}{// the number of rows in the process mesh}}
+\DoxyCodeLine{    \textcolor{keywordtype}{int} cols;   \textcolor{comment}{// the number of columns in the process mesh}}
+\DoxyCodeLine{\};}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{comment}{// distribution function (row-\/major ordered 2D block cyclic distribution)}}
+\DoxyCodeLine{\textcolor{keywordtype}{int} block\_cyclic\_func(\textcolor{keywordtype}{int} i, \textcolor{keywordtype}{int} j, \textcolor{keywordtype}{void} *arg)}
+\DoxyCodeLine{\{}
+\DoxyCodeLine{    \textcolor{keyword}{struct }block\_cyclic\_arg *mesh = (\textcolor{keyword}{struct }block\_cyclic\_arg *) arg;}
+\DoxyCodeLine{    \textcolor{keywordflow}{return} (i \% mesh-\/>rows) * mesh-\/>cols + j \% mesh-\/>cols;}
+\DoxyCodeLine{\}}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{keywordtype}{void} func(...)}
+\DoxyCodeLine{\{}
+\DoxyCodeLine{    ...}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{keyword}{struct }block\_cyclic\_arg arg = \{ .rows = 4, .cols = 6 \};}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__matrix_ga752a8405b28dfae3b2c85202887a250d}{starneig\_distr\_t}} distr =}
+\DoxyCodeLine{        \mbox{\hyperlink{group__starneig__dm__matrix_gade87e091936a7aab0c576e278a4b8929}{starneig\_distr\_init\_func}}(\&block\_cyclic\_func, \&arg, \textcolor{keyword}{sizeof}(arg));}
+\DoxyCodeLine{}
+\DoxyCodeLine{    ...}
+\DoxyCodeLine{\}}
+\end{DoxyCode}
+
+
+A data distribution is destroyed with the \mbox{\hyperlink{group__starneig__dm__matrix_ga2a3f59a9521ce7ea0583e75f0b08de67}{starneig\+\_\+distr\+\_\+destroy()}} interface function.
+
+\begin{DoxyRemark}{Remarks}
+Certain interface functions (\mbox{\hyperlink{group__starneig__dm__sep_gab328fae0d50eaab2e35110da6d6812c8}{starneig\+\_\+\+S\+E\+P\+\_\+\+D\+M\+\_\+\+Hessenberg()}}, \mbox{\hyperlink{group__starneig__dm__sep_gacda636c9bbb32bb65f03b0797998f1bc}{starneig\+\_\+\+S\+E\+P\+\_\+\+D\+M\+\_\+\+Reduce()}}, \mbox{\hyperlink{group__starneig__dm__gep_ga864e04d38e72ebbb06bc4a7558a7a3e1}{starneig\+\_\+\+G\+E\+P\+\_\+\+D\+M\+\_\+\+Hessenberg\+Triangular()}}, and \mbox{\hyperlink{group__starneig__dm__gep_ga56de8627462e69a926d2746a657ece65}{starneig\+\_\+\+G\+E\+P\+\_\+\+D\+M\+\_\+\+Reduce()}}) are wrappers for / use several Sca\+L\+A\+P\+A\+CK subroutines. The involved matrices should thus have a two-\/dimensional block cyclic data distribution. The library will automatically convert the matrices to a compatible format but this requires extra memory.
+\end{DoxyRemark}
+\doxysection*{Distributed matrix}
+
+A distributed matrix is created using the \mbox{\hyperlink{group__starneig__dm__matrix_ga87b37007fe51519b91f9976197577a8d}{starneig\+\_\+distr\+\_\+matrix\+\_\+create()}} interface function. The function call will automatically allocate the required local resources. For example, 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{\mbox{\hyperlink{group__starneig__dm__matrix_ga752a8405b28dfae3b2c85202887a250d}{starneig\_distr\_t}} distr =}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__matrix_ga8238518d3fec830454e78c59b561c2d2}{starneig\_distr\_init\_mesh}}(4, 6, \mbox{\hyperlink{group__starneig__dm__matrix_gga5a0f09f962b09e0858bbbc7986e3964aabef644e09e36ecdb49a45aae76dfb147}{STARNEIG\_ORDER\_DEFAULT}});}
+\DoxyCodeLine{\mbox{\hyperlink{group__starneig__dm__matrix_gafe12044a51d121d0c3d8544eede44512}{starneig\_distr\_matrix\_t}} dA =}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__matrix_ga87b37007fe51519b91f9976197577a8d}{starneig\_distr\_matrix\_create}}(m, n, bm, bn, \mbox{\hyperlink{group__starneig__dm__matrix_ggad8f668a249453af08e1063acaf6f95c1ac36c6c4ab926ecf1e5cb22c1968971ad}{STARNEIG\_REAL\_DOUBLE}}, distr);}
+\end{DoxyCode}
+ would create a $m \times n$ double-\/precision real matrix that is distributed in a two-\/dimensional block cyclic fashion in $bm \times bn$ blocks. Or, 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{\mbox{\hyperlink{group__starneig__dm__matrix_gafe12044a51d121d0c3d8544eede44512}{starneig\_distr\_matrix\_t}} dB =}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__matrix_ga87b37007fe51519b91f9976197577a8d}{starneig\_distr\_matrix\_create}}(n, n, -\/1, -\/1, \mbox{\hyperlink{group__starneig__dm__matrix_ggad8f668a249453af08e1063acaf6f95c1ac36c6c4ab926ecf1e5cb22c1968971ad}{STARNEIG\_REAL\_DOUBLE}}, NULL);}
+\end{DoxyCode}
+ would create a $n \times n$ double-\/precision real matrix with a default data distribution ({\ttfamily N\+U\+LL} argument) and a default block size ({\ttfamily -\/1, -\/1}).
+
+\begin{DoxyAttention}{Attention}
+Star\+N\+Eig library is designed to use much larger distributed blocks than Sca\+L\+A\+P\+A\+CK. Selecting a too small distributed block size will be detrimental to the performance.
+\end{DoxyAttention}
+A user may access the locally owned blocks using the \mbox{\hyperlink{group__starneig__dm__matrix_ga88df5c04d8351cd4f3609aa29072745a}{starneig\+\_\+distr\+\_\+matrix\+\_\+get\+\_\+blocks()}} interface function. A distributed matrix is destroyed using the \mbox{\hyperlink{group__starneig__dm__matrix_gab5e014192e0b468e72802ea8b512848d}{starneig\+\_\+distr\+\_\+matrix\+\_\+destroy()}} interface function. This will deallocate all local resources. See module \mbox{\hyperlink{group__starneig__dm__matrix}{Distributed Memory / Distributed matrices}} for further information.
+
+\begin{DoxyRemark}{Remarks}
+Certain interface functions (\mbox{\hyperlink{group__starneig__dm__sep_gab328fae0d50eaab2e35110da6d6812c8}{starneig\+\_\+\+S\+E\+P\+\_\+\+D\+M\+\_\+\+Hessenberg()}}, \mbox{\hyperlink{group__starneig__dm__sep_gacda636c9bbb32bb65f03b0797998f1bc}{starneig\+\_\+\+S\+E\+P\+\_\+\+D\+M\+\_\+\+Reduce()}}, \mbox{\hyperlink{group__starneig__dm__gep_ga864e04d38e72ebbb06bc4a7558a7a3e1}{starneig\+\_\+\+G\+E\+P\+\_\+\+D\+M\+\_\+\+Hessenberg\+Triangular()}}, and \mbox{\hyperlink{group__starneig__dm__gep_ga56de8627462e69a926d2746a657ece65}{starneig\+\_\+\+G\+E\+P\+\_\+\+D\+M\+\_\+\+Reduce()}}) are wrappers for / use several Sca\+L\+A\+P\+A\+CK subroutines. The involved matrices should thus be distributed in square blocks. In addition, the Sca\+L\+A\+P\+A\+CK subroutines usually perform better when the block size is relatively small. The library will automatically convert the matrices to a compatible format but this requires extra memory.
+\end{DoxyRemark}
+\doxysection*{Copy, scatter and gather}
+
+An entire distributed matrix can be copied with the \mbox{\hyperlink{group__starneig__dm__matrix_ga41cf77e628b68c39142d148cdd5d991e}{starneig\+\_\+distr\+\_\+matrix\+\_\+copy()}} interface function\+: 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{\mbox{\hyperlink{group__starneig__dm__matrix_gafe12044a51d121d0c3d8544eede44512}{starneig\_distr\_matrix\_t}} dA, dB;}
+\DoxyCodeLine{}
+\DoxyCodeLine{...}
+\DoxyCodeLine{}
+\DoxyCodeLine{starneig\_distr\_matrix\_copy(dB, dA);}
+\end{DoxyCode}
+ This copies distributed matrix {\ttfamily dB} to a distributed matrix {\ttfamily dA}. A region (submatrix) of a distributed matrix can be copied to a second distributed matrix using the \mbox{\hyperlink{group__starneig__dm__matrix_gaf1db526abd6035841cb8ce3dec6e74a1}{starneig\+\_\+distr\+\_\+matrix\+\_\+copy\+\_\+region()}} interface function.
+
+A local matrix can be converted to a \char`\"{}single owner\char`\"{} distributed matrix with the \mbox{\hyperlink{group__starneig__dm__matrix_ga4e05c038d2bd44b7757eb4c07bef96dc}{starneig\+\_\+distr\+\_\+matrix\+\_\+create\+\_\+local()}} interface function\+: 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{\textcolor{keywordtype}{int} owner = 0; \textcolor{comment}{// MPI rank that owns the local matrix}}
+\DoxyCodeLine{\textcolor{keywordtype}{double} *A;     \textcolor{comment}{// local pointer}}
+\DoxyCodeLine{\textcolor{keywordtype}{int} ldA;       \textcolor{comment}{// matching leading dimension}}
+\DoxyCodeLine{}
+\DoxyCodeLine{...}
+\DoxyCodeLine{}
+\DoxyCodeLine{starneig\_distr\_matrix\_t lA = \mbox{\hyperlink{group__starneig__dm__matrix_ga4e05c038d2bd44b7757eb4c07bef96dc}{starneig\_distr\_matrix\_create\_local}}(}
+\DoxyCodeLine{    n, n, \mbox{\hyperlink{group__starneig__dm__matrix_ggad8f668a249453af08e1063acaf6f95c1ac36c6c4ab926ecf1e5cb22c1968971ad}{STARNEIG\_REAL\_DOUBLE}}, owner, A, ldA);}
+\end{DoxyCode}
+ This creates a wrapper object, i.\+e., the pointer {\ttfamily A} and the distributed matrix {\ttfamily lA} point to the same data on the {\ttfamily owner} node. The created distributed matrix is associated with a data distribution that indicated that the whole matrix is owned by the node {\ttfamily owner}. The used block size is $n \times n$.
+
+Copying from a \char`\"{}single owner\char`\"{} distributed matrix to a distributed matrix performs a {\itshape scatter} operation and copying from a distributed matrix to a \char`\"{}single owner\char`\"{} distributed matrix performs a {\itshape gather} operation.
+
+\doxysection*{Sca\+L\+A\+P\+A\+CK compatibility layer}
+
+The library provides a Sca\+L\+A\+P\+A\+CK compatibility layer\+:
+
+
+\begin{DoxyItemize}
+\item B\+L\+A\+CS contexts are encapsulated inside \mbox{\hyperlink{group__starneig__dm__blacs_ga2610a78a74c6216e26c710b0d319edcd}{starneig\+\_\+blacs\+\_\+context\+\_\+t}} objects.
+\item B\+L\+A\+CS descriptors are encapsulated inside \mbox{\hyperlink{group__starneig__dm__blacs_ga741ddf1e6fb545cb7cc7bcdc558cd60e}{starneig\+\_\+blacs\+\_\+descr\+\_\+t}} objects.
+\end{DoxyItemize}
+
+A two-\/dimensional block cyclic data distribution can be converted to a B\+L\+A\+CS context and vice versa using the \mbox{\hyperlink{group__starneig__dm__blacs_ga358e78f5506447151ab45ffea61bc2a2}{starneig\+\_\+distr\+\_\+to\+\_\+blacs\+\_\+context()}} and \mbox{\hyperlink{group__starneig__dm__blacs_ga1f0b0bcb78e17be5921edeb10213be43}{starneig\+\_\+blacs\+\_\+context\+\_\+to\+\_\+distr()}} interface functions, respectively. Similarly, a distributed matrix that uses a two-\/dimensional block cyclic data distribution can be converted to a B\+L\+A\+CS descriptor (and a local buffer) and vice versa using the \mbox{\hyperlink{group__starneig__dm__blacs_ga55b5ea5e908657c0db6e8c98a958e59d}{starneig\+\_\+distr\+\_\+matrix\+\_\+to\+\_\+blacs\+\_\+descr()}} and \mbox{\hyperlink{group__starneig__dm__blacs_ga239d4a160b7e28cb17766b30ca27736d}{starneig\+\_\+blacs\+\_\+descr\+\_\+to\+\_\+distr\+\_\+matrix()}} interface functions, respectively. The conversion is performed in-\/place and a user is allowed to mix Star\+N\+Eig interface functions with Sca\+L\+A\+P\+A\+CK style subroutines/functions without reconversion.
+
+For example, 
+\begin{DoxyCode}{0}
+\DoxyCodeLine{\mbox{\hyperlink{group__starneig__dm__matrix_gafe12044a51d121d0c3d8544eede44512}{starneig\_distr\_matrix\_t}} dA = \mbox{\hyperlink{group__starneig__dm__matrix_ga87b37007fe51519b91f9976197577a8d}{starneig\_distr\_matrix\_create}}(...);}
+\DoxyCodeLine{}
+\DoxyCodeLine{...}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{comment}{// convert the data distribution to a BLACS context}}
+\DoxyCodeLine{starneig\_distr\_t distr = \mbox{\hyperlink{group__starneig__dm__matrix_ga0ee931a54b3482a3dadd6978d95613a1}{starneig\_distr\_matrix\_get\_distr}}(A);}
+\DoxyCodeLine{\mbox{\hyperlink{group__starneig__dm__blacs_ga2610a78a74c6216e26c710b0d319edcd}{starneig\_blacs\_context\_t}} context = \mbox{\hyperlink{group__starneig__dm__blacs_ga358e78f5506447151ab45ffea61bc2a2}{starneig\_distr\_to\_blacs\_context}}(distr);}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{comment}{// convert the distributed matrix to a BLACS descriptor and a local buffer}}
+\DoxyCodeLine{\mbox{\hyperlink{group__starneig__dm__blacs_structstarneig__blacs__descr}{starneig\_blacs\_descr\_t}} descr\_a;}
+\DoxyCodeLine{\textcolor{keywordtype}{double} *local\_a;}
+\DoxyCodeLine{\mbox{\hyperlink{group__starneig__dm__blacs_ga55b5ea5e908657c0db6e8c98a958e59d}{starneig\_distr\_matrix\_to\_blacs\_descr}}(dA, context, \&descr\_a, (\textcolor{keywordtype}{void} **)\&local\_a);}
+\DoxyCodeLine{}
+\DoxyCodeLine{...}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{comment}{// a ScaLAPACK subroutine for reducing general distributed matrix to upper}}
+\DoxyCodeLine{\textcolor{comment}{// Hessenberg form}}
+\DoxyCodeLine{extern \textcolor{keywordtype}{void} pdgehrd\_(\textcolor{keywordtype}{int} \textcolor{keyword}{const} *, \textcolor{keywordtype}{int} \textcolor{keyword}{const} *, \textcolor{keywordtype}{int} \textcolor{keyword}{const} *, \textcolor{keywordtype}{double} *,}
+\DoxyCodeLine{    \textcolor{keywordtype}{int} \textcolor{keyword}{const} *, \textcolor{keywordtype}{int} \textcolor{keyword}{const} *, \mbox{\hyperlink{group__starneig__dm__blacs_structstarneig__blacs__descr}{starneig\_blacs\_descr\_t}} \textcolor{keyword}{const} *, \textcolor{keywordtype}{double} *,}
+\DoxyCodeLine{    \textcolor{keywordtype}{double} *, \textcolor{keywordtype}{int} \textcolor{keyword}{const} *, \textcolor{keywordtype}{int} *);}
+\DoxyCodeLine{}
+\DoxyCodeLine{pdgehrd\_(\&n, \&ilo, \&ihi, local\_a, \&ia, \&ja, \&descr\_a, tau, ...);}
+\end{DoxyCode}
+ converts a distributed matrix {\ttfamily dA} to a B\+L\+A\+CS descriptor {\ttfamily descr\+\_\+a} and a local pointer {\ttfamily local\+\_\+a}. The descriptor and the local array are then fed to a Sca\+L\+A\+P\+A\+CK subroutine. A user must make sure that the live time of the distributed matrix {\ttfamily dA} is at least as long as the live time of the matching B\+L\+A\+CS descriptor {\ttfamily descr\+\_\+a}. See modules \mbox{\hyperlink{group__starneig__dm__blacs__helpers}{Sca\+L\+A\+P\+A\+CK compatibility / B\+L\+A\+CS helpers}} and \mbox{\hyperlink{group__starneig__dm__blacs}{Sca\+L\+A\+P\+A\+CK compatibility / B\+L\+A\+CS matrices}} for further information. 
