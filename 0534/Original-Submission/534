@@ -1,0 +1,1142 @@
+C*                                                                     *MAIN  10
+C*---------- THIS IS A MAIN PROGRAM FOR  STINT-TYPE SUBROUTINES -------*MAIN  20
+C*--------------------- SET HERE FOR N = 4 PROBLEM --------------------*MAIN  30
+C*                                                                     *MAIN  40
+      DOUBLE PRECISION D, EPS, ERO, ERORI, HI, HMAX, HMIN, HNEXT,       MAIN  50
+     1                 H0, RJ, RW, S, SAVE, T, TF, TI, TOUT,            MAIN  60
+     2                 TOUTP, TS, YDOT, YI, YMAX, YOUT, Y0              MAIN  70
+C     DOUBLE PRECISION DABS, DBLE, DMAX1                                MAIN  80
+      DIMENSION YI(4), ERORI(4), Y0(4,8,4), YDOT(4,4), SAVE(52), RJ(16),MAIN  90
+     1          YMAX(4), RW(16), ERO(4), YOUT(4), IPIV(4)               MAIN 100
+      COMMON /STAT/ NSTEP,NFE,NJE,NINVS                                 MAIN 110
+      DATA LIN/5/,LOUT/6/                                               MAIN 120
+C*                                                                     *MAIN 130
+C*       SET THE INPUT PARAMETERS                                      *MAIN 140
+C*                                                                     *MAIN 150
+C*       NP   PROBLEM IDENTIFIER                                       *MAIN 160
+C*       NC   NUMBER OF TIMES THE SAME PROBLEM IS SOLVED WITH DIFFERENT*MAIN 170
+C*            VALUE OF EPS                                             *MAIN 180
+C*       IP   NUMBER OF TEST POINTS AT WHICH THE SOLUTION IS SOUGHT    *MAIN 190
+C*            (DOES NOT INCLUDE THE FINAL POINT)                       *MAIN 200
+C*       N    NUMBER OF DIFFERENTIAL EQUATIONS TO BE SOLVED            *MAIN 210
+C*       YI   THE INITIAL VALUES OF THE DEPENDENT VARIABLE             *MAIN 220
+C*       TI   THE INITIAL VALUE OF THE INDEPENDENT VARIABLE            *MAIN 230
+C*       TF   THE FINAL VALUE OF THE INDEPENDENT VARIABLE              *MAIN 240
+C*       HI   THE INITIAL STEP-SIZE                                    *MAIN 250
+C*       MF   METHOD FLAG DETERMINING THE MODE OF THE JACOBIAN         *MAIN 260
+C*            MATRIX EVALUATION                                        *MAIN 270
+C*       EPS  USERS  SPECIFIED ERROR PER STEP                          *MAIN 280
+C*                                                                     *MAIN 290
+      READ(LIN,10) NP                                                   MAIN 300
+      READ(LIN,10) NC                                                   MAIN 310
+      READ(LIN,10) IP                                                   MAIN 320
+      READ(LIN,10) N                                                    MAIN 330
+   10 FORMAT(I2)                                                        MAIN 340
+      READ(LIN,20) (YI(I),I=1,N)                                        MAIN 350
+      READ(LIN,20) TI, TF, HI                                           MAIN 360
+      DO 1000 K=1,NC                                                    MAIN 370
+      READ(LIN,10) MF                                                   MAIN 380
+      READ(LIN,20) EPS                                                  MAIN 390
+   20 FORMAT(3D22.15)                                                   MAIN 400
+      WRITE(LOUT,30) NP, MF, EPS                                        MAIN 410
+   30 FORMAT(1H1,10X,13H PROBLEM NO. ,I2//                              MAIN 420
+     1           11X,16H METHOD FLAG =  ,I2//                           MAIN 430
+     2           11X,18H ERROR PER STEP = ,D10.3//                      MAIN 440
+     3           5X,4HTIME,15X,29HS O L U T I O N  /  E R R O R,26X,    MAIN 450
+     4           7H H-USED,3X,7HNQ-USED,3X,6H STEPS,3X,5H FNS ,3X,      MAIN 460
+     5           5H JACS//)                                             MAIN 470
+      DO 40 I=1,N                                                       MAIN 480
+C*                                                                     *MAIN 490
+C*       SET THE NORMALIZING VECTOR YMAX                               *MAIN 500
+C*                                                                     *MAIN 510
+      YMAX(I)=DMAX1(DABS(YI(I)),1.D0)                                   MAIN 520
+C*                                                                     *MAIN 530
+      ERORI(I)=0.D0                                                     MAIN 540
+   40 Y0(I,1,1)=YI(I)                                                   MAIN 550
+C*                                                                     *MAIN 560
+C*       THE FOLLOWING PARAMETERS ARE USED FOR STATISTICAL PURPOSES    *MAIN 570
+C*                                                                     *MAIN 580
+C*       NSTEP   NUMBER OF ACCEPTED STEPS                              *MAIN 590
+C*       NFE     NUMBER OF FUNCTION EVALUATIONS                        *MAIN 600
+C*       NJE     NUMBER OF JACOBIAN EVALUATIONS                        *MAIN 610
+C*       NINVS   NUMBER OF CONVERGENCE FACTOR INVERSIONS               *MAIN 620
+C*                                                                     *MAIN 630
+      NSTEP=0                                                           MAIN 640
+      NFE=0                                                             MAIN 650
+      NJE=0                                                             MAIN 660
+      NINVS=0
+C*                                                                     *
+C*       THE FIRST POINT AT WHICH THE SOLUTION IS SOUGHT IS SET BELOW. *
+C*       FOR TESTING PURPOSES THE SET OF POINTS TOUT AT WHICH THE      *
+C*       SOLUTION IS SOUGHT IS DESIGNED SO THAT ITS DENSITY IS LARGE   *
+C*       AT THE BEGINNING OF THE INTEGRATION INTERVAL AND THEN         *
+C*       GEOMETRICALLY DECREASES. TOUTP IS THE LAST INTERPOLATION POINT*
+C*       HMAX, THE MAXIMUM STEP-SIZE, IS EQUAL TO THE DISTANCE         *
+C*       BETWEEN THE NEXT AND LAST INTERPOLATION POINTS, MULTIPLIED    *
+C*       BY 10.                                                        *
+C*                                                                     *
+      TOUT=TI+(TF-TI)/2.D0**IP
+      TOUTP=TI
+      HMAX=(TOUT-TOUTP)*1.D1
+C*                                                                     *
+      T =TI
+      HNEXT=HI
+      HMIN=HI*1.D-2
+      MAXDER=7
+      JSTART=0
+   50 CALL STINT (N, T, Y0, YDOT, SAVE, H0, HNEXT, HMIN, HMAX, EPS,
+     1            YMAX, KFLAG, KNEXT, JSTART, MAXDER, RW, RJ, MF, IPIV)
+      IF(KFLAG.GE.0) GO TO 200
+      WRITE(LOUT,60) KFLAG
+   60 FORMAT(1H0/20H COMPLETION CODE IS ,I4)
+      GO TO 800
+  200 KFLGP1=KFLAG+1
+C*                                                                     *
+C*       CHECK WHETHER THE COMPUTED SOLUTION REACHED BEYOND THE        *
+C*       INTERPOLATION POINT TOUT                                      *
+C*                                                                     *
+      II=0
+      DO 500 I=1,KFLGP1
+      II=II+1
+      TS=TOUT-T+H0*DBLE(FLOAT(I-1))
+      IF(TS.LT.0.D0) GO TO 500
+      IF(I-1) 50, 50, 510
+  500 CONTINUE
+C*                                                                     *
+C*       THE SOLUTION REACHED BEYOND TOUT.                             *
+C*       PERFORM INTERPOLATION AT TOUT.                                *
+C*                                                                     *
+  510 IND=KFLAG+3-II
+      IF(II.EQ.2) IND=1
+      S=(TS-H0)/H0
+      DO 600 I=1,N
+      D=1.D0
+      YOUT(I)=Y0(I,1,IND)
+      DO 600 J=1,JSTART
+      D=D*(DBLE(FLOAT(J-1))+S)/DBLE(FLOAT(J))
+  600 YOUT(I)=YOUT(I)+D*Y0(I,J+1,IND)
+      CALL ERROR(TOUT,YOUT,N,ERO)
+C*                                                                     *
+C*       DETERMINE THE MAXIMUM ERROR OF THE INTERPOLATED SOLUTION      *
+C*       COMMITTED SO FAR AND PRINT IT OUT WITH THE SOLUTION AT TOUT   *
+C*                                                                     *
+      DO 610 I=1,N
+  610 ERORI(I)=DMAX1(ERORI(I),DABS(ERO(I)))
+      WRITE(LOUT,620) TOUT, (YOUT(I),I=1,N), H0, JSTART, NSTEP, NFE,
+     1                NJE, (ERO(I),I=1,N)
+  620 FORMAT( 4H T =,D11.4,4D15.6,D12.3,3X,I4,6X,I4,4X,I4,4X,I4/15X,
+     1        4D15.6/)
+C*                                                                     *
+C*       SET THE NEW INTERPOLATION POINT AND CHECK WHETHER AN          *
+C*       INTERPOLATION CAN BE PERFORMED.  SET NEW HMAX                 *
+C*                                                                     *
+      TOUTP=TOUT
+      TOUT=TI+(TOUT-TI)*2.D0
+      IF(TOUT.GT.TF) GO TO 800
+      IF(TOUT.LE.T) GO TO 200
+      HMAX=(TOUT-TOUTP)*1.D1
+      GO TO 50
+C*                                                                     *
+C*       REGARDLESS OF WHETHER OR NOT THE PROBLEM HAS BEEN SOLVED,     *
+C*       PRINT OUT THE FINAL STATISTICS                                *
+C*                                                                     *
+  800 WRITE(LOUT,810)
+  810 FORMAT(1H0/20X,20HINTERPOLATION ERRORS)
+      WRITE(LOUT,820) (ERORI(I),I=1,N)
+  820 FORMAT(1H0/10X,23H MAXIMUM ABSOLUTE ERROR//11X,4D22.8)
+      DO 830 I=1,N
+  830 ERORI(I)=ERORI(I)/YMAX(I)
+      WRITE(LOUT,840) (ERORI(I),I=1,N)
+  840 FORMAT(1H0/10X,23H MAXIMUM RELATIVE ERROR//11X,4D22.8)
+      WRITE(LOUT,850) NSTEP, NFE, NJE, NINVS
+  850 FORMAT(1H0/22H PROBLEM COMPLETED IN ,I5,6H STEPS/
+     1           22X,I5,21H FUNCTION EVALUATIONS/
+     2           22X,I5,21H JACOBIAN EVALUATIONS/
+     3           22X,I5,18H LU DECOMPOSITIONS)
+ 1000 CONTINUE
+      STOP
+      END
+      SUBROUTINE STINT (N, T, Y, DY, SAVE, H, HNEXT, HMIN, HMAX, EPS,   STNT  10
+     +                  YMAX, KFLAG, KNEXT, JSTART, MAXORD, RW, RJ, MF,
+     +                  IPIV)
+C
+C***********************************************************************
+C*                                                                     *
+C*    THIS PROGRAM INTEGRATES A SET OF N FIRST ORDER ORDINARY          *
+C*   DIFFERENTIAL EQUATIONS.  A BLOCK OF THREE OR FOUR SOLUTION POINTS,*
+C*   EACH SEPARATED BY A STEP-SIZE H, IS COMPUTED AT EACH CALL. THE    *
+C*   STEP-SIZE MAGNITUDE MAY BE SPECIFIED BY THE USER AT EACH CALL.    *
+C*   ALTERNATIVELY, IT MAY BE INCREASED OR DECREASED BY STINT WITHIN   *
+C*   THE RANGE DABS(HMIN) TO DABS(HMAX),                               *
+C*   IN ORDER TO ACHIEVE AS LARGE A STEP AS POSSIBLE, WHILE NOT        *
+C*   COMMITING A SINGLE STEP ERROR WHICH IS LARGER THAN EPS IN THE     *
+C*   RMS NORM, WHERE EACH COMPONENT OF THE ERROR VECTOR IS DIVIDED BY  *
+C*   THE CORRESPONDING COMPONENT OF YMAX.                              *
+C*                                                                     *
+C*    THE PROGRAM REQUIRES 4 SUBROUTINES NAMED                         *
+C*                                                                     *
+C*        DIFFUN(N, T, Y, DY)                                          *
+C*        PEDERV(N, T, Y, RJ, N0)                                      *
+C*        DEC(N, N0, A, IPIV, IER)                                     *
+C*        SOL(N, N0, A, B, IPIV)                                       *
+C*                                                                     *
+C*    DIFFUN EVALUATES THE DERIVATIVES OF THE DEPENDENT VARIABLE Y(I)  *
+C*   FOR I=1,...,N AND T AND STORES THE RESULT IN THE ARRAY DY.        *
+C*                                                                     *
+C*    PEDERV COMPUTES THE PARTIAL DERIVATIVES OF THE DIFFERENTIAL      *
+C*   EQUATIONS AT THE VALUES Y(I) FOR I=1,...,N AND T AND STORES THE   *
+C*   RESULT IN ARRAY RJ.  THUS, RJ(J+(K-1)*N0) IS THE PARTIAL OF DY(J) *
+C*   WITH RESPECT TO Y(K) FOR J,K=1,...,N EVALUATED AT Y(I) FOR I=1,.. *
+C*   ..,N AND T.  NOTE--N0 IS THE VALUE OF N ON THE FIRST CALL.  IF THE*
+C*   ANALYTIC EXPRESSIONS FOR THE PARTIAL DERIVATIVES ARE NOT          *
+C*   AVAILABLE, THEIR APPROXIMATE VALUES CAN BE OBTAINED BY NUMERICAL  *
+C*   DIFFERENCING.  (SEE PARAMETER MF.)  IN THIS CASE SUBROUTINE PEDERV*
+C*   MAY SIMPLY BE                                                     *
+C*                                                                     *
+C*        SUBROUTINE PEDERV(N, T, Y, RJ, N0)                           *
+C*        RETURN                                                       *
+C*        END                                                          *
+C*                                                                     *
+C*    DEC PERFORMS AN LU DECOMPOSITION OF A MATRIX A. IF THE           *
+C*   DECOMPOSITION IS SUCCESSFUL IER SHOULD BE SET TO 0, OTHERWISE IT  *
+C*   SHOULD BE SET TO +1.                                              *
+C*                                                                     *
+C*    SOL SOLVES THE LINEAR ALGEBRAIC SYSTEM A*X=B, FOR WHICH THE      *
+C*   MATRIX A WAS PROCESSED BY DEC.                                    *
+C*                                                                     *
+C*    THIS PROGRAM USES DOUBLE PRECISION FOR ALL FLOATING POINT        *
+C*   VARIABLES, EXCEPT FOR THOSE STARTING WITH P, WHICH ARE IN SINGLE  *
+C*   PRECISION.                                                        *
+C*                                                                     *
+C*    TEMPORARY STORAGE SPACE IS PROVIDED (BY THE USER) IN THE         *
+C*   ARRAYS IPIV, RJ, RW, AND SAVE. THE ARRAY IPIV HOLDS A VECTOR OF   *
+C*   THE SAME NAME. THE ARRAYS RJ AND RW ARE USED TO HOLD MATRICES OF  *
+C*   THE SAME NAMES.  THE ARRAY SAVE IS PARTITIONED AS FOLLOWS         *
+C*                                                                     *
+C*    SAVE(J,I)     1.LE.J.LE.8 AND 1.LE.I.LE.N IS USED TO SAVE        *
+C*                  Y(I,J) IN CASE A STEP (AND HENCE THE WHOLE CYCLE)  *
+C*                  HAS TO BE REPEATED.                                *
+C*    SAVE(9,I)     1.LE.I.LE.N IS USED TO STORE THE DERIVATIVE OF THE *
+C*                  I-TH DEPENDENT VARIABLE SCALED BY H.               *
+C*    SAVE(N9+I,1)  IS USED TO STORE THE DERIVATIVES AS THEY ARE       *
+C*                  COMPUTED BY DIFFUN FOR THE CORRECTOR. IT IS ALSO   *
+C*                  ACCESSED AS A COMPLETE ARRAY SAVE(N9P1,1).         *
+C*                  IN ADDITION IT IS USED IN THE ERROR CONTROL TEST.  *
+C*                  (N9 = N0 * 9  AND  N9P1 = N9 + 1.)                 *
+C*    SAVE(N10+I,1) IS USED TO HOLD THE CORRECTION TERMS FOR THE ENTIRE*
+C*                  CORRECTOR ITERATION IN THE CASE, THE CORRECTOR HAS *
+C*                  TO BE REPEATED. (N10 = N0 * 10.)                   *
+C*    SAVE(N11+I,1) IS USED TO HOLD THE DERIVATIVES EVALUATED AT       *
+C*                  Y(I)+D AND T, WHERE D IS THE INCREMENT USED IN THE *
+C*                  NUMERICAL DIFFERENCING SCHEME INVOKED, IN ORDER TO *
+C*                  OBTAIN APPROXIMATE VALUES OF THE PARTIAL           *
+C*                  DERIVATIVES. (N11 = N0 * 11.)                      *
+C*    SAVE(N12+I,1) IS USED TO HOLD THE DERIVATIVES EVALUATED AT Y(I)  *
+C*                  AND T IN ORDER TO OBTAIN APPROXIMATE VALUES OF THE *
+C*                  PARTIAL DERIVATIVES. (N12 = N0 * 12.)              *
+C*                                                                     *
+C*   THE PARAMETERS IN THE CALLING SEQUENCE HAVE THE FOLLOWING MEANING *
+C*                                                                     *
+C*    N       THE NUMBER OF FIRST ORDER DIFFERENTIAL EQUATIONS TO BE   *
+C*             INTEGRATED.  N MAY BE DECREASED ON SUBSEQUENT CALLS IF  *
+C*             THE NUMBER OF ACTIVE EQUATIONS DECREASES, WITH THE      *
+C*             FIRST ONES BEING THOSE RETAINED.  BUT, IT MUST          *
+C*             NOT BE INCREASED WITHOUT CALLING WITH JSTART = 0.       *
+C*    T       THE INDEPENDENT VARIABLE.  ON ENTRY T IS THE CURRENT     *
+C*             SETTING OF THE INDEPENDENT VARIABLE.  ON RETURN TO THE  *
+C*             CALLING PROGRAM, T CORRESPONDS TO THE SETTING OF THE    *
+C*             INDEPENDENT VARIABLE FOR THE MOST FORWARD POINT OBTAINED*
+C*             THUS FAR.                                               *
+C*    Y       AN N BY 8 BY 4 ARRAY CONTAINING THE DEPENDENT VARIABLES  *
+C*             AND THEIR BACKWARD DIFFERENCES.  ON EACH CALL UP TO FOUR*
+C*             SOLUTION POINTS ARE OBTAINED. THE MOST FORWARD POINT IS *
+C*             ALWAYS AT Y(I,1,1). THE POINT NEXT TO THE MOST FORWARD  *
+C*             POINT IS RETURNED IN Y(I,1,KFLAG). THE MOST BACKWARD    *
+C*             POINT IN THE NEW BLOCK IS RETURNED IN Y(I,1,2). ONLY THE*
+C*             INITIAL SOLUTION VALUES, ENTERED IN Y(I,1,1) FOR        *
+C*             I=1,...,N, NEED TO BE SUPPLIED ON THE FIRST             *
+C*             CALL (JSTART = 0).                                      *
+C*             Y(I,J+1,K) CONTAINS THE J-TH BACKWARD DIFFERENCE OF THE *
+C*             I-TH DEPENDENT VARIABLE (FOR K=1,...,KFLAG).            *
+C*             IF IT IS DESIRED TO INTERPOLATE TO NON-MESH POINTS,     *
+C*             THESE VALUES CAN BE USED.  IF THE CURRENT STEP-SIZE IS  *
+C*             H AND THE VALUE AT T-E (0.LT.DABS(E).LT.DABS(H)) IS     *
+C*             NEEDED, FORM S=E/H AND THEN COMPUTE                     *
+C*                             NQ                                      *
+C*                Y(I)(T-E) = SUM Y(I,J+1,K)*B(J)                      *
+C*                            J=0                                      *
+C*             WHERE K, WHICH CORRESPONDS TO T, IS THE FIRST MESH POINT*
+C*             BEYOND THE POINT T-E, AND B(J+1) = B(J)*(J-S)/(J+1)     *
+C*             WITH B(0) = 1.                                          *
+C*    DY      AN N BY 4 ARRAY.  DY(I,K), 1.LE.I.LE.N, 1.LE.K.LE.KFLAG, *
+C*             CONTAINS THE DERIVATIVE OF THE I-TH DEPENDENT VARIABLE  *
+C*             SCALED BY H.  THE DY(I,1) ARRAY NEED NOT BE SUPPLIED AT *
+C*             THE FIRST CALL (JSTART = 0).                            *
+C*    SAVE    A BLOCK OF AT LEAST 13*N0 DOUBLE PRECISION FLOATING POINT*
+C*             LOCATIONS.                                              *
+C*    H       THE STEP-SIZE USED FOR THE JUST COMPLETED BLOCK.         *
+C*    HNEXT   THE STEP-SIZE FOR THE NEXT BLOCK.  ON THE                *
+C*             FIRST CALL (JSTART=0) THE USER MUST SPECIFY AN INITIAL  *
+C*             STEP-SIZE.  A GOOD ESTIMATE OF ITS MAGNITUDE IS GIVEN   *
+C*             BY  0.2*(EPS/DABS(E))**0.5, WHERE E IS THE LARGEST      *
+C*             EIGENVALUE OF THE JACOBIAN EVALUATED AT THE INITIAL     *
+C*             VALUES OF T AND Y.  THE SIGN OF THE INITIAL HNEXT       *
+C*             SHOULD BE POSITIVE (NEGATIVE) IF THE FINAL TIME IS      *
+C*             GREATER (LESS) THAN THE INITIAL TIME.  IF THE INITIAL   *
+C*             STEP-SIZE CHOICE DOES NOT CAUSE AN ERROR GREATER THAN   *
+C*             EPS, IN THE RMS NORM, IT WILL BE ACCEPTED. OTHERWISE,   *
+C*             ITS MAGNITUDE WILL BE DECREASED UNTIL AN ERROR LESS     *
+C*             THAN EPS IS ACHIEVED.  THE SUBROUTINE AUTOMATICALLY     *
+C*             ADJUSTS THE STEP-SIZE AFTER THE INITIAL AND SUBSEQUENT  *
+C*             CALLS FOR THE STEP-SIZE OF LARGEST POSSIBLE MAGNITUDE.  *
+C*             THE MAGNITUDE MAY BE ADJUSTED DOWN ON ANY SUBSEQUENT    *
+C*             CALL.  NOTE--A MAGNITUDE ADJUSTMENT UP OR A SIGN CHANGE *
+C*             WILL BE IGNORED.                                        *
+C*    HMIN    DABS(HMIN) IS THE MINIMUM STEP-SIZE MAGNITUDE TO BE      *
+C*             ALLOWED FOR THE NEXT INTEGRATION CYCLE.  (ON THE FIRST  *
+C*             CALL (JSTART=0), DABS(HMIN) SHOULD BE CHOSEN SIGNIF-    *
+C*             ICANTLY SMALLER THAN DABS(HNEXT) SO AS TO AVOID START-UP*
+C*             PROBLEMS IF THE ERROR CRITERION IS NOT MET WITH THE USER*
+C*             SPECIFIED HNEXT.)  NOTE--THE SIGN OF HMIN IS IGNORED.   *
+C*             HMIN MAY BE CHANGED ON SUBSEQUENT CALLS.                *
+C*    HMAX    DABS(HMAX) IS THE MAXIMUM STEP-SIZE MAGNITUDE TO BE      *
+C*             ALLOWED FOR THE NEXT INTEGRATION CYCLE.  NOTE--IF       *
+C*             DABS(HMAX) IS LESS THAN DABS(HMIN), THEN THE SUBROUTINE *
+C*             FUNCTIONS AS THOUGH DABS(HMAX) EQUALS DABS(HMIN). HMAX  *
+C*             MAY BE CHANGED ON SUBSEQUENT CALLS.                     *
+C*    EPS     THE ERROR TEST CONSTANT.  THE SINGLE STEP ERROR ESTIMATE *
+C*             FOR Y, COMPUTED AS A WEIGHTED RMS NORM, MUST NOT EXCEED *
+C*             EPS.  THE WEIGHT FOR THE I-TH ELEMENT IN THE ERROR      *
+C*             ESTIMATE IS 1/YMAX(I).  (SEE PARAMETER YMAX.)  THE      *
+C*             STEP-SIZE AND/OR ORDER ARE ADJUSTED TO ACHIEVE THIS.    *
+C*    YMAX    AN ARRAY OF N0 LOCATIONS, WITH--FOR I=1,...,N--YMAX(I)   *
+C*             BEING THE MAXIMUM OF UNITY AND THE MAXIMUM VALUE OF     *
+C*             DABS(Y(I)) SEEN THUS FAR.  ON THE FIRST CALL IT SHOULD  *
+C*             BE SET TO THE MAXIMUM OF UNITY AND THE INITIAL VALUE OF *
+C*             DABS(Y(I)).                                             *
+C*    KFLAG   A COMPLETION CODE. IF KFLAG IS GREATER THAN 0,THEN       *
+C*             KFLAG POINTS HAVE BEEN COMPUTED. IF KFLAG IS            *
+C*             -2, -3, OR -4 THEN 2, 3, OR 4 MESH POINTS, RESPECTIVELY,*
+C*             HAVE BEEN COMPUTED WITH DABS(H) EQUAL TO DABS(HMIN),    *
+C*             BUT THE REQUESTED ERROR WAS NOT ACHIEVED.  OTHER VALUES *
+C*             KFLAG CAN ASSUME ARE AS FOLLOWS                         *
+C*              -5  THE REQUESTED ERROR WAS SMALLER THAN CAN BE HANDLED*
+C*                  FOR THIS PROBLEM.                                  *
+C*              -6  CORRECTOR CONVERGENCE COULD NOT BE ACHIEVED FOR    *
+C*                  DABS(H).GT.DABS(HMIN).                             *
+C*              -7  THE MAXIMUM ORDER SPECIFIED WAS TOO LARGE.         *
+C*    KNEXT   AFTER THE INITIAL CALL (JSTART=0), THE VALUE OF KNEXT IS *
+C*             THE NUMBER OF POINTS TO BE COMPUTED DURING THE NEXT     *
+C*             CYCLE.  THE VALUE IS SUPPLIED FOR INFORMATION ONLY.  THE*
+C*             USER CANNOT CONTROL THE NUMBER OF POINTS BY SETTING     *
+C*             KNEXT.                                                  *
+C*    JSTART  AN INPUT INDICATOR WITH THE FOLLOWING MEANINGS           *
+C*              .EQ.0  INITIALIZATION CALL.  (JSTART MUST BE SET TO 0  *
+C*                     ON THE FIRST CALL.)                             *
+C*              .GT.0  CONTINUE FROM THE LAST STEP.                    *
+C*             ON RETURN JSTART IS SET TO NQ, THE MAXIMUM BACKWARD     *
+C*             DIFFERENCE AVAILABLE IN THE Y ARRAY.  (THIS ALSO CORRES-*
+C*             PONDS TO THE ORDER OF THE METHOD USED TO COMPUTE THE    *
+C*             JUST COMPLETED BLOCK OF POINTS.)                        *
+C*    MAXORD  THE MAXIMUM ORDER (1.LE.MAXORD.LE.7) THAT MAY BE USED.   *
+C*             NOTE--IF MAXORD IS RESET BETWEEN CYCLES TO A VALUE LESS *
+C*             THAN THE ORDER DETERMINED FOR THE NEXT CYCLE, THEN THE  *
+C*             ORDER MAY FOR SEVERAL CYCLES EXCEED MAXORD.  HOWEVER,   *
+C*             IT CANNOT EXCEED THE ABOVE DETERMINED VALUE AND, ONCE   *
+C*             THE ORDER IS LESS THAN OR EQUAL TO MAXORD, IT CANNOT    *
+C*             THEN EXCEED MAXORD.                                     *
+C*    RJ      A BLOCK OF AT LEAST N0**2 DOUBLE PRECISION FLOATING POINT*
+C*             LOCATIONS, WHICH CONTAINS AN ESTIMATE OF THE JACOBIAN   *
+C*             OF THE DIFFERENTIAL EQUATION.                           *
+C*    RW      A BLOCK OF AT LEAST N0**2 DOUBLE PRECISION FLOATING POINT*
+C*             LOCATIONS.                                              *
+C*    IPIV    A BLOCK OF AT LEAST N0 INTEGERS USED TO HOLD PIVOT DATA  *
+C*             GENERATED DURING AN LU DECOMPOSITION.                   *
+C*    MF      METHOD FLAG.  IT DETERMINES THE MODE BY WHICH THE PARTIAL*
+C*             DERIVATIVES ARE OBTAINED WITH THE FOLLOWING MEANINGS    *
+C*             1  ANALYTIC EXPRESSIONS FOR THE PARTIAL DERIVATIVES ARE *
+C*                SUPPLIED BY THE USER IN THE SUBROUTINE PEDERV.       *
+C*             2  THE ANALYTIC EXPRESSIONS ARE NOT AVAILABLE.          *
+C*                APPROXIMATE VALUES OF THE PARTIAL DERIVATIVES ARE    *
+C*                OBTAINED BY NUMERICAL DIFFERENCING.                  *
+C*                                                                     *
+C***********************************************************************
+C
+      DOUBLE PRECISION B, BND, B1, B2, C, CRATE, D, DF, DI, DY,
+     +                 D1, D2, D3, E, EDOWN, ENQDWN, ENQSAM,
+     +                 ENQUP, EPS, ES, EUP, FN, H, HMAX, HMIN,
+     +                 HNEW, HNEXT, HOLD, Q, RATIO, RC, RJ, RMAX,
+     +                 RRDOWN, RRSAME, RRUP, RW, SAVE, SQRTUR, T,
+     +                 TDL, TOLD, UROUND, Y, YJ1, YMAX
+C     DOUBLE PRECISION DABS, DBLE, DMAX1, DMIN1, DSQRT
+      DIMENSION Y(N,8,4), DY(N,4), SAVE(9,1), YMAX(1), RW(1), IPIV(1),
+     +          INDEX(7,2), B(82), C(16), PERROR(9), PC(16), PD(7),
+     +          B1(48), B2(34), RJ(1)
+      COMMON /STAT/ NSTEP,NFE,NJE,NINVS
+      EQUIVALENCE(B(1),B1(1)),(B(49),B2(1))
+C
+C         ****************************************************
+C         *****  SEVEN OF EIGHT DATA STATEMENTS CONTAIN  *****
+C         *****  ARRAY NAMES AND VARIOUS  LINES OF CODE  *****
+C         *****  INCLUDE SUBSCRIPT EXPRESSIONS.          *****
+C         ****************************************************
+C
+C***********************************************************************
+C*   THE CONSTANT UROUND SHOULD BE SET EQUAL TO THE UNIT ROUND-OFF     *
+C*   FOR THE MACHINE.  THE CONSTANT SQRTUR SHOULD BE SET EQUAL TO THE  *
+C*   SQUARE ROOT OF UROUND.                                            *
+C***********************************************************************
+C
+      DATA UROUND/4.D-16/, SQRTUR/2.D-8/
+C
+C***********************************************************************
+C*   THE ARRAY INDEX HOLDS POINTERS AND CONSTANTS FOR THE VARIOUS      *
+C*   ORDER METHODS.  FOR NQ=1,...,7 THE ENTRIES ARE AS FOLLOWS         *
+C*    INDEX(NQ,1)   BASE INDEX FOR B ARRAY (H*DY PREDICTOR).           *
+C*    INDEX(NQ,2)   BASE INDEX FOR C ARRAY (CORRECTOR).                *
+C***********************************************************************
+C
+      DATA INDEX/ 1, 2, 4, 11, 20, 38, 59,
+     +            1, 2, 3,  5,  7, 10, 14/
+C
+C***********************************************************************
+C*   THE COEFFICIENTS APPEARING IN THE NEXT DATA STATEMENTS FOR THE    *
+C*   B ARRAY SHOULD BE DEFINED TO THE MAXIMUM ACCURACY PERMITTED BY    *
+C*   THE MACHINE. THEY ARE, IN THE ORDER SPECIFIED,...                 *
+C*    1                                                                *
+C*    -2, 3                                                            *
+C*    -9/2, -5/4, 11/2                                                 *
+C*    -15/2, -3/4, 13/2, 2                                             *
+C*    -22/3, -8/3, -17/18, 25/3                                        *
+C*    -9, -9/4, -7/8, 35/4, 5/4                                        *
+C*    -125/12, -101/24, -71/36, -37/48, 137/12                         *
+C*    -253/24, -1001/240, -707/360, -123/160, 1373/120, 1/10           *
+C*    -57/4, -25/8, -17/10, -169/240, 61/5, -1/20, 31/10               *
+C*    -137/10, -117/20, -46/15, -191/120, -197/300, 147/10             *
+C*    -353/25, -571/100, -1819/600, -79/50, -3919/6000, 1477/100, 7/20 *
+C*    -3529/200, -1889/400, -1609/600, -3527/2400, -931/1500, 3079/200,*
+C*        -3/20, 17/5                                                  *
+C*    -343/20, -303/40, -253/60, -589/240, -101/75, -23/40, 363/20     *
+C*    -266/15, -221/30, -749/180, -73/30, -803/600, -103/180, 547/30,  *
+C*        1/2                                                          *
+C*    -1316/75, -1151/150, -3689/900, -121/50, -4003/3000, -257/450,   *
+C*        2737/150, -1/5, 1/2                                          *
+C***********************************************************************
+C
+      DATA B1/
+     +        1.0D0, -2.0D0, 3.0D0, -4.5D0, -1.25D0, 5.5D0, -7.5D0,
+     +        -.75D0, 6.5D0, 2.0D0, -7.3333333333333333D0,
+     +        -2.6666666666666667D0, -.94444444444444444D0,
+     +        8.3333333333333333D0, -9.0D0, -2.25D0, -.875D0, 8.75D0,
+     +        1.25D0, -10.416666666666667D0, -4.2083333333333333D0,
+     +        -1.9722222222222222D0, -.77083333333333333D0,
+     +        11.416666666666667D0, -10.541666666666667D0,
+     +        -4.1708333333333333D0, -1.9638888888888889D0, -.76875D0,
+     +        11.441666666666667D0, 0.1D0, -14.25D0, -3.125D0, -1.7D0,
+     +        -.70416666666666667D0, 12.2D0, -.05D0, 3.1D0, -13.7D0,
+     +        -5.85D0, -3.0666666666666667D0, -1.5916666666666667D0,
+     +        -.65666666666666667D0, 14.7D0, -14.12D0, -5.71D0,
+     +        -3.0316666666666667D0, -1.58D0, -.65316666666666667D0/
+      DATA B2/
+     +        14.77D0, 0.35D0, -17.645D0, -4.7225D0,
+     +        -2.6816666666666667D0, -1.4695833333333333D0,
+     +        -.62066666666666667D0, 15.395D0, -.15D0, 3.4D0, -17.15D0,
+     +        -7.575D0, -4.2166666666666667D0, -2.4541666666666667D0,
+     +        -1.3466666666666667D0, -.575D0, 18.15D0,
+     +        -17.733333333333333D0, -7.3666666666666667D0,
+     +        -4.1611111111111111D0, -2.4333333333333333D0,
+     +        -1.3383333333333333D0, -.57222222222222222D0,
+     +        18.233333333333333D0, 0.5D0, -17.546666666666667D0,
+     +        -7.6733333333333333D0, -4.0988888888888889D0, -2.42D0,
+     +        -1.3343333333333333D0, -.57111111111111111D0,
+     +        18.246666666666667D0, -0.2D0, 0.5D0/
+C
+C***********************************************************************
+C*   THE COEFFICIENTS APPEARING IN THE NEXT DATA STATEMENTS FOR THE    *
+C*   C ARRAY SHOULD BE DEFINED TO THE MAXIMUM ACCURACY PERMITTED BY    *
+C*   THE MACHINE.  THEY ARE, IN THE ORDER SPECIFIED,...                *
+C*    -1                                                               *
+C*    -2/3                                                             *
+C*    -6/11, -2/3                                                      *
+C*    -12/25, -16/31                                                   *
+C*    -60/137, -600/1373, -100/193                                     *
+C*    -20/49, -120/293, -75/184, -1200/2299                            *
+C*    -140/363, -60/143, -1050/2437                                    *
+C***********************************************************************
+C
+      DATA C/ -1.0D0, -.66666666666666667D0, -.54545454545454545D0,
+     +        -.66666666666666667D0, -.48D0, -.51612903225806452D0,
+     +        -.43795620437956204D0, -.43699927166788056D0,
+     +        -.51813471502590674D0, -.40816326530612245D0,
+     +        -.40955631399317406D0, -.40760869565217391D0,
+     +        -.52196607220530666D0, -.38567493112947659D0,
+     +        -.41958041958041958D0, -.43085761181780879D0/
+C
+C***********************************************************************
+C*   THE COEFFICIENTS IN THE PERROR ARRAY ARE USED IN THE ERROR TEST,  *
+C*   THE FIRST TIME IT IS PERFORMED, AS WELL AS IN THE STEP-SIZE/ORDER *
+C*   SELECTION SEGMENT. PERROR(I+1) = 1/D(I+1), I=1,...,7, WHERE       *
+C*   D(I+1) IS THE DISCRETIZATION ERROR CONSTANT CORRESPONDING TO THE  *
+C*   SECOND PASS OF THE INTEGRATION CYCLE OF ORDER I. PERROR(1) AND    *
+C*   PERROR(9) ARE DEFINED SOLELY FOR PROGRAMMING EASE. THEY ARE NOT   *
+C*   USED.                                                             *
+C***********************************************************************
+C
+      DATA PERROR/  1.0, 1.0, 1.92857, 2.78161, 3.56735,
+     +              4.29497, 4.9065, 5.6066, 1.0/
+C
+C***********************************************************************
+C*   THE COEFFICIENTS IN THE ARRAY PC ARE USED BOTH IN THE CONVERGENCE *
+C*   AND ERROR TESTS. THEY ARE THE RECIPROCAL VALUES OF THE            *
+C*   DISCRETIZATION ERROR CONSTANTS FOR EQUATIONS CONSTITUTING THE     *
+C*   METHODS OF ORDER 1 THRU 7.                                        *
+C***********************************************************************
+C
+      DATA PC/  2.0, 4.5, 7.3333, 6.0, 10.4167, 9.3, 13.7, 13.8687,
+     +          9.6904, 17.15, 16.9504, 17.4349, 9.472, 20.7429, 15.921,
+     +          14.7809/
+C
+C***********************************************************************
+C*   THE COEFFICIENTS APPEARING IN THE ARRAY PD ARE USED IN THE TESTING*
+C*   OF THE *OUTDATEDNESS* OF THE ARRAY RW.  THE PD(I) ELEMENT CONTAINS*
+C*   THE AVERAGE VALUE OF THE COEFFICIENTS IN ARRAY C CORRESPONDING TO *
+C*   ORDER I.                                                          *
+C***********************************************************************
+C
+      DATA PD/  1.0, 0.6667, 0.6061, 0.4981, 0.4644, 0.4368, 0.412/
+C
+C***********************************************************************
+C***********************************************************************
+C
+      KFLAG = 0
+      IFAIL = 0
+      IF(JSTART.NE.0) GO TO 80
+C*                                                                     *
+C*       INITIALIZATION --- FIRST CALL                                 *
+C*                                                                     *
+   20 N0 = N
+      FN=DBLE(FLOAT(N))
+      N9 = N0 * 9
+      N9P1 = N9 + 1
+      N10 = N9 + N0
+      N11 = N10 + N0
+      N11P1 = N11 + 1
+      N12 = N11 + N0
+      N12P1 = N12 + 1
+      NSQ = N0*N0
+      IWEVAL=+1
+      TDL=T
+      H=DMAX1(DABS(HMIN),DMIN1(DABS(HNEXT),DABS(HMAX)))
+      IF(HNEXT.LT.0.D0) H=-H
+   30 NQOLD= 0
+      ISW1=0
+      ISW2=0
+      CRATE=1.D0
+      CALL DIFFUN (N, T, Y, DY)
+      NFE=NFE+1
+      DO 40 I=1,N
+   40   DY(I,1) = H*DY(I,1)
+      NQ = 1
+      IST = 1
+      IDEL = 0
+      GO TO 180
+C*                                                                     *
+C*        CONTINUE WITH THE STEP-SIZE H                                *
+C*                                                                     *
+   80 HNEW=DMAX1(DABS(HMIN),DMIN1(DABS(HNEW),DABS(HNEXT),DABS(HMAX)))
+      IF(H.LT.0.D0) HNEW=-HNEW
+      IF(H.NE.HNEW) GO TO 100
+      IST = NQP1
+      IDEL = NQP1
+      ISW2=0
+      GO TO 180
+C*                                                                     *
+C*        NEW STEP-SIZE --- INTERPOLATE FOR NEW POINTS                 *
+C*                                                                     *
+  100 RATIO=HNEW/H
+      H = RATIO*H
+      RC=RC*RATIO*DBLE(PD(NQ)/PDOLD)
+      PDOLD = PD(NQ)
+      IF (NQ.EQ.1) GO TO 150
+      IEQ = NEQ
+      D = 0.0D0
+      DO 140 J=2,NQ
+        D = D + RATIO
+        IF (D.GT.DBLE(FLOAT(NEQ+NQP1-IEQ))) IEQ=2
+        D1 = DBLE(FLOAT(NEQ-IEQ-1)) - D
+        DO 140 I=1,N
+          D2 = 1.0D0
+          D3 = 0.0D0
+          DO 120 J1=2,NQP1
+            D2 = D2*(DBLE(FLOAT(J1)) + D1)/DBLE(FLOAT(J1-1))
+  120       D3 = D3 + D2*Y(I,J1,IEQ)
+  140     Y(I,J,1) = D3 + Y(I,1,IEQ)
+  150 IST = NQ
+      IDEL = 0
+      DO 160 I=1,N
+  160   DY(I,1) = DY(I,1)*RATIO
+      IRET = 3
+      GO TO 4000
+C*                                                                     *
+C*        INITIALIZE SAVE ARRAY                                        *
+C*                                                                     *
+  180 DO 200 I=1,N
+        SAVE(9,I) = DY(I,1)
+        DO 200 J=1,IST
+  200     SAVE(J,I) = Y(I,J,1)
+      NQST = NQ
+      RATIO = 1.0D0
+      TOLD = T
+      HOLD = H
+  220 IF ((NQ.EQ.NQOLD).AND.(FN.EQ.DBLE(FLOAT(N)))) GO TO 300
+      IF ((NQ.EQ.NQOLD).AND.(FN.NE.DBLE(FLOAT(N)))) GO TO 280
+      IF (MAXORD.LT.8) GO TO 260
+      KFLAG = -7
+      GO TO 4185
+C*                                                                     *
+C*        SET APPROPRIATE PARAMETERS AND CONSTANTS                     *
+C*        FOR NEW CYCLE OF ORDER NQ                                    *
+C*                                                                     *
+  260 INDB = INDEX(NQ,1)
+      INDC = INDEX(NQ,2)
+      NEQ = 3+NQ/5
+      JSTART = NQ
+      NQOLD = NQ
+      NQM1=NQ-1
+      NQP1 = NQ+1
+      Q = DBLE(FLOAT(NQ))
+      ENQDWN = 0.5D0/Q
+      ENQSAM = 0.5D0/(Q+1.0D0)
+      ENQUP = 0.5D0/(Q+2.0D0)
+  280 FN = DBLE(FLOAT(N))
+      EDOWN = FN*(DBLE(PERROR(NQ))*EPS)**2
+      EUP = FN*(DBLE(PERROR(NQ+2))*EPS)**2
+      ES = FN*(DBLE(PERROR(NQP1))*EPS)**2
+      IF(EDOWN.GT.0.D0) GO TO 300
+      KFLAG = -5
+      GO TO 4185
+C*                                                                     *
+C*        CHECK FOR REEVALUATION OF JACOBIAN                           *
+C*                                                                     *
+  300 IF(IWEVAL.GT.0) GO TO 320
+      IF(DABS(RC-1.D0).GE.4.D-1) IWEVAL = +2
+      IF((TDL-TOLD)*H.GT.0.D0) GO TO 320
+      IF(DABS(RC-1.D0).GE.8.D-1) IWEVAL = +1
+  320 INDBB = INDB
+      INDCC = INDC
+      DO 1000 IEQ=1,NEQ
+        IST = MOD (IEQ, NEQ) + 1
+        T = T + H
+        BND=FN*(DBLE(PC(INDCC))*ENQUP*EPS)**2
+        E=ES
+        IF(IEQ.GT.2) E=FN*(DBLE(PC(INDCC))*EPS)**2
+C*                                                                     *
+C*        PREDICT Y AND DY FOR THE NEXT MESH POINT                     *
+C*                                                                     *
+        DO 460 I=1,N
+          D = DY(I,IEQ)
+          D1 = Y(I,1,IEQ) + Q*D
+          D2 = B(INDBB+NQM1)*D
+          IF (NQ-2) 440, 400, 340
+  340     IF (IEQ-3) 400, 380, 360
+  360     D2 = D2 + B(INDBB+NQP1)*DY(I,3)
+  380     D2 = D2 + B(INDBB+NQ)*DY(I,2)
+  400     DO 420 J=2,NQ
+            D = Y(I,J,IEQ)
+            D3 = DBLE(FLOAT(J-1))
+            D1 = D1 + D*(D3-Q)/D3
+  420       D2 = D2 + D*B(INDBB+J-2)
+  440     Y(I,1,IST) = D1
+  460     DY(I,IST) = D2
+        IF(NQ.LE.2) GO TO 470
+        IF(IEQ.GT.1) INDBB = INDBB + NQ + IEQ - 2
+C*                                                                     *
+C*        ITERATE THE CORRECTOR UP TO THREE TIMES. ACCUMULATE THE      *
+C*        CORRECTION TERMS IN SAVE(N10+I,1) FOR REDOING THE ENTIRE     *
+C*        CORRECTOR IF CONVERGENCE IS NOT ACHIEVED                     *
+C*                                                                     *
+  470   D1 = C(INDCC)
+  500   DO 510 I=1,N
+  510     SAVE(N10+I,1) = 0.D0
+        DO 780 J=1,3
+          CALL DIFFUN (N, T, Y(1,1,IST), SAVE(N9P1,1))
+          NFE=NFE+1
+          IF(IWEVAL-1) 680, 520, 620
+  520     IND = 1
+          IF(IEQ.EQ.2) IND = 1
+          GO TO (610, 530), MF
+  530     CALL DIFFUN (N, T-H*DBLE(FLOAT(1+IEQ-IND)), Y(1,1,IND),
+     +      SAVE(N12P1,1))
+          NFE=NFE+1
+          D = 0.D0
+          DO 540 I=1,N
+  540       D = D + SAVE(N12+I,1)**2
+          D = DABS(H)*1.D3*UROUND*DSQRT(D)
+          NJE = NJE + 1
+          J0 = 0
+          DO 560 J1=1,N
+            DI = SQRTUR*YMAX(J1)
+            DI = DMAX1(DI,D)
+            YJ1 = Y(J1,1,IND)
+            Y(J1,1,IND) = Y(J1,1,IND) + DI
+            CALL DIFFUN (N, T-H*DBLE(FLOAT(1+IEQ-IND)), Y(1,1,IND),
+     +        SAVE(N11P1,1))
+            NFE = NFE + 1
+            DO 550 I=1,N
+  550         RJ(I+J0) = (SAVE(N11+I,1) - SAVE(N12+I,1))/DI
+            J0 = J0 + N0
+            Y(J1,1,IND) = YJ1
+  560       CONTINUE
+          GO TO 620
+  610     CALL PEDERV(N, T-H*DBLE(FLOAT(1+IEQ-IND)), Y(1,1,IND), RJ, N0)
+          NJE=NJE+1
+  620     D = D1*H
+          DO 640 I=1,NSQ
+  640       RW(I) = RJ(I)*D
+          J1 = 1
+          DO 660 I=1,N
+            RW(J1) = 1.D0 + RW(J1)
+  660       J1 = J1 + N0 + 1
+          CALL DEC (N, N0, RW, IPIV, IER)
+          NINVS=NINVS+1
+          IWEVAL = -IEQ
+          RC=1.D0
+          PDOLD=PD(NQ)
+          IF(IER.NE.0) GO TO 800
+  680     DO 700 I=1,N
+  700       SAVE(N9+I,1) = DY(I,IST) - H*SAVE(N9+I,1)
+          CALL SOL (N, N0, RW, SAVE(N9P1,1), IPIV)
+          D2 = 0.0D0
+          J3 = N9
+          DO 760 I=1,N
+            J3 = J3 + 1
+            J2 = J3 + N0
+            SAVE(J2,1) = SAVE(J2,1) + SAVE(J3,1)
+            Y(I,1,IST) = Y(I,1,IST) + D1*SAVE(J3,1)
+            DY(I,IST) = DY(I,IST) - SAVE(J3,1)
+  760       D2 = D2 + (SAVE(J3,1)/YMAX(I))**2
+          IF(J.NE.1) CRATE = DMAX1(CRATE*9.D-1,D2/D3)
+          IF (D2*DMIN1(1.D0,2.D0*CRATE).GT.BND) GO TO 770
+          GO TO 940
+  770     D3 = D2
+  780     CONTINUE
+C*                                                                     *
+C*        CORRECTOR FAILED TO CONVERGE IN THREE ITERATIONS.            *
+C*        IF JACOBIAN WAS REEVALUATED DURING THIS CYCLE, STEP-SIZE IS  *
+C*        REDUCED TO 3/10 OF H. OTHERWISE, JACOBIAN IS REEVALUATED     *
+C*                                                                     *
+        TDL = TOLD
+        IF(IWEVAL.EQ.0) GO TO 900
+  800   IF(DABS(H).LE.(1.00001D0*DABS(HMIN))) IF(NQ-2) 4180, 1080, 4140
+        RATIO = RATIO*0.3D0
+        IRET = 1
+        ISW1=0
+        ISW2=1
+        IWEVAL = +2
+        GO TO 3000
+  900   DO 920 I=1,N
+          D = SAVE(N10+I,1)
+          Y(I,1,IST) = Y(I,1,IST) - D1*D
+  920     DY(I,IST) = DY(I,IST) + D
+        IWEVAL = +1
+        GO TO 500
+C*                                                                     *
+C*        CORRECTOR CONVERGED. THE BACKWARD DIFFERENCES OF ORDER       *
+C*        ONE THROUGH NQ AT THE NEW MESH POINT ARE COMPUTED            *
+C*                                                                     *
+  940   DO 980 I=1,N
+          DO 960 J=1,NQ
+  960       Y(I,J+1,IST) = Y(I,J,IST) - Y(I,J,IEQ)
+        IF(IEQ.EQ.1) GO TO 980
+C*                                                                     *
+C*        THE (NQ+1)-ST BACKWARD DIFFERENCE FOR ALL BUT THE FIRST      *
+C*        MESH POINT IS ESTABLISHED                                    *
+C*                                                                     *
+        SAVE(N9+I,1) = Y(I,NQP1,IST) - Y(I,NQP1,IEQ)
+  980   CONTINUE
+        IF (IEQ.EQ.NEQ) GO TO 1015
+        IF (NQ.LE.2) GO TO 1010
+        IF  ((IEQ.GT.1).OR.(NQ.EQ.6)) INDCC = INDCC + 1
+ 1010   IF(IEQ.EQ.1) GO TO 1000
+C*                                                                     *
+C*        ERROR TEST FOR ALL BUT THE FIRST MESH POINT IS PERFORMED     *
+C*                                                                     *
+ 1015   D = 0.D0
+        DO 1020 I=1,N
+ 1020     D = D + (SAVE(N9+I,1)/YMAX(I))**2
+        IF(D.GT.E) GO TO 1030
+ 1000   CONTINUE
+      GO TO 1160
+C*                                                                     *
+C*        THE ERROR CRITERION WAS NOT MET                              *
+C*                                                                     *
+ 1030 IFAIL=IFAIL+1
+      IF(IFAIL.GT.2) GO TO 1080
+      IF(DABS(H).LE.(DABS(HMIN)*1.00001D0)) IF(NQ-2) 1140, 4120, 4140
+      IWEVAL = +2
+      IF(IFAIL.EQ.1) GO TO 1200
+      TDL=T
+      RATIO = RATIO*5.D-1
+      IRET = 1
+      ISW1=0
+      ISW2=1
+      GO TO 3000
+C*                                                                     *
+C*        START OVER WITH ORDER 1 METHOD                               *
+C*                                                                     *
+ 1080 IFAIL = 0
+      DO 1090 I=1,N
+ 1090   Y(I,1,1) = SAVE(1,I)
+      T = TOLD
+      H = H*DMAX1(1.D-1,DABS(HMIN/H))
+      IWEVAL = +2
+      GO TO 30
+C*                                                                     *
+C*        A NEW BLOCK OF SOLUTION POINTS HAS BEEN ACCEPTED             *
+C*                                                                     *
+ 1140 IWEVAL = 0
+      NSTEP = NSTEP + IEQ
+      KFLAG = -IEQ
+      RETURN
+ 1160 IWEVAL = 0
+      E = ES
+      KFLAG = NEQ
+      NSTEP = NSTEP + KFLAG
+      HNEW=H
+C*                                                                     *
+C*        CHECK FOR CONTINUATION WITH THE SAME H AND NQ                *
+C*                                                                     *
+      IF(ISW2.EQ.1) GO TO 1420
+      IF(NQ.GT.3) ISW1=1-ISW1
+      IF(ISW1.EQ.1) GO TO 1420
+C*                                                                     *
+C*        NEW STEP-SIZE AND/OR ORDER SELECTION                         *
+C*                                                                     *
+ 1200 RRSAME=1.2D0*(D/E)**ENQSAM
+      IF(IFAIL.NE.0) GO TO 1380
+      RMAX = 1.D-4
+      DF=DBLE(FLOAT(NEQ+NQM1))
+      IF(NQ.NE.1) RMAX=(Q-1.D0)/DF
+      RRSAME=DMAX1(RRSAME,RMAX)
+      RRUP = 1.D20
+      RRDOWN = 1.D20
+      IF(NQ.GE.MAXORD) GO TO 1240
+      D = 0.0D0
+      DO 1220 I=1,N
+        D1 = Y(I,NQP1,NEQ) - Y(I,NQP1,NEQ-1)
+ 1220   D = D + ((SAVE(N9+I,1) - D1)/YMAX(I))**2
+      RRUP = 1.2D0*(D/EUP)**ENQUP
+      RMAX=Q/DF
+      RRUP=DMAX1(RRUP,RMAX)
+ 1240 IF(NQ.EQ.1) GO TO 1280
+      D = 0.0D0
+      DO 1260 I=1,N
+ 1260   D = D + (Y(I,NQP1,1)/YMAX(I))**2
+      RRDOWN = 1.2D0*(D/EDOWN)**ENQDWN
+      RMAX = 1.D-4
+      IF(NQ.NE.2) RMAX=(Q-2.D0)/DF
+      RRDOWN=DMAX1(RRDOWN,RMAX)
+ 1280 IF (RRSAME.GT.RRUP) IF (RRUP-RRDOWN) 1340, 1300, 1300
+      IF (RRSAME.LE.RRDOWN) GO TO 1320
+ 1300 NEWQ = NQM1
+      D=1.D0/RRDOWN
+      GO TO 1360
+ 1320 NEWQ = NQ
+      D=1.D0/RRSAME
+      GO TO 1360
+ 1340 NEWQ = NQP1
+      D=1.D0/RRUP
+ 1360 IF (D-1.1D0) 1420, 1400, 1400
+ 1380 RATIO=RATIO/RRSAME
+      IRET = 1
+      ISW1=0
+      ISW2=1
+      GO TO 3000
+ 1400 HNEW = H*D
+      NQ = NEWQ
+ 1420 DO 1460 I=1,N
+        D=YMAX(I)
+        DO 1440 J=1,NEQ
+ 1440     D=DMAX1(D,DABS(Y(I,1,J)))
+ 1460   YMAX(I)=D
+      HNEXT = HNEW
+      KNEXT = 3+NQ/5
+      RETURN
+C*                                                                     *
+C*        THIS SECTION IS USED WHEN STEP-SIZE OR ORDER IS CHANGED      *
+C*        DURING THE CYCLE.  STARTING VALUES ARE RETRIEVED FROM THE    *
+C*        SAVE ARRAY.                                                  *
+C*                                                                     *
+ 3000 RATIO = DMAX1 (DABS(HMIN/HOLD), DMIN1(RATIO, 1.0D0))
+      T = TOLD
+      IF (RATIO.LT.1.0D0) IF (IDEL) 3030, 3030, 3080
+      DO 3020 I=1,N
+        DY(I,1) = SAVE(9,I)
+        DO 3020 J=1,NQ
+ 3020     Y(I,J,1) = SAVE(J,I)
+      GO TO (320,260), IRET
+C*                                                                     *
+C*        THE (NQST+1)-ST ORDER BACKWARD DIFFERENCE IS ESTABLISHED     *
+C*                                                                     *
+ 3030 IDEL = NQST+1
+      IF ((NQST.LT.2) .OR. (NQ.LT.2)) GO TO 3080
+      D = DBLE(FLOAT(NQST))
+      DO 3060 I=1,N
+        D1 = SAVE(9,I)
+        DO 3040 J=2,NQST
+ 3040     D1 = D1 - SAVE(J,I)/DBLE(FLOAT(J-1))
+ 3060   SAVE(IDEL,I) = D*D1
+C*                                                                     *
+C*        INTERPOLATE FOR NEW POINTS                                   *
+C*                                                                     *
+ 3080 DO 3140 I=1,N
+        DY(I,1) = RATIO*SAVE(9,I)
+        IF (NQ.LT.2) GO TO 3140
+        D1 = 0.0D0
+        DO 3120 J=2,NQ
+          D1 = D1 + RATIO
+          D2 = 1.0D0
+          D = 0.0D0
+          DO 3100 J1=2,IDEL
+            D2 = D2*(DBLE(FLOAT(J1-2)) - D1)/DBLE(FLOAT(J1-1))
+ 3100       D = D + D2*SAVE(J1,I)
+ 3120     Y(I,J,1) = D + SAVE(1,I)
+ 3140   Y(I,1,1) = SAVE(1,I)
+      H = HOLD*RATIO
+C*                                                                     *
+C*        FORM THE BACKWARD DIFFERENCES                                *
+C*                                                                     *
+ 4000 IF (NQ.LT.2) GO TO 4040
+      NQM1 = NQ-1
+      DO 4020 I=1,N
+        DO 4020 J=1,NQM1
+          J0=J + 1
+          DO 4020 J1=J0,NQ
+            J2 = NQ-J1+J+1
+ 4020       Y(I,J2,1) = Y(I,J2-1,1) - Y(I,J2,1)
+ 4040 GO TO (320,260,180), IRET
+C*                                                                     *
+C*        CONVERGENCE OR ERROR PROBLEMS                                *
+C*                                                                     *
+ 4120 NQ = 1
+      GO TO 4160
+ 4140 NQ = 2
+ 4160 IFAIL = 0
+      IRET = 2
+      IWEVAL = +2
+      GO TO 3000
+ 4180 KFLAG = -6
+ 4185 J1 = NQST + 1
+      DO 4190 I=1,N
+        DY(I,1) = SAVE(9,I)
+        DO 4190 J=1,J1
+ 4190     Y(I,J,1) = SAVE(J,I)
+      H = HOLD
+      T = TOLD
+      JSTART = NQST
+      RETURN
+C
+C***********************************************************************
+C*                                                                     *
+C*                   --- END OF SUBROUTINE STINT ---                   *
+C*                                                                     *
+C***********************************************************************
+C
+      END
+      SUBROUTINE DEC (N, NDIM, A, IP, IER)                              DEC0  10
+C
+      INTEGER N,NDIM,IP,IER,NM1,K,KP1,M,I,J
+      DOUBLE PRECISION A, T
+C     DOUBLE PRECISION DABS
+      DIMENSION A(NDIM,N), IP(N)
+C-----------------------------------------------------------------------
+C  MATRIX TRIANGULARIZATION BY GAUSSIAN ELIMINATION.
+C  INPUT..
+C     N = ORDER OF MATRIX.
+C     NDIM = DECLARED DIMENSION OF ARRAY  A .
+C     A = MATRIX TO BE TRIANGULARIZED.
+C  OUTPUT..
+C     A(I,J), I.LE.J = UPPER TRIANGULAR FACTOR, U .
+C     A(I,J), I.GT.J = MULTIPLIERS = LOWER TRIANGULAR FACTOR, I - L.
+C     IP(K), K.LT.N = INDEX OF K-TH PIVOT ROW.
+C     IP(N) = (-1)**(NUMBER OF INTERCHANGES) OR O .
+C     IER = 0 IF MATRIX A IS NONSINGULAR, OR K IF FOUND TO BE
+C           SINGULAR AT STAGE K.
+C  USE  SOL  TO OBTAIN SOLUTION OF LINEAR SYSTEM.
+C  DETERM(A) = IP(N)*A(1,1)*A(2,2)*...*A(N,N).
+C  IF IP(N)=O, A IS SINGULAR, SOL WILL DIVIDE BY ZERO.
+C
+C  REFERENCE..
+C     C. B. MOLER, ALGORITHM 423, LINEAR EQUATION SOLVER,
+C     C.A.C.M. 15 (1972), P. 274.
+C-----------------------------------------------------------------------
+      IER = 0
+      IP(N) = 1
+      IF (N .EQ. 1) GO TO 70
+      NM1 = N - 1
+      DO 60 K = 1,NM1
+        KP1 = K + 1
+        M = K
+        DO 10 I = KP1,N
+ 10       IF (DABS(A(I,K)) .GT. DABS(A(M,K))) M = I
+        IP(K) = M
+        T = A(M,K)
+        IF (M .EQ. K) GO TO 20
+        IP(N) = -IP(N)
+        A(M,K) = A(K,K)
+        A(K,K) = T
+ 20     IF (T .EQ. 0.D0) GO TO 80
+        T = 1.D0/T
+        DO 30 I = KP1,N
+ 30       A(I,K) = -A(I,K)*T
+        DO 50 J = KP1,N
+          T = A(M,J)
+          A(M,J) = A(K,J)
+          A(K,J) = T
+          IF (T .EQ. 0.D0) GO TO 50
+          DO 40 I = KP1,N
+ 40         A(I,J) = A(I,J) + A(I,K)*T
+ 50       CONTINUE
+ 60     CONTINUE
+ 70   K = N
+      IF (A(N,N) .EQ. 0.D0) GO TO 80
+      RETURN
+ 80   IER = K
+      IP(N) = 0
+      RETURN
+C----------------------- END OF SUBROUTINE DEC -------------------------
+      END
+      SUBROUTINE SOL (N, NDIM, A, B, IP)                                SOL0  10
+C
+      INTEGER N,NDIM,IP,NM1,K,KP1,M,I,KB,KM1
+      DOUBLE PRECISION A,B,T
+      DIMENSION A(NDIM,N), B(N), IP(N)
+C-----------------------------------------------------------------------
+C  SOLUTION OF LINEAR SYSTEM, A*X = B .
+C  INPUT..
+C    N = ORDER OF MATRIX.
+C    NDIM = DECLARED DIMENSION OF ARRAY  A .
+C    A = TRIANGULARIZED MATRIX OBTAINED FROM DEC.
+C    B = RIGHT HAND SIDE VECTOR.
+C    IP = PIVOT VECTOR OBTAINED FROM DEC.
+C  DO NOT USE IF DEC HAS SET IER .NE. 0.
+C  OUTPUT..
+C    B = SOLUTION VECTOR, X .
+C-----------------------------------------------------------------------
+      IF (N .EQ. 1) GO TO 50
+      NM1 = N - 1
+      DO 20 K = 1,NM1
+        KP1 = K + 1
+        M = IP(K)
+        T = B(M)
+        B(M) = B(K)
+        B(K) = T
+        DO 10 I = KP1,N
+ 10       B(I) = B(I) + A(I,K)*T
+ 20     CONTINUE
+      DO 40 KB = 1,NM1
+        KM1 = N - KB
+        K = KM1 + 1
+        B(K) = B(K)/A(K,K)
+        T = -B(K)
+        DO 30 I = 1,KM1
+ 30       B(I) = B(I) + A(I,K)*T
+ 40     CONTINUE
+ 50   B(1) = B(1)/A(1,1)
+      RETURN
+C----------------------- END OF SUBROUTINE SOL -------------------------
+      END
+      SUBROUTINE DIFFUN(N, T, Y, YDOT)                                  TEST  10
+      DOUBLE PRECISION T, T1, T2, W1, W2, W3, W4, S, Y, YDOT
+      DIMENSION Y(N), YDOT(N)
+      T1=-Y(1)+Y(2)+Y(3)+Y(4)
+      T2=Y(1)-Y(2)+Y(3)+Y(4)
+      W1=5.D-1*(T1*T1-T2*T2)
+      W2=T1*T2
+      W3=(Y(1)+Y(2)-Y(3)+Y(4))**2
+      W4=(Y(1)+Y(2)+Y(3)-Y(4))**2
+      S=0.D0
+      DO 10 I=1,3
+   10 S=S-1.D-3*Y(I)
+      S=S+1.D-3*Y(4)
+      YDOT(1)=-2.5D-1*(9.8D2*Y(1)+1.02D3*Y(2)-9.8D2*Y(3)+1.02D3*Y(4)-S)
+     +   +1.25D-1*(-W1+W2+W3+W4)
+      YDOT(2)=-2.5D-1*(1.02D3*Y(1)+9.8D2*Y(2)-1.02D3*Y(3)+9.8D2*Y(4)-S)
+     +   +1.25D-1*( W1-W2+W3+W4)
+      YDOT(3)=-2.5D-1*(-1.02D3*Y(1)-9.8D2*Y(2)+9.8D2*Y(3)-1.02D3*Y(4)-S)
+     +   +1.25D-1*( W1+W2-W3+W4)
+      YDOT(4)=-2.5D-1*(9.8D2*Y(1)+1.02D3*Y(2)-1.02D3*Y(3)+9.8D2*Y(4)+S)
+     +   +1.25D-1*( W1+W2+W3-W4)
+      RETURN
+      END
+      SUBROUTINE PEDERV(N, T, Y, P0, N0)                                TEST 240
+      DOUBLE PRECISION P0, Y, T
+      DIMENSION P0(16), Y(N)
+      P0(1)=(-9.80001D2+Y(1)+Y(3)+Y(4)+3.D0*Y(2))*2.5D-1
+      P0(5)=(-1.020001D3+Y(2)-Y(3)-Y(4)+3.D0*Y(1))*2.5D-1
+      P0(9)=(9.79999D2+Y(1)-Y(2)-Y(4)+3.D0*Y(3))*2.5D-1
+      P0(13)=(-1.019999D3+Y(1)-Y(2)-Y(3)+3.D0*Y(4))*2.5D-1
+      P0(2)=P0(5)
+      P0(6)=P0(1)
+      P0(10)=-P0(13)
+      P0(14)=-P0(9)
+      P0(3)=P0(10)
+      P0(7)=P0(9)
+      P0(11)=P0(1)
+      P0(15)=-P0(5)
+      P0(4)=P0(14)
+      P0(8)=P0(13)
+      P0(12)=P0(15)
+      P0(16)=P0(1)
+      RETURN
+      END
+      SUBROUTINE ERROR(T, Y, N, ER0)                                    TEST 450
+      DOUBLE PRECISION T, T1, T2, T3, W1, W2, W3, W4, X, Y, ER0
+C     DOUBLE PRECISION DEXP, DSIN, DCOS, DABS
+      DIMENSION ER0(N), Y(N)
+      X=1.D1*T
+      IF(X.GT.1.65D2) GO TO 20
+      T1=1.D0+DEXP(-X)*(9.D0*DCOS(X)+1.D1*DSIN(X))
+      T2=DEXP(-X)*(1.D1*DCOS(X)-9.0D0*DSIN(X))
+      IF(DABS(T2).LE.1.D-15) GO TO 10
+      T3=1.D1/(T1*T1+T2*T2)
+      GO TO 11
+   10 T3=1.D1/T1**2
+   11 W1=-(T1+T2)*T3
+      W2=(T1-T2)*T3
+      GO TO 21
+   20 W1=-1.D1
+      W2=1.D1
+   21 X=1.D3*T
+      IF(X.GT.1.65D2) GO TO 22
+      W3=5.D2/(1.D0-1.001D3*DEXP(X))
+      GO TO 23
+   22 W3=0.D0
+   23 W4=5.D-4/(1.D0-1.001D0*DEXP(1.D-3*T))
+      ER0(1)=-W1+W2+W3+W4
+      ER0(2)= W1-W2+W3+W4
+      ER0(3)= W1+W2-W3+W4
+      ER0(4)= W1+W2+W3-W4
+      DO 30 I=1,N
+   30 ER0(I)=ER0(I)-Y(I)
+      RETURN
+      END
+20                                                                      TEST 760
+ 6                                                                      TEST 770
+15                                                                      TEST 780
+04                                                                      TEST 790
+ 0.000000000000000D+00-2.000000000000000D+00-1.000000000000000D+00      TEST 800
+-1.000000000000000D+00                                                  TEST 810
+ 0.000000000000000D+00 1.000000000000000D+02 5.000000000000000D-09      TEST 820
+ 1                                                                      TEST 830
+ 1.000000000000000D-03                                                  TEST 840
+ 1                                                                      TEST 850
+ 1.000000000000000D-05                                                  TEST 860
+ 1                                                                      TEST 870
+ 1.000000000000000D-07                                                  TEST 880
+ 2                                                                      TEST 890
+ 1.000000000000000D-03                                                  TEST 900
+ 2                                                                      TEST 910
+ 1.000000000000000D-05                                                  TEST 920
+ 2                                                                      TEST 930
+ 1.000000000000000D-07                                                  TEST 940

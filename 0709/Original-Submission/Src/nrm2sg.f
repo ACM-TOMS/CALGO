@@ -1,0 +1,257 @@
+      REAL             FUNCTION  ZZNRM2 ( N, V )
+C!!!! DOUBLE PRECISION FUNCTION  ZZNRM2 ( N, V )
+
+C## A R G U M E N T S:
+
+      INTEGER          N
+
+      REAL             V(N)
+C!!!! DOUBLE PRECISION V(N)
+
+C## S T A T U S:
+C               SINGLE/DOUBLE CONVERSION:        NOT REQUIRED.
+C               SINGLE/DOUBLE CONVERSION: NEEDED (SEE CONVRT).
+C
+C               IGNORE LINES BEGINNING WITH  "C!!!!" .
+C
+C               THIS VERSION IS IN   S I N G L E   PRECISION.
+C!!!!           THIS VERSION IS IN   D O U B L E   PRECISION.
+C
+C               SYSTEM  DEPENDENCE:                      NONE.
+C               SYSTEM  DEPENDENCE:   SYSTEM ROUTINE FOR ####.
+C
+C    SYSTEM  DEPENDENCE:               NONE
+C
+C    CONVERSION FOR SINGLE OR DOUBLE PRECISION:   REQUIRED (SEE CONVRT)
+C
+C      IGNORE LINES BEGINNING WITH  "C!!!!" .
+C
+C      THIS VERSION IS IN   S I N G L E   PRECISION.
+C!!!!  THIS VERSION IS IN   D O U B L E   PRECISION.
+C
+C>RCS $HEADER: NRM2.F,V 2.1 91/11/20 10:47:00 BUCKLEY EXP $
+C>RCS $LOG:     NRM2.F,V $
+C>RCS REVISION 2.1  91/11/20  10:47:00  BUCKLEY
+C>RCS FINAL SUBMISSION TO TOMS
+C>RCS
+C>RCS REVISION 2.0  90/07/31  11:16:18  BUCKLEY
+C>RCS ADDED REVISED BLAS.
+C>RCS
+C>RCS REVISION 1.9.1.1  89/06/30  15:28:16  BUCKLEY
+C>RCS PREPARING SUBMITTED VERSION OF MT
+C>RCS
+C>RCS REVISION 1.9  89/06/30  13:11:48  BUCKLEY
+C>RCS PREPARING SUBMITTED VERSION OF MT
+C>RCS
+C>RCS REVISION 1.3  89/05/18  12:40:14  BUCKLEY
+C>RCS FINAL TEST OF MT BEFORE SUBMITTING
+C>RCS
+C>RCS REVISION 1.2  89/05/15  14:49:25  BUCKLEY
+C>RCS INITIAL INSTALLATION OF MT INTO RCS FORM..
+C>RCS
+C>RCS REVISION 1.1  89/01/07  14:35:57  BUCKLEY
+C>RCS INITIAL REVISION
+C>RCS
+C
+C## D E S C R I P T I O N:
+C
+C     THIS COMPUTES THE 2-NORM (I.E. THE EUCLIDEAN NORM) OF THE
+C     VECTOR  V  OF LENGTH N, WITH DUE REGARD TO AVOIDING OVERFLOW
+C     AND UNDERFLOW.
+C
+C     THE ROUTINE IS BASED ON SNRM2 FROM THE BLAS (IN LINPACK),
+C     BUT THIS VERSION IS FOR CONSECUTIVELY STORED VECTORS ONLY,
+C     AND IT USES MACHINE DEPENDENT CONSTANTS TAKEN FROM ZZMPAR.
+C     THEREFORE IT MAKES NONE OF THE ASSUMPTIONS USED IN SNRM2, AND
+C     IS IN FACT LESS MACHINE DEPENDENT.
+C
+C     SNRM2 WAS WRITTEN IN FORTRAN 66, WHEREAS THIS VERSION IS WRITTEN
+C     IN FORTRAN 77. THE USE OF BLOCK IF STATEMENTS MAKES THIS VERSION
+C     MUCH MORE READABLE THAN SNRM2.
+C
+C     THE MACHINE CONSTANTS MIN (THE SMALLEST MAGNITUDE), MAX (THE
+C     LARGEST MAGNITUDE), AND PREC (THE PRECISION) ARE USED TO
+C     CALCULATE THE CONSTANTS CUTLO AND CUTHI. THREE DIFFERENT CASES
+C     MUST BE CONSIDERED WHEN CALCULATING THE NORM:
+C
+C        (1)  ALL COMPONENTS OF V ARE BELOW CUTLO.
+C
+C                 TO AVOID UNDERFLOW, EACH COMPONENT IS DIVIDED BY
+C                 SQRT(MIN)/N   AND THEN THE REGULAR EUCLIDEAN NORM
+C                 OF THIS MODIFIED VECTOR IS CALCULATED. THIS RESULT
+C                 IS THEN MULTIPLIED BY   SQRT(MIN)/N   IN ORDER
+C                 TO GET THE CORRECT VALUE FOR THE NORM.
+C
+C        (2)  ONE OR MORE COMPONENTS ARE GREATER THAN CUTHI.
+C
+C                 TO AVOID OVERFLOW, THE SAME METHOD AS IN CASE (1)
+C                 IS USED WITH A SCALING FACTOR OF   SQRT(MAX)*N .
+C
+C        (3)  ALL COMPONENTS ARE LESS THAN CUTHI, WITH AT LEAST
+C             ONE COMPONENT GREATER THAN CUTLO.
+C
+C                 THE REGULAR FORMULA FOR THE EUCLIDEAN NORM IS
+C                 USED.
+C
+C## E N T R Y   P O I N T S: THE NATURAL ENTRY ZZZZZZ.
+C
+C                  ONLY THE NATURAL ENTRY POINT ZZNRM2
+C
+C## S U B R O U T I N E S:   NONE ARE CALLED.
+C
+C     ZZMPAR     TO OBTAIN MACHINE DEPENDENT CONSTANTS.
+C
+C     SQRT, ABS, REAL(DBLE) ... INTRINSIC
+C
+C## P A R A M E T E R S:     NONE ARE DEFINED.
+
+      INTEGER     NULL,     SMALL,     NORMAL,     LARGE
+      PARAMETER ( NULL = 0, SMALL = 1, NORMAL = 2, LARGE = 2 )
+
+      REAL              ZERO,       ONE,       TWO,       THREE
+C!!!! DOUBLE PRECISION  ZERO,       ONE,       TWO,       THREE
+      PARAMETER (       ZERO = 0D0, ONE = 1D0, TWO = 2D0, THREE = 3D0)
+
+      REAL              FOUR,       FIVE,      SIX,       SEVEN
+C!!!! DOUBLE PRECISION  FOUR,       FIVE,      SIX,       SEVEN
+      PARAMETER (       FOUR = 4D0, FIVE = 5D0,SIX = 6D0, SEVEN = 7D0)
+
+      REAL              EIGHT,         NINE,          TEN
+C!!!! DOUBLE PRECISION  EIGHT,         NINE,          TEN
+      PARAMETER (       EIGHT = 8D0,   NINE = 9D0,    TEN = 10D0     )
+
+      INTEGER     XEPS,     XSMALL,     XBIG
+      PARAMETER ( XEPS = 1, XSMALL = 2, XBIG = 3 )
+
+C## L O C A L   D E C L:     NONE ARE DEFINED.
+
+      INTEGER           I, CASE
+
+      LOGICAL           FIRST
+
+      REAL              CUTLO, CUTHI, MAX, SUM, ZZMPAR, RD, XMAX
+C!!!! DOUBLE PRECISION  CUTLO, CUTHI, MAX, SUM, ZZMPAR, RD, XMAX
+
+C## S A V E:                 NONE SELECTED.
+
+      SAVE  FIRST, MAX
+
+C## E Q U I V A L E N C E S: NONE ARE DEFINED.
+C
+C                       THERE ARE NO EQUIVALENCES.
+C
+C## C O M M O N:             NONE IS DEFINED.
+C
+C                       THERE ARE NO COMMON BLOCKS.
+C
+C## D A T A:                 NONE ARE SET.
+
+      DATA  FIRST / .TRUE. /
+
+C##                                                E X E C U T I O N
+C##                                                E X E C U T I O N
+
+C----DEFINE A STATEMENT FUNCTION.
+
+      RD(I) = REAL (I)
+C!!!! RD(I) = DBLE (I)
+
+C-----GET MACHINE LIMITS.
+
+      IF ( FIRST ) THEN
+
+         CUTLO  = SQRT ( ZZMPAR(XSMALL) / ZZMPAR(XEPS) )
+         MAX    = ZZMPAR(XBIG)
+
+         FIRST  = .FALSE.
+
+      ENDIF
+
+C-----DO NORM.
+
+      IF ( N .LE. 0 ) THEN
+         ZZNRM2 = ZERO
+         GOTO 90000
+      ENDIF
+
+      CUTHI  = SQRT(MAX) / RD(N)
+
+      SUM   = ZERO
+      CASE  = NULL
+
+C---- EVALUATE THE NORM BY ACCUMULATING A SCALED SUM OF SQUARES
+C     AND ADJUSTING THE SCALING AS NUMBERS OF INCREASING LARGE
+C     MAGNITUDE ARE FOUND.
+
+      DO 100 I=1,N
+
+         IF      ( CASE .EQ. NORMAL ) THEN
+            IF ( ABS(V(I)) .LT. CUTHI ) THEN
+               SUM = SUM + V(I)**2
+            ELSE
+               CASE = LARGE
+               XMAX = ABS(V(I))
+               SUM = ONE + (SUM/V(I))/V(I)
+            ENDIF
+
+         ELSE IF ( CASE .EQ. SMALL  ) THEN
+            IF ( ABS(V(I)) .LE. CUTLO ) THEN
+               IF ( ABS(V(I)) .LE. XMAX ) THEN
+                  SUM = SUM + (V(I)/XMAX) **2
+               ELSE
+                  SUM = ONE + (XMAX/V(I)) **2
+                  XMAX = ABS(V(I))
+               ENDIF
+            ELSE IF ( ABS(V(I)) .GE. CUTHI ) THEN
+               CASE = LARGE
+               XMAX = ABS(V(I))
+               SUM = ONE + (SUM/V(I))/V(I)
+            ELSE
+               CASE = NORMAL
+               SUM  = (SUM*XMAX)*XMAX + V(I)**2
+            ENDIF
+
+         ELSE IF ( CASE .EQ. LARGE  ) THEN
+            IF ( ABS(V(I)) .LE. XMAX ) THEN
+              SUM = SUM + (V(I)/XMAX)**2
+            ELSE
+              SUM = ONE + SUM * (XMAX/V(I))**2
+              XMAX = ABS(V(I))
+            ENDIF
+
+         ELSE IF ( CASE .EQ. NULL   ) THEN
+            IF      ( ABS(V(I)) .EQ. ZERO  ) THEN
+C                                                 JUST FALL THROUGH...
+            ELSE IF ( ABS(V(I)) .LE. CUTLO ) THEN
+               CASE = SMALL
+               XMAX = ABS (V(I))
+               SUM  = ONE
+            ELSE IF ( ABS(V(I)) .GE. CUTHI ) THEN
+               CASE = LARGE
+               XMAX = ABS (V(I))
+               SUM  = ONE
+            ELSE
+               CASE = NORMAL
+               SUM  = V(I)**2
+            ENDIF
+
+         ENDIF
+
+  100 CONTINUE
+
+      IF ( CASE .EQ. NORMAL .OR. CASE .EQ. NULL ) THEN
+         ZZNRM2 = SQRT(SUM)
+      ELSE
+         ZZNRM2 = XMAX * SQRT(SUM)
+      ENDIF
+
+C## E X I T
+
+90000 RETURN
+
+C## F O R M A T S:  NONE ARE DEFINED.
+C
+C                       THERE ARE NO FORMATS USED.
+C
+C##                 E N D         OF ZZNRM2.
+                    END

@@ -1,0 +1,525 @@
+***********************************************************************
+*                                                                     *
+*         PNEW - A BUNDLE-NEWTON ALGORITHM FOR NONSMOOTH              *
+*                UNCONSTRAINED OPTIMIZATION.                          *
+*                                                                     *
+***********************************************************************
+
+
+1. Introduction:
+----------------
+
+      The double-precision FORTRAN 77 basic subroutine PNEW is designed
+to find a close approximation to a local minimum of a nonlinear
+nonsmooth function F(X) with simple bounds on variables and general
+linear constraints. Here X is a vector of N variables and F(X), is
+assumed to be a locally Lipschitz continuous function. Simple bounds
+are assumed in the form
+
+               X(I) unbounded if  IX(I) = 0,
+      XL(I) <= X(I)           if  IX(I) = 1,
+               X(I) <= XU(I)  if  IX(I) = 2,
+      XL(I) <= X(I) <= XU(I)  if  IX(I) = 3,
+      XL(I)  = X(I)  = XU(I)  if  IX(I) = 5,
+
+where 1 <= I <= N. General linear constraints are assumed in the form
+
+               C(I) unbounded if  IC(I) = 0,
+      CL(I) <= C(I)           if  IC(I) = 1,
+               C(I) <= CU(I)  if  IC(I) = 2,
+      CL(I) <= C(I) <= CU(I)  if  IC(I) = 3,
+      CL(I)  = C(I)  = CU(I)  if  IC(I) = 5,
+
+where C(I) = A_I*X, 1 <= I <= NC, are linear functions. To simplify
+user's work, three additional easy to use subroutines are added. They
+call the basic general subroutine PNEW:
+
+      PNEWU - unconstrained nonsmooth optimization,
+      PNEWS - nonsmooth optimization with simple bounds,
+      PNEWL - nonsmooth optimization with simple bounds and general
+              linear constraints.
+
+All subroutines contain a description of formal parameters and
+extensive comments. Furthermore, two test programs TNEWU and TNEWL are
+included, which contain several test problems (see e.g. [4]). These
+test programs serve as examples for using the subroutines, verify their
+correctness and demonstrate their efficiency.
+      In this short guide, we describe all subroutines which can be
+called from the user's program. A detailed description of methods is
+given in [2] and [3]. In the description of formal parameters, we
+introduce a type of the argument that specifies whether the argument
+must have a value defined on entry to the subroutine (I), whether it
+is a value which will be returned (O), or both (U), or whether it is
+an auxiliary value (A). Note that the arguments of the type I can be
+changed on output under some circumstances, especially if improper
+input values were given. Besides formal parameters, we can use a
+COMMON /STAT/ block containing statistical information. This block,
+used in each subroutine has the following form:
+
+      COMMON /STAT/ NDECF,NRES,NRED,NREM,NADD,NIT,NFV,NFG,NFH
+
+The arguments have the following meaning:
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NDECF     O   Positive INTEGER variable that indicates the number of
+                matrix decompositions.
+  NRES      O   Positive INTEGER variable that indicates the number of
+                restarts.
+  NRED      O   Positive INTEGER variable that indicates the number of
+                reductions.
+  NREM      O   Positive INTEGER variable that indicates the number of
+                constraint deletions during the QP solutions.
+  NADD      O   Positive INTEGER variable that indicates the number of
+                constraint additions during the QP solutions.
+  NIT       O   Positive INTEGER variable that indicates the number of
+                iterations.
+  NFV       O   Positive INTEGER variable that indicates the number of
+                function evaluations.
+  NFG       O   Positive INTEGER variable that specifies the number of
+                gradient evaluations.
+  NFH       O   Positive INTEGER variable that specifies the number of
+                Hessian evaluations.
+
+
+2. Subroutines PNEWU, PNEWS, PNEWL:
+-----------------------------------
+
+The calling sequences are
+
+      CALL PNEWU(NF,NA,X,IA,RA,IPAR,RPAR,FP,GMAX,IHES,ITERM)
+      CALL PNEWS(NF,NA,NB,X,IX,XL,XU,IA,RA,IPAR,RPAR,FP,GMAX,IHES,
+     & ITERM)
+      CALL PNEWL(NF,NA,NB,NC,X,IX,XL,XU,CF,IC,CL,CU,CG,IA,RA,IPAR,
+     &           RPAR,FP,GMAX,IHES,ITERM)
+
+The arguments have the following meaning.
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NF        I   Positive INTEGER variable that specifies the number of
+                variables of the objective function.
+  NA        I   Nonnegative INTEGER variable that specifies the maximum
+                bundle dimension. The choice NA=0 causes that the
+                default value NA=NF+3 will be taken.
+  NB        I   Nonnegative INTEGER variable that specifies whether the
+                simple bounds are suppressed (NB=0) or accepted (NB>0).
+  NC        I   Nonnegative INTEGER variable that specifies the number
+                of linear constraints; if NC=0 the linear constraints
+                are suppressed.
+  X(NF)     U   On input, DOUBLE PRECISION vector with the initial
+                estimate to the solution. On output, the approximation
+                to the minimum.
+  IX(NF)    I   On input (significant only if NB>0) INTEGER vector
+                containing the simple bounds types:
+                   IX(I)=0 - the variable X(I) is unbounded,
+                   IX(I)=1 - the lower bound X(I) >= XL(I),
+                   IX(I)=2 - the upper bound X(I) <= XU(I),
+                   IX(I)=3 - the two side bound XL(I) <= X(I) <= XU(I),
+                   IX(I)=5 - the variable X(I) is fixed (given by its
+                             initial estimate).
+  XL(NF)    I   DOUBLE PRECISION vector with lower bounds for variables
+                (significant only if NB>0).
+  XU(NF)    I   DOUBLE PRECISION vector with upper bounds for variables
+                (significant only if NB>0).
+  CF(NC)    A   DOUBLE PRECISION vector which contains values of
+                constraint functions (only if NC>0).
+  IC(NC)    I   On input (significant only if NC>0) INTEGER vector which
+                contains constraint types:
+                  IC(K)=0 - the constraint CF(K) is not used,
+                  IC(K)=1 - the lower constraint CF(K) >= CL(K),
+                  IC(K)=2 - the upper constraint CF(K) <= CU(K),
+                  IC(K)=3 - the two side constraint
+                            CL(K) <= CF(K) <= CU(K),
+                  IC(K)=5 - the equality constraint CF(K) = CL(K).
+  CL(NC)    I   DOUBLE PRECISION vector with lower bounds for constraint
+                functions (significant only if NC>0).
+  CU(NC)    I   DOUBLE PRECISION vector with upper bounds for constraint
+                functions (significant only if NC>0).
+  CG(NF*NC) I   DOUBLE PRECISION matrix whose columns are normals of the
+                linear constraints (significant only if NC>0).
+  IA(NIA)   A   INTEGER working array of the dimension of at least
+                NIA=NF+NA+1.
+  RA(NRA)   A   DOUBLE PRECISION working array of the dimension of at
+                least NRA=NF*(NF+1)*(NA+3)/2+NF*(NA+6)+5*NA+4.
+  IPAR(7)   A   INTEGER parameters:
+                  IPAR(1)=MOS,   IPAR(2)=MES,   IPAR(3)=MTESX,
+                  IPAR(4)=MTESF, IPAR(5)=MIT,   IPAR(6)=MFV,
+                  IPAR(7)=IPRNT.
+                Parameters MOS, MES, MTESX, MTESF, MIT, MFV, IPRNT are
+                described in Section 3 together with other parameters
+                of the subroutine PNEW.
+  RPAR(9)   A   DOUBLE PRECISION parameters:
+                  RPAR(1)=TOLX,  RPAR(2)=TOLF,  RPAR(3)=TOLB,
+                  RPAR(4)=TOLG,  RPAR(5)=TOLD,  RPAR(6)=TOLS,
+                  RPAR(7)=TOLP.  RPAR(8)=ETA,   RPAR(9)=XMAX.
+                Parameters TOLX, TOLF, TOLB, TOLG, TOLD, TOLS, TOLP,
+                ETA, XMAX are described in Section 3 together with
+                other parameters of the subroutine PNEW.
+  FP        O   DOUBLE PRECISION value of the objective function at the
+                solution X.
+  GMAX      O   DOUBLE PRECISION maximum absolute value of a partial
+                derivative of the Lagrangian function.
+  IHES      I   INTEGER variable that specifies a way for computing
+                second derivatives:
+                  IHES=0 - numerical computation,
+                  IHES=1 - analytical computation by the user supplied
+                           subroutine HES.
+  ITERM     O   INTEGER variable that indicates the cause of termination:
+                  ITERM= 1 - if |X - XO| was less than or equal to TOLX
+                             in MTESX subsequent iterations,
+                  ITERM= 2 - if |F - FO| was less than or equal to TOLF
+                             in MTESF subsequent iterations,
+                  ITERM= 3 - if F is less than or equal to TOLB,
+                  ITERM= 4 - if GMAX is less than or equal to TOLG,
+                  ITERM=11 - if NFV exceeded MFV,
+                  ITERM=12 - if NIT exceeded MIT,
+                  ITERM< 0 - if the method failed.
+
+The subroutines PNEWU, PNEWS, PNEWL require user supplied subroutines
+FUNDER and HES that defines the objective function, its subgradient
+and has the form
+
+      SUBROUTINE FUNDER(NF,X,F,G)
+      SUBROUTINE HES(NF,X,H)
+
+The arguments of user supplied subroutines have the following meaning.
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NF        I   Positive INTEGER variable that specifies the number of
+                variables of the objective function.
+  X(NF)     I   DOUBLE PRECISION an estimate to the solution.
+  F         O   DOUBLE PRECISION value of the objective function at the
+                point X.
+  G(NF)     O   DOUBLE PRECISION subgradient of the objective function
+                at the point X.
+  H(NH)     O   DOUBLE PRECISION matrix containing the second order
+                information at the point X (NH is equal to NF*(NF+1)/2).
+
+
+3. Subroutine PNEW:
+-------------------
+
+This general subroutine is called from all the subroutines described
+in Section 2. The calling sequence is
+
+      CALL PNEW(NF,NA,NB,NC,X,IX,XL,XU,CF,IC,CL,CU,CG,AF,IA,AFD,AG,
+     & IAA,AR,AZ,G,H,HF,AH,S,SO,XO,GO,TOLX,TOLF,TOLB,TOLG,TOLD,TOLS,
+     & TOLP,ETA,XMAX,GMAX,FP,MOS,MES,MTESX,MTESF,MIT,MFV,IPRNT,IHES,
+     & ITERM).
+
+The arguments NF, NA, NB, NC, X, IX, XL, XU, CF, IC, CL, CU, CG,
+GMAX, FP, ITERM, have the same meaning as in Section 2. Other
+arguments have the following meaning M is equal to NF*(NF+1)/2):
+
+ Argument  Type Significance
+ ---------------------------------------------------------------------
+  AF(5*NA)  A   DOUBLE PRECISION vector of bundle function values.
+  IA(NA)    A   INTEGER vector containing types of bundle functions.
+  AFD(NA)   A   DOUBLE PRECISION vector of bundle function increments.
+  AG(NF*NA) A   DOUBLE PRECISION matrix whose columns are bundle
+                gradients.
+  IAA(NA)   A   INTEGER vector containing indices of active functions.
+  AR(NAR)   A   DOUBLE PRECISION matrix containing triangular
+                decomposition of the orthogonal projection kernel
+                (NAR is equal to (NF+1)*(NF+2)/2).
+  AZ(NF+1)  A   DOUBLE PRECISION vector of Lagrange multipliers.
+  G(NF)     A   DOUBLE PRECISION subgradient of the objective function.
+  H(NH)     A   DOUBLE PRECISION aggregate Hessian matrix (NH is equal
+                to NF*(NF+1)/2).
+  HF(NH)    A   DOUBLE PRECISION Hessian matrix of the objective
+                function.
+  AH(NA*NH) A   DOUBLE PRECISION Bundle of Hessian matrices.
+  S(NF+1)   A   DOUBLE PRECISION direction vector.
+  SO(NF)    A   DOUBLE PRECISION auxiliary vector.
+  XO(NF)    A   DOUBLE PRECISION vector which contains increments of
+                variables.
+  GO(NF+1)  A   DOUBLE PRECISION gradient of the Lagrangian function.
+  TOLX      I   DOUBLE PRECISION tolerance for the change of the
+                coordinate vector X; the choice TOLX=0 causes that the
+                default value TOLX=1.0D-16 will be taken.
+  TOLF      I   DOUBLE PRECISION tolerance for the change of function
+                values; the choice TOLF=0 causes that the default
+                value TOLF=1.0D-8 will be taken.
+  TOLB      I   DOUBLE PRECISION minimum acceptable function value;
+                the choice TOLB=0 causes that the default value
+                TOLB=-1.0D60 will be taken.
+  TOLG      I   DOUBLE PRECISION tolerance for the Lagrangian function
+                gradient; the choice TOLG=0 causes that the default
+                value TOLG=1.0D-6 will be taken.
+  TOLD      I   DOUBLE PRECISION tolerance for a descent direction;
+                the choice TOLD= 0 causes that the default value
+                TOLD=1.0D-4 will be taken.
+  TOLS      I   DOUBLE PRECISION tolerance parameter for a function
+                decrease in a line search; the choice TOLS=0 causes
+                that the default value TOLS=1.0D-2 will be taken.
+  TOLP      I   DOUBLE PRECISION tolerance parameter for a significant
+                modification of the next line search direction; the
+                choice TOLP=0 causes that the default value TOLP=0.5D0
+                will be taken.
+  ETA       I   DOUBLE PRECISION distance measure parameter.
+  XMAX      I   DOUBLE PRECISION maximum stepsize; the choice XMAX=0
+                causes that the default value 1.0D3 will be taken.
+  MOS       I   INTEGER distance measure exponent (MOS=1 or MOS=2).
+                The choice MOS=0 causes that the default value MOS=1
+                will be taken.
+  MES       I   INTEGER variable that specifies the interpolation
+                method selection in a line search:
+                  MES=1 - bisection,
+                  MES=2 - two point quadratic interpolation,
+                  MES=3 - three point quadratic interpolation,
+                  MES=4 - three point cubic interpolation.
+                The choice MES=0 causes that the default value MES=1
+                will be taken.
+  MTESX     I   INTEGER variable that specifies the maximum number of
+                iterations with changes of the coordinate vector X
+                smaller than TOLX; the choice MTESX=0 causes that the
+                default value MTESX=20 will be taken.
+  MTESF     I   INTEGER variable that specifies the maximum number of
+                iterations with changes of function values smaller
+                than TOLF; the choice MTESF=0 causes that the default
+                value MTESF=2 will be taken.
+  MIT       I   INTEGER variable that specifies the maximum number of
+                iterations; the choice MIT=0 causes that the default
+                value 200 will be taken.
+  MFV       I   INTEGER variable that specifies the maximum number of
+                function evaluations; the choice |MFV|=0 causes that
+                the default value 500 will be taken.
+  IPRNT     I   INTEGER variable that specifies PRINT:
+                  IPRNT= 0 - print is suppressed,
+                  IPRNT= 1 - basic print of final results,
+                  IPRNT=-1 - extended print of final results,
+                  IPRNT= 2 - basic print of intermediate and final
+                             results,
+                  IPRNT=-2 - extended print of intermediate and final
+                             results.
+
+     The subroutine PNEW has a modular structure. The following list
+contains its most important subroutines:
+
+      PF1HS1 - Numerical computation of the Hessian matrix.
+      PDDBQ2 - Determination of the descent direction using quadratic
+               programming subroutine and bundle updating.
+      PLQDF1 - Dual range space method for solving a quadratic
+               programming subproblem with linear constraints
+               (see [1]).
+      PS1L05 - Line search using function values and derivatives.
+
+The subroutine PNEW requires the user supplied subroutine FUNDER
+which is described in Section 2.
+
+
+4. Subroutine PLQDF1:
+---------------------
+
+Since the dual range space method for special quadratic programming
+subproblems arising in bundle type nonsmooth optimization can be used
+separately in many applications (e.g. in minimax optimization), we
+describe the subroutine PLQDF1 in more details. The calling sequence
+is
+
+      CALL PLQDF1(NF,NA,NC,X,IX,XL,XU,AF,AFD,IA,IAA,AG,AR,AZ,
+     & CF,IC,CL,CU,CG,G,H,S,MFP,KBF,KBC,IDECF,ETA0,ETA2,ETA9,
+     & EPS7,EPS9,XNORM,UMAX,GMAX,N,ITERQ)
+
+The arguments NF, NA, NC, X, IX, XL, XU, AF, CF, IC, CL, CU, CG have
+the same meaning as in Section 2 (only with the difference that the
+arguments X and AF are of the type (I), i.e. they  must have a value
+defined on entry to PLQDF1 and they are not changed). The arguments AFD,
+IA, IAA, AG, AR, AZ have the same meaning as in Section 3 (only with
+the difference that the arguments AFD, IAA, AR, AZ are of the type (O),
+i.e. their values can be used subsequently). Other arguments have the
+following meaning:
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  G(NF+1)   O   DOUBLE PRECISION gradient of the Lagrangian function.
+  H(NH)     U   DOUBLE PRECISION Choleski decomposition of the
+                approximate Hessian matrix (NH is equal to NF*(NF+1)/2).
+  S(NF+1)   O   DOUBLE PRECISION direction vector.
+  MFP       I   INTEGER variable that specifies the type of the
+                computed point.
+                  MFP=1 - computation is terminated whenever an
+                          arbitrary feasible point is found,
+                  MFP=2 - computation is terminated whenever an
+                          optimum feasible point is found,
+                  MFP=3 - computation starts from the previously
+                          reached point and is terminated whenever
+                          an optimum feasible point is found.
+  KBF       I   INTEGER variable that specifies simple bounds on
+                variables.
+                  KBF=0 - simple bounds are suppressed,
+                  KBF=1 - one sided simple bounds,
+                  KBF=2 - two sided simple bounds.
+  KBC       I   INTEGER variable that specifies general linear
+                constraints.
+                  KBC=0 - linear constraints are suppressed,
+                  KBC=1 - one sided linear constraints,
+                  KBC=2 - two sided linear constraints.
+  IDECF     U   INTEGER variable that specifies the type of matrix
+                decomposition.
+                  IDECF= 0 - no decomposition,
+                  IDECF= 1 - Choleski decomposition,
+                  IDECF= 9 - inversion,
+                  IDECF=10 - diagonal matrix.
+  ETA0      I   DOUBLE PRECISION machine precision (the recommended
+                value is 1.0D-15.
+  ETA2      I   DOUBLE PRECISION tolerance for positive definiteness
+                in the Choleski decomposition.
+  ETA9      I   DOUBLE PRECISION maximum floating point number.
+  EPS7      I   DOUBLE PRECISION tolerance for linear independence
+                of constraints (the recommended value is 1.0D-10).
+  EPS9      I   DOUBLE PRECISION tolerance for the definition of active
+                constraints (the recommended value is 1.0D-8).
+  XNORM     O   DOUBLE PRECISION value of the linearized minimax
+                function.
+  UMAX      O   DOUBLE PRECISION maximum absolute value of the negative
+                Lagrange multiplier.
+  GMAX      O   DOUBLE PRECISION infinity norm of the gradient of the
+                Lagrangian function.
+  N         O   INTEGER dimension of a manifold defined by active
+                constraints.
+  ITERQ     O   INTEGER variable that indicates the type of the
+                computed feasible point.
+                  ITERQ= 1 - an arbitrary feasible point was found,
+                  ITERQ= 2 - the optimum feasible point was found,
+                  ITERQ=-1 - an arbitrary feasible point does not
+                             exist,
+                  ITERQ=-2 - the optimum feasible point does not
+                             exist.
+
+5. Form of printed results:
+---------------------------
+      The form of printed results is specified by the parameter IPRNT
+as is described in Section 3. Here we demonstrate individual forms of
+printed results by the simple use of the program TNEWU described in the
+next section (with NEXT=16). If we set IPRNT=1, then the printed results
+will have the form
+
+NIT=  12  NFV=  14  NFG=  14  F= -.84140833D+00  G= .6734D-06  ITERM=  4
+
+If we set IPRNT=-1, then the printed results will have the form
+
+EXIT FROM PNEW :
+NIT=  12  NFV=  14  NFG=  14  F= -.84140833D+00  G= .6734D-06  ITERM=  4
+X= -.1262566D+00 -.3437830D-01 -.6857198D-02  .2636066D-01  .6729492D-01
+   -.2783995D+00  .7421866D-01  .1385240D+00  .8403122D-01  .3858031D-01
+
+If we set IPRNT=2, then the printed results will have the form
+
+ENTRY TO PNEW :
+NIT=   0  NFV=   1  NFG=   1  F=  .00000000D+00  G= .1000D+61
+NIT=   1  NFV=   3  NFG=   3  F=  .53370664D+04  G= .1200D+05
+NIT=   2  NFV=   4  NFG=   4  F=  .66499712D+02  G= .2610D+02
+NIT=   3  NFV=   5  NFG=   5  F=  .33934270D+02  G= .3771D+02
+NIT=   4  NFV=   6  NFG=   6  F=  .12040341D+01  G= .3214D+01
+NIT=   5  NFV=   7  NFG=   7  F=  .51324695D+00  G= .1459D+01
+NIT=   6  NFV=   8  NFG=   8  F= -.76915236D+00  G= .2347D+01
+NIT=   7  NFV=   9  NFG=   9  F= -.83859100D+00  G= .2683D+00
+NIT=   8  NFV=  10  NFG=  10  F= -.84140726D+00  G= .2491D-02
+NIT=   9  NFV=  11  NFG=  11  F= -.84140726D+00  G= .3213D-03
+NIT=  10  NFV=  12  NFG=  12  F= -.84140726D+00  G= .4862D-03
+NIT=  11  NFV=  13  NFG=  13  F= -.84140726D+00  G= .5265D-05
+NIT=  12  NFV=  14  NFG=  14  F= -.84140833D+00  G= .6734D-06
+EXIT FROM PNEW :
+NIT=  12  NFV=  14  NFG=  14  F= -.84140833D+00  G= .6734D-06  ITERM=  4
+
+If we set IPRNT=-2, then the printed results will have the form
+
+ENTRY TO PNEW :
+NIT=   0  NFV=   1  NFG=   1  F=  .00000000D+00  G= .1000D+61
+NIT=   1  NFV=   3  NFG=   3  F=  .53370664D+04  G= .1200D+05
+NIT=   2  NFV=   4  NFG=   4  F=  .66499712D+02  G= .2610D+02
+NIT=   3  NFV=   5  NFG=   5  F=  .33934270D+02  G= .3771D+02
+NIT=   4  NFV=   6  NFG=   6  F=  .12040341D+01  G= .3214D+01
+NIT=   5  NFV=   7  NFG=   7  F=  .51324695D+00  G= .1459D+01
+NIT=   6  NFV=   8  NFG=   8  F= -.76915236D+00  G= .2347D+01
+NIT=   7  NFV=   9  NFG=   9  F= -.83859100D+00  G= .2683D+00
+NIT=   8  NFV=  10  NFG=  10  F= -.84140726D+00  G= .2491D-02
+NIT=   9  NFV=  11  NFG=  11  F= -.84140726D+00  G= .3213D-03
+NIT=  10  NFV=  12  NFG=  12  F= -.84140726D+00  G= .4862D-03
+NIT=  11  NFV=  13  NFG=  13  F= -.84140726D+00  G= .5265D-05
+NIT=  12  NFV=  14  NFG=  14  F= -.84140833D+00  G= .6734D-06
+EXIT FROM PNEW :
+NIT=  12  NFV=  14  NFG=  14  F= -.84140833D+00  G= .6734D-06  ITERM=  4
+X= -.1262566D+00 -.3437830D-01 -.6857198D-02  .2636066D-01  .6729492D-01
+   -.2783995D+00  .7421866D-01  .1385240D+00  .8403122D-01  .3858031D-01
+
+
+6. Verification of the subroutines:
+-----------------------------------
+
+      Subroutine PNEWU can be verified and tested using the program
+TNEWU. This program calls the subroutines TIUD19 (initiation), TFFU19
+(function evaluation) and TFGU19 (subgradient evaluation) containing
+20 academic test problems with at most 50 variables [4]. The results
+obtained by the program TNEWU on a PC computer with Microsoft Power
+Station Fortran compiler have the following form.
+
+NIT=  58  NFV=  59  NFG=  59  F=  .22533111D-15  G= .8624D-05  ITERM=  2
+NIT=   7  NFV=   8  NFG=   8  F=  .16765701D-10  G= .5792D-05  ITERM=  4
+NIT=   9  NFV=  10  NFG=  10  F=  .19522245D+01  G= .2172D-05  ITERM=  4
+NIT=  10  NFV=  11  NFG=  11  F=  .20000068D+01  G= .2161D-04  ITERM=  4
+NIT=  14  NFV=  15  NFG=  15  F= -.30000000D+01  G= .5398D-08  ITERM=  2
+NIT=   4  NFV=   6  NFG=   6  F=  .72000000D+01  G= .1445D-08  ITERM=  4
+NIT=  16  NFV=  17  NFG=  17  F= -.14142136D+01  G= .5653D-07  ITERM=  4
+NIT=  11  NFV=  13  NFG=  13  F= -.10000000D+01  G= .4158D-07  ITERM=  4
+NIT=  10  NFV=  11  NFG=  11  F= -.10000000D+01  G= .4562D-06  ITERM=  4
+NIT=  25  NFV=  26  NFG=  26  F= -.79999999D+01  G= .3813D-02  ITERM=  4
+NIT=  13  NFV=  15  NFG=  15  F= -.44000000D+02  G= .4215D-05  ITERM=  4
+NIT=   7  NFV=   8  NFG=   8  F=  .22600173D+02  G= .1263D-02  ITERM=  4
+NIT=  22  NFV=  24  NFG=  24  F= -.32348679D+02  G= .3409D-02  ITERM=  4
+NIT=  76  NFV=  77  NFG=  77  F= -.29197002D+01  G= .1061D-02  ITERM=  4
+NIT=  89  NFV=  91  NFG=  91  F=  .55981330D+00  G= .1528D-05  ITERM=  4
+NIT=  12  NFV=  14  NFG=  14  F= -.84140833D+00  G= .6734D-06  ITERM=  4
+NIT=  52  NFV=  53  NFG=  53  F=  .97857721D+01  G= .2964D-03  ITERM=  4
+NIT=  40  NFV=  42  NFG=  42  F=  .16703855D+02  G= .1778D+00  ITERM=  4
+NIT=  36  NFV=  37  NFG=  37  F=  .38373702D-08  G= .5758D-08  ITERM=  2
+NIT=  24  NFV=  25  NFG=  25  F=  .45289427D-08  G= .1100D-09  ITERM=  2
+
+The rows corresponding to individual test problems contain the number of
+iterations NIT, the number of function evaluations NFV, the number of
+gradient evaluations NFG, the final value of the objective function F,
+the value of the criterion for the termination G and the cause of
+termination ITERM.
+      Subroutine PNEWL can be verified and tested using the program
+TNEWL. This program calls the subroutines TIUD22 (initiation), TAFU22
+(function evaluation), TAGU22 (subgradient evaluation) containing
+6 academic test problems with at most 20 variables [4]. The results
+obtained by the program TNEWL on a PC computer with Microsoft Power
+Station Fortran compiler have the following form.
+
+NIT=   6  NFV=   7  NFG=   7  F= -.38965952D+00  G= .1650D-07  ITERM=  4
+NIT=   2  NFV=  13  NFG=  13  F= -.33035714D+00  G= .1110D-15  ITERM=  4
+NIT=  49  NFV=  50  NFG=  50  F= -.44891079D+00  G= .1014D-06  ITERM=  4
+NIT=  10  NFV=  11  NFG=  11  F= -.42928061D+00  G= .1269D-03  ITERM=  4
+NIT=   5  NFV=   6  NFG=   6  F= -.18141200D+01  G= .1618D-03  ITERM=  4
+NIT=  20  NFV=  21  NFG=  21  F=  .10183089D+00  G= .2697D-06  ITERM=  4
+NIT=  93  NFV=  98  NFG=  98  F=  .53905532D-03  G= .3304D-06  ITERM=  2
+NIT=   6  NFV=   7  NFG=   7  F=  .24852881D+03  G= .1167D-06  ITERM=  4
+NIT=  10  NFV=  12  NFG=  12  F=  .35240929D+03  G= .6705D-04  ITERM=  4
+NIT=  94  NFV=  98  NFG=  98  F=  .50694800D+00  G= .4083D-06  ITERM=  4
+
+
+References:
+-----------
+
+[1] Luksan L.: Dual Method for Solving a Special Problem of Quadratic
+    Programming as a Subproblem at Linearly Constrained Nonlinear
+    Minimax Approximation. Kybernetika 20 (1984) 445-457.
+
+[2] Luksan L., Vlcek J.: A Bundle-Newton Method for Nonsmooth
+    Unconstrained Minimization. Mathematical Programming.
+
+[3] Luksan L., Vlcek J.: NDA: Algorithms for Nondifferentiable
+    Optimization. Research Report V-797, Institute of Computer Science,
+    Academy of Sciences of the Czech Republic, Prague, Czech Republic,
+    2000.
+
+[4] Luksan L., Vlcek J.: Subroutines for Testing Nonsmooth
+    Unconstrained and Linearly Constrained Optimization Problems.
+    Research Report V-798, Institute of Computer Science,
+    Academy of Sciences of the Czech Republic, Prague, Czech Republic,
+    2000.
+

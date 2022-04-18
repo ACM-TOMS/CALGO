@@ -1,0 +1,207 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage{amsfonts,amssymb}
+\usepackage{graphicx}
+
+\evensidemargin 0cm \oddsidemargin 0cm \topmargin -1cm
+\textheight 23 true cm
+\textwidth 16 true cm
+
+%opening
+
+\title{Documentation and implementation}
+\author{}
+
+\begin{document}
+
+
+
+\maketitle
+
+
+The main files of the package are listed below
+\begin{itemize}
+\item {\tt z=evalArgy(x,y,p)}: {\tt x}, {\tt y} are scalars (or row vectors of
+the same
+length) with the coordinates of a point (or a set of points) where we
+will evaluate the basis functions; {\tt p} is a $2\times 3$ matrix
+that determines the triangle. Its $j$th column are the coordinates
+of the $j$th vertex. The only output argument ({\tt z}) is  a
+$21\times k$ matrix $k$ being the length of ${\tt x}$ or ${\tt y}$,
+where the $i$th row is  the values of the $i$th element of the basis
+at the points given by {\tt x}, {\tt y}.
+
+
+\item {\tt [dx,dy]=evalGradArgy(x,y,p)} returns in {\tt dx},{\tt dy}
+the values of the  $x-$ and $y-$ derivatives of the  elements of the
+local basis of the Argyris element at $({\tt x},{\tt y})$. All the
+input and output arguments follow the convention above.
+
+
+
+\item {\tt [dxx,dxy,dyy]=evalHessArgy(x,y,p)} evaluates
+the second  derivatives of the elements of the Argyris basis at
+$({\tt x},{\tt y})$.
+\end{itemize}
+
+We have some auxiliary routines used in the computations:
+\begin{itemize}
+
+\item {\tt [C,B,b,Th]=changeOfBasis(p)} computes $C$, $B$, ${\bf b}$ and
+$\Theta$, the matrices (and vector) involved in the changes of
+coordinates between the reference triangle and the triangle given by
+{\tt p}.
+
+\item {\tt [zx,zy]=khat2k(x,y,B,b)} returns in ({\tt zx},{\tt zy}) the image
+of points by the linear map $(x,y)^\top \mapsto B (x,y)^\top + b$.
+In our computations, $B$ and ${\bf b}$ are the coefficients of the
+transformation mapping $\widehat K$ to $K$. {\tt
+[zx,zy]=k2khat(x,y,B,b)} computes images with the inverse mapping.
+As before, ${\tt x}$ and ${\tt y}$ can be row vectors.
+\end{itemize}
+
+There is a data file
+\begin{itemize}
+\item {\tt coefRef.dat}: in this file it is saved a $21\times21$
+matrix. The $i$th row contains the coefficients in the monomial
+basis of the $i$th element of the Argyris basis in the reference
+triangle.
+\end{itemize}
+
+This matrix is used by the main routines {\tt evalArgy,
+evalGradArgy, evalHessArgy}. These functions proceed to check at the
+beginning of the code the existence of the variable {\tt coefRef}.
+In case that it has not been declared, the file {\tt coefRef.dat} is
+loaded and stored in a global variable of the same name. Then {\tt
+coefRef} is now defined and becomes accessible for the all the
+routines from now on. Therefore, the file {\tt coefRef.dat} is loaded
+only once per session.
+
+Finally, we have the routine
+\begin{itemize}
+\item {\tt coefRef=reference:}  returns the  array {\tt coefRef} with
+the coefficients of the Argyris basis on the reference triangle.
+This function can be used also to compute the Argyris basis on a
+user-chosen triangle. It requires the symbolic toolbox.
+\end{itemize}
+In practise, there is no need to execute this file since the matrix
+{\tt coefRef} is available as a data file. We have included it here
+for the sake of completeness.
+
+ In the remainder of the section we give some
+details about the implementation of this package, starting with the
+function {\tt changeOfBasis}. The computation of $B$, ${\bf b}$ and
+$\Theta$ is straightforward and is made in an internal function
+called ${\tt afftrans}$. The bulk of the code  is devoted to the
+computation of $C$. We distinguish three parts. The first part
+defines some geometric quantities
+\begin{verbatim}
+      v=[p(:,2)- p(:,1), p(:,3)-p(:,1), p(:,3)-p(:,2)];
+      [B,b,Th]=afftrans(p);
+      sides=diag([norm(v(:,1)),norm(v(:,2)),norm(v(:,3))]);
+      aux=sides^(-2)*[0  1; -1   0; -1/sqrt(2) -1/sqrt(2)]*B';  % see (3)
+      R=[0 -1; 1 0];
+\end{verbatim}
+Next we construct the matrix $D$:
+\begin{verbatim}
+      f=dot(aux',v);
+      g=dot(aux',R*v);
+      D=blkdiag(eye(3),B',B',B',Th,Th,Th,[diag(g) diag(f)]);
+\end{verbatim}
+Note the use of the Matlab command {\tt dot} to compute $f_\alpha$
+and $g_\alpha$ by doing the dot product between the columns of
+appropriate matrices. The command {\tt blkdiag}
+is finally employed to assembly the matrix $D$.
+
+The construction of the  matrix $E$ is done similarly
+\begin{verbatim}
+      E=zeros(24,21);
+      E(1:21,:)=blkdiag(eye(18),sides);
+      E(22:24,1:3)= 15/8*[-1  1 0;  -1  0 1; 0 -1 1];
+      E(22:24,4:9)=-7/16*[v(:,1)' v(:,1)'  0  0;
+                          v(:,2)' 0  0     v(:,2)';...
+                          0  0    v(:,3)'  v(:,3)'];
+      w=[v(1,:).^2; 2*v(1,:).*v(2,:); v(2,:).^2]';
+      E(22:24,10:18)=1/32*[-w(1,:)    w(1,:)    0  0  0;.
+                           -w(2,:)   0  0  0     w(2,:);...
+                           0  0  0   -w(3,:)     w(3,:)];
+\end{verbatim}
+The program finishes by  computing $C$
+\begin{verbatim}
+      C=D*E;
+\end{verbatim}
+
+Function {\tt evalArgy} performs the evaluation of the Argyris
+basis in the triangle specified by {\tt p}. This is done in the
+following lines
+\begin{verbatim}
+      [C,B,b]=changeOfBasis(p);
+      [x,y]=k2khat(x,y,B,b);
+      z=monomials(x,y);
+      z=C'*coefRef*z;
+\end{verbatim}
+The point $(x,y)$ is mapped first into the reference triangle and
+next the elements of the  monomial basis are evaluated at this point
+(note that the $i$th row of {\tt coefRef*z} corresponds to $\widehat
+N_i(x,y)$). The change of basis, and therefore the evaluation of the
+local basis $N_i(x,y)$ in the user-specified triangle, is carried
+out by the left multiplication by {\tt C'}.
+
+This code can be vectorized just by allowing both {\tt x,y} to be
+row vectors of the same length. If  $k$ is the length of {\tt x},
+{\tt y}, {\tt z}, becomes a $21 \times k$ matrix in all the
+occurrences.
+
+To compute the first derivatives we use the chain rule (recall that
+the gradient is seen columnwise)
+\[
+(\nabla N_j({\bf x}))^\top= \sum_{i=1}^n c_{ij} (\nabla
+\widehat{N}_i)^\top \circ F^{-1}({\bf x}) B^{-1}
+\]
+The following lines, which belong to the function {\tt
+evalGradArgy}, evaluate the gradient
+\begin{verbatim}
+      [C,B,b]=changeOfBasis(p);
+      [x,y]=k2khat(x,y,B,b);
+      k=length(x);
+      mx=derx(x,y);
+      my=dery(x,y);
+      grads=zeros(21,2*k);
+      grads(:)=[mx(:) my(:)]/B;
+      grads=C'*coefRef*grads;
+      dx=grads(:,1:k);
+      dy=grads(:,k+1:2*k);
+\end{verbatim}
+Functions {\tt derx}, {\tt dery} return a column vector with the
+derivatives of the monomial basis evaluated at $({\tt x},{\tt y})$.
+The columnwise access to the elements of a matrix in Matlab is used
+here to set {\tt grads} in such a way that after running  the six
+first lines, {\tt grads} has in the first  $k$ columns
+$\partial_x(m_i\circ F^{-1})(x_j,y_j)$ (here $m_{i}$ denotes the
+$i$th element of the basis of monomials and $F$ the affine mapping
+from $\widehat{K}$ onto $K$) whereas $\partial_y(m_i\circ
+F^{-1})(x_j,y_j)$ are stored in the last $k$ columns.  Finally,
+left multiplication by {\tt coefRef} and {\tt C'} makes the change of
+basis.
+
+
+The evaluation of the second derivatives, which is done in {\tt
+evalHessArgy}, is implemented in the same manner:
+\begin{verbatim}
+      [C,B,b,Th]=changeOfBasis(p);
+      [x,y]=k2khat(x,y,B,b);
+      k=length(x);
+      mxx=derxx(x,y);
+      mxy=derxy(x,y);
+      myy=deryy(x,y);
+      hessian=zeros(21,3*k);
+      hessian(:)=[mxx(:) mxy(:) myy(:)]/Th';
+      hessian=C'*coefRef*hessian;
+      dxx=hessian(:,1:k);
+      dxy=hessian(:,k+1:2*k);
+      dyy=hessian(:,2*k+1:3*k);
+\end{verbatim}
+
+
+
+
+\end{document}

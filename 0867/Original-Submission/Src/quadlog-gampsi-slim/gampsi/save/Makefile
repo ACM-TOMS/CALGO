@@ -1,0 +1,2149 @@
+#=======================================================================
+# Makefile for files in /u/sy/beebe/jim-ball/toms/dist/gampsi
+#
+# Current target list:
+#	all			make everything
+#
+#	all-dp			make double-precision targets
+#	all-qp			make quadruple-precision targets
+#	all-sp			make single-precision targets
+#
+#	check			run complete validation suite
+#
+#	check-afpmx		run afpmx validation suite
+#
+#	check-algam		run all algam validation suites
+#	check-algam0		run algam validation suite 0
+#	check-algam1		run algam validation suite 1
+#	check-algam2		run algam validation suite 2
+#
+#	check-alog		run all alog validation suites
+#	check-alog0		run alog validation suite 0
+#	check-alog1		run alog validation suite 1
+#
+#	check-cos		run all cos validation suites
+#	check-cos0		run cos validation suite 0
+#	check-cos1		run cos validation suite 1
+#	check-cos2		run cos validation suite 2
+#
+#	check-dcos		run all dcos validation suites
+#	check-dcos0		run dcos validation suite 0
+#	check-dcos1		run dcos validation suite 1
+#	check-dcos2		run dcos validation suite 2
+#
+#	check-delefun		run double-precision elementary function tests
+#
+#	check-dexp		run all dexp validation suites
+#	check-dexp0		run dexp validation suite 0
+#	check-dexp1		run dexp validation suite 1
+#
+#	check-dfpmx		run dfpmx validation suite
+#
+#	check-dgamma		run all gamma validation suites
+#	check-dgamma0		run gamma validation suite 0
+#	check-dgamma1		run gamma validation suite 1
+#	check-dgamma3		run gamma validation suite 3
+#	check-dgamma4		run gamma validation suite 4
+#
+#	check-dlgam		run all dlgam validation suites
+#	check-dlgam0		run dlgam validation suite 0
+#	check-dlgam1		run dlgam validation suite 1
+#	check-dlgam2		run dlgam validation suite 2
+#
+#	check-dlog		run all dlog validation suites
+#	check-dlog0		run dlog validation suite 0
+#	check-dlog1		run dlog validation suite 1
+#
+#	check-dp		run all double-precision tests
+#
+#	check-dpsi		run all psi validation suites
+#	check-dpsi0		run psi validation suite 0
+#	check-dpsi1		run psi validation suite 1
+#	check-dpsi2		run psi validation suite 2
+#	check-dpsi3		run psi validation suite 3
+#	check-dpsi4		run psi validation suite 4
+#	check-dpsi5		run psi validation suite 5
+#	check-dpsi6		run psi validation suite 6
+#
+#	check-dpsiln		run all dpsiln validation suites
+#	check-dpsiln0		run dpsiln validation suite 0
+#	check-dpsiln1		run dpsiln validation suite 1
+#	check-dpsiln2		run dpsiln validation suite 2
+#
+#	check-dsin		run all dsin validation suites
+#	check-dsin0		run dsin validation suite 0
+#	check-dsin1		run dsin validation suite 1
+#	check-dsin2		run dsin validation suite 2
+#
+#	check-dtan		run all dtan validation suites
+#	check-dtan0		run dtan validation suite 0
+#	check-dtan1		run dtan validation suite 1
+#	check-dtan2		run dtan validation suite 2
+#
+#	check-elefun		run single-precision elementary function tests
+#
+#	check-exp		run all exp validation suites
+#	check-exp0		run exp validation suite 0
+#	check-exp1		run exp validation suite 1
+#
+#	check-gamma		run all gamma validation suites
+#	check-gamma0		run gamma validation suite 0
+#	check-gamma1		run gamma validation suite 1
+#	check-gamma3		run gamma validation suite 3
+#
+#	check-monotonicity	run all monotonicity checks
+#	check-monotonicity-dp	run double-precision monotonicity checks
+#	check-monotonicity-qp	run quadruple-precision monotonicity checks
+#	check-monotonicity-sp	run single-precision monotonicity checks
+#
+#	check-psi		run all psi validation suites
+#	check-psi0		run psi validation suite 0
+#	check-psi1		run psi validation suite 1
+#	check-psi2		run psi validation suite 2
+#	check-psi3		run psi validation suite 3
+#	check-psi4		run psi validation suite 4
+#	check-psi5		run psi validation suite 5
+#	check-psi6		run psi validation suite 6
+#
+#	check-psiln		run all psiln validation suites
+#	check-psiln0		run psiln validation suite 0
+#	check-psiln1		run psiln validation suite 1
+#	check-psiln2		run psiln validation suite 2
+#
+#	check-qcos		run all qcos validation suites
+#	check-qcos0		run qcos validation suite 0
+#	check-qcos1		run qcos validation suite 1
+#	check-qcos2		run qcos validation suite 2
+#
+#	check-qelefun		run quadruple-precision elementary function tests
+#
+#	check-qexp		run all qexp validation suites
+#	check-qexp0		run qexp validation suite 0
+#	check-qexp1		run qexp validation suite 1
+#	check-qexp2		run qexp validation suite 2
+#
+#	check-qfpmx		run qfpmx validation suite
+#
+#	check-qgamma		run all qgamma validation suites
+#	check-qgamma0		run qgamma validation suite 0
+#	check-qgamma1		run qgamma validation suite 1
+#	check-qgamma2		run qgamma validation suite 2
+#	check-qgamma3		run qgamma validation suite 3
+#	check-qgamma4		run qgamma validation suite 4
+#
+#	check-qlgam		run all qlgam validation suites
+#	check-qlgam0		run qlgam validation suite 0
+#	check-qlgam1		run qlgam validation suite 1
+#	check-qlgam2		run qlgam validation suite 2
+#	check-qlgam3		run qlgam validation suite 3
+#
+#	check-qlog		run all qlog validation suites
+#	check-qlog0		run qlog validation suite 0
+#	check-qlog1		run qlog validation suite 1
+#	check-qlog2		run qlog validation suite 2
+#
+#	check-qp		run all quadruple-precision tests
+#
+#	check-qp-double		run limited quadruple-precision tests
+#
+#	check-qpsi		run all qpsi validation suites
+#	check-qpsi0		run qpsi validation suite 0
+#	check-qpsi1		run qpsi validation suite 1
+#	check-qpsi2		run qpsi validation suite 2
+#	check-qpsi3		run qpsi validation suite 3
+#	check-qpsi4		run qpsi validation suite 4
+#	check-qpsi5		run qpsi validation suite 5
+#	check-qpsi6		run qpsi validation suite 6
+#
+#	check-qpsiln		run all qpsiln validation suites
+#	check-qpsiln0		run qpsiln validation suite 0
+#	check-qpsiln1		run qpsiln validation suite 1
+#	check-qpsiln2		run qpsiln validation suite 2
+#
+#	check-qsin		run all qsin validation suites
+#	check-qsin0		run qsin validation suite 0
+#	check-qsin1		run qsin validation suite 1
+#	check-qsin2		run qsin validation suite 2
+#
+#	check-qtan		run all qtan validation suites
+#	check-qtan0		run qtan validation suite 0
+#	check-qtan1		run qtan validation suite 1
+#	check-qtan2		run qtan validation suite 2
+#
+#	check-sin		run all sin validation suites
+#	check-sin0		run sin validation suite 0
+#	check-sin1		run sin validation suite 1
+#	check-sin2		run sin validation suite 2
+#
+#	check-sp		run all single-precision tests
+#
+#	check-tan		run all tan validation suites
+#	check-tan0		run tan validation suite 0
+#	check-tan1		run tan validation suite 1
+#	check-tan2		run tan validation suite 2
+#
+#	check-tmgam		run tmgam validation suite
+#	check-tmpsi		run tmpsi validation suite
+#	check-tmdgam		run tmdgam validation suite
+#	check-tmdpsi		run tmdpsi validation suite
+#	check-tmqgam		run tmqgam validation suite
+#	check-tmqpsi		run tmqpsi validation suite
+#
+#	check-warning		print warning message to prefix tests
+#
+#	check-xgamma		run psi validation suite
+#	check-xpsi		run psi validation suite
+#
+#	check-xxx		internal target: do not use
+#	check-xxx-dp		internal target: do not use
+#	check-xxx-qp		internal target: do not use
+#	check-xxx-sp		internal target: do not use
+#
+#	clean			remove unneeded intermediate files
+#	clean-test		remove unneeded test output files
+#	clobber			same as distclean
+#	configure		fixup configure script
+#	delefun			build double-precision elementary function test
+#	dist			make distribution archive
+#	distclean		remove almost everything make can rebuild
+#				(paring back to the original distribution)
+#	elefun			build single-precision elementary function test
+#	FRC			dummy target to force others to be remade
+#	install			install files on local system
+#	maintainer-clean	remove absolutely everything make can rebuild
+#				at the author's site (do NOT use this target)
+#	makdat			build plot data filter
+#	maple			make maple programs for high-precision
+#				function evaluation
+#	mostlyclean		same as clean
+#
+#	plot-relerr-alog	make plots of all alog tests
+#	plot-relerr-alog1	make plots of alog test 1
+#
+#	plot-relerr-cos		make plots of all cos tests
+#	plot-relerr-cos1	make plots of cos test 1
+#	plot-relerr-cos2	make plots of cos test 2
+#
+#	plot-relerr-dcos	make plots of all dcos tests
+#	plot-relerr-dcos1	make plots of dcos test 1
+#	plot-relerr-dcos2	make plots of dcos test 2
+#
+#	plot-relerr-dexp	make plots of all dexp tests
+#	plot-relerr-dexp1	make plots of dexp test 1
+#	plot-relerr-dexp2	make plots of dexp test 2
+#
+#	plot-relerr-dgamma	make plots of all dgamma tests
+#	plot-relerr-dgamma1	make plots of dgamma test 1
+#	plot-relerr-dgamma3	make plots of dgamma test 3
+#
+#	plot-relerr-dlog	make plots of all dlog tests
+#	plot-relerr-dlog1	make plots of dlog test 1
+#
+#	plot-relerr-dp		make plots of all double-precision tests
+#
+#	plot-relerr-dpsi	make plots of all dpsi tests
+#	plot-relerr-dpsi1	make plots of dpsi test 1
+#	plot-relerr-dpsi2	make plots of dpsi test 2
+#	plot-relerr-dpsi3	make plots of dpsi test 3
+#	plot-relerr-dpsi4	make plots of dpsi test 4
+#	plot-relerr-dpsi5	make plots of dpsi test 5
+#	plot-relerr-dpsi6	make plots of dpsi test 6
+#
+#	plot-relerr-dpsiln	make plots of all dpsiln tests
+#	plot-relerr-dpsiln1	make plots of dpsiln test 1
+#	plot-relerr-dpsiln2	make plots of dpsiln test 2
+#
+#	plot-relerr-dsin	make plots of all dsin tests
+#	plot-relerr-dsin1	make plots of dsin test 1
+#	plot-relerr-dsin2	make plots of dsin test 2
+#
+#	plot-relerr-dtan	make plots of all dtan tests
+#	plot-relerr-dtan1	make plots of dtan test 1
+#	plot-relerr-dtan2	make plots of dtan test 2
+#
+#	plot-relerr-exp		make plots of all exp tests
+#	plot-relerr-exp1	make plots of exp test 1
+#
+#	plot-relerr-gamma	make plots of all gamma tests
+#	plot-relerr-gamma1	make plots of gamma test 1
+#	plot-relerr-gamma3	make plots of gamma test 3
+#
+#	plot-relerr-psi		make plots of all psi tests
+#	plot-relerr-psi1	make plots of psi test 1
+#	plot-relerr-psi2	make plots of psi test 2
+#	plot-relerr-psi3	make plots of psi test 3
+#	plot-relerr-psi4	make plots of psi test 4
+#	plot-relerr-psi5	make plots of psi test 5
+#	plot-relerr-psi6	make plots of psi test 6
+#
+#	plot-relerr-psiln	make plots of all psiln tests
+#	plot-relerr-psiln1	make plots of psiln test 1
+#	plot-relerr-psiln2	make plots of psiln test 2
+#
+#	plot-relerr-qcos	make plots of all qcos tests
+#	plot-relerr-qcos1	make plots of qcos test 1
+#	plot-relerr-qcos2	make plots of qcos test 2
+#
+#	plot-relerr-qexp	make plots of all qexp tests
+#	plot-relerr-qexp1	make plots of qexp test 1
+#	plot-relerr-qexp2	make plots of qexp test 2
+#
+#	plot-relerr-qgamma	make plots of all qgamma tests
+#	plot-relerr-qgamma1	make plots of qgamma test 1
+#	plot-relerr-qgamma2	make plots of qgamma test 2
+#	plot-relerr-qgamma3	make plots of qgamma test 3
+#	plot-relerr-qgamma4	make plots of qgamma test 4
+#
+#	plot-relerr-qlog	make plots of all qlog tests
+#	plot-relerr-qlog1	make plots of qlog test 1
+#	plot-relerr-qlog2	make plots of qlog test 2
+#
+#	plot-relerr-qp		make plots of all quadruple-precision tests
+#
+#	plot-relerr-qpsi	make plots of all qp tests
+#	plot-relerr-qpsi1	make plots of qpsi test 1
+#	plot-relerr-qpsi2	make plots of qpsi test 2
+#	plot-relerr-qpsi3	make plots of qpsi test 3
+#	plot-relerr-qpsi4	make plots of qpsi test 4
+#	plot-relerr-qpsi5	make plots of qpsi test 5
+#	plot-relerr-qpsi6	make plots of qpsi test 6
+#
+#	plot-relerr-qpsiln	make plots of all qpsiln tests
+#	plot-relerr-qpsiln1	make plots of qpsiln test 1
+#	plot-relerr-qpsiln2	make plots of qpsiln test 2
+#
+#	plot-relerr-qsin	make plots of all qsin tests
+#	plot-relerr-qsin1	make plots of qsin test 1
+#	plot-relerr-qsin2	make plots of qsin test 1
+#
+#	plot-relerr-qtan	make plots of all qtan tests
+#	plot-relerr-qtan1	make plots of qtan test 1
+#	plot-relerr-qtan2	make plots of qtan test 1
+#
+#	plot-relerr-sin		make plots of all sin tests
+#	plot-relerr-sin1	make plots of sin test 1
+#	plot-relerr-sin2	make plots of sin test 1
+#
+#	plot-relerr-sp		make plots of all single-precision tests
+#
+#	plot-relerr-tan		make plots of all sp tests
+#	plot-relerr-tan1	make plots of tan test 1
+#	plot-relerr-tan2	make plots of tan test 1
+#
+#	plot-relerr-xxx		internal target: do not use
+#	plot-relerr-xxx-dp	internal target: do not use
+#	plot-relerr-xxx-qp	internal target: do not use
+#	plot-relerr-xxx-sp	internal target: do not use
+#
+#	qelefun			build quadruple-precision elementary function xxx test
+#	tafpmx			build test of afpmx()
+#	tagen			build single-precision test data generator
+#	tdfpmx			build test of dfpmx()
+#	tdfpmx.o		object file
+#	tdgen			build double-precision test data generator
+#	tdgen.o			object file
+#	tdgen2			build double-precision I/O-free test data
+#				generator
+#	tdgen2-timing		build double-precision function timing test
+#	tmdgam			build double-precision monotonicity test: dgamma()
+#	tmdpsi			build double-precision monotonicity test: dpsi()
+#	tmgam			build single-precision monotonicity test: gamma()
+#	tmpsi			build single-precision monotonicity test: psi()
+#	tmqgam			build double-precision monotonicity test: qgamma()
+#	tmqpsi			build double-precision monotonicity test: qpsi()
+#	tqfpmx			build test of qfpmx()
+#	tqfpmx.o		object file
+#	tqgen			build quadruple-precision test data generator
+#	tqgen.o			object file
+#	tqgen2			build quadruple-precision I/O-free test data
+#				generator
+#	tqgen2-timing		build double-precision function timing test
+#	txgam			build test of alternate version of dgamma()
+#	txpsi			build test of alternate version of dpsi()
+#	uninstall		remove files installed by "make install"
+#
+# [01-Aug-2000]
+#=======================================================================
+
+#=======================================================================
+# Macro definitions
+
+AUTOCONF	= autoconf
+
+AWK		= awk
+
+CC		= gcc
+
+CHMOD		= chmod
+
+CMP		= cmp
+
+DIFF		= diff
+
+# This is a (wildcarded) list of files that go into the official
+# distribution of this package, relative to two directory levels
+# higher
+DISTFILES       = $(DISTSLIM) \
+		  dist/gampsi/test
+
+DISTSLIM	= dist/gampsi.h \
+		  dist/common/MKDIRS \
+		  dist/common/README \
+		  dist/common/*.f \
+		  dist/common/*.in \
+		  dist/common/*.inc \
+		  dist/common/*.pch \
+		  dist/common/*.pgi \
+		  dist/common/*.sh \
+		  dist/common/*.sok \
+		  dist/common/configure \
+		  dist/common/save \
+		  dist/gampsi/MKDIRS \
+		  dist/gampsi/README \
+		  dist/gampsi/*.awk \
+		  dist/gampsi/*.c \
+		  dist/gampsi/*.f \
+		  dist/gampsi/*.in \
+		  dist/gampsi/*.pch \
+		  dist/gampsi/*.sed \
+		  dist/gampsi/*.sh \
+		  dist/gampsi/*.sok \
+		  dist/gampsi/configure \
+		  dist/gampsi/maple/*.awk \
+		  dist/gampsi/maple/*.map \
+		  dist/gampsi/maple/Makefile \
+		  dist/gampsi/save
+
+
+FC		= f77
+
+GREP		= grep
+
+GZIP		= gzip
+
+LDFLAGS		= 
+
+# We include this value in all load commands, because sometimes
+# special compilation options require additional libraries; normally,
+# none are needed.
+LIBS		= 
+
+LS		= ls
+
+MAPLE		= mapleV5.1
+
+MV		= mv
+
+# This script will use ndiff if it is available in the search path,
+# and will otherwise fall back to using diff.
+NDIFF		= `$(WHICH) ndiff`
+
+NDIFFFLAGS	= --relerr $(RELERR) --minwidth 10
+
+PLOTRELERR	= $(TIME) ./plot-relerr.sh
+
+# This is the relative error tolerance used in the check target.
+# It can be redefined on the make command line if desired.
+#
+# The maximum relative error in this implementation of the dgamma()
+# function is about 1.32e-13, and in the dpsi() function, 3.34e-16.
+# Setting RELERRxx larger than these reduces output from ndiff to just
+# the "### Maximum ... error ..." lines.
+
+RELERRDP	= 5.0e-11
+
+RELERRQP	= 5.0e-27
+
+RELERRSP	= 5.0e-04
+
+RELERR		= $(RELERRDP)
+
+RM		= rm -f
+
+SED		= sed
+
+SHELL		= /bin/sh
+
+TAR		= tar
+
+TEST		= test
+
+TIME		= time
+
+# We use our own private version of the `which' command, because
+# system implementations of `which' have inconsistent behavior.
+WHICH		= $(COMMON)/which.sh
+
+#=======================================================================
+# Compiler and other program flags.
+
+CDEFS		=
+
+CEXTRA		= 
+
+CFLAGS		=  $(COPT) $(CINC) $(CWARN) $(CDEFS) $(CEXTRA)
+
+CINC		=
+
+COMMON		= ../common
+
+COPT		= -O
+
+CWARN		=
+
+DIFFFLAGS	= -w -i -b
+
+FEXTRA		= 
+
+FFLAGS		= -u $(FOPT) $(FINC) $(FWARN) $(FEXTRA)
+
+FINC		= -I$(COMMON)
+
+FOPT		= -O
+
+FWARN		=
+
+RUNFLAGS	= 
+
+#=======================================================================
+# Test files.  A base set of test files serves for all supported
+# precisions; additional test files handle the greater precision and
+# range of higher precisions, and test files matching [a-z]+[0-9]1[0-9]
+# are for the lower precision and range of single precision.
+
+CHECKAFPMX	= afpm01
+
+CHECKALOG0	= log001
+
+CHECKCOS0	= cos001
+
+CHECKCOS1	= cos101 cos102 cos103
+
+CHECKCOS1S	= cos111 cos112 cos113
+
+CHECKCOS2	= cos201
+
+CHECKCOS2S	= cos211
+
+CHECKDCOS0	= cos001
+
+CHECKDEXP0	= exp001
+
+CHECKDFPMX	= dfpm01
+
+CHECKDGAMMA0	= gam001
+
+CHECKDLOG0	= log001
+
+CHECKDPSI0	= psi001 psi002 psi003 psi006
+
+CHECKDSIN0	= sin001
+
+CHECKDTAN0	= tan001
+
+CHECKEXP0	= exp001
+
+CHECKEXP1	= exp101
+
+CHECKEXP1S	= exp111
+
+CHECKEXP2	= exp201
+
+CHECKFILES	= no-such-file
+
+CHECKGAM0	= gam001
+
+CHECKGAM1	= gam101 gam102 gam103
+
+CHECKGAM1S	= gam111 gam112 gam113
+
+CHECKGAM2	= gam201
+
+CHECKGAM3	= gam301
+
+CHECKGAM3S	= gam311
+
+CHECKGAM4	= gam401
+
+CHECKLGAM0	= lga001
+
+CHECKLGAM1	= lga101 lga102 lga103
+
+CHECKLGAM1S	= lga111 lga112 lga113
+
+CHECKLGAM2	= lga201
+
+CHECKLGAM2S	= lga211
+
+CHECKLGAM3	= lga301
+
+CHECKLOG1	= log101 log102 log103
+
+CHECKLOG1S	= log111 log112 log113
+
+CHECKLOG2	= log201
+
+CHECKPSI0	= psi001 psi002 psi003 psi005
+
+CHECKPSI1	= psi101 psi102 psi103 psi104 psi105 psi106 psi107
+
+CHECKPSI1S	= psi111 psi112 psi113 psi114 psi115 psi116 psi117
+
+CHECKPSI2	= psi201
+
+CHECKPSI2S	= psi211
+
+CHECKPSI3	= psi301
+
+CHECKPSI3S	= psi311
+
+CHECKPSI4	= psi401 psi402
+
+CHECKPSI4S	= psi411 psi412
+
+CHECKPSI5	= psi501 psi502
+
+CHECKPSI5S	= psi511 psi512
+
+CHECKPSI6	= psi601 psi602
+
+CHECKPSI6S	= psi611 psi612
+
+CHECKPSILN0	= pln001
+
+CHECKPSILN1	= pln101
+
+CHECKPSILN1S	= pln111
+
+CHECKPSILN2	= pln201
+
+CHECKPSILN2S	= pln211
+
+CHECKQCOS0	= cos001
+
+CHECKQEXP0	= exp001
+
+CHECKQFPMX	= qfpm01
+
+CHECKQGAMMA0	= gam001
+
+CHECKQLOG0	= log001
+
+CHECKQPSI0	= psi001 psi002 psi004 psi007
+
+CHECKQSIN0	= sin001
+
+CHECKQTAN0	= tan001
+
+CHECKSIN0	= sin001
+
+CHECKSIN1	= sin101 sin102 sin103
+
+CHECKSIN1S	= sin111 sin112 sin113
+
+CHECKSIN2	= sin201
+
+CHECKSIN2S	= sin211
+
+CHECKTAN0	= tan001
+
+CHECKTAN1	= tan101 tan102
+
+CHECKTAN1S	= tan111 tan112
+
+CHECKTAN2	= tan201
+
+CHECKTAN2S	= tan211
+
+TESTNAME	= no-such-test
+
+#=======================================================================
+# Object files.
+
+AGENOBJS        = agen.o $(COMMON)/ainf.o $(COMMON)/airan.o $(COMMON)/anan.o \
+		  $(COMMON)/astorf.o $(COMMON)/iceil.o $(COMMON)/isanan.o \
+		  $(COMMON)/ran.o
+
+AGEN2OBJS       = agen2.o $(COMMON)/ainf.o $(COMMON)/airan.o $(COMMON)/anan.o \
+		  $(COMMON)/astore.o $(COMMON)/astorf.o $(COMMON)/iceil.o \
+		  $(COMMON)/isanan.o $(COMMON)/ran.o
+
+DGENOBJS        = dgen.o $(COMMON)/dfloat.o $(COMMON)/dinf.o \
+		  $(COMMON)/diran.o $(COMMON)/dnan.o $(COMMON)/dran.o \
+		  $(COMMON)/dstorf.o $(COMMON)/idceil.o $(COMMON)/isdnan.o
+
+DGEN2OBJS       = dgen2.o $(COMMON)/dfloat.o $(COMMON)/dinf.o \
+		  $(COMMON)/diran.o $(COMMON)/dnan.o $(COMMON)/dran.o \
+		  $(COMMON)/dstore.o $(COMMON)/dstorf.o $(COMMON)/idceil.o \
+		  $(COMMON)/isdnan.o
+
+DTESTPROGS      = tdgen
+
+MISCPROGS       = delefun elefun makdat qelefun tafpmx tdfpmx tmdgam tmdpsi \
+		  tmgam tmpsi tmqgam tmqpsi tqfpmx
+
+QGENOBJS        = qgen.o $(COMMON)/dfloat.o $(COMMON)/diran.o \
+		  $(COMMON)/dran.o $(COMMON)/dstorf.o $(COMMON)/iqceil.o \
+		  $(COMMON)/isqnan.o $(COMMON)/qfloat.o $(COMMON)/qinf.o \
+		  $(COMMON)/qnan.o $(COMMON)/qstorf.o
+
+QGEN2OBJS       = qgen2.o $(COMMON)/dfloat.o $(COMMON)/diran.o \
+		  $(COMMON)/dran.o $(COMMON)/dstorf.o $(COMMON)/iqceil.o \
+		  $(COMMON)/isqnan.o $(COMMON)/qfloat.o $(COMMON)/qinf.o \
+		  $(COMMON)/qnan.o $(COMMON)/qstore.o $(COMMON)/qstorf.o
+
+# These are not normally built, because quadruple-precision support
+# is not universally available:
+QTESTPROGS      = tqgen
+
+STESTPROGS      = tagen
+
+TAFPMXOBJS      = tafpmx.o $(COMMON)/afpmax.o $(COMMON)/astore.o
+
+# NB: psiln() does internal computations in double precision, so we need
+# dfloat.o and idceil.o here:
+TAGENOBJS       = tagen.o funhdr.o $(AGENOBJS) $(COMMON)/algam.o \
+		  $(COMMON)/dfloat.o $(COMMON)/gamma.o $(COMMON)/idceil.o \
+		  $(COMMON)/psi.o $(COMMON)/psiln.o
+
+TAGEN2OBJS      = tagen.o funhdr.o $(AGEN2OBJS) $(COMMON)/algam.o \
+		  $(COMMON)/dfloat.o $(COMMON)/gamma.o $(COMMON)/idceil.o \
+		  $(COMMON)/psi.o $(COMMON)/psiln.o
+
+TDFPMXOBJS      = tdfpmx.o $(COMMON)/dfpmax.o $(COMMON)/dstore.o
+
+TDGENOBJS       = tdgen.o funhdr.o $(DGENOBJS) $(COMMON)/dgamma.o \
+		  $(COMMON)/dlgam.o $(COMMON)/dpsi.o $(COMMON)/dpsiln.o
+
+TDGEN2OBJS      = tdgen.o funhdr.o $(DGEN2OBJS) $(COMMON)/dgamma.o \
+		  $(COMMON)/dlgam.o $(COMMON)/dpsi.o $(COMMON)/dpsiln.o
+
+TMDGAMOBJS	= tmdgam.o $(COMMON)/dfloat.o $(COMMON)/dinf.o \
+		  $(COMMON)/diran.o $(COMMON)/dnan.o $(COMMON)/dran.o \
+		  $(COMMON)/dstorf.o $(COMMON)/isdnan.o $(COMMON)/dgamma.o
+
+TMDPSIOBJS	= tmdpsi.o $(COMMON)/dfloat.o $(COMMON)/dinf.o \
+		  $(COMMON)/diran.o $(COMMON)/dnan.o $(COMMON)/dran.o \
+		  $(COMMON)/dstorf.o $(COMMON)/isdnan.o $(COMMON)/dpsi.o
+
+TMGAMOBJS	= tmgam.o $(COMMON)/ainf.o \
+		  $(COMMON)/airan.o $(COMMON)/anan.o $(COMMON)/ran.o \
+		  $(COMMON)/astorf.o $(COMMON)/isanan.o $(COMMON)/gamma.o
+
+TMPSIOBJS	= tmpsi.o $(COMMON)/ainf.o \
+		  $(COMMON)/airan.o $(COMMON)/anan.o $(COMMON)/ran.o \
+		  $(COMMON)/astorf.o $(COMMON)/isanan.o $(COMMON)/psi.o
+
+TMQGAMOBJS	= tmqgam.o $(COMMON)/qfloat.o $(COMMON)/dinf.o \
+		  $(COMMON)/diran.o $(COMMON)/qnan.o $(COMMON)/dran.o \
+		  $(COMMON)/qstorf.o $(COMMON)/isqnan.o $(COMMON)/qgamma.o \
+		  $(COMMON)/qinf.o $(COMMON)/dstorf.o
+
+TMQPSIOBJS      = tmqpsi.o $(COMMON)/qfloat.o $(COMMON)/dinf.o \
+		  $(COMMON)/diran.o $(COMMON)/qnan.o $(COMMON)/dran.o \
+		  $(COMMON)/qstorf.o $(COMMON)/isqnan.o $(COMMON)/qpsi.o \
+		  $(COMMON)/qinf.o $(COMMON)/dstorf.o
+
+TQFPMXOBJS      = tqfpmx.o $(QGENOBJS) $(COMMON)/qfpmax.o $(COMMON)/qstore.o
+
+TQGENOBJS       = tqgen.o funhdr.o $(QGENOBJS) $(COMMON)/qgamma.o \
+		  $(COMMON)/qlgam.o $(COMMON)/qpsi.o $(COMMON)/qpsiln.o
+
+TQGEN2OBJS      = tqgen.o funhdr.o $(QGEN2OBJS) $(COMMON)/qgamma.o \
+		  $(COMMON)/qlgam.o $(COMMON)/qpsi.o $(COMMON)/qpsiln.o
+
+TXGAMOBJS       = tdgen.o $(DGENOBJS) $(COMMON)/xgamma.o $(COMMON)/dlog2.o
+
+TXPSIOBJS       = tdgen.o $(DGENOBJS) $(COMMON)/xpsi.o $(COMMON)/dlog2.o
+
+# These are not normally built, because they are an experiment to
+# see if quadruple-precision code can masquerade as double-precision
+# with better accuracy (xgamma.f vs. qgamma.f, xpsi.f vs. qpsi.f)
+XTESTPROGS	= txgam txpsi tagen2 tdgen2 tqgen2
+
+#=======================================================================
+# Default plot options:
+
+ABSERR		=
+
+FUNCTION	= no-such-function
+
+LOGX		=
+
+MACHID		=
+
+XFORMAT		= %g
+
+XRANGE		=
+
+YFORMAT		= %.0f
+
+YRANGE		= no-such-range
+
+YRANGEDP	= -20:-12
+
+YRANGEQP	= -38:-28
+
+YRANGESP	= -12:-4
+
+#=======================================================================
+# Suffixes and extra rule(s)
+
+.SUFFIXES:	.s .i .c .f
+
+# Preprocessor output:
+.c.i:
+	$(CC) $(CFLAGS) -E $< > $@
+
+# Assembly code:
+.c.s:
+	$(CC) $(CFLAGS) -S $<
+
+# Object code (an explicit "-o $*.o" makes compilations in ../common work properly!)
+.f.o:
+	$(FC) $(FFLAGS) -c -o $*.o $<
+
+# Assembly code:
+.f.s:
+	$(FC) $(FFLAGS) -S $<
+
+#=======================================================================
+# Targets:
+
+# NB: Target all-qp is excluded here, because some systems lack
+# support for quadruple-precision arithmetic.
+all:	all-dp all-sp
+
+all-dp:	lib-dp $(DTESTPROGS)
+
+all-qp:	lib-qp $(QTESTPROGS)
+
+all-sp:	lib-sp $(STESTPROGS)
+
+check:	all
+	@if $(TEST) -d test ; \
+	then \
+		$(MAKE) -k -s check-warning check-dp ; \
+	else \
+		$(MAKE) check-unavailable ; \
+	fi
+
+check-afpmx:     tafpmx
+	$(MAKE) -s check-xxx RELERR=$(RELERRSP) TESTNAME=tafpmx CHECKFILES="$(CHECKAFPMX)"
+
+#-----------------------------------------------------------------------
+
+check-algam:	check-algam0 check-algam1 check-algam2
+
+check-algam0:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKLGAM0)"
+
+check-algam1:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKLGAM1S)"
+
+check-algam2:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKLGAM2S)"
+
+#-----------------------------------------------------------------------
+
+check-alog:	check-alog0 check-alog1
+
+check-alog0:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKALOG0)"
+
+check-alog1:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKLOG1S)"
+
+#-----------------------------------------------------------------------
+
+check-delefun:	delefun elefun.sed
+	@if $(TEST) -d test ; \
+	then \
+		./delefun $(RUNFLAGS) | $(SED) -f elefun.sed > test/delefun.out ; \
+		$(DIFF) $(DIFFFLAGS) test/delefun.out test/okay/delefun.out && \
+			$(RM) test/delefun.out ; \
+	else \
+		$(MAKE) check-unavailable ; \
+	fi
+
+check-dp:
+	@if $(TEST) -d test ; \
+	then \
+		$(MAKE) -k -s \
+			check-dcos check-delefun check-dexp check-dfpmx \
+			check-dgamma check-dlgam check-dlog check-dpsi check-dpsiln \
+			check-dsin check-dtan ; \
+	else \
+		$(MAKE) check-unavailable ; \
+	fi
+
+check-elefun:	elefun elefun.sed
+	@if $(TEST) -d test ; \
+	then \
+		./elefun $(RUNFLAGS) | $(SED) -f elefun.sed > test/elefun.out ; \
+		$(DIFF) $(DIFFFLAGS) test/elefun.out test/okay/elefun.out && \
+			$(RM) test/elefun.out ; \
+	else \
+		$(MAKE) check-unavailable ; \
+	fi
+
+#-----------------------------------------------------------------------
+
+# Monotonicity checks: these are not run as part of "make check", because
+# there is no expectation that the output will be almost identical from
+# machine to machine.  The tests do, however, show where there are
+# monotonicity failures.
+
+check-monotonicity:	check-monotonicity-dp check-monotonicity-sp
+
+check-monotonicity-dp:	check-tmdgam check-tmdpsi
+
+check-monotonicity-qp:	check-tmqgam check-tmqpsi
+
+check-monotonicity-sp:	check-tmgam check-tmpsi
+
+#-----------------------------------------------------------------------
+
+check-qelefun:	qelefun elefun.sed
+	@if $(TEST) -d test ; \
+	then \
+		./qelefun $(RUNFLAGS) | $(SED) -f elefun.sed > test/qelefun.out ; \
+		$(DIFF) $(DIFFFLAGS) test/qelefun.out test/okay/qelefun.out && \
+			$(RM) test/qelefun.out ; \
+	else \
+		$(MAKE) check-unavailable ; \
+	fi
+
+# Quadruple-precision tests: these can be run only on systems with
+# support for that precision, and implement it with the normal IEEE
+# 754 quadruple-precision format with wider range and precision than
+# the double-precision format).  The tests include all of those for
+# check-qp-double, plus additional ones which probe the wider exponent
+# range in normal IEEE 754 arithmetic.
+check-qp:	check-qp-double
+	@if $(TEST) -d test ; \
+	then \
+		$(MAKE) -k -s \
+			check-qexp2 \
+			check-qgamma2 check-qgamma4 \
+			check-qlog2 \
+			check-qpsi4 ; \
+	else \
+		$(MAKE) check-unavailable ; \
+	fi
+
+# Quadruple-precision tests: these can be run only on systems with
+# support for that precision, and implement it as a pair of
+# double-precision values.
+check-qp-double:	check-warning
+	@if $(TEST) -d test ; \
+	then \
+		$(MAKE) -k -s \
+			check-qcos \
+			check-qelefun \
+			check-qexp \
+			check-qfpmx \
+			check-qgamma \
+			check-qlgam \
+			check-qlog \
+			check-qpsi \
+			check-qpsiln \
+			check-qsin \
+			check-qtan ; \
+	else \
+		$(MAKE) check-unavailable ; \
+	fi
+
+check-sp:
+	@if $(TEST) -d test ; \
+	then \
+		$(MAKE) -k -s check-afpmx check-algam check-alog check-cos check-elefun \
+		  check-exp check-gamma check-psi check-psiln check-sin \
+		  check-tan ; \
+	else \
+		$(MAKE) check-unavailable ; \
+	fi
+
+#-----------------------------------------------------------------------
+
+check-cos:	check-cos0 check-cos1 check-cos2
+
+check-cos0:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKCOS0)"
+
+check-cos1:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKCOS1S)"
+
+check-cos2:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKCOS2S)"
+
+#-----------------------------------------------------------------------
+
+check-dcos:	check-dcos0 check-dcos1 check-dcos2
+
+check-dcos0:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKDCOS0)"
+
+check-dcos1:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKCOS1)"
+
+check-dcos2:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKCOS2)"
+
+#-----------------------------------------------------------------------
+
+check-dexp:	check-dexp0 check-dexp1
+
+check-dexp0:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKDEXP0)"
+
+check-dexp1:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKEXP1)"
+
+check-dexp2:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKEXP2)"
+
+#-----------------------------------------------------------------------
+
+check-dfpmx:     tdfpmx
+	$(MAKE) -s check-xxx RELERR=$(RELERRDP) TESTNAME=tdfpmx CHECKFILES="$(CHECKDFPMX)"
+
+#-----------------------------------------------------------------------
+
+check-dgamma:	check-dgamma0 check-dgamma1 check-dgamma3
+
+check-dgamma0:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKDGAMMA0)"
+
+check-dgamma1:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKGAM1)"
+
+check-dgamma3:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKGAM3)"
+
+# This is a special test which substitutes dgamma() by a version that
+# calls a vendor-provided qgamma().  It is not normally run at end
+# user sites, but was used during development to investigate avenues
+# for more accurate Gamma() computation.
+check-dgamma4:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKGAM1)"
+
+#-----------------------------------------------------------------------
+
+check-dlgam:	check-dlgam0 check-dlgam1 check-dlgam2
+
+check-dlgam0:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKLGAM0)"
+
+check-dlgam1:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKLGAM1)"
+
+check-dlgam2:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKLGAM2)"
+
+#-----------------------------------------------------------------------
+
+check-dlog:	check-dlog0 check-dlog1
+
+check-dlog0:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKDLOG0)"
+
+check-dlog1:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKLOG1)"
+
+#-----------------------------------------------------------------------
+
+check-dpsi:     check-dpsi0 check-dpsi1 check-dpsi2 check-dpsi3 check-dpsi4 \
+		check-dpsi6
+
+check-dpsi0:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKDPSI0)"
+
+check-dpsi1:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKPSI1)"
+
+check-dpsi2:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKPSI2)"
+
+check-dpsi3:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKPSI3)"
+
+# NB: psi401 must be excluded: it is for quadruple-precision case only
+check-dpsi4:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="psi402"
+
+check-dpsi5:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKPSI5)"
+
+check-dpsi6:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKPSI6)"
+
+#-----------------------------------------------------------------------
+
+check-dpsiln:	check-dpsiln0 check-dpsiln1 check-dpsiln2
+
+check-dpsiln0:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKPSILN0)"
+
+check-dpsiln1:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKPSILN1)"
+
+check-dpsiln2:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKPSILN2)"
+
+#-----------------------------------------------------------------------
+
+check-dsin:	check-dsin0 check-dsin1 check-dsin2
+
+check-dsin0:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKDSIN0)"
+
+check-dsin1:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKSIN1)"
+
+check-dsin2:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKSIN2)"
+
+#-----------------------------------------------------------------------
+
+check-dtan:	check-dtan0 check-dtan1 check-dtan2
+
+check-dtan0:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKDTAN0)"
+
+check-dtan1:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKTAN1)"
+
+check-dtan2:	tdgen
+	$(MAKE) -s check-xxx-dp CHECKFILES="$(CHECKTAN2)"
+
+#-----------------------------------------------------------------------
+
+check-exp:	check-exp0 check-exp1
+
+check-exp0:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKEXP0)"
+
+check-exp1:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKEXP1S)"
+
+#-----------------------------------------------------------------------
+
+check-gamma:	check-gamma0 check-gamma1 check-gamma3
+
+check-gamma0:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKGAM0)"
+
+check-gamma1:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKGAM1S)"
+
+check-gamma3:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKGAM3S)"
+
+#-----------------------------------------------------------------------
+
+check-psi:	check-psi0 check-psi1 check-psi2 check-psi3 check-psi4 \
+		check-psi6
+
+check-psi0:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKPSI0)"
+
+check-psi1:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKPSI1S)"
+
+check-psi2:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKPSI2S)"
+
+check-psi3:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKPSI3S)"
+
+check-psi4:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKPSI4S)"
+
+check-psi5:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKPSI5S)"
+
+check-psi6:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKPSI6S)"
+
+#-----------------------------------------------------------------------
+
+check-psiln:	check-psiln0 check-psiln1 check-psiln2
+
+check-psiln0:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKPSILN0)"
+
+check-psiln1:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKPSILN1S)"
+
+check-psiln2:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKPSILN2S)"
+
+#-----------------------------------------------------------------------
+
+check-qcos:	check-qcos0 check-qcos1 check-qcos2
+
+check-qcos0:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKQCOS0)"
+
+check-qcos1:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKCOS1)"
+
+check-qcos2:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKCOS2)"
+
+#-----------------------------------------------------------------------
+
+# NB: excludes check-qexp2, which cannot be run on all systems
+check-qexp:	check-qexp0 check-qexp1
+
+check-qexp0:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKQEXP0)"
+
+check-qexp1:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKEXP1)"
+
+check-qexp2:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKEXP2)"
+
+#-----------------------------------------------------------------------
+
+check-qfpmx:	tqfpmx
+	$(MAKE) -s check-xxx RELERR=$(RELERRQP) TESTNAME=tqfpmx CHECKFILES="$(CHECKQFPMX)"
+
+#-----------------------------------------------------------------------
+
+# NB: excludes check-qgamma2 and check-qgamma4, which cannot be run on
+# all systems
+check-qgamma:	check-qgamma0 check-qgamma1 check-qgamma3
+
+check-qgamma0:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKQGAMMA0)"
+
+check-qgamma1:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKGAM1)"
+
+check-qgamma2:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKGAM2)"
+
+check-qgamma3:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKGAM3)"
+
+check-qgamma4:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKGAM4)"
+
+#-----------------------------------------------------------------------
+
+check-qlgam:	check-qlgam0 check-qlgam1 check-qlgam2 check-qlgam3
+
+check-qlgam0:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKLGAM0)"
+
+check-qlgam1:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKLGAM1)"
+
+check-qlgam2:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKLGAM2)"
+
+check-qlgam3:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKLGAM3)"
+
+#-----------------------------------------------------------------------
+
+# NB: excludes check-qlog2, which cannot be run on all systems
+check-qlog:	check-qlog0 check-qlog1
+
+check-qlog0:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKQLOG0)"
+
+check-qlog1:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKLOG1)"
+
+check-qlog2:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKLOG2)"
+
+
+#-----------------------------------------------------------------------
+
+# NB: excludes check-qpsi4, which cannot be run on all systems, and
+#     check-qpsi6, whose range corresponds to a dpsi() test
+check-qpsi:	check-qpsi0 check-qpsi1 check-qpsi2 check-qpsi3 check-qpsi5
+
+check-qpsi0:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKQPSI0)"
+
+check-qpsi1:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKPSI1)"
+
+check-qpsi2:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKPSI2)"
+
+check-qpsi3:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKPSI3)"
+
+check-qpsi4:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKPSI4)"
+
+check-qpsi5:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKPSI5)"
+
+check-qpsi6:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKPSI6)"
+
+#-----------------------------------------------------------------------
+
+check-qpsiln:	check-qpsiln0 check-qpsiln1 check-qpsiln2
+
+check-qpsiln0:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKPSILN0)"
+
+check-qpsiln1:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKPSILN1)"
+
+check-qpsiln2:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKPSILN2)"
+
+#-----------------------------------------------------------------------
+
+check-qsin:	check-qsin0 check-qsin1 check-qsin2
+
+check-qsin0:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKQSIN0)"
+
+check-qsin1:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKSIN1)"
+
+check-qsin2:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKSIN2)"
+
+#-----------------------------------------------------------------------
+
+check-qtan:	check-qtan0 check-qtan1 check-qtan2
+
+check-qtan0:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKQTAN0)"
+
+check-qtan1:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKTAN1)"
+
+check-qtan2:	tqgen
+	$(MAKE) -s check-xxx-qp CHECKFILES="$(CHECKTAN2)"
+
+#-----------------------------------------------------------------------
+
+check-sin:	check-sin0 check-sin1 check-sin2
+
+check-sin0:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKSIN0)"
+
+check-sin1:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKSIN1S)"
+
+check-sin2:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKSIN2S)"
+
+#-----------------------------------------------------------------------
+
+check-tan:	check-tan0 check-tan1 check-tan2
+
+check-tan0:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKTAN0)"
+
+check-tan1:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKTAN1S)"
+
+check-tan2:	tagen
+	$(MAKE) -s check-xxx-sp CHECKFILES="$(CHECKTAN2S)"
+
+#-----------------------------------------------------------------------
+
+check-tmdgam:	tmdgam
+	./tmdgam $(RUNFLAGS)
+
+#-----------------------------------------------------------------------
+
+check-tmdpsi:	tmdpsi
+	./tmdpsi $(RUNFLAGS)
+
+#-----------------------------------------------------------------------
+
+check-tmgam:	tmgam
+	./tmgam $(RUNFLAGS)
+
+#-----------------------------------------------------------------------
+
+check-tmpsi:	tmpsi
+	./tmpsi $(RUNFLAGS)
+
+#-----------------------------------------------------------------------
+
+check-tmqgam:	tmqgam
+	./tmqgam $(RUNFLAGS)
+
+#-----------------------------------------------------------------------
+
+check-tmqpsi:	tmqpsi
+	./tmqpsi $(RUNFLAGS)
+
+#-----------------------------------------------------------------------
+
+check-unavailable:	FRC
+	@echo ========================================================================
+	@echo WARNING: This seems to be the slim package distribution without the
+	@echo extensive validation suite.  You must test the package on your own!
+	@echo ========================================================================
+
+check-warning:	FRC
+	@if $(TEST) -d test ; \
+	then \
+		echo ======================================================================== ; \
+		echo There should be no output from these tests, except their names.  If ; \
+		echo ndiff is available, there will also be reports of the maximum absolute ; \
+		echo and relative errors found.  If small numeric differences are reported, ; \
+		echo then YOU must decide whether they are significant.  You can do ; \
+		echo "        " make check RELERR=xxx ; \
+		echo to rerun the tests with a different relative error tolerance, where xxx ; \
+		echo is either a suitable small positive floating-point number, or else a ; \
+		echo 'value >= 1.0, meaning that multiple of the machine epsilon.' ; \
+		echo ======================================================================== ; \
+	fi
+
+#-----------------------------------------------------------------------
+
+# Special target for testing an alternate version of dgamma
+check-xgamma:	txgam
+	$(MAKE) -s check-xxx RELERR=$(RELERRDP) TESTNAME=txgam CHECKFILES="$(CHECKGAM1)"
+
+# Special target for testing an alternate version of dpsi
+check-xpsi:	txpsi
+	$(MAKE) -s check-xxx RELERR=$(RELERRDP) TESTNAME=txpsi CHECKFILES="$(CHECKPSI1)"
+
+# This is an internal target for use ONLY by other Makefile targets.
+# Invoke with TESTNAME=... CHECKFILES="..."
+check-xxx:
+	@if $(TEST) -d test ; \
+	then \
+		echo Checking $(TESTNAME) ... ; \
+		NDIFF="$(NDIFF)" ; \
+		if $(TEST) -n "$$NDIFF" ; \
+		then \
+			DIFF="$$NDIFF $(NDIFFFLAGS)" ; \
+		else \
+			echo !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ; \
+			echo You should consider installing ndiff: the difference output will likely ; \
+			echo be voluminous with diff.  Further information is in the ../INSTALL file. ; \
+			echo !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ; \
+			DIFF=$(DIFF) $(DIFFFLAGS) ; \
+		fi ; \
+		echo File differences are made with: $$DIFF ; \
+		cd test ; \
+		for f in $(CHECKFILES) ; \
+		do \
+			echo $$f ; \
+			../$(TESTNAME) $(RUNFLAGS) < $$f.in > $$f.out 2> $$f.err ; \
+			if $(CMP) okay/$$f.out $$f.out ; \
+			then \
+				$(RM) $$f.out ; \
+			else \
+				$$DIFF okay/$$f.out $$f.out ; \
+			fi ; \
+		done ; \
+	else \
+		$(MAKE) check-unavailable ; \
+	fi
+
+check-xxx-dp:
+	$(MAKE) -s check-xxx RELERR=$(RELERRDP) TESTNAME=tdgen CHECKFILES="$(CHECKFILES)"
+
+check-xxx-qp:
+	$(MAKE) -s check-xxx RELERR=$(RELERRQP) TESTNAME=tqgen CHECKFILES="$(CHECKFILES)"
+
+check-xxx-sp:
+	$(MAKE) -s check-xxx RELERR=$(RELERRSP) TESTNAME=tagen CHECKFILES="$(CHECKFILES)"
+
+#-----------------------------------------------------------------------
+
+clean:	clean-test
+	-$(RM) *.dcl
+	-$(RM) *.i
+	-$(RM) *.lst
+	-$(RM) *.o
+	-$(RM) *.out.*
+	-$(RM) *.s
+	-$(RM) *.stb
+	-$(RM) *.stx
+	-$(RM) *.tmp
+	-$(RM) *.u
+	-$(RM) *~
+	-$(RM) \#*
+	-$(RM) core
+	-$(RM) core.*
+	-$(RM) tg_[0-9][0-9][0-9][0-9][0-9].*
+	-(cd $(COMMON) ; $(MAKE) $@)
+
+clean-exe:
+	-$(RM) a.out
+	-$(RM) $(DTESTPROGS)
+	-$(RM) $(MISCPROGS)
+	-$(RM) $(QTESTPROGS)
+	-$(RM) $(STESTPROGS)
+	-$(RM) $(XTESTPROGS)
+
+clean-test:
+	-$(RM) *.out.*
+	-$(RM) test/*.err
+	-$(RM) test/*.out
+	-$(RM) test/core
+	-$(RM) test/core.*
+
+clobber:	distclean
+
+# We need to reverse the search order for Fortran compilers, because g77
+# on IBM and HP systems adds trailing underscores to names, while the
+# native Fortran compilers do not.
+configure:	configure.in FRC
+	$(AUTOCONF)
+	$(SED) -e 's/for ac_prog in g77 f77 f2c/for ac_prog in f77 g77 f90 f95/' < $@ >$@.tmp
+	$(CHMOD) 775 $@.tmp
+	$(CMP) -s $@.tmp $@ || $(MV) $@.tmp $@
+	-$(RM) $@.tmp
+
+delefun:	delefun.o
+	$(FC) $(FFLAGS) -o $@ delefun.o
+
+demo:	demo-dp
+
+demo-dp:
+	@echo There are no demonstration programs in this directory
+
+demo-qp:
+	@echo There are no demonstration programs in this directory
+
+dist:
+	(cd ../..; $(TAR) cf - $(DISTFILES) | $(GZIP) -9 > /tmp/gampsi.tar.gz)
+	@$(LS) -l /tmp/gampsi.tar.gz
+
+distslim:
+	(cd ../..; $(TAR) cf - $(DISTSLIM) | $(GZIP) -9 > /tmp/gampsi-slim.tar.gz)
+	@$(LS) -l /tmp/gampsi-slim.tar.gz
+
+distclean:	mostlyclean clean-test
+	-$(RM) [a-z][a-z][a-z][0-9][0-9][0-9].map
+	-$(RM) config.cache config.status config.log Makefile
+	-(cd $(COMMON) ; $(MAKE) $@)
+
+elefun:		elefun.o
+	$(FC) $(FFLAGS) -o $@ elefun.o
+
+FRC:
+
+gam101.map:	intomap.awk test/gam101.out
+	$(AWK) -f intomap.awk < test/gam101.out > $@
+
+gam101.out:	gam101.map
+	$(MAPLE) < $?  | $(GREP) '^[#0-9]' > $@
+
+gam201.map:	intomap.awk test/gam201.out
+	$(AWK) -f intomap.awk < test/gam201.out > $@
+
+gam201.out:	gam201.map
+	$(MAPLE) < $?  | $(GREP) '^[#0-9]' > $@
+
+gam301.map:	intomap.awk test/gam301.out
+	$(AWK) -f intomap.awk < test/gam301.out > $@
+
+gam301.out:	gam301.map
+	$(MAPLE) < $?  | $(GREP) '^[#0-9]' > $@
+
+gam401.map:	intomap.awk test/gam401.out
+	$(AWK) -f intomap.awk < test/gam401.out > $@
+
+gam401.out:	gam401.map
+	$(MAPLE) < $?  | $(GREP) '^[#0-9]' > $@
+
+install:
+	@echo There is nothing to install from this directory
+
+lib-dp:
+	(cd ../common; $(MAKE) $@)
+
+lib-qp:
+	(cd ../common; $(MAKE) $@)
+
+lib-sp:
+	(cd ../common; $(MAKE) $@)
+
+maintainer-clean:	distclean
+	@echo "This command is intended for maintainers to use;"
+	@echo "it deletes files that may require special tools to rebuild."
+	-$(RM) gam101.map psi101.map psi201.map psi301.map
+	-$(RM) gam101.out psi101.out psi201.out psi301.out
+
+makdat:	makdat.o
+	$(FC) $(FFLAGS) -o $@ $?
+
+maple:	gam101.out psi101.out
+
+mostlyclean:	clean clean-exe
+	-$(RM) *.d
+	-$(RM) *.log
+	-$(RM) *.tcov
+	-(cd $(COMMON) ; $(MAKE) $@)
+
+#-----------------------------------------------------------------------
+# NB:             The plot targets are ONLY usable if both Maple and
+#		  gnuplot are already installed.
+# Maple is a commercial product: see http://www.maplesoft.com/
+# gnuplot is freely available: see ftp://ftp.gnuplot.vt.edu/pub/gnuplot/
+
+plot-relerr-dp:   plot-relerr-dcos plot-relerr-dexp plot-relerr-dgamma \
+		  plot-relerr-dlgam plot-relerr-dlog plot-relerr-dpsi \
+		  plot-relerr-dpsiln plot-relerr-dsin plot-relerr-dtan
+
+plot-relerr-qp:   plot-relerr-qcos plot-relerr-qexp plot-relerr-qgamma \
+		  plot-relerr-qlgam plot-relerr-qlog plot-relerr-qpsi \
+		  plot-relerr-qpsiln plot-relerr-qsin plot-relerr-qtan
+
+plot-relerr-sp:   plot-relerr-algam plot-relerr-alog plot-relerr-cos \
+		  plot-relerr-exp plot-relerr-gamma plot-relerr-psi \
+		  plot-relerr-psiln plot-relerr-sin plot-relerr-tan
+
+#-----------------------------------------------------------------------
+
+plot-relerr-algam:	plot-relerr-algam1 plot-relerr-algam2
+
+plot-relerr-algam1:	check-algam1
+	$(MAKE) -s plot-relerr-xxx-sp CHECKFILES="$(CHECKLGAM1S)" FUNCTION=algam
+
+plot-relerr-algam2:	check-algam2
+	$(MAKE) -s plot-relerr-xxx-sp CHECKFILES="$(CHECKLGAM2S)" FUNCTION=algam LOGX=logx
+
+#-----------------------------------------------------------------------
+
+plot-relerr-alog:	plot-relerr-alog1
+
+plot-relerr-alog1:	check-alog1
+	$(MAKE) -s plot-relerr-xxx-sp CHECKFILES="$(CHECKLOG1S)" FUNCTION=alog LOGX=logx
+
+#-----------------------------------------------------------------------
+
+plot-relerr-cos:	plot-relerr-cos1 plot-relerr-cos2
+
+plot-relerr-cos1:	check-cos1
+	$(MAKE) -s plot-relerr-xxx-sp CHECKFILES="$(CHECKCOS1S)" FUNCTION=cos
+
+plot-relerr-cos2:	check-cos2
+	$(MAKE) -s plot-relerr-xxx-sp CHECKFILES="$(CHECKCOS2S)" FUNCTION=cos
+
+#-----------------------------------------------------------------------
+
+plot-relerr-dcos:	plot-relerr-dcos1 plot-relerr-dcos2
+
+plot-relerr-dcos1:	check-dcos1
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="$(CHECKCOS1)" FUNCTION=dcos
+
+plot-relerr-dcos2:	check-dcos2
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="$(CHECKCOS2)" FUNCTION=dcos
+
+#-----------------------------------------------------------------------
+
+plot-relerr-dexp:	plot-relerr-dexp1 plot-relerr-dexp2
+
+plot-relerr-dexp1:	check-dexp1
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="$(CHECKEXP1)" FUNCTION=dexp
+
+plot-relerr-dexp2:	check-dexp2
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="$(CHECKEXP2)" FUNCTION=dexp
+
+#-----------------------------------------------------------------------
+
+plot-relerr-dgamma:	plot-relerr-dgamma1 plot-relerr-dgamma3
+
+plot-relerr-dgamma1:	check-dgamma1
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="$(CHECKGAM1)" FUNCTION=dgamma
+
+plot-relerr-dgamma3:	check-dgamma3
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="$(CHECKGAM3)" FUNCTION=dgamma LOGX=logx
+
+#-----------------------------------------------------------------------
+
+plot-relerr-dlgam:	plot-relerr-dlgam1 plot-relerr-dlgam2
+
+plot-relerr-dlgam1:	check-dlgam1
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="$(CHECKLGAM1)" FUNCTION=dlgam
+
+plot-relerr-dlgam2:	check-dlgam2
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="$(CHECKLGAM2)" FUNCTION=dlgam LOGX=logx
+
+#-----------------------------------------------------------------------
+
+plot-relerr-dlog:	plot-relerr-dlog1
+
+plot-relerr-dlog1:	check-dlog1
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="$(CHECKLOG1)" FUNCTION=dlog LOGX=logx
+
+#-----------------------------------------------------------------------
+
+plot-relerr-dpsi:	plot-relerr-dpsi1 plot-relerr-dpsi2 plot-relerr-dpsi3 \
+			plot-relerr-dpsi4 plot-relerr-dpsi5 plot-relerr-dpsi6
+
+plot-relerr-dpsi1:	check-dpsi1
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="psi101" FUNCTION=dpsi LOGX=logx
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="psi102 psi103 psi104 psi105 psi106 psi107" FUNCTION=dpsi
+
+plot-relerr-dpsi2:	check-dpsi2
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="$(CHECKPSI2)" FUNCTION=dpsi \
+		XFORMAT='%.2f' YFORMAT='%.1f'
+
+plot-relerr-dpsi3:	check-dpsi3
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="$(CHECKPSI3)" FUNCTION=dpsi \
+		XFORMAT='%.4f' YFORMAT='%.1f'
+
+# NB: psi401 must be excluded: it is for quadruple-precision case only
+plot-relerr-dpsi4:	check-dpsi4
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="psi402" FUNCTION=dpsi LOGX=logx
+
+plot-relerr-dpsi5:	check-dpsi5
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="$(CHECKPSI5)" FUNCTION=dpsi LOGX=logx
+
+plot-relerr-dpsi6:	check-dpsi6
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="$(CHECKPSI6)" FUNCTION=dpsi LOGX=logx
+
+#-----------------------------------------------------------------------
+
+plot-relerr-dpsiln:	plot-relerr-dpsiln1 plot-relerr-dpsiln2
+
+plot-relerr-dpsiln1:	check-dpsiln1
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="$(CHECKPSILN1)" FUNCTION=dpsiln
+
+plot-relerr-dpsiln2:	check-dpsiln2
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="$(CHECKPSILN2)" FUNCTION=dpsiln LOGX=logx
+
+#-----------------------------------------------------------------------
+
+plot-relerr-dsin:	plot-relerr-dsin1 plot-relerr-dsin2
+
+plot-relerr-dsin1:	check-dsin1
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="$(CHECKSIN1)" FUNCTION=dsin
+
+plot-relerr-dsin2:	check-dsin2
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="$(CHECKSIN2)" FUNCTION=dsin
+
+#-----------------------------------------------------------------------
+
+plot-relerr-dtan:	plot-relerr-dtan1 plot-relerr-dtan2
+
+plot-relerr-dtan1:	check-dtan1
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="$(CHECKTAN1)" FUNCTION=dtan
+
+plot-relerr-dtan2:	check-dtan2
+	$(MAKE) -s plot-relerr-xxx-dp CHECKFILES="$(CHECKTAN2)" FUNCTION=dtan
+
+#-----------------------------------------------------------------------
+
+plot-relerr-exp:	plot-relerr-exp1
+
+plot-relerr-exp1:	check-exp1
+	$(MAKE) -s plot-relerr-xxx-sp CHECKFILES="$(CHECKEXP1S)" FUNCTION=exp
+
+#-----------------------------------------------------------------------
+
+plot-relerr-gamma:	plot-relerr-gamma1 plot-relerr-gamma3
+
+plot-relerr-gamma1:	check-gamma1
+	$(MAKE) -s plot-relerr-xxx-sp CHECKFILES="$(CHECKGAM1S)" FUNCTION=gamma
+
+plot-relerr-gamma3:	check-gamma3
+	$(MAKE) -s plot-relerr-xxx-sp CHECKFILES="$(CHECKGAM3S)" FUNCTION=gamma LOGX=logx
+
+#-----------------------------------------------------------------------
+
+plot-relerr-psi:	plot-relerr-psi1 plot-relerr-psi2 plot-relerr-psi3 \
+			plot-relerr-psi4 plot-relerr-psi5 plot-relerr-psi6
+
+plot-relerr-psi1:	check-psi1
+	$(MAKE) -s plot-relerr-xxx-sp CHECKFILES="psi111" FUNCTION=psi LOGX=logx
+	$(MAKE) -s plot-relerr-xxx-sp CHECKFILES="psi112 psi113 psi114 psi115 psi116 psi117" FUNCTION=psi
+
+plot-relerr-psi2:	check-psi2
+	$(MAKE) -s plot-relerr-xxx-sp CHECKFILES="$(CHECKPSI2S)" FUNCTION=psi \
+		XFORMAT='%.2f' YFORMAT='%.1f'
+
+plot-relerr-psi3:	check-psi3
+	$(MAKE) -s plot-relerr-xxx-sp CHECKFILES="$(CHECKPSI3S)" FUNCTION=psi \
+		XFORMAT='%.4f' YFORMAT='%.1f'
+
+plot-relerr-psi4:	check-psi4
+	$(MAKE) -s plot-relerr-xxx-sp CHECKFILES="$(CHECKPSI4S)" FUNCTION=psi LOGX=logx
+
+plot-relerr-psi5:	check-psi5
+	$(MAKE) -s plot-relerr-xxx-sp CHECKFILES="$(CHECKPSI5S)" FUNCTION=psi LOGX=logx
+
+plot-relerr-psi6:	check-psi6
+	$(MAKE) -s plot-relerr-xxx-sp CHECKFILES="$(CHECKPSI6S)" FUNCTION=psi LOGX=logx
+
+#-----------------------------------------------------------------------
+
+plot-relerr-psiln:	plot-relerr-psiln1 plot-relerr-psiln2
+
+plot-relerr-psiln1:	check-psiln1
+	$(MAKE) -s plot-relerr-xxx-sp CHECKFILES="$(CHECKPSILN1S)" FUNCTION=psiln
+
+plot-relerr-psiln2:	check-psiln2
+	$(MAKE) -s plot-relerr-xxx-sp CHECKFILES="$(CHECKPSILN2S)" FUNCTION=psiln LOGX=logx
+
+#-----------------------------------------------------------------------
+
+plot-relerr-qcos:	plot-relerr-qcos1 plot-relerr-qcos2
+
+plot-relerr-qcos1:	check-qcos1
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKCOS1)" FUNCTION=qcos
+
+plot-relerr-qcos2:	check-qcos2
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKCOS2)" FUNCTION=qcos
+
+#-----------------------------------------------------------------------
+
+plot-relerr-qexp:	plot-relerr-qexp1 plot-relerr-qexp2
+
+plot-relerr-qexp1:	check-qexp1
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKEXP1)" FUNCTION=qexp
+
+plot-relerr-qexp2:	check-qexp2
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKEXP2)" FUNCTION=qexp
+
+#-----------------------------------------------------------------------
+
+plot-relerr-qgamma:	plot-relerr-qgamma1 plot-relerr-qgamma2 \
+			plot-relerr-qgamma3 plot-relerr-qgamma4
+
+plot-relerr-qgamma1:	check-qgamma1
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKGAM1)" FUNCTION=qgamma
+
+plot-relerr-qgamma2:	check-qgamma2
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKGAM2)" FUNCTION=qgamma
+
+plot-relerr-qgamma3:	check-qgamma3
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKGAM3)" FUNCTION=qgamma LOGX=logx
+
+plot-relerr-qgamma4:	check-qgamma4
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKGAM4)" FUNCTION=qgamma LOGX=logx
+
+#-----------------------------------------------------------------------
+
+plot-relerr-qlgam:	plot-relerr-qlgam1 plot-relerr-qlgam2 plot-relerr-qlgam3
+
+plot-relerr-qlgam1:	check-qlgam1
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKLGAM1)" FUNCTION=qlgam
+
+plot-relerr-qlgam2:	check-qlgam2
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKLGAM2)" FUNCTION=qlgam LOGX=logx
+
+plot-relerr-qlgam3:	check-qlgam3
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKLGAM3)" FUNCTION=qlgam LOGX=logx
+
+#-----------------------------------------------------------------------
+
+plot-relerr-qlog:	plot-relerr-qlog1 plot-relerr-qlog2
+
+plot-relerr-qlog1:	check-qlog1
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKLOG1)" FUNCTION=qlog LOGX=logx
+
+plot-relerr-qlog2:	check-qlog2
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKLOG2)" FUNCTION=qlog LOGX=logx
+
+#-----------------------------------------------------------------------
+
+plot-relerr-qpsi:	plot-relerr-qpsi1 plot-relerr-qpsi2 \
+			plot-relerr-qpsi3 plot-relerr-qpsi4 \
+			plot-relerr-qpsi5 plot-relerr-qpsi6 \
+			plot-relerr-qpsi8
+
+plot-relerr-qpsi1:	check-qpsi1
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="psi101" FUNCTION=qpsi LOGX=logx
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="psi102 psi103 psi104 psi105 psi106 psi107" FUNCTION=qpsi
+
+plot-relerr-qpsi2:	check-qpsi2
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKPSI2)" FUNCTION=qpsi \
+		XFORMAT='%.2f' YFORMAT='%.1f'
+
+plot-relerr-qpsi3:	check-qpsi3
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKPSI3)" FUNCTION=qpsi \
+		XFORMAT='%.4f' YFORMAT='%.1f'
+
+plot-relerr-qpsi4:	check-qpsi4
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="psi401" FUNCTION=qpsi LOGX=logx XFORMAT='%.1f'
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="psi402" FUNCTION=qpsi LOGX=logx
+
+plot-relerr-qpsi5:	check-qpsi5
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKPSI5)" FUNCTION=qpsi LOGX=logx
+
+plot-relerr-qpsi6:	check-qpsi6
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKPSI6)" FUNCTION=qpsi LOGX=logx
+
+#-----------------------------------------------------------------------
+
+plot-relerr-qpsiln:	plot-relerr-qpsiln1 plot-relerr-qpsiln2
+
+plot-relerr-qpsiln1:	check-qpsiln1
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKPSILN1)" FUNCTION=qpsiln
+
+plot-relerr-qpsiln2:	check-qpsiln2
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKPSILN2)" FUNCTION=qpsiln LOGX=logx
+
+#-----------------------------------------------------------------------
+
+plot-relerr-qsin:	plot-relerr-qsin1 plot-relerr-qsin2
+
+plot-relerr-qsin1:	check-qsin1
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKSIN1)" FUNCTION=qsin
+
+plot-relerr-qsin2:	check-qsin2
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKSIN2)" FUNCTION=qsin
+
+#-----------------------------------------------------------------------
+
+plot-relerr-qtan:	plot-relerr-qtan1 plot-relerr-qtan2
+
+plot-relerr-qtan1:	check-qtan1
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKTAN1)" FUNCTION=qtan
+
+plot-relerr-qtan2:	check-qtan2
+	$(MAKE) -s plot-relerr-xxx-qp CHECKFILES="$(CHECKTAN2)" FUNCTION=qtan
+
+#-----------------------------------------------------------------------
+
+plot-relerr-sin:	plot-relerr-sin1 plot-relerr-sin2
+
+plot-relerr-sin1:	check-sin1
+	$(MAKE) -s plot-relerr-xxx-sp CHECKFILES="$(CHECKSIN1S)" FUNCTION=sin
+
+plot-relerr-sin2:	check-sin2
+	$(MAKE) -s plot-relerr-xxx-sp CHECKFILES="$(CHECKSIN2S)" FUNCTION=sin
+
+#-----------------------------------------------------------------------
+
+plot-relerr-tan:	plot-relerr-tan1 plot-relerr-tan2
+
+plot-relerr-tan1:	check-tan1
+	$(MAKE) -s plot-relerr-xxx-sp CHECKFILES="$(CHECKTAN1S)" FUNCTION=tan
+
+plot-relerr-tan2:	check-tan2
+	$(MAKE) -s plot-relerr-xxx-sp CHECKFILES="$(CHECKTAN2S)" FUNCTION=tan
+
+#-----------------------------------------------------------------------
+# Generic plot group target:
+# Usage: make plot-relerr-xxx \
+#		CHECKFILES="..." \
+#		FUNCTION=name \
+#		LOGX=logx \
+#		MACHID=machid \
+#		XFORMAT=xfmt \
+#		XRANGE=xrange \
+#		YFORMAT=yfmt \
+#		YRANGE=yrange
+
+plot-relerr-xxx:
+	for f in $(CHECKFILES) ; \
+	do \
+		$(PLOTRELERR) $$f.out $(FUNCTION) '$(LOGX)' '$(XRANGE)' \
+			'$(YRANGE)' '$(XFORMAT)' '$(YFORMAT)' '$(ABSERR)' \
+			$(MACHID) ; \
+	done
+
+plot-relerr-xxx-dp:
+	$(MAKE) plot-relerr-xxx \
+		CHECKFILES="$(CHECKFILES)" \
+		FUNCTION=$(FUNCTION) \
+		LOGX=$(LOGX) \
+		MACHID='$(MACHID)' \
+		XFORMAT='$(XFORMAT)' \
+		XRANGE='$(XRANGE)' \
+		YFORMAT='$(YFORMAT)' \
+		YRANGE='$(YRANGEDP)'
+
+plot-relerr-xxx-qp:
+	$(MAKE) plot-relerr-xxx \
+		CHECKFILES="$(CHECKFILES)" \
+		FUNCTION=$(FUNCTION) \
+		LOGX=$(LOGX) \
+		MACHID='$(MACHID)' \
+		XFORMAT='$(XFORMAT)' \
+		XRANGE='$(XRANGE)' \
+		YFORMAT='$(YFORMAT)' \
+		YRANGE='$(YRANGEQP)'
+
+plot-relerr-xxx-sp:
+	$(MAKE) plot-relerr-xxx \
+		CHECKFILES="$(CHECKFILES)" \
+		FUNCTION=$(FUNCTION) \
+		LOGX=$(LOGX) \
+		MACHID='$(MACHID)' \
+		XFORMAT='$(XFORMAT)' \
+		XRANGE='$(XRANGE)' \
+		YFORMAT='$(YFORMAT)' \
+		YRANGE='$(YRANGESP)'
+
+#-----------------------------------------------------------------------
+
+psi101.map:	intomap.awk dp test/psi101.out
+	$(AWK) -f intomap.awk < test/psi101.out > $@
+
+psi101.out:	psi101.map
+	$(MAPLE) < $?  | $(GREP) '^[#0-9]' > $@
+
+psi201.map:	intomap.awk test/psi201.out
+	$(AWK) -f intomap.awk < test/psi201.out > $@
+
+psi201.out:	psi201.map
+	$(MAPLE) < $?  | $(GREP) '^[#0-9]' > $@
+
+psi301.map:	intomap.awk test/psi301.out
+	$(AWK) -f intomap.awk < test/psi301.out > $@
+
+psi301.out:	psi301.map
+	$(MAPLE) < $?  | $(GREP) '^[#0-9]' > $@
+
+qelefun:	qelefun.o
+	$(FC) $(FFLAGS) -o $@ qelefun.o
+
+tafpmx:	$(TAFPMXOBJS)
+	$(FC) $(FFLAGS) -o $@ $(TAFPMXOBJS) $(LIBS)
+
+tagen:	$(TAGENOBJS)
+	$(FC) $(FFLAGS) -o $@ $(TAGENOBJS) $(LIBS)
+
+# NB: This target needs to be run twice, once with cutoff in
+# $(COMMON)/gamma.f set to 12, and once with it set to xbig+one (the
+# distributed choice).
+tagen2-timing:	tagen2
+	$(TIME) ./tagen2 $(RUNFLAGS) < test/psi501.in
+	$(TIME) ./tagen2 $(RUNFLAGS) < test/dpsi0530.in
+	$(TIME) ./tagen2 $(RUNFLAGS) < test/dpsi3055.in
+
+# Version of tdgen with output suppressed, used for benchmark timing
+tagen2:	$(TAGEN2OBJS)
+	$(FC) $(FFLAGS) -o $@ $(TAGEN2OBJS) $(LIBS)
+
+tdgen:	$(TDGENOBJS)
+	$(FC) $(FFLAGS) -o $@ $(TDGENOBJS) $(LIBS)
+
+# NB: This target needs to be run twice, once with cutoff in
+# $(COMMON)/dgamma.f set to 12, and once with it set to xbig+one (the
+# distributed choice).
+tdgen2-timing:	tdgen2
+	$(TIME) ./tdgen2 $(RUNFLAGS) < test/psi501.in
+	$(TIME) ./tdgen2 $(RUNFLAGS) < test/dpsi0530.in
+	$(TIME) ./tdgen2 $(RUNFLAGS) < test/dpsi3055.in
+
+# Version of tdgen with output suppressed, used for benchmark timing
+tdgen2:	$(TDGEN2OBJS)
+	$(FC) $(FFLAGS) -o $@ $(TDGEN2OBJS) $(LIBS)
+
+tdfpmx:	$(TDFPMXOBJS)
+	$(FC) $(FFLAGS) -o $@ $(TDFPMXOBJS) $(LIBS)
+
+tmdgam:	$(TMDGAMOBJS)
+	$(FC) $(FFLAGS) -o $@ $(TMDGAMOBJS) $(LIBS)
+
+tmdpsi:	$(TMDPSIOBJS)
+	$(FC) $(FFLAGS) -o $@ $(TMDPSIOBJS) $(LIBS)
+
+tmgam:	$(TMGAMOBJS)
+	$(FC) $(FFLAGS) -o $@ $(TMGAMOBJS) $(LIBS)
+
+tmpsi:	$(TMPSIOBJS)
+	$(FC) $(FFLAGS) -o $@ $(TMPSIOBJS) $(LIBS)
+
+tmqgam:	$(TMQGAMOBJS)
+	$(FC) $(FFLAGS) -o $@ $(TMQGAMOBJS) $(LIBS)
+
+tmqpsi:	$(TMQPSIOBJS)
+	$(FC) $(FFLAGS) -o $@ $(TMQPSIOBJS) $(LIBS)
+
+tqfpmx:	$(TQFPMXOBJS)
+	$(FC) $(FFLAGS) -o $@ $(TQFPMXOBJS) $(LIBS)
+
+tqgen:	$(TQGENOBJS)
+	$(FC) $(FFLAGS) -o $@ $(TQGENOBJS) $(LIBS)
+
+# Version of tqgen with output suppressed, used for benchmark timing
+tqgen2:	$(TQGEN2OBJS)
+	$(FC) $(FFLAGS) -o $@ $(TQGEN2OBJS) $(LIBS)
+
+# NB: This target needs to be run twice, once with cutoff in
+# $(COMMON)/qgamma.f set to 18, and once with it set to xbig+one.
+#
+# For systems with full 128-bit IEEE 754 arithmetic, also run the
+# commented-out test manually for each of the above cutoff choices.
+tqgen2-timing:	tqgen2
+	$(TIME) ./tqgen2 $(RUNFLAGS) < test/gam502.in
+#	$(TIME) ./tqgen2 $(RUNFLAGS) < test/gam503.in
+	$(TIME) ./tqgen2 $(RUNFLAGS) < test/psi0220.in
+	$(TIME) ./tqgen2 $(RUNFLAGS) < test/qpsi2040.in
+
+txgam:	$(TXGAMOBJS)
+	$(FC) $(FFLAGS) -o $@ $(TXGAMOBJS) $(LIBS)
+
+txpsi:	$(TXPSIOBJS)
+	$(FC) $(FFLAGS) -o $@ $(TXPSIOBJS) $(LIBS)
+
+uninstall:
+
+#=======================================================================
+# Fortran/SFTRAN3 header file dependencies (generated by
+# ../makedepends.sh)
+
+delefun.o:     	$(COMMON)/stdio.inc
+
+elefun.o:      	$(COMMON)/stdio.inc
+
+funhdr.o:      	$(COMMON)/stdio.inc
+
+makdat.o:      	$(COMMON)/stdio.inc
+
+qelefun.o:     	$(COMMON)/stdio.inc
+
+tafpmx.o:      	$(COMMON)/stdio.inc
+
+tagen.o:       	$(COMMON)/stdio.inc
+
+tdfpmx.o:      	$(COMMON)/stdio.inc
+
+tdgen.o:       	$(COMMON)/stdio.inc
+
+tisdinf.o:     	$(COMMON)/stdio.inc
+
+tisdnan.o:     	$(COMMON)/stdio.inc
+
+tlgam.o:       	$(COMMON)/stdio.inc
+
+tmdgam.o:      	$(COMMON)/deps.inc
+tmdgam.o:      	$(COMMON)/stdio.inc
+
+tmdpsi.o:      	$(COMMON)/dxmin.inc
+tmdpsi.o:      	$(COMMON)/stdio.inc
+
+tmgam.o:       	$(COMMON)/aeps.inc
+tmgam.o:       	$(COMMON)/stdio.inc
+
+tmpsi.o:       	$(COMMON)/axlarg.inc
+tmpsi.o:       	$(COMMON)/axmin.inc
+tmpsi.o:       	$(COMMON)/axsmal.inc
+tmpsi.o:       	$(COMMON)/stdio.inc
+
+tmqgam.o:      	$(COMMON)/deps.inc
+tmqgam.o:      	$(COMMON)/stdio.inc
+
+tmqpsi.o:      	$(COMMON)/qxlarg.inc
+tmqpsi.o:      	$(COMMON)/qxmin.inc
+tmqpsi.o:      	$(COMMON)/qxsmal.inc
+tmqpsi.o:      	$(COMMON)/stdio.inc
+
+tqfpmx.o:      	$(COMMON)/stdio.inc
+
+tqgen.o:       	$(COMMON)/stdio.inc
+
+tzhang.o:      	$(COMMON)/stdio.inc
+
+#=======================================================================

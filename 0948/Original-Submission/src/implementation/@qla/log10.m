@@ -1,0 +1,6 @@
+function s = log10(s)
+
+index = s.type==2;
+s.type(index) = 3;
+
+end

@@ -1,0 +1,3104 @@
+C   ****************************************************************    00000010
+C   *                                                                   00000020
+C   *  THE MAIN ROUTINE READS THE NECESSARY DATA AND COMPUTES           00000030
+C   *  THE ACTUAL REDUCTION OF THE INPUT-MATRICES.                      00000040
+C   *  FOR MATRICES WITH DIMENSION GREATER OR EQUAL TO 20,              00000050
+C   *  THE DIMENSIONS OF ALL ARRAY VARIABLES HAVE TO BE                 00000060
+C   *  CHANGED IN THE PROGRAM.                                          00000070
+C   *  ALL INPUT ARE READ FROM  LOGICAL UNIT 5.                         00000080
+C   *  DETAILS CONCERNING THE VARIABLES OF THE INPUT-LISTS              00000090
+C   *  ARE PRESENTED BELOW (SEE COMMENTS IN THE SOURCE CODE)            00000100
+C   *  THE RESULTS ARE WRITTEN ON THE LOGICAL UNIT 6.                   00000110
+C   *                                                                   00000120
+C   *  MACHINE DEPENDENT CONSTANTS/PARAMETERS                           00000130
+C   *                                                                   00000140
+C   *  ROUTINE   NAME                                                   00000150
+C   *  MAIN      MACHEP    RELATIVE MACHINE PRECISION (F.P.)            00000160
+C   *  CBAL      RADIX     BASE OF THE MACHINE FLOATING POINT           00000170
+C   *                      (F.P.) REPRESENTATION                        00000180
+C   *  COMLR2    MACEP     RELATIVE MACHINE PRECISION (F.P.)            00000190
+C   *  CSVD1     ETA       RELATIVE MACHINE PRECISION (F.P.)            00000200
+C   *  CSVD1     TOL       SMALLEST NORMALIZED POSITIVE NUMBER          00000210
+C   *                      DIVIDED BY ETA                               00000220
+C   *                                                                   00000230
+C   *                                                                   00000240
+C   *  FOR EACH MATRIX (I.E MATNR=0,1,2,3,4 OR 5) THE FOLLOWING         00000250
+C   *  TWO CARDS ARE NECESSARY                                          00000260
+C   *                                                                   00000270
+C   *  CARD1 - MATNR,PC1,PC2,MINUS                                      00000280
+C   *  CARD2 - ISTEP                                                    00000290
+C   *                                                                   00000300
+C   *  NOTE - IF MATNR=1000 NO MORE MATRIX IS TREATED( CARD2            00000310
+C   *         IS OMITTED )                                              00000320
+C   *                                                                   00000330
+C   *                                                                   00000340
+C   *  VARIABLE   FORMAT DESCRIPTION                                    00000350
+C   *                                                                   00000360
+C   *  MATNR      I4     THE NUMBER OF THE ACTUAL TEST MATRIX           00000370
+C   *                    (0-5)CORRESPONDING TO THE SUBROUTINES          00000380
+C   *                    MATRIS,MATRS1-MATRS5.IF MATNR IS GREATER       00000390
+C   *                    THAN 1000 THE EXECUTION IS INTERRUPTED.        00000400
+C   *  PC1        E20.5  TOLERANCE PARAMETER,IS USED TO COMPUTE         00000410
+C   *                    EINF=PC1*MACEP.                                00000420
+C   *                    EINF CORRESPONDS TO PERTURBATIONS OF           00000430
+C   *                    THE INPUT MATRIX.EINF IS USED IN THE           00000440
+C   *                    GROUPING OF NUMERICAL MULTIPLE EIGEN-          00000450
+C   *                    VALUES AND IS A PARAMETER TO JNF.              00000460
+C   *                    PC1 IS PROBLEM-DEPENDENT BUT MACHINE-          00000470
+C   *                    INDEPENDENT.                                   00000480
+C   *  PC2        E20.5  TOLERANCE PARAMETER,IS USED TO COMPUTE         00000490
+C   *                    TOL=PC2*MACHEP.                                00000500
+C   *                    TOL IS USED IN THE CONSTRUCTION OF NIL-        00000510
+C   *                    POTENT MATRICES I.E IN THE DETERMINATION       00000520
+C   *                    OF THE STRUCTURE OF THE INPUT MATRIX AND       00000530
+C   *                    IS A PARAMETER TO JNF.                         00000540
+C   *                    PC2 IS PROBLEM-DEPENDENT BUT MACHINE-          00000550
+C   *                    INDEPENDENT.                                   00000560
+C   *  MINUS      I6     FOR NORMAL USE MINUS IS SET TO A NON-ZERO      00000570
+C   *                    NUMBER.IF MINUS IS ZERO, THE                   00000580
+C   *                    ELEMENTS OF THE INPUT MATRIX CHANGE            00000590
+C   *                    SIGNS                                          00000600
+C   *  ISTEP     I2      MAKES IT POSSIBLE FOR THE USER TO              00000610
+C   *                    RETURN FROM JNF AFTER STEP ISTEP               00000620
+C   *                    (=1,2,3,4,5,6 OR 7).FULL REDUCTION             00000630
+C   *                    TO JORDAN FORM IF ISTEP IS GREATER             00000640
+C   *                    OR EQUAL TO 7.SEE ALSO THE DESCRIPTION         00000650
+C   *                    OF THE PARAMETERS OF JNF.                      00000660
+C   *                                                                   00000670
+C   *  MATNR CONTROLS THE REST OF THE INPUT FOR EACH MATRIX.            00000680
+C   ***MATNR=0                                                          00000690
+C   *  THE MATRIX IS GENERATED IN SUBROUTINE MATRIS.THE ORDER           00000700
+C   *  OF THE MATRIX (N) AND THE MATRIX ELEMENTS (AR(I,J),AI(I,J))      00000710
+C   *  ARE READ FROMLOGICAL UNIT 5.                                     00000720
+C   * *INPUT                                                            00000730
+C   *  N              FORMAT(I3)                                        00000740
+C   *  AR(I,J),AI(I,J)FORMAT(8F10.0)                                    00000750
+C   *                                                                   00000760
+C   *  EXAMPLE - N=10                                                   00000770
+C   *                                                                   00000780
+C   *  CARD3 - N                                                        00000790
+C   *  CARD4 - AR(1,1),AI(1,1),AR(1,2),...,AR(1,4),AI(1,4)              00000800
+C   *  CARD5 - AR(1,5),AI(1,5),...        ,AR(1,8),AI(1,8)              00000810
+C   *  CARD6 - AR(1,9),AI(1,9),AR(1,10),AI(1,10)                        00000820
+C   *  CARD7 - AR(2,1).AI(2,1),...        ,AR(2,4),AI(2,4)              00000830
+C   *  ...                                                              00000840
+C   *  CARD30- AR(10,9),AI(10,9),AR(10,10,),AI(10,10)                   00000850
+C   *                                                                   00000860
+C   ***MATNR=1                                                          00000870
+C   *  THE MATRIX IS GENERATED IN SUBROUTINE MATRS1.THE ORDER           00000880
+C   *  OF THE MATRIX N =12                                              00000890
+C   *  NO MORE INPUT                                                    00000900
+C   *                                                                   00000910
+C   ***MATNR=2                                                          00000920
+C   *  THE MATRIX IS GENERATED IN SUBROUTINE MATRS2 IN THE              00000930
+C   *  FORM A= H2*S*H1*J*H1*S-INVERSE*H2                                00000940
+C   *  THE ORDER OF THE MATRIX N =10                                    00000950
+C   *  S IS A DIAGONAL  MATRIX WITH ENTRIES GENERATED AS                00000960
+C   *  POWERS OF THE SINGLE VARIABLE SIG.                               00000970
+C   *  J IS A MATRIX IN JORDAN FORM WHOSE DIAGONAL IS STORED            00000980
+C   *  IN DIAG AND SUPER - DIAGONAL IN BS                               00000990
+C   *  H1,H2 SEE COMMENTS IN MATRS2.                                    00001000
+C   * *INPUT                                                            00001010
+C   *  SIG            FORMAT(F10.0)                                     00001020
+C   *  DIAG           FORMAT(8F10.0)                                    00001030
+C   *  BS             FORMAT(8F10.0)                                    00001040
+C   *                                                                   00001050
+C   *  CARD3 - SIG                                                      00001060
+C   *  CARD4 - DIAG(1),...,DIAG(8)                                      00001070
+C   *  CARD5 - DIAG(9),DIAG(10)                                         00001080
+C   *  CARD6 - BS(1),...,BS(8)                                          00001090
+C   *  CARD7 - BS(9),BS(10)                                             00001100
+C   *                                                                   00001110
+C   ***MATNR=3                                                          00001120
+C   *  THEMATRIX IS GENERATED IN SUBROUTINE MATRS3.THE ORDER            00001130
+C   *  OF THE MATRIX N=7.                                               00001140
+C   *  DELTA AND EPS ARE USED IN THE GENERATION                         00001150
+C   *  AND ARE READ BY THE MAIN ROUTINE.                                00001160
+C   * *INPUT                                                            00001170
+C   *  EPS             FORMAT(F10.0)                                    00001180
+C   *  DELTA           FORMAT(F10.0)                                    00001190
+C   *                                                                   00001200
+C   *  CARD3 - EPS,DELTA                                                00001210
+C   *                                                                   00001220
+C   ***MATNR=4                                                          00001230
+C   *  THE MATRIX IS GENERATED IN SUBROUTINE MATRS4.THE ORDER           00001240
+C   *  OF THE MATRIX N = 8                                              00001250
+C   *  ALFA IS USED IN THE MATRIX-GENERATION AND ARE READ BY            00001260
+C   *  THE MAIN ROUTINE.                                                00001270
+C   * *INPUT                                                            00001280
+C   *  ALFA             FORMAT(F10.0)                                   00001290
+C   *                                                                   00001300
+C   *  CARD3 - ALFA                                                     00001310
+C   *                                                                   00001320
+C   ***MATNR=5                                                          00001330
+C   *  THE MATRIX IS GENERATED IN SUBROUTINE MATRS5.THE ORDER           00001340
+C   *  OF THE MATRIX N = 7                                              00001350
+C   *  NO MORE INPUT                                                    00001360
+C   *                                                                   00001370
+C   ******************************************************************* 00001380
+      COMMON/A1/ HR(20,20),HI(20,20),EVR(20),EVI(20),ZR(20,20)          00001390
+     *           ,ZI(20,20)                                             00001400
+     C,ER(20,20),EI(20,20),AR(20,20),AI(20,20)                          00001410
+      COMMON/A3/ Z(20,20),SVD(20)                                       00001420
+      COMPLEX Z                                                         00001430
+      COMMON/A2/ DELE(20),SUPD(20),SM(20),NDEL(20),NDEFL(20),NDB(20),   00001440
+     C  NXT(20),U(1,1),V(1,1),NM,N,EINF,TOL,IERR,EINFO                  00001450
+      COMPLEX  U,V                                                      00001460
+      COMMON/A4/ LU(20,20),X(20),SX(20),SY(20),                         00001470
+     C     SUPD1(20),D(20),JBL(20),IPS(20)                              00001480
+      COMPLEX  LU,X,SX,SY                                               00001490
+      COMMON   L                                                        00001500
+C   ******************************************************************  00001510
+C   *                                                                   00001520
+C   *  MACHINE - DEPENDENT CONSTANT                                     00001530
+C   *  MACHEP = RELATIVE MACHINE PRECISION (F.P.)                       00001540
+       REAL MACHEP                                                      00001550
+       DATA MACHEP/1.0E-14/                                             00001560
+C                                                                       00001570
+C                                                                       00001580
+      NM = 20                                                           00001590
+       WRITE(6,200)                                                     00001600
+  200  FORMAT(1H1,10X,41HTHE MATRICES ARE PRINTED COLUMN BY COLUMN      00001610
+     *        /9X,47HTHERE IS ROOM FOR 10 COLUMNS BESIDE EACH OTHER.    00001620
+     *        /9X,40HIF MORE THAN 10 COLUMNS THEY ARE PRINTED           00001630
+     *           ,33H BEYOND THE 10 FIRST COLUMNS ETC.)                 00001640
+C                                                                       00001650
+ 1    CONTINUE                                                          00001660
+       WRITE(6,13)                                                      00001670
+      L = 0                                                             00001680
+C   *  INPUT FROM CARD1                                                 00001690
+C   *                                                                   00001700
+      READ(5,14)MATNR,PC1,PC2,MINUS                                     00001710
+C   *                                                                   00001720
+C   *  COMPUTE EINF AND TOL                                             00001730
+       EINF=PC1*MACHEP                                                  00001740
+       TOL =PC2*MACHEP                                                  00001750
+      MATNR = MATNR+1                                                   00001760
+      IF( MATNR.LT.1000) GO TO 1000                                     00001770
+C   *  MATNR=1000                                                       00001780
+C   *  NO MORE MATRIX TO TREAT,THE EXECUTION IS INTERRUPTED             00001790
+C   *                                                                   00001800
+      STOP                                                              00001810
+ 1000 CONTINUE                                                          00001820
+C   *  INPUT FORM CARD2                                                 00001830
+C   *                                                                   00001840
+      READ(5,50)ISTEP                                                   00001850
+  50     FORMAT(I2)                                                     00001860
+      GO TO (2,3,4,5,7,9), MATNR                                        00001870
+ 2    CONTINUE                                                          00001880
+C   *  ENTER IF MATNR = 0                                               00001890
+C   *                                                                   00001900
+      CALL MATRIS (NM,N,AR,AI)                                          00001910
+      CALL OUTPUT (NM,N,AR,AI,24HINPUT MATRIS NR 0-------,1)            00001920
+      GO TO 10                                                          00001930
+ 3    CONTINUE                                                          00001940
+C  *  ENTER IF MATNR=1                                                  00001950
+C  *                                                                    00001960
+      N = 12                                                            00001970
+       CALL MATRS1(NM,N,AR,AI)                                          00001980
+      CALL OUTPUT (NM,N,AR,AI,24HINPUTMATRIS NR 1= FRANKS,1)            00001990
+      GO TO 10                                                          00002000
+ 4    CONTINUE                                                          00002010
+C   *  ENTER IF MATNR=2                                                 00002020
+C   *                                                                   00002030
+       N=10                                                             00002040
+      CALL MATRS2(NM,N,AR,AI)                                           00002050
+      CALL OUTPUT (NM,N,AR,AI,24HINPUTMATRIS NR 2=WILK---,1)            00002060
+      GO TO 10                                                          00002070
+ 5    CONTINUE                                                          00002080
+C   *  ENTER IF MATNR = 3                                               00002090
+C   *                                                                   00002100
+      READ(5,16)EPS,DELTA                                               00002110
+C   *  INPUT FROM CARD 3                                                00002120
+C   *                                                                   00002130
+       WRITE(6,17)EPS,DELTA                                             00002140
+ 6    CONTINUE                                                          00002150
+      SLAMB = 1.0                                                       00002160
+      CALL MATRS3(NM,N,AR,AI,SLAMB,DELTA,EPS)                           00002170
+      CALL OUTPUT (NM,N,AR,AI,24HINPUTMATRIS NR 3 -------,1)            00002180
+      GO TO 10                                                          00002190
+ 7    CONTINUE                                                          00002200
+C  *  ENTER IF MATNR = 4                                                00002210
+C  *                                                                    00002220
+C  *  INPUT FROM CARD3                                                  00002230
+      READ(5,18)ALFA                                                    00002240
+ 8    CONTINUE                                                          00002250
+      CALL MATRS4(NM,N,AR,AI,ALFA)                                      00002260
+      WRITE(6,19)ALFA                                                   00002270
+      CALL OUTPUT (NM,N,AR,AI,24HINPUTMATRIS NR 4--------,1)            00002280
+      GO TO 10                                                          00002290
+ 9    CONTINUE                                                          00002300
+C   *  ENTER IF MATNR = 5                                               00002310
+      CALL MATRS5(NM,N,AR,AI,2.0)                                       00002320
+      CALL OUTPUT (NM,N,AR,AI,24HINPUTMATRIS NR 5--------,1)            00002330
+ 10   CONTINUE                                                          00002340
+       IF(MINUS.NE.0)GO TO 276                                          00002350
+C   *  IF MINUS=0 THE ELEMENTS OF THE INPUT MATRIX CHANGE               00002360
+C   *  SIGNS                                                            00002370
+C   *                                                                   00002380
+      DO  275 I=1,N                                                     00002390
+      DO  275 J=1,N                                                     00002400
+      AR(I,J)= -AR(I,J)                                                 00002410
+      AI(I,J)= -AI(I,J)                                                 00002420
+  275 CONTINUE                                                          00002430
+276    CONTINUE                                                         00002440
+      DO 11 I=1,N                                                       00002450
+      DO 11 J=1,N                                                       00002460
+      HR(I,J) = AR(I,J)                                                 00002470
+ 11   HI(I,J) = AI(I,J)                                                 00002480
+C                                                                       00002490
+       WRITE(6,210)                                                     00002500
+210    FORMAT(10X,42HTOLERANCE PARAMETERS.COMPUTED FROM PC1 PC2/)       00002510
+      WRITE(6,20)EINF                                                   00002520
+      WRITE(6,40)TOL                                                    00002530
+      EINFO = EINF                                                      00002540
+C   *                                                                   00002550
+C   *  SUBROUTINE JNF IS CALLED                                         00002560
+C   *                                                                   00002570
+      CALL JNF (NM,N,HR,HI,ZR,ZI,EVR,EVI,SUPD,NXT,NDEL,NDEFL,NDB,NBLOCK,00002580
+     CEINF,TOL,DELE,SM,IERR,ISTEP)                                      00002590
+      WRITE(6,51)ISTEP                                                  00002600
+51    FORMAT(10X,26HRETURN FROM JNF AFTER STEP,I2)                      00002610
+      EINF = EINFO                                                      00002620
+      CALL OUTPUT(1,N,EVR,EVI,24HEIGENVALUES-------------,1)            00002630
+      WRITE(6,21) (SUPD(I),I=1,N)                                       00002640
+      WRITE(6,22) (NXT(I),I=1,N)                                        00002650
+      WRITE(6,23) (NDB(I),I=1,NBLOCK)                                   00002660
+      WRITE(6,28) (NDEL(I),I=1,N)                                       00002670
+      WRITE(6,29) (NDEFL(I),I=1,N)                                      00002680
+      WRITE(6,24) (DELE(I),I=1,NBLOCK)                                  00002690
+      WRITE(6,25) (SM(I),I=1,NBLOCK)                                    00002700
+C                                                                       00002710
+C        COMPUTE THE CONDITION NUMBER OF ZR,ZI                          00002720
+      DO 12 I=1,N                                                       00002730
+      DO 12 J=1,N                                                       00002740
+      Z(I,J) = CMPLX(ZR(I,J),ZI(I,J))                                   00002750
+ 12   CONTINUE                                                          00002760
+      CALL CSVD1 (Z,NM,NM,N,N,0,0,0,SVD,U,V)                            00002770
+      CONDZ = SVD(N)/SVD(1)                                             00002780
+       WRITE(6,27)CONDZ                                                 00002790
+C                                                                       00002800
+       WRITE(6,220)                                                     00002810
+  220  FORMAT(1H0,9X,40HFOR INTERPRETATION OF NEXT,NDB,NDEL AND         00002820
+     *              ,41HNDEFL SEE SECTION 4 OF THE ALGORITHM PART)      00002830
+C                                                                       00002840
+C    * COMPUTE THE EUCLIDEAN NORM OF THE VECTORS (Z)                    00002850
+      DO 30 J=1,N                                                       00002860
+      RSUM=0.                                                           00002870
+      DO 31 I=1,N                                                       00002880
+31    RSUM=RSUM+ ZR(I,J)**2+ ZI(I,J)**2                                 00002890
+      RSUM=SQRT(RSUM)                                                   00002900
+      SVD(J)=RSUM                                                       00002910
+30    CONTINUE                                                          00002920
+       WRITE(6,32)(SVD(J),J=1,N)                                        00002930
+   32  FORMAT(10X,32HEUCLIDEAN NORM OF THE VECTORS(Z)/(2X,10E13.5))     00002940
+      CALL RESID(NM,N,HR,HI,ZR,ZI,AR,AI,ER,EI,SUPD,ENORM,NXT)           00002950
+        WRITE(6,41)ENORM                                                00002960
+C   *                                                                   00002970
+C   *  THE ROUTINE RESID IS USEFUL ONLY IF ISTEP=7                      00002980
+C   *  IF 1.LE.ISTEP .LE.6 THEN YOU MUST WRITE A NEW RESID              00002990
+C   *                                                                   00003000
+C   *********************************************************           00003010
+      CALL OUTPUT (NM,N,ZR,ZI,24HTRANSFORMATION MATRIX---,1)            00003020
+C   *  TREAT A NEW MATRIX                                               00003030
+C   *                                                                   00003040
+        GO TO 1                                                         00003050
+C                                                                       00003060
+C                                                                       00003070
+ 13   FORMAT (1H1)                                                      00003080
+14     FORMAT(I4,2E20.5,I6)                                             00003090
+ 16   FORMAT (2F10.0)                                                   00003100
+ 17   FORMAT (10X,4HEPS=,E15.5,2X,6HDELTA=,E15.5)                       00003110
+ 18   FORMAT (F10.0)                                                    00003120
+ 19   FORMAT (10X,5HALFA=,E15.5)                                        00003130
+ 20   FORMAT (10X,5HEINF=,E15.5)                                        00003140
+   21 FORMAT(10X,42HR-COUPLING ELEMENTS (EQUIVALENT WITH SUPD)          00003150
+     *        /(10X,8E15.5))                                            00003160
+ 22   FORMAT(10X,3HNXT/10X,20I4)                                        00003170
+ 23   FORMAT(10X,3HNDB/10X,20I4)                                        00003180
+ 24   FORMAT(10X,4HDELE/(10X,8E15.5))                                   00003190
+ 25   FORMAT(10X,38HPNORM-ESTIMATES OF SPECTRAL PROJECTORS,             00003200
+     *          20H(EQUIVQLENT WITH SM)/(10X,8E15.5))                   00003210
+27    FORMAT(10X,22HCONDITION NUMBER OF Z=,E15.5)                       00003220
+ 28   FORMAT(10X,4HNDEL/10X,20I4)                                       00003230
+ 29   FORMAT(10X,5HNDEFL/10X,20I4)                                      00003240
+40    FORMAT(10X,4HTOL=,E15.5)                                          00003250
+   41 FORMAT(10X,39HFROBENIUS NORM OF THE RESIDUAL H*Z-Z*J=,E15.5)      00003260
+       STOP                                                             00003270
+      END                                                               00003280
+      SUBROUTINE RESID(NM,N,HR,HI,ZR,ZI,AR,AI,ER,EI,SUPD,ENORM,NXT)     00003290
+C   ***************************************************************
+C   *
+C   *  THE ROUTINE COMPUTES THE EUCLIDEAN MATRIX NORM(FROBENIUS
+C   *  NORM) OF A*Z-Z*J WHERE A IS THE ORIGINAL MATRIX,J THE BI-
+C   *  DIAGONAL JORDAN MATRIX AND Z THE CORRESPONDING EIGEN-
+C   *  VECTOR MATRIX.
+C   *  THE FORMAL PARAMETER LIST
+C   *  ON INPUT-
+C   *
+C   *  NM    THE ROW DIMENSION OF THE TWO-DIMENSIONAL ARRAY
+C   *        PARAMETERS (HR,HI,AR,AI,ER,EI,ZR,ZI)AS DECLARED
+C   *        IN THE CALLING PROGRAM DIMENSOIN STATEMENT
+C   *  N     THE ORDER OF THE ORIGINAL MATRIX
+C   *  AR,AI THE REAL AND IMAGINARY PARTS,RESPECTIVELY,OF THE
+C   *        ORIGINAL MATRIX
+C   *  HR,HI THE REAL AND IMAGINARY PARTS,RESPECTIVELY,OF THE
+C   *        TRANSFORMED MATRIX(ONLY THE DIAGONAL ELEMENTS
+C   *        I.E THE EIGENVALUES ARE USED)
+C   *  ZR,ZI THE REAL AND IMAGINARY PARTS,RESPECTIVELY,OF THE
+C   *        EIGENVECTORS AND PRINCIPAL VECTORS
+C   *  SUPD  THE REAL SUPERDIAGONAL OF THE JORDAN MATRIX(THE
+C   *        COUPLING ELEMENTS)
+C   *  NXT   CONTAINS THE COLUMN INDICES OF THE SUPERDIAGONAL
+C   *
+C   *  ON OUTPUT-
+C   *
+C   *  ER,EI THE REAL AND IMAGINARY PARTS,RESPECTIVELY,OF THE
+C   *        RESIDUAL MATRIX A*Z-Z*J
+C   *  ENORM THE FROBENIUS MATRIX NORM OF THE RESIDUAL MATRIX
+C   *
+C   ***************************************************************
+      REAL SUPD(N)
+      INTEGER NXT(N)
+C
+      REAL HR(NM,N),HI(NM,N),ZR(NM,N),ZI(NM,N),AR(NM,N),AI(NM,N),ER(NM,N
+     C),EI(NM,N)
+      DOUBLE PRECISION ERR,EII,ARR,AII,HRR,HII,XR,XI
+      NN = N
+      ENORM = 0.E0
+      DO 3 I=1,N
+      DO 3 K=1,N
+      ERR = 0.D0
+      EII = 0.D0
+      DO 1 J=1,N
+      ARR = AR(I,J)
+      AII = AI(I,J)
+      XR = ZR(J,K)
+      XI = ZI(J,K)
+      ERR = ERR+ARR*XR-AII*XI
+      EII = EII+AII*XR+ARR*XI
+ 1    CONTINUE
+      XR=ZR(I,K)
+      XI=ZI(I,K)
+      HRR= HR(K,K)
+      HII= HI(K,K)
+      ERR= ERR - XR*HRR + XI*HII
+      EII= EII - XI*HRR - XR*HII
+C
+      DO 2   J=1,N
+      IF(K.NE.NXT(J))GOTO 2
+C
+      XR = ZR(I,J)
+      XI = ZI(I,J)
+      HRR = SUPD(J)
+      ERR= ERR - XR*HRR
+      EII= EII -  XI*HRR
+    2 CONTINUE
+      ER(I,K) = ERR
+      EI(I,K) = EII
+      ENORM = ENORM+ERR**2+EII**2
+ 3    CONTINUE
+      ENORM = SQRT(ENORM)
+      RETURN
+      END
+      SUBROUTINE DECIDE (NM,N,NDEL,CSHTR,CSHTI,NBLOCK,HR,HI)            00004040
+C   *************************************************************
+C   *
+C   *  DECIDE IS A USER WRITTEN SUBROUTINE WHICH MAKES IT POSSIBLE
+C   *  FOR THE USER TO CHANGE THE GROUPING OF THE NUMERICAL MUL-
+C   *  TIPLE EIGENVALUES,AND/OR CHANGE THE VALUES OF THE MULTIPLE
+C   *  EIGENVALUES.
+C   *  THE FORMAL PARAMETER LIST
+C   *
+C   *  NM       THE ROW DIMENSION OF THE TWO-DIMENSIONAL ARRAY
+C   *           PARAMETERS(HR,HI)AS DECLARED IN THE CALLING
+C   *           PROGRAM DIMENSION STATEMENT
+C   *  N        THE ORDER OF THE ORIGINAL MATRIX
+C   *  NBLOCK   THE NUMBER OF BLOCKS I.E THE NUMBER OF NUMERICAL
+C   *           MULTIPLE EIGENVALUES
+C   *  CSHTR,   THE REAL AND IMAGINARY PARTS,RESPECTIVELY,OF THE
+C   *  CSHTI    NUMERICAL MULTIPLE EIGENVALUES
+C   *  NDEL     INDICATES THE MULTIPLICITY OF THE NUMERICAL
+C   *           MULTIPLE EIGENVALUES.NDEL(I+1)-NDEL(I)=THE
+C   *           MULTIPLICITY OF EIGENVALUE I FOR I=1,..,NBLOCK
+C   *  HR,HI    THE REAL AND IMAGINARY PARTS,RESPECTIVELY, OF
+C   *           THE UPPER TRIANGULAR MATRIX RESULTING FROM
+C   *           STEPS 1-3 OF THE ALGORITHM
+C   *
+C   *  NOTE -- THE USER MUST NOT CHANGE HR,HI
+C   *
+C   ******************************************************************
+      INTEGER NDEL(N)
+      REAL HR(NM,N),HI(NM,N),CSHTR(1),CSHTI(1)
+      WRITE(6,9)
+   9  FORMAT(1H0,1X,47HTHE FOLLOWING OUTPUT (A,B AND C) ARE PRINTED BY,
+     *          31HTHE USER WRITTEN ROUTINE DECIDE/
+     *        1H0,1X,31HSEE SECTION 2 OF THE ALGORITHM.)
+      WRITE(6,10)
+      WRITE(6,11) (HR(K,K),K=1,N)
+      WRITE(6,11) (HI(K,K),K=1,N)
+      WRITE(6,12)
+      DO 1 K=1,NBLOCK
+      MULT=NDEL(K+1)-NDEL(K)
+      WRITE(6,13) NDEL(K+1),MULT,CSHTR(K),CSHTI(K)
+    1 CONTINUE
+      WRITE(6,14)
+14    FORMAT(1H0,1X,34HC--IN STEP 6 OF THE ALGORITHM THE ,
+     *  50HSTRUCTURE OF EACH MULTIPLE EIGENVALUE IS COMPUTED.
+     * /1H0,1X,42HFOR THAT REASON RDEFL SUCCESIVELY COMPUTES,
+     *  44H SINGULAR VALUE DECOMPOSITIONS. RDEFL PRINTS
+     * /1H0,1X,39HTHE RESULTS BELOW(SEE ALSO COMMENTS IN ,
+     *    35HRDEFL AND STEP 6 OF THE ALGORITHM).)
+  10  FORMAT(1H0,1X,43HA--ENTER DECIDE WITH EIGENVALUES COMPUTED  ,
+     *          36HBY COMLR2 (STEP 1 OF THE ALGORITHM ))
+   11  FORMAT(10F13.9)
+12      FORMAT(1X,40HB--GROUPINGS OF THE EIGENVALUES,COMPUTED,
+     *  27H BY STEP 3 OF THE ALGORITHM)
+   13 FORMAT(12H DIVISION AT,I4, 7H MULT.=,I4, 8H CENTER=,2E20.10)
+      RETURN
+      END
+      SUBROUTINE MATRIS (NM,N,AR,AI)                                    00004600
+C   ******************************************************************
+C   *
+C   *  THE ROUTINE GENERATES TEST MATRICES BY READING FROM LOGICAL
+C   *  UNIT 5.THE MATRIX IS ASSUMED TO BE PUNCHED ROW BY ROW,
+C   *  NEW ROW IMPLIES NEW CARD.
+C   *  FORMAL PARAMETER LIST
+C   *
+C   *  NM     THE ROW DIMENSION OF THE TWO-DIMENSIONAL ARRAY
+C   *         PARAMETERS (AR,AI)AS DECLARED IN THE CALLING PROGRAM
+C   *         DIMENSION STATEMENT
+C   *  N      THE ORDER OF THE MATRIX
+C   *  AR,AI  THE REAL AND IMAGINARY PARTS,RESPECTIVELY,OF
+C   *         THE GENERATED MATRIX
+C   *
+C   *  PUNCHING0 AR(1,1),AI(1,1),AR(1,2),AI(1,2) ETC.
+C   *
+C   *****************************************************************
+      REAL AR(NM,1),AI(NM,1)
+      REAL B(20,20)
+C
+       COMMON L
+      IF (L.NE.0) GO TO 3
+      READ(5,5)N
+      DO 2 I=1,N
+      READ(5,6) (AR(I,J),AI(I,J),J=1,N)
+      DO 1 J=1,N
+      B(I,J) = AR(I,J)
+ 1    CONTINUE
+ 2    CONTINUE
+      L = 1
+      RETURN
+ 3    DO 4 I=1,N
+      DO 4 J=1,N
+      AR(I,J) = B(I,J)
+      AI(I,J) = 0.0
+ 4    CONTINUE
+      RETURN
+C
+C
+ 5    FORMAT (I3)
+ 6    FORMAT (8F10.0)
+      END
+      SUBROUTINE MATRS1(NM,N,AR,AI)                                     00005030
+C   ***************************************************************
+C   *
+C   *  THE ROUTINE GENERATES THE FRANK MATRIX
+C   *
+C   *               0     IF I.GT.J+1
+C   *     F=     N-I+1    IF I = J+1
+C   *            N-J+1    IF I.LE.J
+C   *
+C   *  THE FORMAL PARAMETER LIST
+C   *
+C   *  NM    THE ROW DIMENSION OF THE TWO-DIMENSIONAL
+C   *        ARRAY PARAMETERS (AR,AI) AS DECLARED IN THE
+C   *        CALLING PROGRAM DIMENSION STATEMENT
+C   *  N     THE ORDER OF THE MATRIX
+C   *  AR,AI THE REAL AND IMAGINARY PARTS,RESPECTIVELY, OF THE
+C   *        GENERATED MATRIX
+C   *
+C   *****************************************************************
+      REAL AR(NM,N),AI(NM,N)
+      DO 4 I=1,N
+      DO 4 J=1,N
+      AI(I,J) = 0.0
+      IF (I-J-1) 1,2,3
+ 1    AR(I,J) = N-J+1
+      GO TO 4
+ 2    AR(I,J) = N-I+1
+      GO TO 4
+ 3    AR(I,J) = 0.0
+ 4    CONTINUE
+      RETURN
+      END
+      SUBROUTINE MATRS3(NM,N,AR,AI,LAMB,DELTA,EPS)                      00005350
+C   ********************************************************************
+C   *
+C   *  THE ROUTINE GENERATES A BLOCK MATRIX FROM TWO FROBENIUS
+C   *  MATRICES.
+C   *  FORMAL PARAMETER LIST
+C   *
+C   *  NM        THE ROW DIMENSION OF THE TWO-DIMENSIONAL
+C   *            ARRAY PARAMETERS (AR,AI) AS DECLARED IN
+C   *            THE CALLING PROGRAM DIMENSION STATEMENT
+C   *  N         THE ORDER OF THE MATRIX(=7,FIX)
+C   *  AR,AI     THE REAL AND IMAGINARY PARTS,RESPECTIVELY,OF THE
+C   *            GENERATED MATRIX
+C   *  LAMB      THE EIGENVALUE OF A 4*4 FROBENIUS MATRIX
+C   *  DELTA     LAMB+DELTA IS THE EIGENVALUE OF A 3*3
+C   *            FROBENIUS MATRIX
+C   *  EPS       A PARAMETER REPRESENTING A PERTURBATION
+C   *            OF THE (1,7)-ELEMENT OF (AR,AI)
+C   *
+C   ********************************************************************
+      REAL AR(NM,1),AI(NM,1)
+      REAL LAMB,DELTA,EPS,LAMB2
+C
+C     N=7
+C     FROBENIUS MATRIX (4*4) EV.= LAMB
+C     FROBENIUS MATRIX (3*3) EV.= LAMB + DELTA
+C     AND  A(1,7)=EPS
+C
+      N = 7
+      DO 1 I=1,N
+      DO 1 J=1,N
+      AR(I,J) = 0.0
+      AI(I,J) = 0.0
+ 1    CONTINUE
+C     (4*4)-BLOCKET
+      AR(1,1) = 4.0*LAMB
+      LAMB2 = LAMB*LAMB
+      AR(1,2) = -6.0*LAMB2
+      AR(1,3) = 4.0*LAMB2*LAMB
+      AR(1,4) = -LAMB2*LAMB2
+      AR(2,1) = 1.0
+      AR(3,2) = 1.0
+      AR(4,3) = 1.0
+C     (3*3)-BLOCKET
+      LAMB = LAMB+DELTA
+      LAMB2 = LAMB*LAMB
+      AR(5,5) = 3.0*LAMB
+      AR(5,6) = -3.0*LAMB2
+      AR(5,7) = LAMB2*LAMB2
+      AR(6,5) = 1.0
+      AR(7,6) = 1.0
+C     (1,7)- ELEMENTET
+      AR(1,7) = EPS
+      RETURN
+      END
+      SUBROUTINE MATRS4(NM,N,HR,HI,ALFA)                                00005900
+C   ********************************************************************
+C   *
+C   *  THE ROUTINE GENERATES THE LANCASTER MATRIX RESULTING
+C   *  FORM A STABILITY PROBLEM.
+C   *  THE FORMAL PARAMETER LIST
+C   *
+C   *  NM     THE ROW DIMENSION OF THE TWO-DIMENSIONAL
+C   *         ARRAY PARAMETERS (HR,HI) AS DECLARED IN THE
+C   *         CALLING PROGRAM DIMENSION STATEMENT
+C   *  N      THE ORDER OF THE MATRIX
+C   *  HR,HI  THE REAL AND IMAGINARY PARTS,RESPECTIVELY,
+C   *         OF THE GENERATED MATRIX
+C   *  ALFA   DETERMINES THE CLOSENESS OF THE EIGENVALUES
+C   *         OF (HR,HI)
+C   *
+C   ********************************************************************
+      REAL HR(NM,1),HI(NM,1)
+      REAL ALFA
+C
+C     THE LANCASTER MATRIX
+C     ALFA.GE.0
+      N = 8
+      BETA = 1.+ALFA
+      DO 1 I=1,4
+      DO 1 J=1,N
+      HI(I,J) = 0.
+      HR(I,J) = 0.
+      IF(I+4.EQ.J)HR(I,J) = 1.0
+ 1    CONTINUE
+      DO 2 I=6,N
+      DO 2 J=5,N
+ 2    HR(I,J) = 0.
+C
+      HR(6,5) = -2.0
+      HR(7,6) = -2.0
+      HR(8,7) = -2.0
+      HR(5,5) = -3.*ALFA
+      HR(5,6)=1.0+ALFA*ALFA+2.0*BETA*BETA
+      HR(5,7) = -ALFA*(1.0+2.0*BETA*BETA)
+      HR(5,8) = BETA*BETA*(ALFA*ALFA+BETA*BETA)
+C
+      HR(5,1)=1.0-2.0*ALFA*ALFA
+      HR(5,2) = -ALFA*(1.0-ALFA*ALFA-2.0*BETA*BETA)
+      HR(5,3) = -2.0*ALFA*ALFA*BETA*BETA
+      HR(5,4) = ALFA*BETA*BETA*(ALFA*ALFA+BETA*BETA)
+C
+      HR(6,1) = -2.0*ALFA
+      HR(6,2) = ALFA*ALFA+2.0*BETA*BETA
+      HR(6,3) = -2.0*ALFA*BETA*BETA
+      HR(6,4) = BETA*BETA*(ALFA*ALFA+BETA*BETA)
+      DO 3 I=1,4
+      HR(7,I) = 0.
+ 3    HR(8,I) = 0.
+      HR(7,1) = -1.0
+      HR(8,2) = -1.0
+C
+      DO 4 I=5,8
+      DO 4 J=1,8
+ 4    HI(I,J) = 0.0
+      RETURN
+      END
+      SUBROUTINE MATRS5(NM,N,HR,HI,LAMB)                                00006520
+C   **************************************************************
+C   *
+C   *  THE ROUTINE GENERATES ONE FORBENIUS MATRIX,CONSISTING
+C   *  OF THREE JORDAN BLOCKS OF DIMENSION 4,2 AND 1
+C   *
+C   *  THE FORMAL PARAMETER LIST
+C   *
+C   *  NM    THE ROW DIMENSION OF THE TWO-DIMENSIONAL ARRAY
+C   *        PARAMETERS (HR,HI) AS DECLARED IN THE CALLING
+C   *        PROGRAM DIMENSION STATEMENT
+C   *  N     THE ORDER OF THE MATRIX
+C   *  HR,HI THE REAL AND IMAGINARY PARTS,RESPECTIVELY,
+C   *        OF THE GENERATED MATRIX
+C   *  LAMB  THE MULTIPLE EIGENVALUE
+C   *
+C   *******************************************************************
+      REAL HR(NM,1),HI(NM,1),LAMB,LAMB2
+C
+      N = 7
+      DO 1 I=1,N
+      DO 1 J=1,N
+      HR(I,J) = 0.0
+      HI(I,J) = 0.0
+ 1    CONTINUE
+C     (4)4)-BLOCKET
+      HR(1,1) = 4.0*LAMB
+      LAMB2 = LAMB*LAMB
+      HR(1,2) = -6.0*LAMB2
+      HR(1,3) = +4.0*LAMB2*LAMB
+      HR(1,4) = -LAMB2*LAMB2
+      HR(2,1) = 1.0
+      HR(3,2) = 1.0
+      HR(4,3) = 1.0
+C     (2*2)-BLOCKET
+      HR(5,5) = 2.0*LAMB
+      HR(5,6) = -LAMB2
+      HR(6,5) = 1.0
+C     (1*1)- BLOCKET
+      HR(7,7) = LAMB
+      RETURN
+      END
+      SUBROUTINE JNF (NM,N,HR,HI,ZR,ZI,EVR,EVI,SUPD,NXT,NDEL,NDEFL,NDB, 00006940
+     CNBLOCK,EIN,TOL,DELE,SM,IERR,ISTEP)
+      REAL HR(NM,N),HI(NM,N),ZR(NM,N),ZI(NM,N),EVR(N),EVI(N),SUPD(N),
+     CDELE(N),SM(N)
+      INTEGER NXT(N),NDEL(N),NDEFL(N),NDB(N)
+C
+C   ******************************************************************
+C   *    THE FORMAL PARAMETER LIST
+C   *
+C   *    ON INPUT -
+C   *
+C   *         NM    - MUST BE SET TO THE ROW DIMENSION OF THE TWO-
+C   *                 DIMENSIONAL ARRAY PARAMETERS AS DECLARED IN
+C   *                 THE CALLING PROGRAM
+C   *         N     - IS THE ORDER OF THE MATRICES
+C   *
+C   *         HR,HI - CONTAIN THE REAL AND IMAGINARY PARTS,RESPECTIVELY
+C   *                 OF THE COMPLEX MATRIX
+C   *         EIN   - IS A TOLERANCE PARAMETER,CORRESPONDING TO
+C   *                 PERTURBATIONS OF HR,HI, AND IS USED IN THE
+C   *                 GROUPING OF NUMERICAL MULTIPLE EIGENVALUES
+C   *
+C   *         TOL   - IS A TOLERANCE PARAMETER USED IN THE CONSTRUCTION
+C   *                 OF THE NILPOTENT MATRICES (IS USED IN RDEFL)
+C   *
+C   *          ISTEP  - RETURN FROM JNF AFTER STEP ISTEP(=1,2,3,4,5,6,7)
+C   *                   FULL REDUCTION TO JORDAN FORM IF ISTEP .GE. 7
+C   *                   OTHER CHOICES GIVE REDUCTION TO
+C   *
+C   *           1       UPPER TRIANGULAR FORM
+C   *
+C   *           2       UPPER TRIANGULAR FORM WITH THE EIGEN-
+C   *                   VALUES SORTED SUCH THAT CLOSE EIGEN-
+C   *                   VALUES APPEAR IN ADJACENT POSITIONS
+C   *
+C   *           3       THE SAME AS 2,IN ADDITION GROUPING OF
+C   *                   CLOSE EIGENVALUES INTO BLOCKS CORRE-
+C   *                   SPONDING TO NUMERICAL MULTIPLE EIGEN-
+C   *                   VALUES
+C   *
+C   *           4       BLOCK DIAGONAL UPPER TRIANGULAR FORM
+C   *
+C   *           5       BLOCK DIAGONAL UPPER TRIANGULAR FORM
+C   *                   AND THE INVARIANT SUBSPACES CORRESPONDING
+C   *                   TO THE DIAGONALS BLOCKS HAVE UNITARY BASES
+C   *
+C   *           6       THE STRUCTURE OF EACH DIAGONAL BLOCK IS
+C   *                   DETERMINED
+C   *    ON OUTPUT -
+C   *
+C   *  THE PARAMETERS CONTAIN USEFUL INFORMATION DEPENDING ON
+C   *  THE VALUE OF THE INPUT PARAMETER ISTEP.
+C   *
+C   *  NOTATION - (IF ISTEP .GE. N )
+C   *  WHERE N IS 1,2,3,4,5,6 OR 7
+C   *
+C   *
+C   *         HR,HI - HAVE BEEN DESTROYED
+C   *
+C   *         IERR  - IS A CONVERGENCE PARAMETER SET BY COMLR2
+C   *                 0  FOR NORMAL RETURN
+C   *                 J  IF THE J-TH EIGENVALUE HAS NOT BEEN DETERMINED
+C   *                 AFTER 30 ITERATIONS
+C   *                 IF AN ERROR EXIT IS MADE (IERR.NE.0),NONE
+C   *                 OF THE FOLLOWING PARAMETERS CONTAIN MEANINGFUL
+C   *                 RESULTS
+C   *                (IF ISTEP.GE.1)
+C   *         EVR,EVI CONTAIN THE REAL AND IMAGINARY PARTS,RESPECTIVELY
+C   *                 OF THE EIGENVALUES.
+C   *                 IF ISTEP.GE.1 BUT .LT.5 THE EIGENVALUES ARE
+C   *                 COMPUTED BY COMLR2.
+C   *                 IF ISTEP.GE.6, EVR,EVI CONTAIN THE MAIN DIAGONAL
+C   *                 OF THE JORDAN MATRIX.
+C   *
+C   *         NBLOCK- IS THE NUMBER OF NUMERICAL MULTIPLE EIGENVALUES
+C   *                 (IF ISTEP.GE.3)
+C   *
+C   *         NDEL  - INDICATES THE MULTIPLICITIES OF THE NUMERICAL
+C   *                 MULTIPLE EIGENVALUES
+C   *                 (IF ISTEP.GE.3)
+C   *                 NDEL(I+1)-NDEL(I)= MULTIPLICITY OF EIGENVALUE
+C   *                                    I FOR I=1,...,NBLOCK
+C   *         NDEFL - INDICATES THE STRUCTURE OF HR,HI
+C   *                 (IF ISTEP.GE.6)
+C   *
+C   *         SUPD  - CONTAINS THE REAL SUPERDIAGONAL OF THE JORDAN
+C   *                 MATRIX (THE COUPLING ELEMENTS)
+C   *                 (IF ISTEP.GE.7)
+C   *
+C   *         NXT   - CONTAINS THE COLUMN INDICES OF SUPD
+C   *                 NXT(I)=J IMPLIES THAT THE VECTOR WITH COUPLING
+C   *                          ELEMENT SUPD(I) IS PLACED IN COLUMN
+C   *                          J OF ZR,ZI
+C   *                 (IF ISTEP.GE.7)
+C   *         NDB   - CONTAINS POINTER REFERENCES
+C   *                 NDB(I)=J MEANS THAT INFORMATION ABOUT THE
+C   *                          STRUCTURE OF THE NUMERICAL MULTIPLE
+C   *                          EIGENVALUE I STARTS IN POSITION J
+C   *                          OF NDEFL
+C   *                 (IF ISTEP.GE.6)
+C   *         ZR,ZI - CONTAIN THE REAL AND IMAGINARY PARTS,RESPECTIVELY
+C   *                 OF THE ACCUMULATED TRANSFORMATIONS FROM STEP 1
+C   *                 TO 7 OF THE ALGORITHM.
+C   *                 IF ISTEP.GE.7, ZR,ZI ARE THE EIGENVECTORS AND
+C   *                 THE PRINCIPAL VECTORS.
+C   *
+C   *         DELE  - CONTAINS INFORMATION ABOUT DELETED ELEMENTS
+C   *                 DURING THE PROCESSES OF FINDING NILPOTENT MATRICES
+C   *                 DELE(I)= EUCLIDEAN NORM OF DELETED PART FOR BLOCK
+C   *                          I FOR I=1,...,NBLOCK
+C   *                 (IF ISTEP.GE.6)
+C   *
+C   *         SM    - CONTAINS ESTIMATES OF THE SPECTRAL PROJECTORS
+C   *                 CORRESPONDING TO DIFFERENT NUMERICAL MULTIPLE
+C   *                 EIGENVALUES
+C   *                 (IF ISTEP.GE.4)
+C   *
+C   *    FOR COMPLETE DESCRIPTION SEE COMPUTATIONAL DETAILS IN
+C   *    THE TEXT
+C   *
+C   *    FOR MATRICES WITH DIMENSION GREATER OR EQUAL TO 20 THE
+C   *    DIMENSIONS OF THE INTERNAL VARIABLES(CSHTR,CSHTI,RAD,DT,
+C   *    SCALE,RADR AND INT)HAVE TO BE CHANGED IN THE PROGRAM.
+C   *
+C   ******************************************************************
+C
+C
+      REAL CSHTR(20),CSHTI(20),RAD(20),DT(20),RADR(20)
+      REAL MPR,MPI,MIN,KSI,MYR,MYI,NYR,NYI
+      INTEGER INT(20)
+      COMPLEX M,X,HRI,ZRI
+      IF(N.LE.1)RETURN
+C
+C     STEP 1.
+C
+C   ********************************************************************
+C   *    TRANSFORM THE N BY N  COMPLEX MATRIX (HR,HI) INTO TRIANGULAR
+C   *    FORM BY USING THE EISPACK-ROUTINES (REF.  )                  *
+C   *    CBAL,COMMHES,COMLR2 AND CBABK2.
+C   *    NOTE0
+C   *    A NEW PARAMETER (NOBACK) HAS BEEN ADDED TO COMLR2.
+C   *    NOBACK= 0  IMPLIES THAT THE EIGENVECTORS ARE NOT COMPUTED I.E
+C   *    THERE IS NO BACKSUBSTITUTION ,AND THE USER GETS THE TRANSFOR-
+C   *    MATIONS MADE DURING THE LR-PROCESS IN THE MATRICES ZR,ZI.
+C   *    THIS CHANGE CONSIST OF ONE EXTRA STATEMENT IN THE CODE OF
+C   *    COMLR20
+C   *        IF(NOBACK.EQ. 0) GO TO 1001
+C   *
+C   *    WHICH IS PLACED DIRECTLY  AFTER THE STATEMENT0
+C   *    680   IF(N.EQ.1) GO TO 1001
+C   *
+C   ********************************************************************
+C
+C
+C   ******     BALANCE THE MATRIX                                    ***
+C
+      CALL CBAL (NM,N,HR,HI,LOW,IGH,RAD)
+C
+C   *****     COMPUTE EINF=EIN*FN,TOLD=TOL*FN WHERE
+C             FN=THE FROBENIUS NORM OF THE BALANCED MATRIX HR,HI  ****
+C                               MATRIX AR,AI)                    *****
+C
+      FN = 0.
+      DO 1 I=1,N
+      DO 1 J=1,N
+      FN = FN+HR(I,J)**2+HI(I,J)**2
+ 1    CONTINUE
+      FN = SQRT(FN)
+      EINF = FN*EIN
+      TOLD = FN*TOL
+C
+C   ******     TRANSFORM TO UPPER HESSENBERG FORM                    ***
+C
+      CALL COMHES (NM,N,LOW,IGH,HR,HI,INT)
+C
+C   ******     TRANSFORM TO UPPER  TRIANGULAR FORM                   ***
+C
+      NOBACK = 0
+      CALL COMLR2 (NM,N,LOW,IGH,INT,HR,HI,EVR,EVI,ZR,ZI,IERR,NOBACK)
+      IF (IERR.NE.0) RETURN
+C
+C   *****   TRANSFORM THE VECTORS  SO THAT ZR,ZI CONTAIN THE
+C           TRANSFORMATIONS WHICH TRANSFORMED HR,HI TO UPPER
+C           TRIANGULAR  FORM                                     *****
+      CALL CBABK2 (NM,N,LOW,IGH,RAD,N,ZR,ZI)
+C
+      IF(ISTEP.EQ.1)RETURN
+C     STEP 2.
+C
+C   ********************************************************************
+C   *    SORT THE DIAGONAL ELEMENTS OF THE TRIANGULAR MATRIX SO THAT
+C   *    THE NUMERICAL MULTIPLE EIGENVALUES APPEAR IN ADJACENT POSITIONS
+C   ********************************************************************
+C
+      DO 7 I=2,N
+      K = N-I+2
+C
+C   ******     K=N,N-1,...,2  (INDEX FOR ACTUAL EIGENVALUE)      *******
+C
+      MIN = SQRT((HR(K,K)-HR(K-1,K-1))**2+(HI(K,K)-HI(K-1,K-1))**2)
+      KPRIM = K
+      K2 = K-2
+      IF(1.GT.K2) GO TO 10020
+      DO 2 J1=1,K2
+      J = K2-J1+1
+      SK = SQRT((HR(J,J)-HR(K,K))**2+(HI(J,J)-HI(K,K))**2)
+      IF (SK.GE.MIN) GO TO 2
+      KPRIM = J
+      MIN = SK
+ 2    CONTINUE
+10020 CONTINUE
+      IF (KPRIM.EQ.K) GO TO 7
+C
+      IF(KPRIM.GT.K2) GO TO 7
+      DO 6 J=KPRIM,K2
+C
+C
+C   ********************************************************************
+C   *    CHANGE PLACES OF THE DIAGONALELEMENTS (J,J) AND(J+1,J+1) WITH
+C   *    A UNITARY TRANSFORMATION
+C   ********************************************************************
+C
+      KSI = SQRT((HR(J+1,J+1)-HR(J,J))**2+(HI(J+1,J+1)-HI(J,J))**2
+     C+HR(J,J+1)**2+HI(J,J+1)**2)
+      MYR = HR(J,J+1)/KSI
+      MYI = HI(J,J+1)/KSI
+      NYR = (HR(J+1,J+1)-HR(J,J))/KSI
+      NYI = (HI(J+1,J+1)-HI(J,J))/KSI
+      SL = HR(J,J)
+      HR(J,J) = HR(J+1,J+1)
+      HR(J+1,J+1) = SL
+      SL = HI(J,J)
+      HI(J,J) = HI(J+1,J+1)
+      HI(J+1,J+1) = SL
+C
+      HI(J,J+1) = -HI(J,J+1)
+C
+      J1 = J-1
+      IF(1.GT.J1) GO TO 10040
+      DO 3 L=1,J1
+      HRLJ = HR(L,J)
+      HILJ = HI(L,J)
+      HRLJ1 = HR(L,J+1)
+      HILJ1 = HI(L,J+1)
+      HR(L,J) = MYR*HRLJ-MYI*HILJ+NYR*HRLJ1-NYI*HILJ1
+      HI(L,J) = MYR*HILJ+MYI*HRLJ+NYR*HILJ1+NYI*HRLJ1
+      HR(L,J+1) = -NYR*HRLJ-NYI*HILJ+MYR*HRLJ1+MYI*HILJ1
+      HI(L,J+1) = -NYR*HILJ+NYI*HRLJ+MYR*HILJ1-MYI*HRLJ1
+ 3    CONTINUE
+10040 CONTINUE
+C
+C   ******     ACCUMULATE TRANSFORMATIONS                        *******
+      DO 4 L=1,N
+      HRLJ = ZR(L,J)
+      HILJ = ZI(L,J)
+      HRLJ1 = ZR(L,J+1)
+      HILJ1 = ZI(L,J+1)
+      ZR(L,J) = MYR*HRLJ-MYI*HILJ+NYR*HRLJ1-NYI*HILJ1
+      ZI(L,J) = MYR*HILJ+MYI*HRLJ+NYR*HILJ1+NYI*HRLJ1
+      ZR(L,J+1) = -NYR*HRLJ-NYI*HILJ+MYR*HRLJ1+MYI*HILJ1
+      ZI(L,J+1) = -NYR*HILJ+NYI*HRLJ+MYR*HILJ1-MYI*HRLJ1
+ 4    CONTINUE
+C
+      J2 = J+2
+      IF(J2.GT.N) GO TO 6
+      DO 5 L=J2,N
+      HRLJ = HR(J,L)
+      HILJ = HI(J,L)
+      HRLJ1 = HR(J+1,L)
+      HILJ1 = HI(J+1,L)
+      HR(J,L) = MYR*HRLJ+MYI*HILJ+NYR*HRLJ1+NYI*HILJ1
+      HI(J,L) = MYR*HILJ-MYI*HRLJ+NYR*HILJ1-NYI*HRLJ1
+      HR(J+1,L) = -NYR*HRLJ+NYI*HILJ+MYR*HRLJ1-MYI*HILJ1
+      HI(J+1,L) = -NYR*HILJ-NYI*HRLJ+MYR*HILJ1+MYI*HRLJ1
+ 5    CONTINUE
+ 6    CONTINUE
+C
+C   ******     CONTINUE THE SORTING PROCEDURE                    *******
+ 7    CONTINUE
+      DO 8 I=1,NM
+      NDEL(I) = 0
+      NDEFL(I) = 0
+      NXT(I) = 0
+      NDB(I) = 0
+      INT(I) = 0
+      SUPD(I) = 0.
+ 8    CONTINUE
+C
+      IF(ISTEP.EQ.2) GO TO 10400
+C     STEP 3.
+C
+C   ********************************************************************
+C   *    USE THE GERSHGORIN CIRCLES CONSTRUCTED FOR DIAGONAL SIMILARITY
+C   *    TRANSFORMATIONS OF THE MATRIX TO DECIDE WHICH OF THE EIGEN -
+C   *    VALUE APPROXIMATIONS FORM GROUPS CORRESPONDING TO NUMERICAL
+C   *    MULTIPLE EIGENVALUES
+C   ********************************************************************
+C
+      NS = N
+      IBL = 1
+C
+C
+ 9    NF = 1
+C
+C
+      NE = NS
+      ND = NE
+      NDEL(IBL) = NE
+      IF (NS.LT.1) GO TO 21
+ 10   MPR = 0.
+      MPI = 0.
+      IF(ND.GT.NE) GO TO 10080
+      DO 11 K=ND,NE
+      MPR = MPR+HR(K,K)
+      MPI = MPI+HI(K,K)
+ 11   CONTINUE
+10080 CONTINUE
+      MB = NE-ND+1
+      MPR=MPR/FLOAT(MB)
+      MPI=MPI/FLOAT(MB)
+      IF (ND.LE.NF) GO TO 20
+      RGMAX = 0.
+      IF(ND.GT.NE) GO TO 10090
+      DO 12 K=ND,NE
+      CABS1 = SQRT((HR(K,K)-MPR)**2+(HI(K,K)-MPI)**2)
+ 12   RGMAX = AMAX1(RGMAX,CABS1)
+10090 CONTINUE
+      ND2 = ND-1
+      RIGMIN = SQRT((HR(ND2,ND2)-MPR)**2+(HI(ND2,ND2)-MPI)**2)
+      ND2 = ND-2
+      IF(NF.GT.ND2) GO TO 10100
+      DO 13 K=NF,ND2
+      CABS1 = SQRT((HR(K,K)-MPR)**2+(HI(K,K)-MPI)**2)
+ 13   RIGMIN = AMIN1(RIGMIN,CABS1)
+10100 CONTINUE
+      ND2 = NE+1
+      IF(ND2.GT.N) GO TO 10110
+      DO 14 K=ND2,N
+      CABS1 = SQRT((HR(K,K)-MPR)**2+(HI(K,K)-MPI)**2)
+ 14   RIGMIN = AMIN1(RIGMIN,CABS1)
+10110 CONTINUE
+      RADI=(RGMAX+RIGMIN)/2.0
+      DO 15 K=1,N
+      CABS1 = SQRT((HR(K,K)-MPR)**2+(HI(K,K)-MPI)**2)
+ 15   RAD(K) = ABS(CABS1-RADI)
+C
+C   ********************************************************************
+C   *    ABOVE WE HAVE  FIXED THE CIRCLE WITH THE RADIUS RGMAX AND
+C   *    DRAWN CIRCLES  AROUND EVERY EIGENVALUE WHICH TOUCH AT THE
+C   *    HALF DISTRANCE (=(RGMAX + RIGMIN)/2)
+C   *    THESE RADIUS ARE STORED IN THE VECTOR RAD(K)
+C   *    NOW COMPUTE  DT(K)= THE DIAGONAL SIMILARITY TRANSFORMATION
+C   *    AND INVESTIGATE IF WE MANAGED TO ISOLATE THE LAST M EIGEN-
+C   *    VALUES
+C   ********************************************************************
+C
+      K = N
+ 16   RSUM = 0.
+      IF (K.EQ.N) GO TO 18
+      KP1 = K+1
+C     RSUM=   SUM ( T(K,I)/D(I))  I=K+1,N
+      IF(KP1.GT.N) GO TO 10130
+      DO 17 I=KP1,N
+ 17   RSUM = RSUM+SQRT(HR(K,I)**2+HI(K,I)**2)/DT(I)
+10130 CONTINUE
+ 18   DT(K) = RAD(K)/(EINF+RSUM)
+      IF (DT(K).LT.1.0) GO TO 19
+      K = K-1
+      IF (K.GE.NF) GO TO 16
+      GO TO 20
+ 19   ND = ND-1
+      GO TO 10
+ 20   CONTINUE
+C
+C   ******     STORE THE NUMERICAL MULTIPLE EIGENVALUE IN CSHTR(IBL)
+C              , CSHTI(IBL)                                      *******
+      CSHTR(IBL) = MPR
+      CSHTI(IBL) = MPI
+      IBL = IBL+1
+      NS = ND-1
+      GO TO 9
+ 21   CONTINUE
+      NBLOCK = IBL-1
+C
+      IBL2 = IBL/2
+      J = NBLOCK+1
+      IF(1.GT.IBL2) GO TO 10140
+      DO 22 I=1,IBL2
+      K = NDEL(J)
+      NDEL(J) = NDEL(I)
+      NDEL(I) = K
+      IF (I.EQ.J-1) GO TO 22
+      SHTR = CSHTR(J-1)
+      SHTI = CSHTI(J-1)
+      CSHTR(J-1) = CSHTR(I)
+      CSHTI(J-1) = CSHTI(I)
+      CSHTR(I) = SHTR
+      CSHTI(I) = SHTI
+ 22   J = J-1
+10140 CONTINUE
+      NDEL(1) = 0
+C
+C   ********************************************************************
+C   *    CALL THE USER WRITTEN ROUTINE DECIDE ,WHICH POSSIBLY
+C   *    CHANGES THE GROUPING  AND/OR THE VALUES OF THE EIGENVALUES
+C   ********************************************************************
+C
+      CALL DECIDE (NM,N,NDEL,CSHTR,CSHTI,NBLOCK,HR,HI)
+C
+       IF(ISTEP.EQ.3)GO TO 10400
+C     STEP 4.
+C
+C   ********************************************************************
+C   *    ELIMINATE THE ELEMENTS ABOVE THE MAIN DIAGONAL AND OUTSIDE
+C   *    THE BLOCKS CORRESPONDING TO NUMERICAL MULTIPLE EIGENVALUES
+C   *    THE PROCESS IS CARRIED OUT IN ROWS WORKING UPWARDS,AND IN
+C   *    COLUMNS FROM LEFT TO RIHGT.
+C   *    COMPUTE  THE BLOCKS M(K,J) AND M(K,J)-INVERSE(SEE THE ALGO-
+C   *    RITHM) IN ORDER TO ESTIMATE THE SPECTRAL PROJECTORS SM(K)
+C   *    FOR EIGENVALUE  K, K=1,2,...,NBLOCK
+C   *    THE M(K,J)-INVERSE BLOCKS ARE STORED IN THE CORRESPONDING
+C   *    ELIMINATED BLOCKS OF HR,HI.
+C   ********************************************************************
+      DO 23 I=1,NBLOCK
+      SM(I) = 0.
+ 23   DT(I) = 0.
+      L1 = NBLOCK+1
+      DO 32 J2=1,NBLOCK
+      IBL = NBLOCK-J2+1
+      NS = NDEL(IBL)
+      IF (NS.LT.1) GO TO 33
+      NF = NDEL(IBL-1)+1
+C
+      IF(NF.GT.NS) GO TO 10170
+      DO 31 I2=NF,NS
+      K5 = 0
+      I = NS-I2+NF
+      K2 = NS+1
+C
+      IF(K2.GT.N) GO TO 10190
+      DO 24 K=K2,N
+      RADR(K) = 0
+ 24   RAD(K) = 0
+      DO 30 K=K2,N
+C
+      M = CMPLX(HR(I,K),HI(I,K))/CMPLX(HR(K,K)-HR(I,I),HI(K,K)-
+     CHI(I,I))
+      I1 = I-1
+      IF(1.GT.I1) GO TO 10200
+      DO 25 J=1,I1
+      X = CMPLX(HR(J,I),HI(J,I))*M+CMPLX(HR(J,K),HI(J,K))
+      HR(J,K)=REAL(X)
+ 25   HI(J,K) = AIMAG(X)
+10200 CONTINUE
+      K1 = K+1
+      IF (K.LE.NDEL(L1)) GO TO 26
+      L1 = L1+1
+      K5 = K5+1
+ 26   NSS = NDEL(L1)
+      IF(K1.GT.NSS) GO TO 10210
+      DO 27 J=K1,NSS
+      X = CMPLX(HR(K,J),HI(K,J))*(-M)+CMPLX(HR(I,J),HI(I,J))
+      HR(I,J)=REAL(X)
+ 27   HI(I,J) = AIMAG(X)
+10210 CONTINUE
+C
+C   ******     ACCUMULATE  TRANSFORMATIONS                       *******
+      DO 28 J=1,N
+      X = CMPLX(ZR(J,I),ZI(J,I))*M+CMPLX(ZR(J,K),ZI(J,K))
+      ZR(J,K)=REAL(X)
+ 28   ZI(J,K) = AIMAG(X)
+      HR(I,K) = RADR(K)-REAL(M)
+      HI(I,K) = RAD(K)-AIMAG(M)
+      K3 = NSS+1
+C
+      IF(K3.GT.N) GO TO 10230
+      DO 29 L=K3,N
+      X = -M*CMPLX(HR(K,L),HI(K,L))
+      RADR(L) = RADR(L)+REAL(X)
+      RAD(L) = RAD(L)+AIMAG(X)
+ 29   CONTINUE
+10230 CONTINUE
+C
+      SM(L1-1) = SM(L1-1)+REAL(M)**2+AIMAG(M)**2
+      DT(IBL-1) = DT(IBL-1)+HR(I,K)**2+HI(I,K)**2
+ 30   CONTINUE
+10190 CONTINUE
+C
+      L1 = L1-K5
+ 31   CONTINUE
+10170 CONTINUE
+      L1 = L1-1
+ 32   CONTINUE
+ 33   CONTINUE
+      DO 34 I=1,NBLOCK
+ 34   SM(I) = (1.0+SQRT(SM(I)))*(1.0+SQRT(DT(I)))
+C
+C
+C   *****   ZERO THE ELEMENTS BEYOND THE MAIN DIAGONAL.
+C           THIS IS MADE BECAUSE THE ALGORITHMS WHICH COMPUTE
+C           THE NILPOTENT MATRIX OF A DIAGONAL BLOCK,
+C           WORK ON THE WHOLE BLOCK,WHICH IS ASSUMED TO
+C           BE UPPER TRIANGULAR.                                 *****
+C
+      DO 38 I=1,N
+      DO 38 J=1,N
+      IF (I.LE.J) GO TO 38
+      HR(I,J) = -0.0
+      HI(I,J) = -0.0
+ 38   CONTINUE
+C
+      IF(ISTEP.EQ.4) GO TO 10400
+C     STEP 5.
+C
+C   ******************************************************************
+C   *    ORTHONORMALIZE THE VECTORS CORRESPONDING TO A NUMERICAL
+C   *    MULTIPLE EIGENVALUE (1,..,NBLOCK) BY THE MODIFIED GRAMM
+C   *    SCHMIDT  PROCESS.
+C   *    THE VECTORS ARE UPDATED AND STORED IN ZR,ZI
+C   ******************************************************************
+C
+      NS = 0
+      DO 49 IBL=1,NBLOCK
+      NF = NS+1
+      NS = NDEL(IBL+1)
+      IF(NF.GT.NS)GO TO 49
+      DO 48 K=NF,NS
+      RSUM = 0
+      DO 39 I=1,N
+ 39   RSUM = RSUM+ZR(I,K)**2+ZI(I,K)**2
+      RSUM = SQRT(RSUM)
+      EVR(1) = RSUM
+      EVI(1) = 0
+      DO 40 I=1,N
+      ZR(I,K) = ZR(I,K)/RSUM
+ 40   ZI(I,K) = ZI(I,K)/RSUM
+      K1 = K+1
+      IF(K1.GT.NS) GO TO 10300
+      DO 43 J=K1,NS
+      XR = 0
+      XI = 0
+      DO 41 I=1,N
+      XR = XR+ZR(I,K)*ZR(I,J)+ZI(I,K)*ZI(I,J)
+ 41   XI = XI+ZR(I,K)*ZI(I,J)-ZI(I,K)*ZR(I,J)
+      L = J-K+1
+      EVR(L) = XR
+      EVI(L) = XI
+      DO 42 I=1,N
+      ZR(I,J) = ZR(I,J)-EVR(L)*ZR(I,K)+EVI(L)*ZI(I,K)
+      ZI(I,J) = ZI(I,J)-EVR(L)*ZI(I,K)-EVI(L)*ZR(I,K)
+ 42   CONTINUE
+ 43   CONTINUE
+10300 CONTINUE
+      IF(K.GT.NS) GO TO 10330
+      DO 45 I=K,NS
+      XR = 0
+      XI = 0
+      DO 44 J=K,I
+      L = J-K+1
+      XR = XR+EVR(L)*HR(J,I)-EVI(L)*HI(J,I)
+ 44   XI = XI+EVR(L)*HI(J,I)+EVI(L)*HR(J,I)
+      HR(K,I) = XR
+      HI(K,I) = XI
+ 45   CONTINUE
+10330 CONTINUE
+      IF(NF.GT.K) GO TO 48
+      DO 47 I=NF,K
+      IF(K1.GT.NS) GO TO 10360
+      DO 46 J=K1,NS
+      L = J-K+1
+      HR(I,J) = (-EVR(L)*HR(I,K)+EVI(L)*HI(I,K))/RSUM+HR(I,J
+     C)
+      HI(I,J) = (-EVR(L)*HI(I,K)-EVI(L)*HR(I,K))/RSUM+HI(I,J
+     C)
+ 46   CONTINUE
+10360 CONTINUE
+      HR(I,K) = HR(I,K)/RSUM
+      HI(I,K) = HI(I,K)/RSUM
+ 47   CONTINUE
+ 48   CONTINUE
+ 49   CONTINUE
+C
+        IF(ISTEP.EQ.5)GO TO 10400
+C     STEP 6.
+C
+C   ******************************************************************
+C   *    TO EACH DIAGONAL BLOCK,CORRESPONDING TO A NUMERICAL
+C   *    MULTIPLE EIGENVALUE, FIND  A NILPOTENT MATRIX(I.E
+C   *    DETERMINE THE STRUCTURE OF THE BLOCK)
+C   *    USE  RQ-DECOMPOSITIONS OR CSVD-DECOMPOSITIONS(SEE THE
+C   *    ALGORITHM).
+C   *    NOTE THE STRUCTURE IN NDEFL.
+C   ******************************************************************
+      IDEF = 1
+      NDEFL(1) = 1
+C
+C   *****  TOLERANCE GAP IS C2/C1 IN THE DEFLATION PROCESS      *****
+      C1 = 1.0
+      C2 = 1000.0
+      NS = 0
+      DO 54 IBL=1,NBLOCK
+C
+      ID = 0
+      NF = NS+1
+      NS = NDEL(IBL+1)
+      NFS = NF
+      DELE(IBL) = 0
+      NDB(IBL) = IDEF
+      SHTR = CSHTR(IBL)
+      SHTI = CSHTI(IBL)
+      DO 50 I=NFS,NS
+      HR(I,I) = HR(I,I)-SHTR
+ 50   HI(I,I) = HI(I,I)-SHTI
+C
+       NDEF=1
+       IF(NF.EQ.NS)GO TO 10385
+ 51   IF (NF.GT.NS) GO TO 52
+C
+      KB = NS-NF+1
+      CALL RDEFL (NM,N,KB,NDEF,HR(NF,NF),HI(NF,NF),ZR(1,NF),ZI(1,NF),
+     CTOLD,ID,C1,C2,DELE(IBL))
+10385  CONTINUE
+      ID = ID+NDEF
+      NF = NF+NDEF
+      IDEF = IDEF+1
+      NDEFL(IDEF) = NF
+      GO TO 51
+ 52   CONTINUE
+      DO 53 I=NFS,NS
+      HR(I,I) = HR(I,I)+SHTR
+ 53   HI(I,I) = HI(I,I)+SHTI
+C
+      DELE(IBL) = SQRT(DELE(IBL))
+C
+ 54   CONTINUE
+C
+        IF(ISTEP.EQ.6)GO TO 10400
+C     STEP 7.
+C
+C   ******************************************************************
+C   *    TO EACH DIAGONAL BLOCK,CORRESPONDING TO A NUMERICAL MULTIPLE
+C   *    EIGENVALUE,COMPUTE THE COUPLING ELEMENTS OF THE PRINCIPAL
+C   *    CHAINS.
+C   *    THIS IS MADE BY STABILIZED ELIMINATION MATRICES.
+C   *    (SEE THE ALGORITHM)
+C   ******************************************************************
+C
+      NS = 0
+      DO 78 I1=1,NBLOCK
+      NF = NS+1
+      NS = NDEL(I1+1)
+      IF (NF.GE.NS) GO TO 78
+      SHTR = CSHTR(I1)
+      SHTI = CSHTI(I1)
+      DO 55 I=NF,NS
+      HR(I,I) = HR(I,I)-SHTR
+ 55   HI(I,I) = HI(I,I)-SHTI
+      NKF = NS+1
+      J1 = NDB(I1+1)
+      IF (J1.GT.0) GO TO 56
+      J1 = IDEF
+ 56   CONTINUE
+      NF1 = NDB(I1)
+      J1 = J1-NF1-1
+C
+C   ******  J1= THE NUMBER OF T(K,K+1)- BLOCKS(SEE THE ALGORITHM) ****
+      IF(1.GT.J1) GO TO 10420
+      DO 76 J2=1,J1
+      J3 = J1-J2+NF1+1
+      NRS = NDEFL(J3)-1
+      NRF = NDEFL(J3-1)
+      NKS = NKF-1
+      NKF = NRS+1
+      IP = NRS
+C   *****  PASS 1  IN  THE  ELIMINATION PROCESS                    *****
+C
+      IF(NKF.GT.NKS) GO TO 10430
+      DO 69 K=NKF,NKS
+C   *****  DETERMINE THE MAXIMUM OF ABS(HR(I,KP)) +ABS(HI(I,KP))
+C          WHERE  I=NRF,NRF+1,...,IP-1
+C
+      KP = NKS-K+NKF
+      IM = IP
+      IP1 = IP-1
+      XR = HR(IP,KP)
+      XI = HI(IP,KP)
+      IF(NRF.GT.IP1) GO TO 10440
+      DO 57 I=NRF,IP1
+      IF (ABS(HR(I,KP))+ABS(HI(I,KP)).LE.ABS(XR)+ABS(XI))
+     C GO TO 57
+C
+      XR = HR(I,KP)
+      XI = HI(I,KP)
+      IM = I
+ 57   CONTINUE
+10440 CONTINUE
+      IF (IM.EQ.IP) GO TO 61
+C
+C   *****  INTERCHANGE THE ROWS  IP AND IM OF HR AND HI             ****
+C
+      IF(NKF.GT.KP) GO TO 10450
+      DO 58 J=NKF,KP
+      XR = HR(IP,J)
+      HR(IP,J) = HR(IM,J)
+      HR(IM,J) = XR
+      XI = HI(IP,J)
+      HI(IP,J) = HI(IM,J)
+ 58   HI(IM,J) = XI
+10450 CONTINUE
+C
+C   *****  INTERCHANGE  THE COLUMNS IP AND IM OF HR,JI AND ZR,ZI    ****
+      DO 60 J=1,N
+C
+      IF (J.LT.NF.OR.J.GE.NRF) GO TO 59
+      XR = HR(J,IP)
+      HR(J,IP) = HR(J,IM)
+      HR(J,IM) = XR
+      XI = HI(J,IP)
+      HI(J,IP) = HI(J,IM)
+      HI(J,IM) = XI
+ 59   XR = ZR(J,IP)
+      ZR(J,IP) = ZR(J,IM)
+      ZR(J,IM) = XR
+      XI = ZI(J,IP)
+      ZI(J,IP) = ZI(J,IM)
+ 60   ZI(J,IM) = XI
+C
+ 61   CONTINUE
+C   *****  ELIMINATE  THE ELEMENTS  HR,HI(J,KP)  J=NF,NF+1,...,IP-1
+C          PIVOTE ELEMENT IS  HR,HI(IP,KP)                         *****
+      KP1 = KP-1
+      HRIK = HR(IP,KP)
+      HIIK = HI(IP,KP)
+C
+      IF(NKF.GT.KP1) GO TO 10470
+      DO 63 L=NKF,KP1
+      IF(NF.GT.IP1) GO TO 63
+      DO 62 J=NF,IP1
+      M = CMPLX(HR(J,L),HI(J,L))-CMPLX(HR(J,KP),HI(J,KP))
+     C/CMPLX(HRIK,HIIK)*CMPLX(HR(IP,L),HI(IP,L))
+      HR(J,L)=REAL(M)
+ 62   HI(J,L) = AIMAG(M)
+ 63   CONTINUE
+10470 CONTINUE
+C
+C   *****  FINISH THE SIMILARITY TRANSFORMATION  AND ACCUMULATE
+C               TRANSFORMATIONS                                    *****
+      DO 67 J=1,N
+      HRI = CMPLX(HR(J,IP),HI(J,IP))
+      ZRI = CMPLX(ZR(J,IP),ZI(J,IP))
+C
+      IF(NF.GT.IP1) GO TO 10500
+      DO 65 L=NF,IP1
+      IF (J.LT.NF.OR.J.GE.NRF) GO TO 64
+      HRI = HRI+CMPLX(HR(L,KP),HI(L,KP))/CMPLX(HRIK,HIIK)
+     C*CMPLX(HR(J,L),HI(J,L))
+ 64   ZRI = ZRI+CMPLX(HR(L,KP),HI(L,KP))/CMPLX(HRIK,HIIK)
+     C*CMPLX(ZR(J,L),ZI(J,L))
+ 65   CONTINUE
+10500 CONTINUE
+      IF (J.LT.NF.OR.J.GE.NRF) GO TO 66
+      HR(J,IP)=REAL(HRI)
+      HI(J,IP) = AIMAG(HRI)
+ 66   ZR(J,IP)=REAL(ZRI)
+      ZI(J,IP) = AIMAG(ZRI)
+ 67   CONTINUE
+      IP = IP-1
+ 69   CONTINUE
+10430 CONTINUE
+C
+C   *****   END  PASS  1                                           *****
+C
+C   *****  PASS 2  IN THE ELIMINATION - PROCESS                     ****
+      IF(NKF.GT.NKS)GO TO 76
+      DO 75 KP=NKF,NKS
+      IP = IP+1
+C
+C   *****  ELIMINATE THE ELEMTS HR,HI(J,KP),J=IP+1,...,NRS          ****
+      IP1 = IP+1
+C
+C   *****  FINISH THE SIMILARITY TRANSFORMATION AND  ACCUMULATE
+C          TRANSFORMATIONS                                          ****
+      HRIK = HR(IP,KP)
+      HIIK = HI(IP,KP)
+C
+      B = SQRT(HRIK**2+HIIK**2)
+      T1 = HRIK/B
+      T2 = -HIIK/B
+      DO 73 J=1,N
+      HRI = CMPLX(HR(J,IP),HI(J,IP))
+      ZRI = CMPLX(ZR(J,IP),ZI(J,IP))
+      IF(IP1.GT.NRS) GO TO 10530
+      DO 71 L=IP1,NRS
+      IF (J.LT.NF.OR.J.GE.NRF) GO TO 70
+      HRI = HRI+CMPLX(HR(L,KP),HI(L,KP))/CMPLX(HRIK,HIIK)
+     C*CMPLX(HR(J,L),HI(J,L))
+ 70   ZRI = ZRI+CMPLX(HR(L,KP),HI(L,KP))/CMPLX(HRIK,HIIK)
+     C*CMPLX(ZR(J,L),ZI(J,L))
+ 71   CONTINUE
+10530 CONTINUE
+      IF (J.LT.NF.OR.J.GE.NRF) GO TO 72
+      HRI = HRI/CMPLX(T1,T2)
+      HR(J,IP)=REAL(HRI)
+      HI(J,IP) = AIMAG(HRI)
+ 72   CONTINUE
+      ZRI = ZRI/CMPLX(T1,T2)
+      ZR(J,IP)=REAL(ZRI)
+      ZI(J,IP) = AIMAG(ZRI)
+ 73   CONTINUE
+C
+C     MAKE THE (IP,KP)- ELEMENT REAL
+      HR(IP,KP) = HRIK*T1-HIIK*T2
+      HI(IP,KP) = HRIK*T2+HIIK*T1
+      NXT(IP) = KP
+      SUPD(IP) = HR(IP,KP)
+ 75   CONTINUE
+C   ****   END PASS  2                                              ****
+C
+C   ***   A  NEW  T(K,K+1) - BLOCK                                  ****
+ 76   CONTINUE
+10420 CONTINUE
+      DO 77 I=NF,NS
+      HR(I,I) = HR(I,I)+SHTR
+      HI(I,I) = HI(I,I)+SHTI
+ 77   CONTINUE
+C
+C   ****   A  NEW  EIGENVALUE                                       ****
+ 78   CONTINUE
+10400 CONTINUE
+      DO 79 I=1,N
+      EVR(I) = HR(I,I)
+ 79   EVI(I) = HI(I,I)
+      RETURN
+      END
+      SUBROUTINE RDEFL (NM,N,KB,NDEF,HR,HI,ZR,ZI,TOLD,D,C1,C2,DL)       00015280
+      REAL HR(NM,N),HI(NM,N),ZR(NM,N),ZI(NM,N)
+      INTEGER D
+C
+C   ********************************************************************
+C   *    THE  ROUTINE  MAKES  A  CSVD- DECOMPOSITION OF A BLOCK TO
+C   *    DETERMINE THE RANK OF THE BLOCK
+C   *
+C   *    THE FORMAL PARAMETER LIST
+C   *
+C   *    ON INPUT
+C   *
+C   *    NM        THE ROW DIMENSION OF THE TWO-DIMENSIONAL ARRAY
+C   *              PARAMETERS(HR,HI,ZR,ZI) AS DECLARED IN THE
+C   *              CALLING PROGRAM DIMENSION STATEMENT
+C   *    N         THE ORDER OF THE ORIGINAL MATRIX
+C   *    KB        THE DIMENSION OF THE BLOCK STARTING AT THE
+C   *              ADDRESS HR,HI
+C   *    HR,HI     THE ADDRESS OF THE REAL AND IMAGINARY PARTS,
+C   *              RESPECTIVELY,OF THE ACTUAL BLOCK S (1,1)-
+C   *              ELEMENT.THE BLOCK IS AFFECTED BY THE PROCESS
+C   *    ZR,ZI     THE REAL AND IMAGINARY PARTS,RESPECTIVELY,
+C   *              OF THE TRANSFORMATION MATRIX(WILL BE ACCUMULATED
+C   *              DURING THE RANK DETERMINATION PROCESS)
+C   *    C1,C2     TOLERANCE GAP IS C2/C1 IN THE DEFLATION PROCESS
+C   *              (THE PARAMETERS ARE GIVEN VALUES BY JNF,C1=1.0
+C   *               AND C2=1000.0)
+C   *    TOLD      TOLERANCE PARAMETER USED IN THE DETERMINATION
+C   *              OF THE RANK OF THE ACTUAL BLOCK
+C   *              (TOLD=TOL*THE FOBENIUS NORM OF THE BALANCED
+C   *              MATRIX FROM CBAL,THE PARAMETER IS COMPUTED BY JNF)
+C   *
+C   *    ON OUTPUT
+C   *
+C   *    NDEF      THE NUMBER OF DEFLATION STEPS I.E THE NUMBER OF
+C   *              SINGULAR VALUES ,INTERPRETED AS ZEROES
+C   *    DL        THE SQUARE OF DELETED SINGULAR VALUES
+C   *
+C   *    THE DIMENSIONS OF H,U,V AND S HAVE TO BE CHANGED FOR
+C   *    MATRICES HR,HI WITH DIMENSION GREATER THEN 20
+C   ********************************************************************
+C
+      COMPLEX H(20,20),U(20,20),V(20,20),HIJ,ZIJ
+      REAL S(20)
+      MMAX = 20
+      DO 1 I=1,KB
+      DO 1 J=1,KB
+      H(I,J) = CMPLX(HR(I,J),HI(I,J))
+ 1    CONTINUE
+C   ******  CSVD1 IS THE CACM ALGORITHM 358 WITH ONE CHANCE,
+C           NAMELY,THE SINGULAR VALUES ARE SORTED IN INCREASING
+C           ORDER  (INSTEAD OF DECREASING ORDER).
+      CALL CSVD1 (H,MMAX,MMAX,KB,KB,0,KB,KB,S,U,V)
+C   *
+C   *    PRINT THE SINGULAR VALUES TO GET THE THEORETICAL
+C   *    COUPLING ELEMENT
+      WRITE(6,200) (S(I),I=1,KB)
+ 200  FORMAT(10X,15HSINGULAR VALUES/8(3X,E12.5))
+C
+C   *****  DETERMINE THE NUMBER OF DEFLATION STEPS NDEF= NUMBER OF
+C          SINGULAR VALUES EQUAL TO ZERO                             ***
+      T1 = C1*TOLD
+      T2 = C2*TOLD
+      DO 2 I=1,KB
+      IF (ABS(S(I)).GE.T1) GO TO 4
+ 2    CONTINUE
+      NDEF = KB
+      DO 3 I=1,NDEF
+ 3    DL = DL+S(I)**2
+      RETURN
+ 4    IF (ABS(S(I)).GT.T2) GO TO 5
+      IF (I.GE.KB) GO TO 5
+      I = I+1
+      GO TO 4
+ 5    NDEF = I-1
+      IF(NDEF.EQ.0)NDEF = 1
+      DO 6 I=1,NDEF
+      DL = DL+S(I)**2
+ 6    CONTINUE
+C
+C   *****   OVERWRITE  HR,HI WITH  V(TRANS,CONJG)*U* DIAG(S(I))      ***
+      DO 8 I=1,KB
+      DO 8 J=1,KB
+      HIJ = (0.,0.)
+      DO 7 K=1,KB
+ 7    HIJ = HIJ+CONJG(V(K,I))*U(K,J)
+      HIJ = HIJ*S(J)
+      HR(I,J)=REAL(HIJ)
+ 8    HI(I,J) = AIMAG(HIJ)
+C
+C   *****  MULTIPLY COLUMNS NF,...,NF+ID WITH V(TRANS,CONJG) FROM LEFT *
+      IF(1.GT.D) GO TO 10060
+      DO 12 J=1,D
+      ID = J-D
+      DO 10 I=1,KB
+      HIJ = (0.,0.)
+      DO 9 K=1,KB
+ 9    HIJ = HIJ+CONJG(V(K,I))*CMPLX(HR(K,ID),HI(K,ID))
+ 10   H(1,I) = HIJ
+      DO 11 I=1,KB
+      HR(I,ID)=REAL(H(1,I))
+ 11   HI(I,ID) = AIMAG(H(1,I))
+ 12   CONTINUE
+10060 CONTINUE
+C
+C   *****  FINISH THE SIMILARITY TRANSFORMATION AND ACCUMULATE
+C          TRANSFORMATIONS                                           ***
+      DO 19 I=1,N
+      ID = I-D
+      DO 16 J=1,KB
+      HIJ = (0.,0.)
+      ZIJ = (0.,0.)
+      DO 14 K=1,KB
+      IF (ID.GT.0) GO TO 13
+      HIJ = HIJ+CMPLX(HR(ID,K),HI(ID,K))*V(K,J)
+ 13   CONTINUE
+ 14   ZIJ = ZIJ+CMPLX(ZR(I,K),ZI(I,K))*V(K,J)
+      IF (ID.GT.0) GO TO 15
+      H(1,J) = HIJ
+ 15   U(1,J) = ZIJ
+ 16   CONTINUE
+      DO 18 J=1,KB
+      IF (ID.GT.0) GO TO 17
+      HR(ID,J)=REAL(H(1,J))
+      HI(ID,J) = AIMAG(H(1,J))
+ 17   ZR(I,J)=REAL(U(1,J))
+      ZI(I,J) = AIMAG(U(1,J))
+ 18   CONTINUE
+ 19   CONTINUE
+C
+      RETURN
+      END
+C     ------------------------------------------------------------------00016600
+C                                                                       00016610
+      SUBROUTINE CBAL(NM,N,AR,AI,LOW,IGH,SCALE)                         00016620
+C
+      INTEGER I,J,K,L,M,N,JJ,NM,IGH,LOW,IEXC
+      REAL AR(NM,N),AI(NM,N),SCALE(N)
+      REAL C,F,G,R,S,B2,RADIX
+C     REAL ABS
+      LOGICAL NOCONV
+C
+C     THIS SUBROUTINE IS A TRANSLATION OF THE ALGOL PROCEDURE
+C     CBALANCE, WHICH IS A COMPLEX VERSION OF BALANCE,
+C     NUM. MATH. 13, 293-304(1969) BY PARLETT AND REINSCH.
+C     HANDBOOK FOR AUTO. COMP., VOL.II-LINEAR ALGEBRA, 315-326(1971).
+C
+C     THIS SUBROUTINE BALANCES A COMPLEX MATRIX AND ISOLATES
+C     EIGENVALUES WHENEVER POSSIBLE.
+C
+C     ON INPUT-
+C
+C       NM MUST BE SET TO THE ROW DIMENSION OF TWO-DIMENSIONAL
+C         ARRAY PARAMETERS AS DECLARED IN THE CALLING PROGRAM
+C         DIMENSION STATEMENT,
+C
+C       N IS THE ORDER OF THE MATRIX,
+C
+C       AR AND AI CONTAINS THE REAL AND IMAGINARY PARTS,
+C         RESPECTIVELY, OF THE COMPLEX MATRIX TO BE BALANCED.
+C
+C     ON OUTPUT-
+C
+C       AR AND AI CONTAIN THE REAL AND IMAGINARY PARTS,
+C         RESPECTIVELY, OF THE BALANCED MATRIX,
+C
+C         LOW AND IGH ARE TWO INTEGERS SUCH THAT AR(I,J) AND AI(I,J)
+C          ARE EQUAL TO ZERO IF
+C           (1) I IS GREATER THAN J AND
+C           (2) J=1,...,LOW-1 OR I-IGH+1,...,N,
+C
+C         SCALE CONTAINS INFORMATION DETERMINING THE
+C           PERMUTATIONS AND SCALING FACTORS USED.
+C
+C     SUPPOSE THAT THE PRINCIPAL SUBMATRIX IN ROWS LOW THROUGH IGH
+C     HAS BEEN BALANCED, THAT P(J) DENOTES THE INDEX INTERCHANGED
+C     WITH J DURING THE PERMUTATION STEP, AND THAT THE ELEMENTS
+C     OF THE DIAGONAL MATRIX USED ARE DENOTED BY D(I,J). THEN
+C         SCALE(J) = P(J),   FOR J = 1,...,LOW-1
+C                  = D(J,J)      J = LOW,...,IGH
+C                  = P(J)        J = IGH+1,...,N.
+C     THE ORDER IN WHICH THE INTERCHANGES ARE MADE IS N TO IGH+1,
+C     THEN 1 TO LOW-1.
+C
+C     NOTE THAT I IS RETURNED FOR IGH IF IGH IS ZERO FORMALLY.
+C
+C     THE ALGOL PROCEDURE EXC CONTAINED IN CBALANCE APPEARS IN
+C     CBAL IN LINE. (NOTE THAT THE ALGOL ROLES OF IDENTIFIERS
+C     K,L HAVE BFEN REVERSED.)
+C
+C     ARITHMETIC IS REAL THROUGHOUT.
+C
+C     QUESTIONS AND COMMENTS SHOULD BE DIRECTED TO B. S. GARBOW,
+C     APPLIED MATHEMATICS DIVISION, ARGONNE NATIONAL LABORATORY
+C
+C     ------------------------------------------------------------------
+C
+C     ********** RADIX IS A MACHINE DEPENDENT PARAMETER SPECIFYING
+C                THE BASE OF BHE MACHINE FLOATING POINT REPRESENTATION.
+C
+C                ***********
+      RADIX = 2.
+C
+      B2 = RADIX * RADIX
+      K = 1
+      L = N
+      GO TO 100
+C     ********** IN-LINE PROCEDURE FOR ROW AND
+C                COLUMN EXCHANGE **********
+   20 SCALE(M) = J
+      IF (J .EQ. M) GO TO 50
+C
+      IF(1.GT.L) GO TO 10000
+      DO 30 I = 1, L
+      F = AR(I,J)
+      AR(I,J) = AR(I,M)
+      AR(I,M) = F
+      F = AI(I,J)
+      AI(I,J) = AI(I,M)
+      AI(I,M) = F
+   30 CONTINUE
+10000 CONTINUE
+C
+      IF(K.GT.N) GO TO 10010
+      DO 40 I = K, N
+      F = AR(J,I)
+      AR(J,I) = AR(M,I)
+      AR(M,I) = F
+      F = AI(J,I)
+      AI(J,I) = AI(M,I)
+      AI(M,I) = F
+   40 CONTINUE
+10010 CONTINUE
+C
+   50 IF(IEXC.LE.1) GO TO 80
+      GO TO 130
+C     ********** SEARCH FOR ROWS ISOLATING AN EIGENVALUE
+C                AND PUSH THEM DOWN **********
+   80 IF (L .EQ. 1) GO TO 280
+      L = L - 1
+C     ********** FOR J=L STEP -1 UNTIL 1 DO -- **********
+  100 IF(1.GT.L) GO TO 10020
+      DO 120 JJ = 1, L
+      J = L + 1 - JJ
+C
+      IF(1.GT.L) GO TO 10030
+      DO 110 I = 1, L
+      IF (I .EQ. J) GO TO 110
+      IF (AR(J,I) .NE. 0.0 .OR. AI(J,I) .NE. 0.0) GO TO 120
+  110 CONTINUE
+10030 CONTINUE
+C
+      M = L
+      IEXC = 1
+      GO TO 20
+  120 CONTINUE
+10020 CONTINUE
+C
+      GO TO 140
+C     ********** SEARCH FOR COLUMNS ISOLATING AN EIGENVALUE
+C                AND PUSH THEM LEFT **********
+  130 K = K + 1
+C
+  140 IF(K.GT.L) GO TO 10040
+      DO 170 J = K, L
+C
+      IF(K.GT.L) GO TO 10050
+      DO 150 I = K, L
+      IF (I .EQ. J) GO TO 150
+      IF (AR(I,J) .NE. 0.0 .OR. AI(I,J) .NE. 0.0) GO TO 170
+  150 CONTINUE
+10050 CONTINUE
+C
+      M = K
+      IEXC = 2
+      GO TO 20
+  170 CONTINUE
+10040 CONTINUE
+C     ********** NOW BALANCE THE SUBMATRIX IN ROWS K TO L **********
+      IF(K.GT.L) GO TO 10060
+      DO 180 I = K, L
+  180 SCALE(I) = 1.0
+10060 CONTINUE
+C     ********** ITERATIVE LOOP FOR NORM REDUCTION **********
+  190 NOCONV = .FALSE.
+C
+      IF(K.GT.L) GO TO 10070
+      DO 270 I = K, L
+      C = 0.0
+      R = 0.0
+C
+      IF(K.GT.L) GO TO 10080
+      DO 200 J = K, L
+      IF (J .EQ. I) GO TO 200
+      C = C + ABS(AR(J,I)) + ABS(AI(J,I))
+      R = R + ABS(AR(I,J)) + ABS(AI(J,I))
+  200 CONTINUE
+10080 CONTINUE
+C
+      G = R / RADIX
+      F = 1.0
+      S = C + R
+  210 IF (C .GE. G) GO TO 220
+      F = F * RADIX
+      C = C * B2
+      GO TO 210
+  220 G = R * RADIX
+  230 IF (C .LT. G) GO TO 240
+      F = F / RADIX
+      C = C / B2
+      GO TO 230
+C     ********** NOW BALANCE **********
+  240 IF ((C + R) / F .GE. 0.95 * S) GO TO 270
+      G = 1.0 / F
+      SCALE(I) = SCALE(I) * F
+      NOCONV = .TRUE.
+C
+      IF(K.GT.N) GO TO 10090
+      DO 250 J = K, N
+      AR(I,J) = AR(I,J) * G
+      AI(I,J) = AI(I,J) * G
+  250 CONTINUE
+10090 CONTINUE
+C
+      IF(1.GT.L) GO TO 10100
+      DO 260 J = 1, L
+      AR(J,I) = AR(J,I) * F
+      AI(J,I) = AI(J,I) * F
+  260 CONTINUE
+10100 CONTINUE
+C
+  270 CONTINUE
+10070 CONTINUE
+C
+      IF (NOCONV) GO TO 190
+C
+  280 LOW = K
+      IGH = L
+      RETURN
+C     ********** LAST CARD OF CBAL **********
+      END
+C     ------------------------------------------------------------------00018690
+C                                                                       00018700
+      SUBROUTINE COMHES(NM,N,LOW,IGH,AR,AI,INT)                         00018710
+C
+      INTEGER I,J,M,N,LA,NM,IGH,KP1,LOW,MM1,MP1
+      REAL AR(NM,N),AI(NM,N)
+      REAL XR,XI,YR,YI
+C     REAL ABS
+      INTEGER INT(IGH)
+      COMPLEX X,Y
+      REAL T1(2),T2(2)
+      EQUIVALENCE (X,T1(1),XR),(T1(2),XI),(Y,T2(1),YR),(T2(2),YI)
+C
+C     THIS SUBROUTINE IS A TRANSLATION OF THE ALGOL PROCEDURE COMHES,
+C     NUM. MATH. 12, 349-368(1968) BY MARTIN AND WILKINSON.
+C     HANDBOOK FOR AUTO. COMP., VOL.II-LINEAR ALGEBRA, 339-358(1971).
+C
+C     GIVEN A COMPLEX GENERAL MATRIX, THIS SUBROUTINE
+C     REDUCES A SUBMATRIX SITUATED IN ROWS AND COLUMNS
+C     LOW THROUGH IGH TO UPPER HESSENBERG FORM BY
+C     STABILIZED ELEMENTARY SIMILARITY TRANSFORMATIONS.
+C
+C     ON INPUT-
+C
+C        NM MUST BE SET TO THE ROW DIMENSION OF TWO-DIMENSIONAL
+C           ARRAY PARAMETERS AS DECLARED IN THE CALLING PROGRAM
+C           DIMENSION STATEMENT,
+C
+C        N IS THE ORDER OF THE MATRIX,
+C
+C        LOW AND IGH ARE INTEGERS DETERMINED BY THE BALANCING
+C           SUBROUTINE CBAL. IF CBAL HAS NOT BEEN USED,
+C           SET LOW=1, IGH=N,
+C
+C        AR AND AI CONTAIN THE REAL AND IMAGINARY PARTS,
+C           RESPECTIVELY, OF THE COMPLEX INPUT MATRIX.
+C
+C     ON OUTPUT-
+C
+C     AR AND AI CONTAIN THE REAL AND IMAGINARY PARTS,
+C           RESPECTIVELY, OF THE HESSENBERG MATRIX. THE
+C           MULTIPLIERS WHICH WERE USED IN THE REDUCTION
+C           ARE STORED IN THE REMAINING TRIANGLES UNDER THE
+C           HESSENBERG MATRIX,
+C
+C        INT CONTAINS INFORMATION ON THE ROWS AND COLUMNS
+C           INTERCHANGED IN THE REDUCTION.
+C           ONLY ELEMENTS LOW THROUGH IGH ARE USED.
+C
+C     ARITHMETIC IS REAL EXCEPT FOR THE REPLACEMENT OF THE ALGOL
+C     PROCEDURE CDIV BY COMPLEX DIVISION.
+C
+C     QUESTIONS AND COMMENTS SHOULD BE DIRECTED TO B. S. GARBOW,
+C     APPLIED MATHEMATICS DIVISION, ARGONNE NATIONAL LABORATORY
+C
+C     ------------------------------------------------------------------
+C
+      LA = IGH - 1
+      KP1 = LOW + 1
+      IF(LA .LT. KP1) GO TO 200
+C
+      IF(KP1.GT.LA) GO TO 10000
+      DO 180 M = KP1, LA
+      MM1 = M - 1
+      XR = 0.0
+      XI = 0.0
+      I = M
+C
+      IF(M.GT.IGH) GO TO 10010
+      DO 100 J = M, IGH
+      IF (ABS(AR(J,MM1)) + ABS(AI(J,MM1))
+     C.LE. ABS(XR) + ABS(XI)) GO TO 100
+      XR = AR(J,MM1)
+      XI = AI(J,MM1)
+      I = J
+  100 CONTINUE
+10010 CONTINUE
+C
+      INT(M) = I
+      IF (I .EQ. M) GO TO 130
+C     ********** INTERCHANGE ROWS AND COLUMNS OF AR AND AI **********
+      IF(MM1.GT.N) GO TO 10020
+      DO 110 J = MM1, N
+      YR = AR(I,J)
+      AR(I,J) = AR(M,J)
+      AR(M,J) = YR
+      YI = AI(I,J)
+      AI(I,J) = AI(M,J)
+      AI(M,J) = YI
+  110 CONTINUE
+10020 CONTINUE
+C
+      IF(1.GT.IGH) GO TO 10030
+      DO 120 J = 1, IGH
+      YR = AR(J,I)
+      AR(J,I) = AR(J,M)
+      AR(J,M) = YR
+      YI = AI(J,I)
+      AI(J,I) = AI(J,M)
+      AI(J,M) = YI
+  120 CONTINUE
+10030 CONTINUE
+C     **********END INTERCHANGE **********
+  130 IF (XR .EQ. 0.0 .AND. XI .EQ. 0.0) GO TO 180
+      MP1 = M + 1
+C
+      IF(MP1.GT.IGH) GO TO 10040
+      DO 160 I = MP1, IGH
+      YR = AR(I,MM1)
+      YI = AI(I,MM1)
+      IF (YR .EQ. 0.0 .AND. YI .EQ. 0.0) GO TO 160
+      Y = Y / X
+      AR(I,MM1) = YR
+      AI(I,MM1) = YI
+C
+      IF(M.GT.N) GO TO 10050
+      DO 140 J = M, N
+      AR(I,J) = AR(I,J) - YR * AR(M,J) + YI * AI(M,J)
+      AI(I,J) = AI(I,J) - YR* AI(M,J) - YI* AR(M,J)
+  140 CONTINUE
+10050 CONTINUE
+C
+      IF(1.GT.IGH) GO TO 10060
+      DO 150 J = 1, IGH
+      AR(J,M) = AR(J,M) + YR * AR(J,I) - YI * AI(J,I)
+      AI(J,M) = AI(J,M) + YR * AI(J,I) + YI * AR(J,I)
+  150 CONTINUE
+10060 CONTINUE
+C
+  160 CONTINUE
+10040 CONTINUE
+C
+  180 CONTINUE
+10000 CONTINUE
+C
+  200 RETURN
+C     ********** LAST CARD OF COMHES **********
+      END
+C     ------------------------------------------------------------------00020070
+C                                                                       00020080
+      SUBROUTINE  COMLR2 (NM,N,LOW,IGH,INT,HR,HI,WR,WI,ZR,ZI,IERR,NOBAK)00020090
+C
+      INTEGER I,J,K,L,M,N,EN,II,JJ,LL,MM,NM,NN,IGH,IM1,IP1,
+     C        ITS,LOW,MP1,ENM1,IEND,IERR
+      INTEGER  NOBAK
+      REAL HR(NM,N),HI(NM,N),WR(N),WI(N),ZR(NM,N),ZI(NM,N)
+      REAL SI,SR,TI,TR,XI,XR,YI,YR,ZZI,ZZR,NORM,MACHEP
+C     REAL ABS
+      INTEGER INT(IGH)
+C     INTEGER MIN0
+      COMPLEX X,Y,Z
+C     COMPLEX CSQRT,CMPLX
+      REAL T1(2),T2(2),T3(2)
+      EQUIVALENCE (X,T1(1),XR),(T1(2),XI),(Y,T2(1),YR),(T2(2),YI),
+     C            (Z,T3(1),ZZR),(T3(2),ZZI)
+C
+C     THIS SUBROUTINE IS A TRANSLATION OF THE ALGOL PROCEDURE COMLR2,
+C     NUM. MATH. 16, 181-204(1970) BY PETERS AND WILKINSON.
+C     HANDBOOK FOR AUTO. COMP., VOL.II-LINEAR ALGEBRA, 372-395(1971).
+C
+C     THIS SUBROUTINE FINDS THE EIGENVALUES AND EIGENVECTORS
+C     OF A COMPLEX UPPER HESSENBERG MATRIX BY THE MODIFIED LR
+C     METHOD. THE EIGENVECTORS OF A COMPLEX GENERAL MATRIX
+C     CAN ALSO BE FOUND IF COMHES HAS BEEN USED TO REDUCE
+C     THIS GENERAL MATRIX TO HESSENBERG FORM.
+C
+C     ON INPUT-
+C
+C        NM MUST BE SET TO THE ROW DIMENSION OF TWO-DIMENSIONAL
+C           ARRAY PARAMETERS AS DECLARED IN THE CALLING PROGRAM
+C           DIMENSION STATEMENT,
+C
+C        N IS THE ORDER OF THE MATRIX,
+C
+C     NOBAK IS AN EXTRA  PARAMETER WHICH  TELLS IF THE USER WANTS
+C     1     THE EIGENVECTORS  OR  JUST  THE  TRANSFORMATIONMATRICES (=0)
+C
+C        LOW AND IGH ARE INTEGERS DETRMINED BY THE BALANCING
+C           SUBROUTINE CBAL. IF CBAL HAS NOT BEEN USED,
+C           SET LOW=1, IGH=N,
+C
+C        INT CONTAINS INFORMATION ON THE ROWS AND COLUMNS INTERCHANGED
+C           IN THE REDUCTION BY COMHES, IF PERFORMED. ONLY ELEMENTS
+C           LOW THROUGH IGH ARE USED. IF THE EIGENVECTORS OF THE HESSEN-
+C           BERG MATRIX ARE DESIRED, SET INT(J)=J FOR THESE ELEMENTS,
+C
+C        HR AND HI CONTAINS THE REAL AND IMAGINARY PARTS,
+C           RESPECTIVELY, OF THE COMPLEX UPPER HESSENBERG MATRIX.
+C           THEIR LOWER TRIANGLES BELOW THE SUBDIAGONAL CONTAINS THE
+C           MULTIPLIERS WHICH WERE USED IN THE REDUCTION BY COMHES,
+C           IF PERFORMED. IF THE EIGENVECTORS OF THE HESSENBERG
+C           MATRIX ARE DESIRED, THESE ELEMENTS MUST BE SET TO ZERO.
+C
+C     ON OUTPUT-
+C
+C        THE UPPER HESSENBERG PORTIONS OF HR AND HI HAVE BEEN
+C           DESTROYED,
+C
+C        WR AND WI CONTAINS THE REAL AND IMAGINARY PARTS,
+C           RESPECTIVELY, OF THE EIGENVALUES. IF AN ERROR
+C           EXIT IS MADE, THE EIGENVALUES SHOULD BE CORRECT
+C           FOR INDICES IERR+1,...,N,
+C
+C        ZR AND ZI CONTAINS THE REAL AND IMAGINARY PARTS,
+C           RESPECTIVELY, OF THE EIGENVECTORS. THE EIGENVECTORS
+C           ARE UNNORMALIZED. IF AN ERROR EXIT IS MADE, NONE OF
+C           THE EIGENVECTORS HAS BEEN FOUND,
+C
+C        IERR IS SET TO
+C           ZERO     FOR NORMAL RETURN,
+C           J         IF THE J-TH EIGENVALUE HAS NOT BEEN
+C                     DETERMINED AFTER 30 ITERATIONS.
+C
+C     ARITHMETIC IS REAL EXCEPT FOR THE REPLACEMENT OF THE ALGOL
+C     PROCEDURE CDIV BY COMPLEX DIVISION AND USE OF THE SUBROUTINES
+C     CSQRT AND CMPLX IN COMPUTING COMPLEX SQUARE ROOTS.
+C
+C     QUESTIONS AND COMMENTS SHOULD BE DIRECTED TO B. S. GARBOW,
+C     APPLIED MATHEMATICS DIVISION, ARGONNE NATIONAL LABORATORY
+C
+C     ------------------------------------------------------------------
+C     *********** MACHEP IS A MACHINE DEPENDENT PARAMETER SPECIFYING
+C                 THE RELATIVE PRECISION OF FLOATING POINT ARITHMETIC.
+C
+C                 **********
+       MACHEP=2.0**(-47)
+C
+      IERR = 0
+C     ********** INITIALIZE EIGENVECTOR MATRIX **********
+      IF(1.GT.N) GO TO 10000
+      DO 100 I = 1,N
+C
+      IF(1.GT.N) GO TO 10000
+      DO 100 J = 1, N
+      ZR(I,J) = 0.0
+      ZI(I,J) = 0.0
+      IF (I .EQ. J) ZR(I,J) = 1.0
+  100 CONTINUE
+10000 CONTINUE
+C     ********** FORM THE MATRIX OF ACCUMULATED TRANSFORMATIONS
+C                FROM THE INFORMATION LEFT BY COMHES **********
+      IEND = IGH - LOW - 1
+      IF (IEND .LE. 0) GO TO 180
+C     ********** FOR I=IGH-1 STEP -1 UNTIL LOW+1 DO -- **********
+      IF(1.GT.IEND) GO TO 10010
+      DO 160 II = 1, IEND
+      I = IGH - II
+      IP1 = I + 1
+C
+      IF(IP1.GT.IGH) GO TO 10020
+      DO 120 K = IP1, IGH
+      ZR(K,I) = HR(K,I-1)
+      ZI(K,I) = HI(K,I-1)
+  120 CONTINUE
+10020 CONTINUE
+C
+      J=INT(I)
+      IF (I .EQ. J) GO TO 160
+C
+      IF(I.GT.IGH) GO TO 10030
+      DO 140 K = I, IGH
+      ZR(I,K) = ZR(J,K)
+      ZI(I,K) = ZI(J,K)
+      ZR(J,K) = 0.0
+      ZI(J,K) = 0.0
+  140 CONTINUE
+10030 CONTINUE
+C
+      ZR(J,I) = 1.0
+  160 CONTINUE
+10010 CONTINUE
+C     ********** STORE ROOTS ISOLATED BY CBAL **********
+  180 IF(1.GT.N) GO TO 10040
+      DO 200 I = 1, N
+      IF (I .GE. LOW .AND. I .LE. IGH) GO TO 200
+      WR(I) = HR(I,I)
+      WI(I) = HI(I,I)
+  200 CONTINUE
+10040 CONTINUE
+C
+      EN = IGH
+      TR = 0.0
+      TI = 0.0
+C     ********** SEARCH FOR NEXT EIGENVALUE **********
+  220 IF (EN .LT. LOW) GO TO 680
+      ITS = 0
+      ENM1 = EN - 1
+C     ********** LOOK FOR SINGLE SMALL SUB-DIAGONAL ELEMENT
+C                FOR L=EN STEP -1 UNTIL LOW DO -- **********
+  240 IF(LOW.GT.EN) GO TO 10050
+      DO 260 LL = LOW, EN
+      L = EN + LOW - LL
+      IF (L .EQ. LOW) GO TO 300
+      IF (ABS(HR(L,L-1)) + ABS(HI(L,L-1)) .LE.
+     C   MACHEP * (ABS(HR(L-1,L-1)) + ABS(HI(L-1,L-1))
+     C          + ABS(HR(L,L)) + ABS(HI(L,L)))) GO TO 300
+  260 CONTINUE
+10050 CONTINUE
+C     ********** FORM SHIFT ***********
+  300 IF (L .EQ. EN) GO TO 660
+      IF (ITS .EQ. 30) GO TO 1000
+      IF (ITS .EQ. 10 .OR. ITS .EQ. 20) GO TO 320
+      SR = HR(EN,EN)
+      SI = HI(EN,EN)
+      XR = HR(ENM1,EN) * HR(EN,ENM1) - HI(ENM1,EN) * HI(EN,ENM1)
+      XI = HR(ENM1,EN) * HI(EN,ENM1) + HI(ENM1,EN) * HR(EN,ENM1)
+      IF (XR .EQ. 0.0 .AND. XI .EQ. 0.0) GO TO 340
+      YR = (HR(ENM1,ENM1) - SR) / 2.0
+      YI = (HI(ENM1,ENM1) - SI) / 2.0
+      Z = CSQRT(CMPLX(YR**2-YI**2+XR,2.0*YR*YI+XI))
+      IF (YR * ZZR + YI * ZZI .LT. 0.0) Z = -Z
+      X = X / (Y + Z)
+      SR = SR - XR
+      SI = SI - XI
+      GO TO 340
+C     ********** FORM EXCEPTIONAL SHIFT **********
+  320 SR = ABS(HR(EN,ENM1)) + ABS(HR(ENM1,EN-2))
+      SI = ABS(HI(EN,ENM1)) + ABS(HI(ENM1,EN-2))
+C
+  340 IF(LOW.GT.EN) GO TO 10060
+      DO 360 I = LOW, EN
+      HR(I,I) = HR(I,I) - SR
+      HI(I,I) = HI(I,I) - SI
+  360 CONTINUE
+10060 CONTINUE
+C
+      TR = TR + SR
+      TI = TI + SI
+      ITS = ITS + 1
+C     ********** LOOK FOR TWO CONSECUTIVE SMALL
+C                SUB-DIAGONAL ELEMENTS **********
+      XR = ABS(HR(ENM1,ENM1)) + ABS(HI(ENM1,ENM1))
+      YR = ABS(HR(EN,ENM1)) + ABS(HI(EN,ENM1))
+      ZZR = ABS(HR(EN,EN)) + ABS(HI(EN,EN))
+C     ********** FOR M=EN-1 STEP -1 UNTIL L DO -- **********
+      IF(L.GT.ENM1) GO TO 10070
+      DO 380 MM = L, ENM1
+      M = ENM1 + L - MM
+      IF (M .EQ. L) GO TO 420
+      YI = YR
+      YR = ABS(HR(M,M-1)) + ABS(HI(M,M-1))
+      XI = ZZR
+      ZZR = XR
+      XR = ABS(HR(M-1,M-1)) + ABS(HI(M-1,M-1))
+      IF(YR .LE. MACHEP*ZZR/YI*(ZZR +XR +XI)) GO TO 420
+  380 CONTINUE
+10070 CONTINUE
+C     ********** TRIANGULAR DECOMPOSITION H=L* R **********
+  420 MP1 = M + 1
+C
+      IF(MP1.GT.EN) GO TO 10080
+      DO 520 I = MP1, EN
+      IM1 = I - 1
+      XR = HR(IM1,IM1)
+      XI = HI(IM1,IM1)
+      YR = HR(I,IM1)
+      YI = HI(I,IM1)
+      IF (ABS(XR) + ABS(XI) .GE. ABS(YR) + ABS(YI)) GO TO 460
+C     ********** INTERCHANGE ROWS OF HR AND HI **********
+      IF(IM1.GT.N) GO TO 10090
+      DO 440 J = IM1, N
+      ZZR = HR(IM1,J)
+      HR(IM1,J) = HR(I,J)
+      HR(I,J) = ZZR
+      ZZI= HI(IM1,J)
+      HI(IM1,J) = HI(I,J)
+      HI(I,J) = ZZI
+  440 CONTINUE
+10090 CONTINUE
+C
+      Z = X / Y
+      WR(I) = 1.0
+      GO TO 480
+  460 Z = Y / X
+      WR(I) = -1.0
+  480 HR(I,IM1) = ZZR
+      HI(I,IM1) = ZZI
+C
+      IF(I.GT.N) GO TO 10100
+      DO 500 J = I, N
+      HR(I,J) = HR(I,J) - ZZR * HR(IM1,J) + ZZI * HI(IM1,J)
+      HI(I,J) = HI(I,J) - ZZR * HI(IM1,J) - ZZI * HR(IM1,J)
+  500 CONTINUE
+10100 CONTINUE
+C
+  520 CONTINUE
+10080 CONTINUE
+C     ********** COMPOSITION R*L=H **********
+      IF(MP1.GT.EN) GO TO 10110
+      DO 640 J = MP1, EN
+      XR = HR(J,J-1)
+      XI = HI(J,J-1)
+      HR(J,J-1) = 0.0
+      HI(J,J-1) = 0.0
+C     ********** INTERCHANGE COLUMNS OF HR, HI, ZR, AND ZI,
+C                IF NECESSARY **********
+      IF (WR(J) .LE. 0.0) GO TO 580
+C
+      IF(1.GT.J) GO TO 10120
+      DO 540 I = 1, J
+      ZZR = HR(I,J-1)
+      HR(I,J-1) = HR(I,J)
+      HR(I,J) = ZZR
+      ZZI = HI(I,J-1)
+      HI(I,J-1)=HI(I,J)
+      HI(I,J) = ZZI
+  540 CONTINUE
+10120 CONTINUE
+C
+      IF(LOW.GT.IGH) GO TO 10130
+      DO 560 I = LOW, IGH
+      ZZR = ZR(I,J-1)
+      ZR(I,J-1) = ZR(I,J)
+      ZR(I,J) = ZZR
+      ZZI = ZI(I,J-1)
+      ZI(I,J-1) = ZI(I,J)
+      ZI(I,J) = ZZI
+  560 CONTINUE
+10130 CONTINUE
+C
+  580 IF(1.GT.J) GO TO 10140
+      DO 600 I = 1, J
+      HR(I,J-1) = HR(I,J-1) + XR * HR(I,J) - XI * HI(I,J)
+      HI(I,J-1) = HI(I,J-1) + XR * HI(I,J) + XI * HR(I,J)
+  600 CONTINUE
+10140 CONTINUE
+C     ********** ACCUMULATE TRANSFORMATIONS **********
+      IF(LOW.GT.IGH) GO TO 10150
+      DO 620 I = LOW, IGH
+      ZR(I,J-1) = ZR(I,J-1) + XR * ZR(I,J) - XI * ZI(I,J)
+      ZI(I,J-1) = ZI(I,J-1) + XR * ZI(I,J) + XI * ZR(I,J)
+  620 CONTINUE
+10150 CONTINUE
+C
+  640 CONTINUE
+10110 CONTINUE
+C
+      GO TO 240
+C     ********** A ROOT FOUND **********
+  660 HR(EN,EN) = HR(EN,EN) + TR
+      WR(EN) = HR(EN,EN)
+      HI(EN,EN) = HI(EN,EN) + TI
+      WI(EN) = HI(EN,EN)
+      EN = ENM1
+      GO TO 220
+C     ********** ALL ROOTS FOUND. BACKSUBSTITUTE TO FIND
+C                VECTORS OF UPPER TRIANGULAR FORM **********
+  680 IF (N .EQ. 1) GO TO 1001
+      IF(NOBAK.EQ.0) GO TO 1001
+      NORM = 0.0
+C
+      IF(1.GT.N) GO TO 10160
+      DO 720 I = 1, N
+C
+      IF(I.GT.N) GO TO 10160
+      DO 720 J = I, N
+      NORM = NORM + ABS(HR(I,J)) + ABS(HI(I,J))
+  720 CONTINUE
+10160 CONTINUE
+C     ********** FOR EN=N STEP -1 UNTIL 2 DO -- **********
+      IF(2.GT.N) GO TO 10170
+      DO 800 NN = 2, N
+      EN = N + 2 - NN
+      XR = WR(EN)
+      XI = WI(EN)
+      ENM1 = EN - 1
+C     ********** FOR I=EN-1 STEP -1 UNTIL 1 DO -- **********
+      IF(1.GT.ENM1) GO TO 10180
+      DO 780 II = 1, ENM1
+      I = EN - II
+      ZZR = HR(I,EN)
+      ZZI = HI(I,EN)
+      IF (I .EQ. ENM1) GO TO 760
+      IP1 = I + 1
+C
+      IF(IP1.GT.ENM1) GO TO 10190
+      DO 740 J = IP1, ENM1
+      ZZR = ZZR + HR(I,J) * HR(J,EN) - HI(I,J) * HI(J,EN)
+      ZZI = ZZI + HR(I,J) * HI(J,EN) + HI(I,J) * HR(J,EN)
+  740 CONTINUE
+10190 CONTINUE
+C
+  760 YR = XR - WR(I)
+      YI = XI - WI(I)
+      IF (YR .EQ. 0.0 .AND. YI .EQ. 0.0) YR = MACHEP * NORM
+      Z = Z / Y
+      HR(I,EN)= T3(1)
+      HI(I,EN)= T3(2)
+  780 CONTINUE
+10180 CONTINUE
+C
+  800 CONTINUE
+10170 CONTINUE
+C     ********** END BACKSUBSTITUTION **********
+      ENM1 = N - 1
+C     ********** VECTORS OF ISOLATED ROOTS **********
+      IF(1.GT.ENM1) GO TO 10200
+      DO 840 I = 1, ENM1
+      IF (I .GE. LOW .AND. I .LE. IGH) GO TO 840
+      IP1 = I + 1
+C
+      IF(IP1.GT.N) GO TO 10210
+      DO 820 J = IP1, N
+      ZR(I,J) = HR(I,J)
+      ZI(I,J) = HI(I,J)
+  820 CONTINUE
+10210 CONTINUE
+C
+  840 CONTINUE
+10200 CONTINUE
+C     ********** MULTIPLY BY TRANSFORMATION MATRIX TO GIVE
+C                VECTORS OF ORIGINAL FULL MATRIX.
+C                FOR J=N STEP -1 UNTIL LOW+1 DO -- **********
+      IF(LOW.GT.ENM1) GO TO 10220
+      DO 880 JJ = LOW, ENM1
+      J = N + LOW - JJ
+      M = MIN0(J-1,IGH)
+C
+      IF(LOW.GT.IGH) GO TO 10220
+      DO 880 I = LOW, IGH
+      ZZR = ZR(I,J)
+      ZZI = ZI(I,J)
+C
+      IF(LOW.GT.M) GO TO 10230
+      DO 860 K = LOW, M
+      ZZR = ZZR + ZR(I,K) * HR(K,J) - ZI(I,K) * HI(K,J)
+      ZZI = ZZI + ZR(I,K) * HI(K,J) + ZI(I,K) * HR(K,J)
+  860 CONTINUE
+10230 CONTINUE
+C
+      ZR(I,J) = ZZR
+      ZI(I,J) = ZZI
+  880 CONTINUE
+10220 CONTINUE
+C
+      GO TO 1001
+C     ********** SET ERROR -- NO CONVERGENCE TO AN
+C                EIGENVALUE AFTER 30 ITERATIONS **********
+C
+1000  IERR = EN
+1001  RETURN
+C     ********** LAST CARD OF COMLR2 **********
+      END
+C     ------------------------------------------------------------------00024120
+C                                                                       00024130
+      SUBROUTINE CBABK2(NM,N,LOW,IGH,SCALE,M,ZR,ZI)                     00024140
+C
+      INTEGER I,J,K,M,N,II,NM,IGH,LOW
+      REAL SCALE(N),ZR(NM,M),ZI(NM,M)
+      REAL S
+C
+C     THIS SUBROUTINE IS A TRANSLATION OF THE ALGOL PROCEDURE
+C     CBARK2, WHICH IS A COMPLEX VERSION OF BALBAK,
+C     NUM. MATH. 13, 293-304(1969) BY PARLETT AND REINSCH.
+C     HANDBOOK FOR AUTO. COM., VOL.II-LINEAR ALGEBRA, 315-326(1971).
+C
+C     THIS SUBROUTINE FORMS THE EIGENVECTORS OF A COMPLEX GENERAL
+C     MATRIX BY BACK TRANSFORMING THOSE OF THE CORRESPONDING
+C     BALANCED MATRIX DETRMINED BY CBAL.
+C
+C     ON INPUT-
+C
+C        NM MUST BE SET TO THE ROW DIMENSION OF TWO-DIMENSIONAL
+C           ARRAY PARAMETERS AS DECLARED IN THE CALLING PROGRAM
+C           DIMENSION STATEMENT,
+C
+C        N IS THE ORDER OF THE MATRIX,
+C
+C        LOW AND IGH ARE INTEGERS DETRMINED BY CBAL,
+C
+C        SCALE CONTAINS INFORMATION DETERMINING THE PERMUTATIONS
+C           AND SCALING FACTORS USED BY CBAL,
+C
+C        M IS THE NUMBER OF EIGENVECTORS OT BE BACK TRANSFORMED,
+C
+C     ZR AND ZI CONTAIN THE REAL AND IMAGINALY PARTS,
+C           RESPECTIVELY, OF THE EIGENVECTORS TO BE
+C           BACK TRANSFORMED IN THEIR FIRST M COLUMNS.
+C
+C     ON OUTPUT-
+C
+C        ZR AND ZI CONTAIN THE REAL AND IMAGINARY PARTS,
+C           RESPECTIVELY, OF THE TRANSFORMED EIGENVECTORS
+C           IN THEIR FIRST M COLUMNS.
+C
+C     QUESTIONS AND COMMENTS SHOULD BE DIRECTED TO B. S. GARBOW,
+C     APPLIED MATHEMATICS DIVISION, ARGONNE NATIONALLABORATORY
+C
+C     ------------------------------------------------------------------
+C
+      IF (IGH .EQ. LOW) GO TO 120
+C
+      IF(LOW.GT.IGH) GO TO 10000
+      DO 110 I = LOW, IGH
+      S = SCALE(I)
+C     ********** LEFT HAND EIGENVECTORS ARE BACK TRANSFORMED
+C                IF THE FOREGOING STATEMENT IS REPLACED BY
+C                S=1.0/SCALE(I). **********
+      IF(1.GT.M) GO TO 10010
+      DO 100 J = 1, M
+      ZR(I,J) = ZR(I,J) * S
+      ZI(I,J) = ZI(I,J) * S
+  100 CONTINUE
+10010 CONTINUE
+C
+  110 CONTINUE
+10000 CONTINUE
+C     ********** FOR I=LOW-1 STEP -1 UNTIL 1,
+C                IGH+1 STEP 1 UNTIL N DO -- **********
+  120 IF(1.GT.N) GO TO 10020
+      DO 140 II = 1, N
+      I = II
+      IF (I .GE. LOW .AND. I .LE. IGH) GO TO 140
+      IF (I .LT. LOW) I = LOW - II
+      K = SCALE(I)
+      IF (K .EQ. I) GO TO 140
+C
+      IF(1.GT.M) GO TO 10030
+      DO 130 J = 1, M
+      S = ZR(I,J)
+      ZR(I,J) = ZR(K,J)
+      ZR(K,J) = S
+      S = ZI(I,J)
+      ZI(I,J) = ZI(K,J)
+      ZI(K,J) = S
+  130 CONTINUE
+10030 CONTINUE
+C
+  140 CONTINUE
+10020 CONTINUE
+C
+      RETURN
+C     ********** LAST CARD OF CBABK2 **********
+      END
+      SUBROUTINE C S V D 1                                              00025030
+     C   (A, MMAX, NMAX, M, N, P, NU, NV,
+     C   S, U, V)
+C***********************************************************************
+C
+C
+C     CSDV  COMPUTES THE SINGULAR VALUES TO A COMPLEX  M BY N MATRIX A
+C
+C     INPUT0
+C           A   M BY N COMPLEX MATRIX
+C           MMAX  MAXIMUM ROW-DIMENSION
+C           NMAX  MAXIMUM COLUMN-DIMENSION
+C           M     ACTUAL  ROW-DIMENSION
+C           N     ACTUAL  COLUMN-DIMENSION
+C           NU  0,N OR M , THE NUMBER OF COLUMNS OF U
+C           NV  0 OR N   ,THE NUMBER OF COLUMNS OF V
+C
+C     OUTPUT0
+C           S   THE COMPUTED SORTED SINGULAR VALUES
+C           U   M BY M  UNITARY MATRIX
+C           V   N BY N  UNITARY MATRIX
+C
+C
+C     CSVD CAN ALSO BE USED TO
+C
+C       - FIND THE LEAST  SQUARES SOLUTION OF MINIMAL LENGTH
+C       - SOLVE A  HOMOGENEOUS SYSTEM OF LINEAR EQUATIONS
+C     THIS      IMPLEMENTATION OF THE ALGORITH 358(CACM) IS MADE
+C     BY BO KAGSTROM,AVD.F.INFORMATIONSBEH.,901 87 UME% UNIVERSITET
+C
+C
+C***********************************************************************
+      COMPLEX A(MMAX,NMAX),U(MMAX,NMAX),V(NMAX,NMAX)
+      INTEGER M,N,P,NU,NV
+      REAL S(NMAX)
+      COMPLEX Q,R
+      REAL B(100),C(100),T(100)
+C   ********************************************************
+C   *
+C   *  THE CONSTANTS USED FOR ETA AND TOL ARE MACHINE-
+C   *  DEPENDENT .ETA IS THE RELATIVE MACHINE PRECISION
+C   *  TOL IS THE SMALLEST NORMALIZED POSITIVE NUMBER
+C   *  DIVIDED BY ETA
+C   *
+C   ***********************************************************
+      DATA ETA/1.E-14/
+       TOL=1.E-50
+      NP=N+P
+      N1=N+1
+C
+C HOUSEHOLDER REDUCTION
+      C(1)=0.
+      K=1
+   10 K1=K+1
+C
+C    ELIMINATION OF A(I,K), I=K+1,...,M
+      Z=0.
+      IF(K.GT.M) GO TO 10000
+      DO 20 I=K,M
+   20 Z = Z + (REAL(A(I,K)))**2 + (AIMAG(A(I,K)))**2
+10000 CONTINUE
+      B(K)=0.
+      IF(Z.LE.TOL)GOTO 70
+      Z=SQRT(Z)
+      B(K)=Z
+      W=CABS(A(K,K))
+      Q=(1.,0.)
+      IF(W.NE.0.)Q=A(K,K)/W
+      A(K,K)= Q*(Z+W)
+      IF(K.EQ.NP)GOTO 70
+      IF(K1.GT.NP) GO TO 10010
+      DO 50 J=K1,NP
+      Q=(0.,0.)
+      IF(K.GT.M) GO TO 10020
+      DO 30 I=K,M
+   30 Q=Q+CONJG(A(I,K))*A(I,J)
+10020 CONTINUE
+      Q=Q/(Z*(Z+W))
+      IF(K.GT.M) GO TO 10030
+      DO 40 I=K,M
+   40 A(I,J)=A(I,J)-Q*A(I,K)
+10030 CONTINUE
+   50 CONTINUE
+10010 CONTINUE
+C
+C    PHASE TRANSFORMATION
+      Q=-CONJG(A(K,K))/CABS(A(K,K))
+      IF(K1.GT.NP) GO TO 10040
+      DO 60 J=K1,NP
+   60 A(K,J)=Q*A(K,J)
+10040 CONTINUE
+C
+C    ELIMINATION OF A(K,J), J=K+2,...,N
+   70 IF(K.EQ.N)GOTO 140
+      Z=0.
+      IF(K1.GT.N) GO TO 10050
+      DO 80 J=K1,N
+   80 Z = Z + (REAL(A(K,J)))**2 + (AIMAG(A(K,J)))**2
+10050 CONTINUE
+      C(K1)=0.
+      IF(Z.LE.TOL)GO TO 130
+      Z=SQRT(Z)
+      C(K1)=Z
+      W=CABS(A(K,K1))
+      Q=(1.,0.)
+      IF(W.NE.0.)Q=A(K,K1)/W
+      A(K,K1)=Q*(Z+W)
+      IF(K1.GT.M) GO TO 10060
+      DO 110 I=K1,M
+      Q=(0.,0.)
+      IF(K1.GT.N) GO TO 10070
+      DO 90 J=K1,N
+   90 Q=Q+CONJG(A(K,J))*A(I,J)
+10070 CONTINUE
+      Q=Q/(Z*(Z+W))
+      IF(K1.GT.N) GO TO 10080
+      DO 100 J=K1,N
+  100 A(I,J)=A(I,J)-Q*A(K,J)
+10080 CONTINUE
+  110 CONTINUE
+10060 CONTINUE
+C
+C    PHASE TRANSFORMATION
+      Q= -CONJG(A(K,K1))/CABS(A(K,K1))
+      IF(K1.GT.M) GO TO 10090
+      DO 120 I=K1,M
+  120 A(I,K1)=A(I,K1)*Q
+10090 CONTINUE
+  130 K=K1
+      GOTO 10
+C
+C TOLERANCE FOR NEGLIGIBLE ELEMENTS
+  140 EPS=0.
+      IF(1.GT.N) GO TO 10100
+      DO 150 K=1,N
+      S(K)=B(K)
+      T(K)=C(K)
+  150 EPS=AMAX1(EPS,S(K)+T(K))
+10100 CONTINUE
+      EPS=EPS*ETA
+C
+C INITIALIZATION OF U AND V
+      IF(NU.EQ.0)GOTO 180
+      IF(1.GT.NU) GO TO 10110
+      DO 170 J=1,NU
+      IF(1.GT.M) GO TO 10120
+      DO 160 I=1,M
+  160 U(I,J)=(0.,0.)
+10120 CONTINUE
+  170 U(J,J)=(1.,0.)
+10110 CONTINUE
+  180 IF(NV.EQ.0)GOTO 210
+      IF(1.GT.NV) GO TO 10130
+      DO 200 J=1,NV
+      IF(1.GT.N) GO TO 10140
+      DO 190 I=1,N
+  190 V(I,J)=(0.,0.)
+10140 CONTINUE
+  200 V(J,J)=(1.,0.)
+10130 CONTINUE
+C
+C QR DIAGONALIZATION
+  210 IF(1.GT.N) GO TO 10150
+      DO 380 KK=1,N
+      K=N1-KK
+C
+C    TEST FOR SPLIT
+  220 IF(1.GT.K) GO TO 10160
+      DO 230 LL=1,K
+      L=K+1-LL
+      IF(ABS(T(L)).LE.EPS)GOTO 290
+      IF(ABS(S(L-1)).LE.EPS)GOTO 240
+  230 CONTINUE
+10160 CONTINUE
+C
+C    CANCELLATION
+  240 CS=0.
+      SN=1.
+      L1=L-1
+      IF(L.GT.K) GO TO 10170
+      DO 280 I=L,K
+      F=SN*T(I)
+      T(I)=CS*T(I)
+      IF(ABS(F).LE.EPS)GOTO 290
+      H=S(I)
+      W=SQRT(F*F+H*H)
+      S(I)=W
+      CS=H/W
+      SN= -F/W
+      IF(NU.EQ.0)GOTO 260
+      IF(1.GT.M) GO TO 10180
+      DO 250 J=1,M
+      X=REAL(U(J,L1))
+      Y=REAL(U(J,I))
+      U(J,L1)=CMPLX(X*CS+Y*SN,0.)
+  250 U(J,I)=CMPLX(Y*CS-X*SN,0.)
+10180 CONTINUE
+  260 IF(NP.EQ.N)GOTO 280
+      IF(N1.GT.NP) GO TO 10190
+      DO 270 J=N1,NP
+      Q=A(L1,J)
+      R=A(I,J)
+      A(L1,J)=Q*CS+R*SN
+  270 A(I,J)=R*CS-Q*SN
+10190 CONTINUE
+  280 CONTINUE
+10170 CONTINUE
+C
+C    TEST FOR CONVERGENCE
+  290 W=S(K)
+      IF(L.EQ.K)GOTO 360
+C
+C    ORIGIN SHIFT
+      X=S(L)
+      Y=S(K-1)
+      G=T(K-1)
+      H=T(K)
+      F=((Y-W)*(Y+W)+(G-H)*(G+H))/(2.*H*Y)
+      G=SQRT(F*F +1.)
+      IF(F.LT.0.)G=-G
+      F=((X-W)*(X+W)+(Y/(F+G)-H)*H)/X
+C
+C    QR STEP
+      CS=1.
+      SN=1.
+      L1=L+1
+      IF(L1.GT.K) GO TO 10200
+      DO 350 I=L1,K
+      G=T(I)
+      Y=S(I)
+      H=SN*G
+      G=CS*G
+      W=SQRT(H*H+F*F)
+      T(I-1)=W
+      CS=F/W
+      SN=H/W
+      F=X*CS+G*SN
+      G=G*CS-X*SN
+      H=Y*SN
+      Y=Y*CS
+      IF(NV.EQ.0)GOTO 310
+      IF(1.GT.N) GO TO 10210
+      DO 300 J=1,N
+      X=REAL(V(J,I-1))
+      W=REAL(V(J,I))
+      V(J,I-1)=CMPLX(X*CS+W*SN,0.)
+  300 V(J,I)=CMPLX(W*CS-X*SN,0.)
+10210 CONTINUE
+  310 W=SQRT(H*H+F*F)
+      S(I-1)= W
+      CS=F/W
+      SN=H/W
+      F=CS*G+SN*Y
+      X= CS*Y - SN*G
+      IF(NU.EQ.0)GOTO 330
+      IF(1.GT.M) GO TO 10220
+      DO 320 J=1,M
+      Y=REAL(U(J,I-1))
+      W=REAL(U(J,I))
+      U(J,I-1)=CMPLX(Y*CS+W*SN,0.)
+  320 U(J,I)=CMPLX(W*CS-Y*SN,0.)
+10220 CONTINUE
+  330 IF(N.EQ.NP)GOTO 350
+      IF(N1.GT.NP) GO TO 10230
+      DO 340 J=N1,NP
+      Q=A(I-1,J)
+      R=A(I,J)
+      A(I-1,J)=Q*CS+R*SN
+  340 A(I,J)=R*CS-Q*SN
+10230 CONTINUE
+  350 CONTINUE
+10200 CONTINUE
+      T(L)=0.
+      T(K)=F
+      S(K)=X
+      GOTO 220
+C
+C  CONVERGENCE
+  360 IF(W.GE.0.)GOTO 380
+      S(K)=-W
+      IF(NV.EQ.0)GOTO 380
+      IF(1.GT.N) GO TO 10240
+      DO 370 J=1,N
+  370 V(J,K)=-V(J,K)
+10240 CONTINUE
+  380 CONTINUE
+10150 CONTINUE
+C
+C SORT SINGULAR VALUES
+      IF(1.GT.N) GO TO 10250
+      DO 450 K=1,N
+      G=S(K)
+      J=K
+      IF(K.GT.N) GO TO 10260
+      DO 390 I=K,N
+      IF(S(I).GE.G)GOTO 390
+      G=S(I)
+      J=I
+  390 CONTINUE
+10260 CONTINUE
+      IF(J.EQ.K)GOTO 450
+      S(J)=S(K)
+      S(K)=G
+      IF(NV.EQ.0)GOTO 410
+      IF(1.GT.N) GO TO 10270
+      DO 400 I=1,N
+      Q=V(I,J)
+      V(I,J)=V(I,K)
+  400 V(I,K)=Q
+10270 CONTINUE
+  410 IF(NU.EQ.0)GOTO 430
+      IF(1.GT.M) GO TO 10280
+      DO 420 I=1,M
+      Q=U(I,J)
+      U(I,J)=U(I,K)
+  420 U(I,K)=Q
+10280 CONTINUE
+  430 IF(N.EQ.NP)GOTO 450
+      IF(N1.GT.NP) GO TO 10290
+      DO 440 I=N1,NP
+      Q=A(J,I)
+      A(J,I)=A(K,I)
+  440 A(K,I)=Q
+10290 CONTINUE
+  450 CONTINUE
+10250 CONTINUE
+C
+C BACK TRANSFORMATION
+      IF (NU.EQ.0)GOTO 510
+      IF(1.GT.N) GO TO 10300
+      DO 500 KK=1,N
+      K=N1-KK
+      IF(B(K).EQ.0.)GOTO 500
+      Q=-A(K,K)/CABS(A(K,K))
+      IF(1.GT.NU) GO TO 10310
+      DO 460 J=1,NU
+  460 U(K,J)=Q*U(K,J)
+10310 CONTINUE
+      IF(1.GT.NU) GO TO 10320
+      DO 490 J=1,NU
+      Q=(0.,0.)
+      IF(K.GT.M) GO TO 10330
+      DO 470 I=K,M
+  470 Q=Q + CONJG(A(I,K))*U(I,J)
+10330 CONTINUE
+      Q=Q/(CABS(A(K,K))*B(K))
+      IF(K.GT.M) GO TO 10340
+      DO 480 I=K,M
+  480 U(I,J)=U(I,J)-Q*A(I,K)
+10340 CONTINUE
+  490 CONTINUE
+10320 CONTINUE
+  500 CONTINUE
+10300 CONTINUE
+  510 IF(NV.EQ.0)GOTO 570
+      IF(N.LT.2)GOTO 570
+      IF(2.GT.N) GO TO 10350
+      DO 560 KK=2,N
+      K=N1-KK
+      K1=K+1
+      IF(C(K1).EQ.0.)GOTO 560
+      Q=-CONJG(A(K,K1))/CABS(A(K,K1))
+      IF(1.GT.NV) GO TO 10360
+      DO 520 J=1,NV
+  520 V(K1,J)=Q*V(K1,J)
+10360 CONTINUE
+      IF(1.GT.NV) GO TO 10370
+      DO 550 J=1,NV
+      Q=(0.,0.)
+      IF(K1.GT.N) GO TO 10380
+      DO 530 I=K1,N
+  530 Q=Q+A(K,I)*V(I,J)
+10380 CONTINUE
+      Q=Q/(CABS(A(K,K1))*C(K1))
+      IF(K1.GT.N) GO TO 10390
+      DO 540 I=K1,N
+  540 V(I,J)=V(I,J)-Q*CONJG(A(K,I))
+10390 CONTINUE
+  550 CONTINUE
+10370 CONTINUE
+  560 CONTINUE
+10350 CONTINUE
+  570 RETURN
+      END
+      SUBROUTINE OUTPUT(NM,N,AR,AI,TEXT,IMAG)                           00028870
+C   *****************************************************************
+C   *  THE ROUTINE WRITES A COMPLEX (OR REAL) MATRIX ON LOGICAL
+C   *  UNIT 6 BY CALLING MATBLK
+C   *  A(I,J) IS PRINTED        REAL (A(I,J))
+C   *                          AIMAG (A(I,J))
+C   *  FORMAL PARAMETER LIST
+C   *  NM      THE ROW DIMENSION OF THE TWO-DIMENSIONAL ARRAY
+C   *          PARAMETERS (AR,AI) AS DECLARED IN THE CALLING PROGRAM
+C   *          DIMENSION STATEMENT
+C   *  N       THE ORDER OF THE MATRIX
+C   *  AR,AI   THE REAL AND THE IMAGINARY PARTS,RESPECTIVELY,
+C   *          OF THE MATRIX
+C   *  TEXT    THE MATRIX (AR,AI) IS PRINTED UNDER A HEADING,
+C   *          WHICH IS STORED IN THE VECTOR TEXT (THE NUMBER OF
+C   *          CHARACTERS IN ONE WORD IS MACHINE DEPENDENT,
+C   *          HERE 1 WORD = 10, CHARACTERS )
+C   *  IMAG    IS SET TO ZERO FOR A REAL MATRIX,IS SET TO ONE
+C   *          FOR A COMPLEX MATRIX
+C   *
+C   *****************************************************************
+      REAL AR(NM,N),AI(NM,N)
+      INTEGER TEXT(6)
+      WRITE(6,200) (TEXT(I),I=1,3)
+ 200  FORMAT(1H0,5X,2A10,A4/)
+C     WORD LENGTH=10 CHARACTERS,MACHINE DEPENDENT
+      NM1=N
+      IF(NM.EQ.1) NM1=1
+      CALL MATBLK(NM,AR,AI,1,NM1,1,N,IMAG)
+      WRITE(6,202)
+  202 FORMAT (1H0)
+      RETURN
+      END
+      SUBROUTINE MATBLK (NM,AR,AI,RF,RS,KF,KS,IMAG)                     00029200
+      REAL AR(NM,1),AI(NM,1)
+      INTEGER RF,RS,KF,KS,TPR
+      INTEGER BL,BLK
+C
+C     NM= THE ROW DIMENSION DECLARED IN THE CALLING PROGRAM,DIMENSION ST
+C     RF= FIRST ROW TO BE WRITTEN
+C     RS= LAST ROW TO BE WRITTEN
+C     KF= FIRST COLUMN TO BE WRITTEN
+C     KS= LAST COLUMN TO BE WRITTEN
+C     TPR= NUMBER OF ELEMENTS PER OUTPUT-ROW
+C     IMAG (=0) REAL MATRIX  (=1)  COMPLEX MATRIX
+      TPR=10
+      BLK= (KS-KF) / TPR +1
+      IFIRST=KF
+      IF(1.GT.BLK) GO TO 10000
+      DO 15  BL= 1,BLK
+      WRITE(6,21)
+      IF( BL.NE. BLK) GO TO 12
+      ILAST = KS
+      GO TO 13
+   12 ILAST = IFIRST +TPR -1
+   13 IF(RF.GT.RS) GO TO 10010
+      DO 14 K=RF,RS
+      WRITE(6,22)
+      WRITE(6,20) (AR(K,I),I=IFIRST,ILAST)
+      IF(IMAG.EQ.0) GO TO 14
+      WRITE(6,20) (AI(K,I),I=IFIRST,ILAST)
+   14 CONTINUE
+10010 CONTINUE
+   15 IFIRST = IFIRST + TPR
+10000 CONTINUE
+   20 FORMAT(3X,10F12.7)
+ 21   FORMAT(1X//)
+   22 FORMAT (1H0)
+      RETURN
+      END
+      SUBROUTINE MATRS2(NA,N,AR,AI)                                     00029570
+      REAL AR(NA,N),AI(NA,N)
+C   ********************************************************************
+C   *
+C   *
+C   *
+C   *  THE ROUTINE  GENERATES THE MATRIX A IN THE FORM
+C   *
+C   * A = H2 * S*H1 * J * H1 * S-INVERSE * H2 WHERE0
+C   *
+C   *  H1 = I - 2/N * E * E-TRANSPOSE WHERE E IS THE VECTOR
+C   *    (1,1,1,...,1)
+C   *
+C   *  H2 = I - 2/N * F * F-TRANSPOSE WHERE F IS THE VECTOR
+C   *    (1,-1,1,-1,...,(-1)**(N+1))
+C   *
+C   * S IS THE DIAGONAL MATRIX WITH ENTRIES COMING FROM SIGMA
+C   *
+C   * J  IS  A  MATRIX  IN  JORDAN FORM WHOSE  DIAGONAL  IS  STORED
+C   * IN  DIAG   AND  SUPERDIAGONAL  IN  BS
+C   *
+C   *
+C   *  THE FORMAL PARAMETER LIST
+C   *
+C   *  NA THE ROW DIMENSION OF THE TWO-DIMENSIONAL ARRAY
+C   *     PARAMETERS (AR,AI) AS DECLARED IN THE CALLING
+C   *     PROGRAM DIMENSION STATEMENT
+C   *  N  THE ORDER OF THE MATRIX
+C   *  AR,AI
+C   *     THE REAL AND IMAGINARY PARTS,RESPECTIVELY,OF THE
+C   *     GENERATED MATRIX
+C   *
+C   ********************************************************************
+C
+       COMPLEX A(20,20),DIAG(20),BS(20),SIGMA(20)
+       COMPLEX FN,RJ,SIG
+        READ(5,1000)SIG
+        READ(5,1000) (DIAG(I),I=1,N)
+        READ(5,1000) (BS(I),I=1,N)
+ 1000 FORMAT(8F10.0)
+C
+C   FORM MATRIX J IN JORDAN FORM (STORE IT IN A)
+C
+C
+      DO  10  I=1,N
+          DO 5  J=1,N
+             A(I,J)=(0.,0.)
+        AR(I,J)=0.
+        AI(I,J)=0.
+    5     CONTINUE
+          A(I,I)=DIAG(I)
+          IF(I.EQ.N) GO TO 10
+          A(I,I+1)=BS(I)
+   10 CONTINUE
+        DO 15 I=1,N
+           AR(I,I)=REAL(A(I,I))
+           AI(I,I)=AIMAG(A(I,I))
+           IF(I.EQ.N) GO TO 15
+            AR(I,I+1)=REAL(A(I,I+1))
+ 15     CONTINUE
+        CALL OUTPUT(NA,N,AR,AI,24HJORDAN MATRIX-----------,1)
+C
+      DO  20  I=1,N
+          SIGMA(I)= SIG**(I-1)
+   20 CONTINUE
+C
+C   FORM H1*J
+C
+      FN=CMPLX(2./FLOAT(N),0.)
+      NM1 = N - 1
+      DO 130 J=1,N
+         RJ=CMPLX(0.,0.)
+        DO 110 I=1,N
+          RJ = RJ + A(I,J)
+  110   CONTINUE
+        RJ = FN * RJ
+        DO 120 I=1,N
+        A(I,J) = A(I,J) - RJ
+  120   CONTINUE
+  130 CONTINUE
+C
+C   FORM (H1*J) + H1
+C
+      DO 160 I=1,N
+         RJ=CMPLX(0.,0.)
+        DO 140 J=1,N
+          RJ = RJ + A(I,J)
+  140   CONTINUE
+        RJ = FN * RJ
+        DO 150 J=1,N
+          A(I,J) = A(I,J) - RJ
+  150     CONTINUE
+  160 CONTINUE
+C
+C   FORM S * (H1*J*H1)
+C
+      DO 170 J=1,N
+        DO 170 I=1,N
+          A(I,J) = A(I,J) * SIGMA(I)
+  170 CONTINUE
+C
+C   FORM (S*H1*J*H1) * S-INVERSE
+C
+      DO 180 J=1,N
+        DO 180 I=1,N
+          A(I,J) = A(I,J) / SIGMA(J)
+  180 CONTINUE
+C
+C   FORM (S*H1*J*H1*S-INVERSE) * H2
+C
+      DO 210 I=1,N
+         RJ=CMPLX(0.,0.)
+        PM1 = 1.
+        DO 190 J=1,N
+          RJ = RJ + PM1*A(I,J)
+          PM1 = -PM1
+  190   CONTINUE
+        RJ = FN * RJ
+        PM1 = -1.
+        DO 200 J=1,N
+          A(I,J) = A(I,J) + PM1*RJ
+          PM1 = -PM1
+  200   CONTINUE
+  210 CONTINUE
+C
+C   FORM H2 * (S*H1*J*H1*S-INVERSE*H2)
+C
+      DO 240 J=1,N
+         RJ=CMPLX(0.,0.)
+        PM1 = 1.
+        DO 220 I=1,N
+        RJ = RJ + PM1*A(I,J)
+          PM1 = -PM1
+  220   CONTINUE
+        RJ = FN * RJ
+        PM1 = -1.
+        DO 230 I=1,N
+          A(I,J) = A(I,J) + PM1*RJ
+          PM1 = -PM1
+  230   CONTINUE
+  240 CONTINUE
+      DO  250 I=1,N
+      DO  250 J=1,N
+           AR(I,J)= REAL(A(I,J))
+           AI(I,J)= AIMAG(A(I,J))
+  250 CONTINUE
+      RETURN
+      END

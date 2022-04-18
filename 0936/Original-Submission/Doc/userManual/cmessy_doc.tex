@@ -1,0 +1,393 @@
+\documentclass[12pt]{article}
+%\documentclass{acmsmall}
+\usepackage{amsmath}
+\usepackage[title]{appendix}
+\usepackage{bm}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage{amssymb}
+\usepackage{listings}
+\lstloadlanguages{C}
+\lstset{language=C, frame=single, basicstyle=\footnotesize}
+\setlength{\textheight}{9in}
+\setlength{\textwidth}{6.5in}
+\setlength{\oddsidemargin}{0in}
+\setlength{\evensidemargin}{0in}
+\setlength{\topmargin}{-.25in}
+\makeatletter% Set up the page style
+\DeclareRobustCommand{\us}{\rule{.2pt}{0pt}\rule[-.8pt]{.4em}{.5pt}%
+\rule{.2pt}{0pt}}
+\newcommand{\ps@fred}{%
+\renewcommand{\@oddfoot}{%
+\today\hfill Krogh/Hanson:\ C Calls Messy
+\hfill Page \thepage }% \renewcommand{\@evenhead}{}%
+\renewcommand{\@oddhead}{}%
+\renewcommand{\@evenfoot}{}%
+}%
+\makeatother% End of setting up the page style
+\DeclareRobustCommand{\us}{\rule{.2pt}{0pt}\rule[-.8pt]{.4em}{.5pt}%
+\rule{.2pt}{0pt}}
+\begin{document}
+\pagestyle{fred}
+\thispagestyle{empty}
+\begin{center}
+  {\LARGE \bf Documentation for C use of Messy}
+  \\[10pt]
+  {\large A Remark for ACM TOMS, May, 2015\\[5pt]
+    Richard J. Hanson and Fred T. Krogh\footnote{Prepared at Math \`a la
+      Carte.com by fkrogh@mathalacarte.com and
+      richard.koolhans@gmail.com}\vspace{10pt}}
+\end{center}
+
+\begin{abstract}
+  This document gives additional information on use of the Fortran code {\tt
+    messy()} described in \cite{Krogh:2014:FMP} but called from C routines using
+  the name {\tt cmessy()}.  A C test driver illustrates several ways of using
+  the code in that environment.  Library versions are created for C that support
+  float and double floating point data formats.  Equivalent functionality is
+  maintained for the C and Fortran versions in those precisions.  Creating a
+  library usable by C routines requires the use of inter-operable Fortran and C
+  compilers.  A preliminary step requires using a Fortran compiler to create a
+  library or equivalent object files.
+\end{abstract}
+
+\tableofcontents
+
+
+\section{Introduction}
+\label{sec:introduction}
+
+This interface is provided so that C programmers can take advantage of the
+features in {\tt messy()}, without a conversion of the Fortran source code.
+  Several ideas in Chap.~10, \cite{HandH:2013:HH} were used in
+designing this interface.  A ``direct\rq{}\rq{} call to {\tt messy()} is made
+using an intermediate wrapper routine, {\tt callmessy()}.
+
+Although C and Fortran are now inter-operable, some features in Fortran used in
+{\tt messy()} are currently missing in C:
+\begin{itemize}\setlength{\itemsep}{-2pt}
+\item C has nothing equivalent to {\em assumed-shape} arrays in Fortran,
+  Chap.~12.3-6, \cite{Metcalf:2004:FE}.  But C does have {\em assumed-size}
+  arrays,  Appx~B.3, \cite{Metcalf:2004:FE}.
+\item C and Fortran do not have inter-operable functionality of {\em optional}
+  arguments.
+\item C and Fortran manage equivalent string and character data in different ways. 
+\end{itemize}
+The design of {\tt messy()} uses assumed-shape arrays and optional arguments to
+yield an easy-to-use message processor.  This functionality is implemented in
+our C code, but it requires a different look and feel for the routine {\tt
+  cmessy()}.
+\begin{itemize}\setlength{\itemsep}{-2pt}
+\item[a.] The C code {\tt cmessy()} calls the  Fortran wrapper code, {\tt callmessy()}.
+\item[b.] The Fortran intrinsic subprogram {\tt c\_f\_pointer()} converts the
+  assumed-size C arrays and their sizes to assumed-shape Fortran arrays.  These
+  are the actual arguments in calls to {\tt messy()}.
+\item[c.] Optional arguments in C are implemented as variable lists of
+  enumerated groups of arguments.  These provide the array data type, its rank
+  and size, and a pointer to the data.
+\item[d.] Conversion of C string variables to Fortran character variables is
+  handled by passing the lengths of the C strings and constructing an
+  intermediate Fortran character variable to pass to {\tt messy()}.
+\item[e.] The set of Fortran wrapper routines with C bindings are
+  found in the Fortran module\\
+{\tt cmessycall\_m.F90}: {\tt allocate\_cmessy\_interface}, {\tt
+  deallocate\_cmessy\_interface},\\ 
+  {\tt get\_cmessy\_defaults}, {\tt callmessy}, {\tt open\_cmessy\_files}, and
+  {\tt close\_cmessy\_files}.
+\end{itemize}
+
+
+\section{Getting Started for C Use}
+% \section{Getting Started}
+In the accompanying file {\tt messy\_doc.pdf} note the subdirectory {\bf C}.
+Unzipping the distribution file shows its contents.  On Linux systems the {\tt
+  make} process will test the {\bf C} installation and compare the
+inter-language call to {\tt messy()}.  For Microsoft Visual Studio users,
+different testing is required:
+
+\section{Getting Started, Microsoft Visual Studio}
+This section is specific to use of the Intel C++ compiler packaged within the
+Microsoft Visual Studio environment. We present the tests with instructions for
+creating separate Visual Studio {\em Solutions} using the double precision
+version of {\tt cmessy()}.
+
+\begin{description}
+\item[{\em cmessylib}] Creates a static library {\tt cmessylib.lib} for double
+  precision use.
+  \begin{enumerate}
+  \item Open a new Visual Studio project.  Under the template {\tt Intel (R)
+      Visual C++} choose {\tt Empty Project}.  Give the project the name {\tt
+      cmessylib}.
+  \item Under the {\em Project Properties} menu item, choose the {\em
+      Configuration Properties} tab.  The choose {\em General $>$ Configuration
+      Type $>$ Static library}.
+  \item Under the {\em Configuration Properties} tab choose {\em General $>$
+Platform Tool Set $>$ Intel C++ Compiler ...}.  Close the {\em Project
+Properties} window.
+\item Add source files to the project.  These are the header file {\tt cmessy.h}
+  and the source file {\tt cmessy.c}, found in {\tt C\textbackslash Src}.
+\item Under the {\em Project Properties} menu item, and the {\em Configuration
+    Properties $>$ C/C++} tab, enable the preprocessor.  Add the additional {\em
+    Preprocessor Definitions}, {\tt CTYP\_=CTYP\_d} and {\tt maxt\us=2}.
+\item Under the {\em Configuration Properties $>$ C/C++/Language [Intel ...]}
+  tab, enable parallel OpenMP and C99 support.
+\item Build the project.  This step compiles the code and creates the static
+  library {\tt cmessylib.lib}.
+\item The full path name to this file is needed in the testing or application
+  use.  Abbreviate this as: {\tt <ctpath> = ...\textbackslash
+    Projects\textbackslash cmessylib\textbackslash Debug}.
+\end {enumerate}
+
+\item[{\em ctmessy}] Calls {\tt cmessy()} in many ways.  Compares results with
+  the distribution file \\{\tt C\textbackslash Drivers\textbackslash Results\textbackslash
+    result.d}.  If you are assured that {\tt cmessylib.lib} is correctly
+  configured this project step can be skipped.
+  \begin{enumerate}
+  \item Open a new Visual Studio project.  Under the template {\tt Intel (R)
+      Visual C++} choose {\tt Empty Project}.  Give the project the name {\tt
+      ctmessy}.
+  \item Under the {\em Project Properties} menu item, choose the {\em
+      Configuration Properties} tab.
+  \item Under the {\em Configuration Properties} tab choose {\em General $>$
+      Platform Tool Set $>$ Intel C++ Compiler ...}.  Close the {\em Project
+      Properties} window.
+  \item Add the header files {\tt cmessy.h} and {\tt csample.h}, and the source
+    files {\tt ctmessy.c} and {\tt csample.c} to the project.  These are in the
+    distribution directories {\tt C\textbackslash Src} and {\tt C\textbackslash
+      Drivers}.
+      \item Add the  distributed data file to the project: {\tt C\textbackslash Drivers\textbackslash Results\textbackslash
+    result.d}.  This is used to check results.
+  \item Under the {\em Project Properties} menu item, and the {\em Configuration
+      Properties $>$ C/C++} tab, enable the preprocessor.  Add the additional
+    {\em Preprocessor Definitions}, {\tt CTYP\_=CTYP\_d} , {\tt maxt\us=1} and
+    {\tt MSWin}.
+  \item Under the {\em Configuration Properties $>$ C/C++/Language [Intel ...]}
+    tab, enable C99 support.
+  \item Under the {\em Project Properties} set the path name for the linker to
+    find the libraries containing {\tt messy()} and {\tt cmessy()}: {\em Linker
+      $>$ General $>$ Additional Library Directories} are set to {\tt <ctpath>}.
+    The second path name is for {\tt <tpath>}, as noted in {\tt messy\_doc.pdf}.
+
+  \item Under the {\em Project Properties} set the path name for the linker to
+    use the libraries containing {\tt messy()} and {\tt cmessy()}: {\em Linker
+      $>$Input $>$ Additional Dependencies} is set to {\tt dmessylib.lib}; {\tt
+      cmessylib.lib}.
+  \item Build and execute {\tt ctmessy}.  The results are written to the file
+    {\tt ...Results/result.d}.
+  \end {enumerate}
+
+  \begin{enumerate}
+  \item Open a second Visual Studio project within the {\em Solution}, {\tt
+      ctmessy}.  Under the template {\tt Intel (R) Visual Fortran} choose {\tt
+      Console Application} and next choose {\tt Empty Project}.  Name the
+    project {\tt checkctmessy}.
+
+  \item Add the source file {\tt checkctmessy.c} to the {\tt checktmessy}
+    project.  This is in the distribution directory {\tt C\textbackslash
+      Drivers\textbackslash MSWin}.
+
+  \item Add the MS DOS batch file {\tt checkctmessy.bat} to the {\tt
+      checkctmessy} project as a Resource.  This is in the distribution
+    directory {\tt C\textbackslash Drivers\textbackslash MSWin}.
+  \item Build and execute {\tt checkctmessy}.  The results in file 
+      {\tt ...Results\textbackslash result.d}.are compared with those of {\tt result.d}.
+  \end {enumerate}
+ 
+\end{description}
+
+\section{C Usage}
+\label{sec:usage-c}
+
+The usage in C is similar to that in Fortran, but the specification of optional
+arguments uses the C {\it variable argument list} macros.  The Text argument
+parameters have the identical meanings as with Fortran calls to {\tt messy()}.
+\begin{tabbing}
+  \#{\bf include} \verb:"cmessy.h":\ // $<$This file is in the package.$>$\\
+  {\bf struct} {\tt cmessy\us ty e}; // $<$ Your name could be different.$>$\\
+  $<$Declare other types that you need.$>$\\
+  {\tt allocate\_cmessy\_interface (int maxcstructs, int maxcthreads)};\\
+  {\tt get\_cmessy\_defaults(\&e)}; // In this order!\\
+  $<$Make changes desired in components of {\tt e}.$>$\\
+  {\tt cmessy}({\tt \&e},``Text defining what you want, as in a call to
+  messy.\rq{}\rq{},\\
+  $<$optional arguments (see below)$>$, {\bf 0});  //Trailing {\bf 0} says the
+  list is complete.\\
+\end{tabbing}\vspace{-15pt}
+
+\begin{lstlisting}[frame=single, caption={Sample use of {\tt cmessy()} to print
+	four digits of two complex numbers}]
+#include "cmessy.h"
+int main(void)
+{struct cmessy_ty e;
+  allocate_cmessy_interface(1,1); get_cmessy_defaults(&e); 
+
+  ck w, z, r[2]; w=I;z=csqrt(w); r[0]=w; r[1]=z;
+  cmessy(&e,``$D4The square-root of the complex number $ZR = $ZR``,
+    m_zdat,2,r, 0);
+// The square-root of the complex number (0.,1.000) = (.7071,.7071)
+}
+\end{lstlisting}
+
+The type {\tt cmessy\us ty} has a C binding and the following public components.
+The indicated defaults are set by the call {\tt get\_cmessy\_defaults()}.
+\begin{tabbing}
+  {\tt character(c\_char)  :: ename[32]="Undefined"} ! Name printed in error
+  messages.\\
+  {\tt integer(c\_int) :: fpprec = numdig} ! Default for floating point
+  precision\\
+  {\tt integer(c\_int) :: kdf = numdig} ! Current default real precision.\\
+  {\tt integer(c\_int) :: line\us len = 128} ! Default for line length\\
+  {\tt integer(c\_int) :: munit = OUTPUT\us UNIT} ! Message unit number\\
+  {\tt integer(c\_int) :: eunit = OUTPUT\us UNIT} \\
+  {\tt integer(c\_int) :: maxerr = 0} ! Max value of 1000 * (10*stop + print) +
+  |index|\\
+  {\tt integer(c\_int) :: lstop = 3} ! Stop indexes $\leq$ this don't stop\\
+  {\tt integer(c\_int) :: lprint = 3} ! Print indexes $\leq$ this don't print\\
+  {\tt integer(c\_int) :: errcnt = 0} ! Count of the number of error messages,
+  incremented\\
+  ! \hspace{1.5in}by 1000000 for internal errors inside messy.\\
+  {\tt integer(c\_int) :: dblev = 3} ! If 0, an immediate return is made (unless
+  text\\
+  ! \hspace{1.5in}starts with "\$E"), else a \$K$<$integer$>$ will behave\\
+  ! \hspace{1.5in}as if reaching the end of text if $<$integer$>$ is
+  $>$ {\tt dblev}.\\
+  {\tt integer(c\_int) :: cinit = 1234565} ! Note if {\tt
+    get\_cmessy\_defaults(\&e)} was called\\
+  {\tt integer(c\_int) :: cstruct}   ! Index of internal copy of {\tt messy\_ty}
+  used to call {\tt messy}\\
+\end{tabbing}\vspace{-10pt}
+
+The next table shows the correspondence between how things look in a call to the
+Fortran routine {\tt messy()} compared to calling the C routine {\tt cmessy()}.
+We use ``dim\rq{}\rq{} for the dimension of a rank-1 array, ``rdim\rq{}\rq{} and
+``cdim\rq{}\rq{} for the row and column dimensions of a rank-2
+array.\vspace{8pt}
+
+\begin{tabular}{ll}
+  \multicolumn{1}{l}{\bf Fortran Args.}&\multicolumn{1}{l}{\qquad \bf C
+                                         Arg. Groups}\\
+  \  idat=idat &  \  {\bf m\us idat}, dim, idat\\
+  \  rdat=rdat & \  {\bf m\us rdat}, dim, rdat\\
+  \  zdat=zdat & \   {\bf m\us zdat}, dim, zdat\\
+  \  imat=idat & \  {\bf m\us imat}, rdim, cdim, idat\\
+  \  rmat=rdat & \   {\bf m\us rmat}, rdim, cdim, rdat\\
+  \  zmat=zdat & \   {\bf m\us zmat}, rdim, cdim, zdat\\
+  \  ix=ix & \   {\bf m\us ix}, dim, ix\\
+  \  ptext=ptext & \   {\bf m\us ptext}, ptext\\
+\end{tabular}\vspace{5pt}
+
+Note that {\bf 0} must be the last argument after all groups.  This signals the
+end of the list of variable arguments.  The leading integer flag in each group
+is defined in a sequential enumeration, located in the header file {\tt
+  cmessy.h}.  The value of the flag indicates the type, rank and size of the
+array that is to be printed by {\tt messy()}.  The C integer dimensions are
+passed to Fortran by value.  To print a single value pass it by pointer
+reference.
+\begin{lstlisting}[frame=single, caption={Sample use of {\tt cmessy()} to print
+	eight digits of a real matrix}]
+#include "cmessy.h"
+int main(void)
+{struct cmessy_ty e;
+allocate_cmessy_interface(1,1); get_cmessy_defaults(&e); 
+rk rmatrix[2][3]={{1,2,3},{4,5,6}};
+for(int i=0;i<2;i++){
+	for(int j=0;j<3;j++){rmatrix[i][j]=sqrt(rmatrix[i][j]);}}
+cmessy(&e,"$D8rmatrix:$N$A",m_rmat,2,3,rmatrix, 0);
+cmessy(&e,"rmatrix[0][1]=$R",m_rdat,1,&rmatrix[0][1],0);
+
+/*rmatrix:
+        Col 1     Col 2     Col 3
+Row 1 1.0000000 1.7320508 2.2360680
+Row 2 1.4142136 2.0000000 2.4494897
+rmatrix[0][1]=1.4142136 */
+}
+\end{lstlisting}
+The call to the Fortran routines {\tt allocate\_cmessy\_interface} and {\tt
+  get\_cmessy\_defaults}, in this order, are {\em required before} any call to
+{\tt cmessy()}.  These calls set the initial state in the wrapper code {\tt
+  callmessy()} and return initial values for the C structure {\tt e}.
+
+
+\subsection{Setting the Number of Structs and Threads}
+Arrays in the wrapper routine {\tt callmessy()} are allocated with an initial
+call\\
+\\{\tt allocate\_cmessy\_interface (int maxcstructs, int maxcthreads)};\\
+
+The first argument {\tt maxcstructs} is an upper bound for the number of
+different copies of the structure {\tt cmessy\_ty} used within an application.
+The second argument {\tt maxcthreads} is an upper bound on the number of OpenMP
+threads created in parallel sections or loops.  If there are no calls to {\tt
+  cmessy()} within OpenMP parallel sections, use {\tt  maxcthreads=1}.\\
+
+To reset the number of structures and threads, deallocate and then allocate
+again with the new numbers:\\
+\\{\tt deallocate\_cmessy\_interface (void)};\\
+{\tt allocate\_cmessy\_interface (int new\_maxcstructs, int
+  new\_maxcthreads)};\\
+
+\subsection{Using Named Output Files in C}
+Associated with each structure {\tt e} that is used in calls to {\tt cmessy()},
+one can designate output to be placed in a named file.  Note that this cannot be
+done directly in the C code, as it has no access to the Fortran I/O libraries.
+Following the call to
+{\tt get\_cmessy\_defaults(\&e)}, and prior to {\tt cmessy()}, call the
+routine,\\
+
+{\tt open\_cmessy\_files(\&e, Task, File)}.
+
+\begin{description}
+\item[Task] Defines what output is associated with {\bf File}: {\tt 1} for
+  regular messages, {\tt 2} for error messages, {\tt 3} for both, and {\tt 0} to
+  set the error unit to the Fortran {\tt ERROR\us UNIT} ({\bf File} not used).
+\item[File] A character string, giving the desired name.  This can be a full
+  path name.
+\end{description}
+
+All {\tt cmessy()} files opened may be closed with\\
+
+{\tt close\_cmessy\_files(\&e)}.
+
+The facility for writing messages to a named file may be useful in a parallel
+computing environment where only one node is able to process I/O.  Each
+processor assigns different units to itself, and messages for each processor
+would go to different units. The one node capable of doing I/O could pick up the
+messages from each of these output units without messages from different
+processes getting mixed together in a confusing way.
+
+
+\section{Testing}
+\label{sec:testing}
+
+
+The code has been tested on the following systems.
+\begin{description}\setlength{\itemsep}{-2pt}
+\item[Gentoo Linux:] gfortran  4.9.2 and gfortran 5.1.0
+\item[Ubuntu Linux:] gfortran 4.9.1
+\item[Red Hat Enterprise Linux:] ifort 13.0.1
+\item[Cray CCE:] ftn  8.2.4.101
+\item[Windows 7:] Intel Fortran 14.0.1.139, 20131008
+\item[Ubuntu Linux:] NAG 6.0
+\end{description}
+\section{With Threads}
+We intended to provide a C testing code for using OpenMP threads.  Its design
+was similar to the test code {\tt thrdtmessy}, documented in {\tt
+  messy\_doc.pdf}.  We believe that this functionality is important. Our success
+was limited to the Cray and Intel compilers, listed above.  The reasons for
+failures in the other environments is not clear.   The code {\tt cthrdtmessy.c} gives
+an example  using threads in an OpenMP parallel ``for\rq{}\rq{} loop. 
+
+\section{Acknowledgments}
+\label{sec:acknowledgments}
+
+The authors are indebted to W.\ Van Snyder for answering many questions about
+the Fortran standard, and for suggestions on alternative ways of doing things to
+take advantage of what the latest versions of Fortran have to offer.  Tim
+Hopkins has helped by locating problems in using the NAG compiler as has Philip Sharp.
+Sharp also helped with
+checking out the code on Ubuntu Linux, and dealing with the Intel compiler on
+RedHat Linux.
+
+\bibliography{messy}
+% \bibliographystyle{acmsmall} %%% Works with .dvi does not with .pdf
+\bibliographystyle{acm}
+\end{document}

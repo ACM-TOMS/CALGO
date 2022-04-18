@@ -1,0 +1,617 @@
+
+<html><head>
+<title>
+  SPRNG: Scalable Parallel Pseudo-Random Number Generator Library
+</title>
+</head>
+
+
+<body bgcolor="#ffffff" alink="#CC3300" vlink="#666666"
+link="#006666">
+
+ 
+<H1><A HREF="users-guide.html">User's Guide:</A> 
+<A HREF = "tests.html">Testing:</A>Test Suite</H1> 
+Next:<A HREF = "definitions.html">Glossary</A> 
+Previous:<A HREF = "test-results.html">Test Results</A> 
+<P> 
+<HR> 
+<P> 
+<BLOCKQUOTE> 
+ 
+<H1 ALIGN=CENTER> Test Suite  </H1> 
+<P> 
+The SPRNG test suite is available in the TESTS directory under 
+sprng. The tests can be divided into two categories, (i) Physical model tests and (ii) Statistical tests. The former are described in the section on <a href="physical-model-tests.html">Physical model tests</a>. The latter are described in this section.  
+ 
+<P> 
+We have implemented parallel versions of 
+certain popular tests described by <A 
+HREF="refs.html#knuth">Knuth</A>. These test can also be used for sequential random number 
+generators. We have also provided a few other parallel tests.   
+ 
+Before describing the test suite, we shall provide an overview of 
+testing random number generators. 
+ 
+<H2>Testing Random Number Generators</H2> 
+Tests of random number generators typically compute some statistic 
+from a portion of a random stream. This statistic is compared against 
+the expected value from a truly random sample from a uniform 
+distribution. If the results from the random number generator are 
+consistent with those from a random sample, then the test is said to 
+have been "passed" by the random number generator. 
+ 
+Passing a test does not imply that the generator is producing a truly 
+random sequence. It just means that that particular test could not 
+differentiate between a truly random stream and the stream generated 
+by the generator under consideration. However, if several different 
+tests are passed, then our confidence in the random number generator 
+increases.  
+ 
+Since we need to compare the statistics from the generate stream with 
+that from a truly random stream, we need to use some general 
+statistical test procedures that can 
+compare different distributions. We mention below the 
+Chisquare test and the Kolmogorov-Smirnov (KS) test, which we use 
+to determine the likelihood of our random streams coming from a 
+uniform distribution. 
+ 
+<P> 
+<H3>Chisquare test</H3> 
+We can use this test for discrete distributions. Let us assume that we 
+have <SAMP>k</SAMP> possible values or "categories" for our variable, 
+and that the probability of a sample being of category <SAMP>i</SAMP> 
+is <SAMP>p<SUB>i</SUB></SAMP>. We make <SAMP>n</SAMP> independent 
+observations and count the number of times each category occurred.  
+ 
+<P> 
+For example, we can generate random numbers in (0.0,1.0) and divide 
+them into four categories. If the number is less than 0.25, then it 
+goes to category 0; if it is between 0.25 and 0.5, then it goes to 
+category 1; if it is between 0.5 and 0.75, then it goes to category 2; 
+if it is greater than 0.75 then it goes to category 3. Note that 
+although the sampled distribution was continuous, we have transformed it 
+to a discrete distribution by associating the numbers with their 
+categories. The probability for each category is equal to 0.25. We 
+count the number of times numbers in each of the four categories 
+occur. For <SAMP>n</SAMP> trials, we expect that each category will 
+have roughly <SAMP>0.25 x n</SAMP> samples. 
+ 
+<P> 
+In general, if category <SAMP>i</SAMP> occurred 
+<SAMP>Y<SUB>i</SUB></SAMP> times, then <SAMP>Y<SUB>i</SUB></SAMP> - 
+<SAMP>np<SUB>i</SUB></SAMP> is the difference between the observed 
+number of values and the expected number of values, and can be 
+considered an "error" between the observed and expected quantity. The 
+chisquare statistic is a function of these "errors" for each of the 
+categories and <SAMP>n</SAMP>. The distribution of the Chisquare 
+statistic is known when the number of categories is 
+given. We can therefore determine the Chisquare percentile for a given 
+chisquare statistic, which is just the proportion of samples from the 
+true distribution that have a chisquare statistic less than the 
+percentile. 
+ 
+<P> 
+For example, if our expected probabilities were computed based on 
+samples from a uniform distribution and the chisquare percentile is 
+10%, then this means that 10% of random samples drawn from the uniform 
+distribution will have chisquare statistics less than what we 
+observed. Thus if the chisquare values is very high, say 99%, then it 
+is unlikely that our sample came from the uniform distribution, since 
+only 1% of the samples from the uniform distribution will have such a 
+high value. Less obvious is the fact that even very low values are  
+unacceptable. For example, if the chisquare statistic is 1%, this means 
+that the observed values were too close to the expected values; even a 
+truly random sample from the uniform distribution would have a higher 
+chisquare value 99% of the time. 
+ 
+<H3>Kolmogorov-Smirnov Test</H3> 
+The Kolmogorov-Smirnov (KS) test is used to compare continuous 
+distributions. In this tests, the cumulative distribution function is 
+determined for the samples. Then the maximum difference (in absolute 
+value) between this distribution and the exact tested distribution is 
+computed. The KS statistic is the product of this difference and the 
+square root of the number of samples. A high value of this statistic 
+therefore indicates that the two distributions are far apart, and vice 
+versa. The KS percentile can be computed, analogous to the chisquare 
+percentile. We reject samples in either tails, as in the case for the 
+chisquare test. 
+ 
+<a name="test-suite"></a> 
+<H2>SPRNG Test Suite</H2>  
+The SPRNG test suite implements the tests 
+described by <A HREF="refs.html#knuth">Knuth</A>, and a few others. We 
+have generalized the tests of single random number streams to detect 
+correlations between streams in a parallel random number generator. In 
+our test scheme we interleave several streams to form a new 
+stream, and then test this new stream with conventional tests. We 
+show an example in the figure below where we combine three streams to 
+form a new stream. 
+ 
+<P ALIGN=CENTER> 
+<IMAGE BORDER=5 ALIGN=CENTER WIDTH=491 HEIGHT=351 SRC="images/interleave.gif"> 
+ 
+<P> 
+We form several such new streams, and test several blocks of random 
+numbers from each stream. Usually the result of the test for each 
+block is a chisquare value. We take the chisquare statistics for all 
+the blocks and use the Kolmogorov-Smirnov test to verify that they are 
+distributed according to the chisquare distribution. If the 
+Kolmogorov-Smirnov percentile is between 1% and 99%, then the test is 
+passed by the random number generator. 
+ 
+<P> 
+The tests in the SPRNG test suite take several arguments. The first 
+few arguments are common to all the tests, and are explained below. The 
+test specific arguments will be explained later. The SPRNG tests are 
+called as follows: 
+ 
+<P> 
+<VAR>test.lib  nstreams ncombine seed param nblocks skip 
+test_arguments</VAR> 
+<P> 
+where the name of the executable <VAR>test.lib</VAR> is formed by 
+concatenating the name of the test and the random number library from 
+which the random numbers are generated.  For example 
+<P> 
+<STRONG>Example:</STRONG> 
+<P> 
+<SAMP>equidist.lcg 4 2 0 0 3 1 2 100</SAMP><BR> 
+<SAMP>mpirun -np 2 equidist.lcg 4 2 0 0 3 1 2 100</SAMP> 
+<P> 
+perform the equidistribution test with the <A 
+HREF="generators.html#lcg48">48 bit Linear Congruential Generator with 
+prime addend</A> in a serial and parallel machine respectively. 
+<P> 
+The argument <VAR>ncombine</VAR> ( = 2 in our example) indicates the 
+number of streams we interleave to form a new stream. We form 
+<VAR>nstreams</VAR> (=4) such new streams and test <VAR>nblocks</VAR> 
+(=3) blocks of random numbers from each new stream. The argument 
+<VAR>seed</VAR> (=0) is the encoded <A 
+HREF="definitions.html#seed"><EM>seed</EM></A> to the random number 
+generator, and <VAR>param</VAR> (=0) is the <A 
+HREF="parameters.html">parameter</A> to the generator. The argument 
+<VAR>skip</VAR> (=1) indicates how many random numbers we skip after 
+testing a block before we start a test on the next block. The rest of 
+the arguments in our example are specific to that test. Note that we 
+can perform tests on individual streams by setting <VAR>ncombine</VAR> 
+to 1. 
+ 
+<P> 
+The result of the example given above are as follows: 
+<P> 
+<SAMP> 
+sprng/TESTS:sif% mpirun -np 2 equidist.lcg 4 2 0 0 3 1 2 100<BR> 
+equidist.lcg  4  2  0  0  3  1  2  100 <BR>  
+Result: KS value = 0.601752<BR> 
+        KS value prob = 17.50 %<BR> 
+</SAMP> 
+<P> 
+The <SAMP>KS value prob</SAMP> line gives the KS percentile for the 
+entire set of tests. Since it is between 1% and 99%, we consider this 
+example to have passed. It should be noted that the real tests are 
+much larger than this simple example. 
+ 
+<P> 
+The figure below illustrates the use of random numbers in the 
+example mentioned above. 
+ 
+<P ALIGN=CENTER> 
+<IMAGE BORDER=5 ALIGN=CENTER WIDTH=526 HEIGHT=336 SRC="images/parallel-tests.gif">  
+ 
+ 
+<P> 
+<A NAME="parseq-tests"></A>  
+<H3>Parallel versions of sequential tests</H3> 
+While most of tests we have implemented are parallel versions of 
+popular sequential tests, some others are inherently parallel. We 
+first describe the former. The users should note that when we state 
+that a particular test is parallel, we are refering to the fact that 
+it can be used to test correlations between streams. We do not mean 
+that it actually runs on multiple processors. All SPRNG tests run can 
+be run either on a single processor or on multiple processors. 
+<P> 
+We next briefly describe each test followed by its test specific arguments. We 
+also give the number of random numbers tested and asymptotic memory 
+requirements (in bytes, assuming an integer is 4 bytes and double 
+precision is 8 bytes). This should helps users estimate the time required for 
+their calculations from smaller sample runs. 
+ 
+<P> 
+The details concerning these tests are presented in <A 
+HREF="refs.html#knuth">Knuth's book</A>, unless we give some other reference.  
+  
+<DL> 
+<A NAME="collisions"></A> 
+<DT><FONT SIZE=4 COLOR=RED>1. Collisions test:</FONT> <SAMP>n logmd logd</SAMP> 
+<DD>  Suppose we throw n << m balls into m urns, then most of the 
+balls will fall into empty urns. If a ball falls into an urn that is 
+occupied, then a collision is said to have occurred. The collisions test 
+counts the number of collisions.  
+ 
+<P> 
+We generate random integers in [0,2<SUP>logd</SUP>-1]. We divide the 
+sequence into n disjoint subsequences of length 2<SUP>logmd</SUP> 
+each. We count the number of distinct sub-sequences obtained 
+empirically and subtract this from n to obtain a count of the number 
+of ``collisions''.  
+ 
+<P> 
+Our implementation of this test requires logmd*logd < 32. The number 
+of subsequences, n, should also be less than the number of possible 
+subsequences, 2<SUP>logmd*logd</SUP>.  
+<P> 
+      <STRONG>Random numbers tested:</STRONG> n*logmd<BR> 
+      <STRONG>Memory:</STRONG> 8*nstreams*nblocks + 4*n + 
+      2^{logmd*logd} 
+ 
+<P> 
+<A NAME="coupon"></A> 
+<DT><FONT SIZE=4 COLOR=RED>2. Coupon collector's test:</FONT> <SAMP> n t d </SAMP> 
+ 
+<DD> We generate random integers in [0,d-1]. We then scan the sequence 
+until we find at least one instance of each of the d integers, and 
+note the length of the segment over which we found this complete 
+set. For example, if d = 3 and the sequence is: 0 2 0 1 ..., then the 
+length of the first segment over which we found a complete set of 
+integers is 4. We continue from the next position in the sequence 
+until we find n such complete sets. The distribution of lengths of the 
+segments is compared against the expected distribution. In our 
+analysis, we lump segments of length > t together.<P> 
+  <STRONG>Random numbers tested:</STRONG> n*d*ln(d)<BR> 
+  <STRONG>Memory:</STRONG>  8*nstreams*nblocks + 4*d + 16*(t-d+1) 
+ 
+<P> 
+<A NAME="equidist"></A> 
+<DT><FONT SIZE=4 COLOR=RED>3. Equidistribution test:</FONT> <SAMP> d n 
+</SAMP> 
+ 
+<DD> We generate random integers in [0,d-1] and check whether they come 
+from a uniform distribution, that is, each of the d numbers has equal probability.<P> 
+<P> 
+  <STRONG>Random numbers tested:</STRONG>  n<BR> 
+  <STRONG>Memory:</STRONG>  8*nstreams*nblocks + 16*d 
+ 
+ 
+<P> 
+<A NAME="gap"></A> 
+<DT><FONT SIZE=4 COLOR=RED>4. Gap test:</FONT> <SAMP> t a b n</SAMP> 
+<DD>  
+ We generate floating point numbers in (0,1) and note the gap in 
+the sequence between successive appearances of numbers in the interval 
+[a,b] in (0,1). For example, if [a,b] = 
+[0.4,0.7] and the sequence is: 0.1, 0.5, 0.9, 0.6, ..., then the 
+length of the first gap (between the numbers 0.5 and 0.6) is 2. We record 'n' 
+  such gaps, and lump gap lengths greater than 't' together in a category 
+  in our analysis.<P> 
+  <STRONG>Random numbers tested:</STRONG> n/(b-a)<BR> 
+  <STRONG>Memory:</STRONG> 8*nstreams*nblocks + 16*t 
+ 
+ 
+<P> 
+<A NAME="maxt"></A> 
+<DT><FONT SIZE=4 COLOR=RED>5. Maximum-of-t test:</FONT> <SAMP>  n t </SAMP> 
+<DD> 
+We generate <B>t</B> floating point numbers in [0,1) and note the largest 
+number. We repeat this n times. The distribution of this largest 
+number should be as x<SUP>t</SUP>.<P> 
+  <STRONG>Random numbers tested:</STRONG> n*m<BR> 
+  <STRONG>Memory:</STRONG> 8*nstreams*nblocks + 16*n 
+ 
+<P> 
+<A NAME="perm"></A> 
+<DT><FONT SIZE=4 COLOR=RED>6. Permutations test:</FONT> <SAMP>  m n </SAMP> 
+<DD> 
+We generate m floating point numbers in (0,1). We can rank them 
+according to their magnitude; the smallest number 
+is ranked 1, ..., the largest is ranked m. There are m! possible ways 
+in which the ranks can be ordered. For example, if m = 3, then the 
+following orders are possible:  
+(1,2,3), (1,3,2), (2,1,3), (2,3,1), (3,1,2), (3,2,1).  
+We repeat this test n 
+times and check if each possible permutations was equally probable.<P> 
+  <STRONG>Random numbers tested:</STRONG> n*m<BR> 
+  <STRONG>Memory:</STRONG> 8*nstreams*nblocks + 8*m + 16*(m!) 
+ 
+ 
+<P> 
+<A NAME="poker"></A> 
+<DT><FONT SIZE=4 COLOR=RED>7. Poker test:</FONT> <SAMP>  n k d </SAMP> 
+<DD> 
+We generate k integers in [0,d-1] and count the number of distinct 
+integers obtained. For example if k = 3, d = 3 and the sequence is: 
+0, 1, 1, ..., then the number of distinct integers obtained in the 
+first 3-tuple is 2. We repeat this n times and compare with the expected 
+distribution for random samples from the uniform distribution. <P> 
+  <STRONG>Random numbers tested:</STRONG> n*k<BR> 
+  <STRONG>Memory:</STRONG> 8*nstreams*nblocks + 0.4*min(n,k) 
+                                                       + 12*k + 4*d  
+ 
+<P> 
+<A NAME="runsup"></A> 
+<DT><FONT SIZE=4 COLOR=RED>8. Runs up test:</FONT> <SAMP>  t n </SAMP> 
+<DD> 
+ We count the length of a "run" in which successive random numbers 
+are non-decreasing. For example if the sequence is: 0.1, 0.2, 0.4, 
+0.3, then the length of the first run is 3. We repeat this n times and compare with the expected 
+distribution of run lengths for random samples from the uniform 
+distribution. Runs of length greater than 't' are lumped together 
+during our analysis. We implement a modified version of this test in 
+which we discard the number that follows a run before starting the new 
+run. In our example, the number 0.3 would be discarded.<P> 
+  <STRONG>Random numbers tested:</STRONG> 1.5*n<BR> 
+  <STRONG>Memory:</STRONG> 8*nstreams*nblocks + 16*t 
+ 
+<P> 
+<A NAME="serial"></A> 
+<DT><FONT SIZE=4 COLOR=RED>9. Serial test:</FONT> <SAMP>  d n </SAMP> 
+<DD> 
+We generate n pairs of integers in [0,d-1]. Each of the 
+d<SUP>2</SUP> pairs should be equally likely to occur. <P> 
+  <STRONG>Random numbers tested:</STRONG> 2*n<BR> 
+  <STRONG>Memory:</STRONG>8*nstreams*nblocks + 16*d*d 
+ 
+</DL> 
+ 
+ 
+<P> 
+<A NAME="parallel-tests"></A>  
+<H3>Inherently parallel tests</H3> 
+Unlike the preceding tests which modify sequential tests to test for 
+correlations between streams, the tests mentioned below are inherently 
+parallel and test for correlations between streams. The meaning of the 
+arguments for these tests are slightly different from those 
+for the preceding tests. Since these tests are inherently parallel, we 
+need not interleave streams, and thus the second argument 
+<VAR>ncombine</VAR> should be set to 1. The first argument 
+<VAR>nstreams</VAR> is the total number of streams tested. All these 
+streams are tested simulatnaneously, rather than independently as in 
+the previous case. The rest of the arguments are indentical to the 
+previous case. 
+ 
+<P> 
+<DL> 
+<A NAME="sum"></A> 
+<DT><FONT SIZE=4 COLOR=RED>1. Sum of independent distributions test:</FONT><SAMP> n 
+groupsize</SAMP>  
+<P> 
+<DD>We can use the fact that the sum of independent variables approaches 
+the normal distribution to test for the independence of random number 
+streams. We add random numbers from several streams and form a sum. We 
+generate several such sums and check if their distribution is 
+normal.  
+ 
+<P> 
+We add <SAMP>groupsize</SAMP> random numbers in (0,1) 
+from each stream to form a sum. We verify if the distribution of 
+<SAMP>n</SAMP> such sums is normal using the Kolmogorov-Smirnov 
+test. We illustrate this test in the figure below with 
+<VAR>nstreams</VAR> = 3, <VAR>n</VAR> = 4, and <VAR>groupsize</VAR> = 
+2. 
+<P ALIGN=CENTER>  
+<IMAGE BORDER=5 ALIGN=CENTER WIDTH=486 HEIGHT=376 SRC="images/sum.gif">  
+ 
+<P> 
+In the current implementation, the argument <VAR>nblocks</VAR> must be 
+1, implying that only one test is performed. The reason for this is 
+that the result of this test is not exact. The true distribution 
+approaches the normal distribution, but is not identical to it. Thus 
+the result of this test has an error, and we are not sure if 
+subjecting a number of such results to another test would yield 
+meaningful results. 
+ 
+<P> 
+We have numerically calculated the maximum difference between the 
+exact distribution and the normal distribution. Based on this result, 
+we also output a range for the the exact KS statistic, if we had used the 
+true distribution instead of the normal approximation. 
+ 
+ 
+</DL> 
+ 
+ 
+ 
+ 
+<H2>Test Wizard</H2> 
+To aid you in running the statistical tests, we have included a Test Wizard in this document. It is Java applet that will translate your choices of test parameters into the appropriate command line. In addition to relieving you from remembering the command line syntax, the wizard will also catch certain simple errors in your choice of parameters. Only some of the tests are included in the wizard.<P> 
+ 
+If your browser's Java feature is not enabled, and if you have java, then  please move to the sprng/www/testwiz directory if you have installed SPRNG and type<BR> 
+<SAMP>java  TestWizard</SAMP><BR><P> 
+ 
+Click here to invoke the Translator:<P> 
+<APPLET  codebase="testwiz/" CODE="StartApplet.class" WIDTH=300 HEIGHT=80> 
+<EM> 
+<BLOCKQUOTE> 
+If you are seeing this, you need to enable your browser's Java feature. Alternatively, if you have java, please move to the sprng/www/testwiz directory if you have installed SPRNG and type<BR> 
+<SAMP>java  TestWizard</SAMP><BR><P> 
+</BLOCKQUOTE> 
+</EM> 
+</APPLET> 
+ 
+ 
+<!--  
+<H2>Adding New Tests</H2> We have provided utilities for others to 
+implement their own tests in C if they are along the pattern of the 
+tests in which we interleave streams and subject them to tests of 
+sequential random number streams. A library called 
+<SAMP>libsprngtest.a</SAMP> is created when a user build the TESTS 
+directory using <SAMP>make</SAMP>. Thius library provides several 
+utilities that can make implementing new tests easier. We start with 
+an example below to demonstate what a typical user will write. 
+ 
+<P> 
+<HR> 
+<PRE> 
+#include &ltstdio.h&gt 
+#include "tests.h" 
+ 
+double mytest (long n); 
+ 
+main(int argc, char *argv[]) 
+{ 
+  long ntests, n, i; 
+  double *V, result; 
+   
+  ntests = init_tests(argc,argv); 
+   
+  V = (double *) mymalloc(NTESTS*sizeof(double)); 
+  n = atol(argv[N_STREAM_PARAM+1]); 
+   
+  for(i=0; i&ltntests; i++) 
+  { 
+    V[i] = mytest(n);     /* test and find chisquare value */ 
+    next_stream();        
+  } 
+   
+#if defined(SPRNG_MPI) 
+  /* Get chisquare values from other processes in order to perform the 
+     Kolmogorov-Smirnov test                            */ 
+  getKSdata(V,NTESTS);   
+#endif 
+   
+  if(proc_rank == 0)      /* Perform KS test on data from individual tests */ 
+  { 
+    set_d_of_f(1); 
+    result = KS(V,NTESTS,chiF); 
+    result = KSpercent(result,NTESTS); 
+    printf("\t KS %% = %.2f\n\n", result*100.0); 
+  } 
+   
+  free(V); 
+} 
+ 
+ 
+ 
+double mytest(long n) 
+{ 
+  double temp; 
+  long actual[2]={0,0}; 
+  double expected[2]={0.5, 0.5}; 
+  long i; 
+   
+  for(i=0; i&ltn; i++) 
+  { 
+    temp = get_rn(); 
+    if(temp &gt 0.5) 
+      actual[0]++; 
+    else 
+      actual[1]++; 
+  } 
+   
+  return chisquare(actual,expected,n,2); 
+} 
+ 
+</PRE> 
+<HR> 
+The file tests.h declares the functions available in libsprngtest.a. A 
+few global variables are also declared. The global variables are: 
+proc_rank and NTESTS. The former is the rank of the process in the MPI 
+version. In a sequential version the value of this variable is 
+0. NTESTS is equal to the product of <VAR>nstreams</VAR> and 
+<VAR>nblocks</VAR> and is thus the total number of subsequences 
+tested. 
+ 
+<P> 
+We first call the function init_tests. This function calls MPI_Init in 
+the MPI version of the program and finds the process rank and the 
+total number of processes. It then performs certain 
+initializations. For example, we need to interleave streams and create 
+<VAR>nstreams</VAR> new streams. This function distributes the task of 
+testing these new streams among the available processes. It returns 
+the number of blocks to be tested by the local process. A test on each 
+block will return a chisquare value. We store these chisquare values 
+in an array called V. Note that we have defined this array to have as 
+many entries as the number of tests conducted over all the processes, 
+rather than the number of tests conducted in the local process. This 
+simplifies the programming a little, and is usually not much of an 
+overhead. 
+<P> 
+We call the function that actually performs the test on each process 
+<SAMP>ntests</SAMP> times and store the chisquare values returned. We 
+next call the function getKSdata, which collects the chisquare values 
+on each process and places them in the array V on process 0. This 
+function also calls MPI_Finalize. 
+<P> 
+Process 0 next performs the Komogorov-Smirnov test. It needs to 
+determine if the chisquare values returned could have come from the 
+chisquare distribution. The degrees of freedom for our test is 1, and 
+we set this through the function set_d_of_f. Next the function KS is 
+called which performs the Komogorov-Smirnov test. This function needs 
+the cumulative distribution function of the distribution to compare 
+against. <SAMP>chiF</SAMP> is a function that returns the cumulative 
+distribution function of the chisquare distribution with the degrees 
+of freedom set by the call to set_d_of_f. Finally, KS percent is 
+called to determine the percentile of the statistic from the 
+Kolmogorov-Smirnov test. 
+<P> 
+The actaul test mentioned here tests whether half the numbers are 
+greater than 0.5. The important aspects here are the call to get_rn to 
+get the next random number, and the call to chisquare to get the 
+chisquare statistic. 
+<P> 
+Users will usually mainly change the function mytest. Most of the 
+other parts of the program should be identical in all the programs. 
+<P> 
+ 
+Makefile. 
+ --> 
+<H2>Testing New Random Number Generators</H2> 
+ 
+We can easily test new random number generators. Let us assume that 
+the new generator is in the library libnew.a, in the same directory as 
+the other SPRNG libraries.  
+ 
+<UL> 
+<LI>This new generator must define functions 
+called <SAMP>init_rng</SAMP>, <SAMP>get_rn_dbl</SAMP>, and <SAMP>free_rng</SAMP> that follow the specifications of the 
+SPRNG functions <A HREF="default-interface.html#initsprng">init_sprng</A>, 
+<A HREF="default-interface.html#sprng">sprng</A>, and  <A 
+HREF="default-interface.html#freesprng">free_sprng</A> respectively (that is, the 
+first function must perform an initialization, the second must produce 
+random double precision numbers, and the third must free up any memory 
+allocated for the random stream). 
+ 
+<P> 
+If users wish to test only a single random number stream, then they 
+can, instead of defining the above functions, just write the stream of 
+random double precision numbers to a file in ASCII (not in binary 
+format). Then they should define the macro <SAMP>READ_FROM_STDIN</SAMP> 
+in the file <SAMP>sprng/TESTS/init_tests.c</SAMP> and compile. The 
+test programs will then read input from standard input. If users 
+redirect stdin from the random number file, then these numbers will be 
+tested. This procedure will not, however, work for the Ising model 
+programs (Wolff and Metropolis.) 
+<P> 
+ 
+<LI>The user just needs to add <VAR>new</VAR> to the list specified by 
+<SAMP>LIBLIST</SAMP> in the Makefile in the TESTS directory and 
+compile.  
+<P> 
+<STRONG>Example:</STRONG> <SAMP>LIBLIST = lcg lfg 
+</SAMP><VAR>new</VAR> 
+</UL> 
+Exectuables are created with the name 
+<VAR>test</VAR>.</VAR>new</VAR> for each test <VAR>test</VAR>. For 
+example <SAMP>equidist</SAMP>.<VAR>new</VAR> is the equidistribution 
+test executable for the new generator. 
+<P> 
+</BLOCKQUOTE> 
+<HR> 
+<CENTER> 
+<TABLE WIDTH=400 ALIGN=CENTER COL=5 CELLSPACING =0 BORDER=0 > 
+<TR><TD><A HREF="quick-start.html"><IMG SRC="qs.gif" BORDER=0 ALT="[Quick 
+Start]"></A></TD> 
+<TD><A HREF="users-guide.html"><IMG SRC="us.gif" BORDER=0 ALT="[User's 
+Guide]"></A></TD> 
+<TD><A HREF="reference.html"><IMG SRC="ref.gif" BORDER=0 ALT="[Reference 
+Manual]"></A></TD> 
+<TD><A HREF="quick-reference.html"><IMG SRC="qr.gif" BORDER=0 ALT="[Quick 
+Reference]"></A></TD> 
+<TD><A HREF="definitions.html"><IMG SRC="next.gif" BORDER=0 ALT="[Next: 
+Glossary]"></A></TD></TR></TABLE> 
+</CENTER> 
+<HR> 
+ 
+<p>
+
+</body></html>

@@ -1,0 +1,1548 @@
+      SUBROUTINE NSPIV (N,IA,JA,A,B,MAX,R,C,IC,X,ITEMP,RTEMP,IERR)             1
+C
+C
+C  NSPIV CALLS NSPIV1 WHICH USES SPARSE GAUSSIAN ELIMINATION WITH
+C  COLUMN INTERCHANGES TO SOLVE THE LINEAR SYSTEM A X = B.  THE
+C  ELIMINATION PHASE PERFORMS ROW OPERATIONS ON A AND B TO OBTAIN
+C  A UNIT UPPER TRIANGULAR MATRIX U AND A VECTOR Y.  THE SOLUTION
+C  PHASE SOLVES U X = Y.
+C
+C
+C  INPUT ARGUMENTS---
+C
+C  N      INTEGER NUMBER OF EQUATIONS AND UNKNOWNS
+C
+C  IA     INTEGER ARRAY OF N+1 ENTRIES CONTAINING ROW POINTERS TO A
+C         (SEE MATRIX STORAGE DESCRIPTION BELOW)
+C
+C  JA     INTEGER ARRAY WITH ONE ENTRY PER NONZERO IN A, CONTAINING
+C         COLUMN NUMBERS OF THE NONZEROES OF A.  (SEE MATRIX STORAGE
+C         DESCRIPTION BELOW)
+C
+C  A      REAL ARRAY WITH ONE ENTRY PER NONZERO IN A, CONTAINING THE
+C         ACTUAL NONZEROES.  (SEE MATRIX STORAGE DESCRIPTION BELOW)
+C
+C  B      REAL ARRAY OF N ENTRIES CONTAINING RIGHT HAND SIDE DATA
+C
+C  MAX    INTEGER NUMBER SPECIFYING MAXIMUM NUMBER OF OFF-DIAGONAL
+C         NONZERO ENTRIES OF U WHICH MAY BE STORED
+C
+C  R      INTEGER ARRAY OF N ENTRIES SPECIFYING THE ORDER OF THE
+C         ROWS OF A (I.E., THE ELIMINATION ORDER FOR THE EQUATIONS)
+C
+C  C      INTEGER ARRAY OF N ENTRIES SPECIFYING THE ORDER OF THE
+C         COLUMNS OF A.  C IS ALSO AN OUTPUT ARGUMENT
+C
+C  IC     INTEGER ARRAY OF N ENTRIES WHICH IS THE INVERSE OF C
+C         (I.E., IC(C(I)) = I).  IC IS ALSO AN OUTPUT ARGUMENT
+C
+C  ITEMP  INTEGER ARRAY OF 2*N + MAX + 2 ENTRIES, FOR INTERNAL USE
+C
+C  RTEMP  REAL ARRAY OF N + MAX ENTRIES FOR INTERNAL USE
+C
+C
+C  OUTPUT ARGUMENTS---
+C
+C  C      INTEGER ARRAY OF N ENTRIES SPECIFYING THE ORDER OF THE
+C         COLUMNS OF U.  C IS ALSO AN INPUT ARGUMENT
+C
+C  IC     INTEGER ARRAY OF N ENTRIES WHICH IS THE INVERSE OF C
+C         (I.E., IC(C(I)) = I).  IC IS ALSO AN INPUT ARGUMENT
+C
+C  X      REAL ARRAY OF N ENTRIES CONTAINING THE SOLUTION VECTOR
+C
+C  IERR   INTEGER NUMBER WHICH INDICATES ERROR CONDITIONS OR
+C         THE ACTUAL NUMBER OF OFF-DIAGONAL ENTRIES IN U (FOR
+C         SUCCESSFUL COMPLETION)
+C
+C         IERR VALUES ARE---
+C
+C         0 LT IERR             SUCCESSFUL COMPLETION.  U HAS IERR
+C                               OFF-DIAGONAL NONZERO ENTRIES
+C
+C         IERR = 0              ERROR.  N = 0
+C
+C         -N LE IERR LT 0       ERROR.  ROW NUMBER IABS(IERR) OF A IS
+C                               IS NULL
+C
+C         -2*N LE IERR LT -N    ERROR.  ROW NUMBER IABS(IERR+N) HAS A
+C                               DUPLICATE ENTRY
+C
+C         -3*N LE IERR LT -2*N  ERROR.  ROW NUMBER IABS(IERR+2*N)
+C                               HAS A ZERO PIVOT
+C
+C         -4*N LE IERR LT -3*N  ERROR.  ROW NUMBER IABS(IERR+3*N)
+C                               EXCEEDS STORAGE
+C
+C
+C  STORAGE OF SPARSE MATRICES---
+C
+C  THE SPARSE MATRIX A IS STORED USING THREE ARRAYS IA, JA, AND A.
+C  THE ARRAY A CONTAINS THE NONZEROES OF THE MATRIX ROW-BY-ROW, NOT
+C  NECESSARILY IN ORDER OF INCREASING COLUMN NUMBER.  THE ARRAY JA
+C  CONTAINS THE COLUMN NUMBERS CORRESPONDING TO THE NONZEROES STORED
+C  IN THE ARRAY A (I.E., IF THE NONZERO STORED IN A(K) IS IN
+C  COLUMN J, THEN JA(K) = J).  THE ARRAY IA CONTAINS POINTERS TO THE
+C  ROWS OF NONZEROES/COLUMN INDICES IN THE ARRAY A/JA (I.E.,
+C  A(IA(I))/JA(IA(I)) IS THE FIRST ENTRY FOR ROW I IN THE ARRAY A/JA).
+C  IA(N+1) IS SET SO THAT IA(N+1) - IA(1) = THE NUMBER OF NONZEROES IN A
+C
+C
+      REAL A(1),B(1),X(1),RTEMP(1)
+      INTEGER IA(1),JA(1),R(1),C(1),IC(1),ITEMP(1)
+      INTEGER IU,JU,U,Y,P
+C
+C  SET INDICES TO DIVIDE TEMPORARY STORAGE FOR NSPIV1
+C
+      Y = 1
+      U = Y + N
+      P = 1
+      IU = P + N + 1
+      JU = IU + N + 1
+C
+C  CALL NSPIV1 TO PERFORM COMPUTATIONS
+C
+      CALL NSPIV1 (N,IA,JA,A,B,MAX,R,C,IC,X,RTEMP(Y),ITEMP(P),
+     C             ITEMP(IU),ITEMP(JU),RTEMP(U),IERR)
+      RETURN
+      END
+      SUBROUTINE NSPIV1 (N,IA,JA,A,B,MAX,R,C,IC,X,Y,P,IU,JU,U,IERR)          109
+C
+C
+C  NSPIV1 USES SPARSE GAUSSIAN ELIMINATION WITH
+C  COLUMN INTERCHANGES TO SOLVE THE LINEAR SYSTEM A X = B.  THE
+C  ELIMINATION PHASE PERFORMS ROW OPERATIONS ON A AND B TO OBTAIN
+C  A UNIT UPPER TRIANGULAR MATRIX U AND A VECTOR Y.  THE SOLUTION
+C  PHASE SOLVES U X = Y.
+C
+C
+C  SEE NSPIV FOR DESCRIPTIONS OF ALL INPUT AND OUTPUT ARGUMENTS
+C  OTHER THAN THOSE DESCRIBED BELOW
+C
+C  INPUT ARGUMENTS (USED INTERNALLY ONLY)---
+C
+C  Y   REAL ARRAY OF N ENTRIES USED TO COMPUTE THE UPDATED
+C      RIGHT HAND SIDE
+C
+C  P   INTEGER ARRAY OF N+1 ENTRIES USED FOR A LINKED LIST.
+C      P(N+1) IS THE LIST HEADER, AND THE ENTRY FOLLOWING
+C      P(K) IS IN P(P(K)).  THUS, P(N+1) IS THE FIRST DATA
+C      ITEM, P(P(N+1)) IS THE SECOND, ETC.  A POINTER OF
+C      N+1 MARKS THE END OF THE LIST
+C
+C  IU  INTEGER ARRAY OF N+1 ENTRIES USED FOR ROW POINTERS TO U
+C      (SEE MATRIX STORAGE DESCRIPTION BELOW)
+C
+C  JU  INTEGER ARRAY OF MAX ENTRIES USED FOR COLUMN NUMBERS OF
+C      THE NONZEROES IN THE STRICT UPPER TRIANGLE OF U.  (SEE
+C      MATRIX STORAGE DESCRIPTION BELOW)
+C
+C  U   REAL ARRAY OF MAX ENTRIES USED FOR THE ACTUAL NONZEROES IN
+C      THE STRICT UPPER TRIANGLE OF U.  (SEE MATRIX STORAGE
+C      DESCRIPTION BELOW)
+C
+C
+C  STORAGE OF SPARSE MATRICES---
+C
+C  THE SPARSE MATRIX A IS STORED USING THREE ARRAYS IA, JA, AND A.
+C  THE ARRAY A CONTAINS THE NONZEROES OF THE MATRIX ROW-BY-ROW, NOT
+C  NECESSARILY IN ORDER OF INCREASING COLUMN NUMBER.  THE ARRAY JA
+C  CONTAINS THE COLUMN NUMBERS CORRESPONDING TO THE NONZEROES STORED
+C  IN THE ARRAY A (I.E., IF THE NONZERO STORED IN A(K) IS IN
+C  COLUMN J, THEN JA(K) = J).  THE ARRAY IA CONTAINS POINTERS TO THE
+C  ROWS OF NONZEROES/COLUMN INDICES IN THE ARRAY A/JA (I.E.,
+C  A(IA(I))/JA(IA(I)) IS THE FIRST ENTRY FOR ROW I IN THE ARRAY A/JA).
+C  IA(N+1) IS SET SO THAT IA(N+1) - IA(1) = THE NUMBER OF NONZEROES IN
+C  A.  IU, JU, AND U ARE USED IN A SIMILAR WAY TO STORE THE STRICT UPPER
+C  TRIANGLE OF U, EXCEPT THAT JU ACTUALLY CONTAINS C(J) INSTEAD OF J
+C
+C
+      REAL A(1),B(1),U(1),X(1),Y(1)
+      REAL DK,LKI,ONE,XPV,XPVMAX,YK,ZERO
+      INTEGER C(1),IA(1),IC(1),IU(1),JA(1),JU(1),P(1),R(1)
+      INTEGER CK,PK,PPK,PV,V,VI,VJ,VK
+C
+C
+      IF (N .EQ. 0) GO TO 1001
+C
+      ONE = 1.0
+      ZERO = 0.0
+C
+C  INITIALIZE WORK STORAGE AND POINTERS TO JU
+C
+      DO 10 J=1,N
+        X(J) = ZERO
+ 10     CONTINUE
+      IU(1) = 1
+      JUPTR = 0
+C
+C  PERFORM SYMBOLIC AND NUMERIC FACTORIZATION ROW BY ROW
+C  VK (VI,VJ) IS THE GRAPH VERTEX FOR ROW K (I,J) OF U
+C
+      DO 170 K=1,N
+C
+C  INITIALIZE LINKED LIST AND FREE STORAGE FOR THIS ROW
+C  THE R(K)-TH ROW OF A BECOMES THE K-TH ROW OF U.
+C
+        P(N+1) = N+1
+        VK = R(K)
+C
+C  SET UP ADJACENCY LIST FOR VK, ORDERED IN
+C  CURRENT COLUMN ORDER OF U.  THE LOOP INDEX
+C  GOES DOWNWARD TO EXPLOIT ANY COLUMNS
+C  FROM A IN CORRECT RELATIVE ORDER
+C
+        JMIN = IA(VK)
+        JMAX = IA(VK+1) - 1
+        IF (JMIN .GT. JMAX)  GO TO 1002
+        J = JMAX
+ 20       JAJ = JA(J)
+          VJ = IC(JAJ)
+C
+C  STORE A(K,J) IN WORK VECTOR
+C
+          X(VJ) = A(J)
+C  THIS CODE INSERTS VJ INTO ADJACENCY LIST OF VK
+          PPK = N+1
+ 30       PK = PPK
+          PPK = P(PK)
+          IF (PPK - VJ)  30,1003,40
+ 40       P(VJ) = PPK
+          P(PK) = VJ
+          J = J - 1
+          IF (J .GE. JMIN) GO TO 20
+C
+C  THE FOLLOWING CODE COMPUTES THE K-TH ROW OF U
+C
+        VI = N+1
+        YK = B(VK)
+ 50     VI = P(VI)
+        IF (VI .GE. K) GO TO 110
+C
+C  VI LT VK -- PROCESS THE L(K,I) ELEMENT AND MERGE THE
+C  ADJACENCY OF VI WITH THE ORDERED ADJACENCY OF VK
+C
+        LKI = - X(VI)
+        X(VI) = ZERO
+C
+C  ADJUST RIGHT HAND SIDE TO REFLECT ELIMINATION
+C
+        YK = YK + LKI * Y(VI)
+        PPK = VI
+        JMIN = IU(VI)
+        JMAX = IU(VI+1) - 1
+        IF (JMIN .GT. JMAX)  GO TO 50
+        DO 100 J=JMIN,JMAX
+          JUJ = JU(J)
+          VJ = IC(JUJ)
+C
+C  IF VJ IS ALREADY IN THE ADJACENCY OF VK,
+C  SKIP THE INSERTION
+C
+          IF (X(VJ) .NE. ZERO)  GO TO 90
+C
+C  INSERT VJ IN ADJACENCY LIST OF VK.
+C  RESET PPK TO VI IF WE HAVE PASSED THE CORRECT
+C  INSERTION SPOT.  (THIS HAPPENS WHEN THE ADJACENCY OF
+C  VI IS NOT IN CURRENT COLUMN ORDER DUE TO PIVOTING.)
+C
+          IF (VJ - PPK) 60,90,70
+ 60       PPK = VI
+ 70       PK = PPK
+          PPK = P(PK)
+          IF (PPK - VJ)  70,90,80
+ 80       P(VJ) = PPK
+          P(PK) = VJ
+          PPK = VJ
+C
+C  COMPUTE L(K,J) = L(K,J) - L(K,I)*U(I,J) FOR L(K,I) NONZERO
+C  COMPUTE U*(K,J) = U*(K,J) - L(K,I)*U(I,J) FOR U(K,J) NONZERO
+C  (U*(K,J) = U(K,J)*D(K,K))
+C
+ 90       X(VJ) = X(VJ) + LKI * U(J)
+ 100      CONTINUE
+        GO TO 50
+C
+C  PIVOT--INTERCHANGE LARGEST ENTRY OF K-TH ROW OF U WITH
+C  THE DIAGONAL ENTRY.
+C
+C  FIND LARGEST ENTRY, COUNTING OFF-DIAGONAL NONZEROES
+C
+ 110    IF (VI .GT. N) GO TO 1004
+        XPVMAX = ABS(X(VI))
+        MAXC = VI
+        NZCNT = 0
+        PV = VI
+ 120      V = PV
+          PV = P(PV)
+          IF (PV .GT. N) GO TO 130
+          NZCNT = NZCNT + 1
+          XPV = ABS(X(PV))
+          IF (XPV .LE. XPVMAX) GO TO 120
+          XPVMAX = XPV
+          MAXC = PV
+          MAXCL = V
+          GO TO 120
+ 130    IF (XPVMAX .EQ. ZERO) GO TO 1004
+C
+C  IF VI = K, THEN THERE IS AN ENTRY FOR DIAGONAL
+C  WHICH MUST BE DELETED.  OTHERWISE, DELETE THE
+C  ENTRY WHICH WILL BECOME THE DIAGONAL ENTRY
+C
+        IF (VI .EQ. K) GO TO 140
+        IF (VI .EQ. MAXC) GO TO 140
+        P(MAXCL) = P(MAXC)
+        GO TO 150
+ 140    VI = P(VI)
+C
+C  COMPUTE D(K) = 1/L(K,K) AND PERFORM INTERCHANGE.
+C
+ 150    DK = ONE / X(MAXC)
+        X(MAXC) = X(K)
+        I = C(K)
+        C(K) = C(MAXC)
+        C(MAXC) = I
+        CK = C(K)
+        IC(CK) = K
+        IC(I) = MAXC
+        X(K) = ZERO
+C
+C  UPDATE RIGHT HAND SIDE.
+C
+        Y(K) = YK * DK
+C
+C  COMPUTE VALUE FOR IU(K+1) AND CHECK FOR STORAGE OVERFLOW
+C
+        IU(K+1) = IU(K) + NZCNT
+        IF (IU(K+1) .GT. MAX+1) GO TO 1005
+C
+C  MOVE COLUMN INDICES FROM LINKED LIST TO JU.
+C  COLUMNS ARE STORED IN CURRENT ORDER WITH ORIGINAL
+C  COLUMN NUMBER (C(J)) STORED FOR CURRENT COLUMN J
+C
+        IF (VI .GT. N)  GO TO 170
+        J = VI
+ 160      JUPTR = JUPTR + 1
+          JU(JUPTR) = C(J)
+          U(JUPTR) = X(J) * DK
+          X(J) = ZERO
+          J = P(J)
+          IF (J .LE. N) GO TO 160
+ 170    CONTINUE
+C
+C  BACKSOLVE U X = Y, AND REORDER X TO CORRESPOND WITH A
+C
+      K = N
+      DO 200 I=1,N
+        YK = Y(K)
+        JMIN = IU(K)
+        JMAX = IU(K+1) - 1
+        IF (JMIN .GT. JMAX)  GO TO 190
+        DO 180 J=JMIN,JMAX
+          JUJ = JU(J)
+          JUJ = IC(JUJ)
+          YK = YK - U(J) * Y(JUJ)
+ 180      CONTINUE
+ 190    Y(K) = YK
+        CK = C(K)
+        X(CK) = YK
+        K = K-1
+ 200    CONTINUE
+C
+C  RETURN WITH IERR = NUMBER OF OFF-DIAGONAL NONZEROES IN U
+C
+      IERR = IU(N+1) - IU(1)
+      RETURN
+C
+C  ERROR RETURNS
+C
+C  N = 0
+C
+ 1001 IERR = 0
+      RETURN
+C
+C  ROW K OF A IS NULL
+C
+ 1002 IERR = -K
+      RETURN
+C
+C  ROW K OF A HAS A DUPLICATE ENTRY
+C
+ 1003 IERR = -(N+K)
+      RETURN
+C
+C  ZERO PIVOT IN ROW K
+C
+ 1004 IERR = -(2*N+K)
+      RETURN
+C
+C  STORAGE FOR U EXCEEDED ON ROW K
+C
+ 1005 IERR = -(3*N+K)
+      RETURN
+      END
+C     PROGRAM PIVCHK(OUTPUT,TAPE6=OUTPUT)                                      1
+C                                                                              2
+C  THIS PROGRAM ILLUSTRATES THE USE OF NSPIV BY SOLVING THE                    3
+C  SYSTEM OF LINEAR EQUATIONS                                                  4
+C                                                                              5
+C       A X = B                                                                6
+C                                                                              7
+C  WITH A AN NG X NG BLOCK TRIDIAGONAL MATRIX, WITH NG X NG BLOCKS.            8
+C  THE DIAGONAL BLOCKS OF A ARE LOWER BI-DIAGONAL (ENTRIES ARE 4.0             9
+C  ON THE DIAGONAL, -1.0 ON THE SUBDIAGONAL), AND THE OFF-DIAGONAL            10
+C  BLOCKS OF A ARE DIAGONAL (ENTRIES ARE -1.0 IN THE LOWER TRIANGLE,          11
+C  -1.5 IN THE UPPER TRIANGLE.)  X IS CHOSEN TO BE A VECTOR                   12
+C  OF ALL ONES, AND B IS COMPUTED ACCORDINGLY.                                13
+C                                                                             14
+C                                                                             15
+      INTEGER IA(101),JA(400),R(100),C(100),IC(100),ITEMP(597)                16
+      REAL A(400),B(100),X(100),RTEMP(495)                                    17
+      DATA MAX/395/,NG/10/,N/100/                                             18
+C                                                                             19
+C  SET UP PROBLEM                                                             20
+C                                                                             21
+      K = 1                                                                   22
+      IA(1) = 1                                                               23
+      IAPTR = 1                                                               24
+      DO 5 I=1,NG                                                             25
+        DO 5 J=1,NG                                                           26
+          BK = 0.                                                             27
+          IF (I .EQ. 1) GO TO 1                                               28
+          JA(IAPTR) = K - NG                                                  29
+          A(IAPTR) = -1.                                                      30
+          BK = BK - 1.                                                        31
+          IAPTR = IAPTR + 1                                                   32
+ 1        IF (J .EQ. 1) GO TO 2                                               33
+          JA(IAPTR) = K - 1                                                   34
+          A(IAPTR) = -1.                                                      35
+          BK = BK - 1.                                                        36
+          IAPTR = IAPTR + 1                                                   37
+ 2        JA(IAPTR) = K                                                       38
+          A(IAPTR) = 4.                                                       39
+          BK = BK + 4.                                                        40
+          IAPTR = IAPTR + 1                                                   41
+          IF (I .EQ. NG) GO TO 4                                              42
+          JA(IAPTR) = K + NG                                                  43
+          A(IAPTR) = -1.5                                                     44
+          BK = BK - 1.5                                                       45
+          IAPTR = IAPTR + 1                                                   46
+ 4        B(K) = BK                                                           47
+          K = K + 1                                                           48
+          IA(K) = IAPTR                                                       49
+ 5        CONTINUE                                                            50
+C                                                                             51
+C  CALL PREORD TO ORDER ROWS OF A BY INCREASING NUMBERS OF NONZEROES          52
+C                                                                             53
+      CALL PREORD(N,IA,R,C,IC)                                                54
+C                                                                             55
+C  CALL NSPIV TO SOLVE SYSTEM                                                 56
+C                                                                             57
+      CALL NSPIV(N,IA,JA,A,B,MAX,R,C,IC,X,ITEMP,RTEMP,IERR)                   58
+      WRITE (6,101) IERR                                                      59
+ 101  FORMAT (8H IERR = ,I10)                                                 60
+C                                                                             61
+C  CALL RESCHK TO COMPUTE MAX-NORM AND 2-NORM OF RESIDUAL                     62
+C                                                                             63
+      CALL RESCHK(N,IA,JA,A,B,X)                                              64
+C                                                                             65
+      STOP                                                                    66
+      END                                                                     67
+      SUBROUTINE PREORD(N,IA,R,C,IC)                                          68
+C
+C  PREORD ORDERS THE ROWS OF A BY INCREASING NUMBER OF NONZEROES.
+C  THE ROW PERMUTATION IS RETURNED IN R.  C IS SET TO THE IDENTITY.
+C
+      INTEGER IA(1),R(1),C(1),IC(1)
+C
+      DO 1 I=1,N
+        R(I) = I
+        C(I) = I
+        IC(I) = I
+1       CONTINUE
+      DO 5 I = 1,N
+5       C(I) = 0
+      DO 10 K = 1,N
+        KDEG = IA(K+1) - IA(K)
+        IF (KDEG .EQ. 0) KDEG = KDEG + 1
+        IC(K) = C(KDEG)
+        C(KDEG) = K
+10      CONTINUE
+      I = 0
+      DO 30 J = 1,N
+        IF (C(J) .EQ. 0) GO TO 30
+        K = C(J)
+20      I = I + 1
+        R(I) = K
+        K = IC(K)
+        IF (K .GT. 0) GO TO 20
+30      CONTINUE
+      DO 40 I = 1,N
+        C(I) = I
+        IC(I) = I
+40      CONTINUE
+      RETURN
+      END
+      SUBROUTINE RESCHK(N,IA,JA,A,B,X)                                       103
+C
+C  RESCHK COMPUTES THE MAX-NORM AND 2-NORM OF THE RESIDUAL.
+C  DOUBLE PRECISION IS USED FOR THE COMPUTATION.
+C
+      INTEGER IA(1),JA(1)
+      REAL A(1),B(1),X(1)
+      DOUBLE PRECISION RESID,RESIDM,ROWSUM
+      RESID = 0.
+      RESIDM = 0.
+      DO 20 I=1,N
+        ROWSUM = DBLE(B(I))
+        JMIN = IA(I)
+        JMAX = IA(I+1) - 1
+        DO 10 J=JMIN,JMAX
+          JAJ = JA(J)
+          ROWSUM = ROWSUM - DBLE(A(J)) * DBLE(X(JAJ))
+10        CONTINUE
+        IF (DABS(ROWSUM) .GT. RESIDM) RESIDM = DABS(ROWSUM)
+        RESID = RESID + ROWSUM**2
+20      CONTINUE
+      RESID = DSQRT(RESID)
+      WRITE (6,25) RESID
+25    FORMAT (22H 2-NORM OF RESIDUAL = ,D14.7)
+      WRITE (6,30) RESIDM
+30    FORMAT(24H MAX NORM OF RESIDUAL = ,D14.7)
+      RETURN
+      END
+C     PROGRAM PIVCHK(INPUT,OUTPUT,TAPE6=OUTPUT,TAPE5=INPUT)                    1
+C                                                                              2
+C  THIS PROGRAM ILLUSTRATES THE USE OF NSPIV BY SOLVING THE                    3
+C  SYSTEM OF LINEAR EQUATIONS                                                  4
+C                                                                              5
+C       A X = B                                                                6
+C                                                                              7
+C  WHERE A IS A BANDED 192 X 192 MATRIX OF BANDWIDTH 20.  X IS                 8
+C  CHOSEN TO BE A VECTOR OF ALL ONES, AND B IS COMPUTED ACCORDINGLY.           9
+C                                                                             10
+C                                                                             11
+      INTEGER IA(193),JA(3500),R(192),C(192),IC(192),ITEMP(7500)              12
+      REAL A(3500),B(192),X(192),RTEMP(7200)                                  13
+      DATA MAX/7000/,N/192/                                                   14
+C                                                                             15
+C  CALL GENPRB TO SET UP PROBLEM                                              16
+C                                                                             17
+      CALL GENPRB(N,IA,JA,A,ITEMP,B)                                          18
+C                                                                             19
+C  CALL PREORD TO ORDER ROWS OF A BY INCREASING NUMBERS OF NONZEROES          20
+C                                                                             21
+      CALL PREORD(N,IA,R,C,IC)                                                22
+C                                                                             23
+C  CALL NSPIV TO SOLVE SYSTEM                                                 24
+C                                                                             25
+      CALL NSPIV(N,IA,JA,A,B,MAX,R,C,IC,X,ITEMP,RTEMP,IERR)                   26
+      WRITE (6,101) IERR                                                      27
+ 101  FORMAT (8H IERR = ,I10)                                                 28
+C                                                                             29
+C  CALL RESCHK TO COMPUTE MAX-NORM AND 2-NORM OF RESIDUAL                     30
+C                                                                             31
+      CALL RESCHK(N,IA,JA,A,B,X)                                              32
+C                                                                             33
+      STOP                                                                    34
+      END                                                                     35
+      SUBROUTINE GENPRB(N,IA,JA,A,B,RHS)                                     104
+C
+C  GENPRB SETS UP THE MATRIX AND RIGHT HAND SIDE FROM
+C  THE DATA ON CARDS.  THE PROBLEM IS ONE FROM THE USGS.
+C
+      INTEGER IA(1),JA(1)
+      REAL B(1),A(1),RHS(1)
+C
+      KMIN = 1
+      DO 5 I=1,N
+        KMAX = KMIN + 38
+        READ (5,101) (B(K),K=KMIN,KMAX)
+ 101    FORMAT (8G10.3)
+        KMIN = KMAX + 1
+ 5      CONTINUE
+C
+      IA(1) = 1
+      IAPTR = 1
+      IPART = 0
+      DO 15 I=1,N
+        RHSI = 0.
+        DO 10 J=1,39
+          K = I - 20 + J
+          IF (K .LE. 0) GO TO 10
+          IF (K .GT. N) GO TO 10
+          IPARTJ = IPART + J
+          IF (B(IPARTJ) .EQ. 0.) GO TO 10
+          A(IAPTR) = B(IPARTJ)
+          JA(IAPTR) = K
+          RHSI = RHSI + B(IAPTR)
+          IAPTR = IAPTR + 1
+ 10       CONTINUE
+        IA(I+1) = IAPTR
+        RHS(I) = RHSI
+ 15     IPART = IPART + 39
+      RETURN
+      END
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0  2.67     -.819     -.475     -.409             0
+         0         0         0         0         0         0         0         0
+         0         0         0 -.475     -.409     -1.14     -.204
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0 1.960E-02  .125    -7.451E-03 6.258E-02         0         0
+         0         0         0         0         0         0         0         0
+         0         0-7.451E-03 6.258E-02-1.233E-02 3.117E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0-2.970E-02-2.556E-02  .333     -.102    -2.970E-02-2.556E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+-7.451E-03 6.258E-02 3.912E-02  .249    -7.451E-03 6.258E-02         0         0
+         0         0         0         0         0         0         0         0
+-1.233E-02 3.117E-02-1.490E-02  .125    -1.233E-02 3.117E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0-2.970E-02-2.556E-02  .333     -.102    -2.970E-02-2.556E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+ -.119      1.00      .626      3.99     -.119      1.00             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0-2.970E-02-2.556E-02  .333     -.102    -2.970E-02-2.556E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+ -.119      1.00      .626      3.99     -.119      1.00             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0-2.970E-02-2.556E-02  .333     -.102    -2.970E-02-2.556E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+ -.119      1.00      .626      3.99     -.119      1.00             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0-2.970E-02-2.556E-02  .333     -.102    -2.970E-02-2.556E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+ -.119      1.00      .626      3.99     -.119      1.00             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0-2.970E-02-2.556E-02  .333     -.102    -2.970E-02-2.556E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+-7.451E-03 6.258E-02 3.912E-02  .249    -7.451E-03 6.258E-02         0         0
+         0         0         0         0         0         0         0         0
+-1.233E-02 3.117E-02-1.490E-02  .125    -1.233E-02 3.117E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0 -.475     -.409      2.67     -.819             0         0         0
+         0         0         0         0         0         0         0         0
+         0 -1.14     -.204     -.475     -.409             0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+-7.451E-03 6.258E-02 1.960E-02  .125             0         0         0         0
+         0         0         0         0         0         0         0         0
+-1.233E-02 3.117E-02-7.451E-03 6.258E-02         0         0         0
+         0         0         0-2.970E-02-2.556E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0  .333     -.102    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0-2.970E-02-2.556E-02-7.142E-02-1.278E-02
+         0         0-7.451E-03 6.258E-02-1.233E-02 3.117E-02         0         0
+         0         0         0         0         0         0         0         0
+         0         0 3.912E-02  .249    -1.490E-02  .125             0         0
+         0         0         0         0         0         0         0         0
+         0         0-7.451E-03 6.258E-02-1.233E-02 3.117E-02         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+-1.233E-02 3.117E-02-1.490E-02  .125    -1.233E-02 3.117E-02         0         0
+         0         0         0         0         0         0         0         0
+-1.490E-02  .125     7.823E-02  .499    -1.490E-02  .125             0         0
+         0         0         0         0         0         0         0         0
+-1.233E-02 3.117E-02-1.490E-02  .125    -1.233E-02 3.117E-02         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+-1.233E-02 3.117E-02-1.490E-02  .125    -1.233E-02 3.117E-02         0         0
+         0         0         0         0         0         0         0         0
+-1.490E-02  .125     7.823E-02  .499    -1.490E-02  .125             0         0
+         0         0         0         0         0         0         0         0
+-1.233E-02 3.117E-02-1.490E-02  .125    -1.233E-02 3.117E-02         0
+         0-7.142E-02-1.278E-02-2.970E-02-2.556E-02         0         0         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .333     -.102             0         0         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-2.970E-02-2.556E-02         0         0
+-1.233E-02 3.117E-02-7.451E-03 6.258E-02         0         0         0         0
+         0         0         0         0         0         0         0         0
+-1.490E-02  .125     3.912E-02  .249             0         0         0         0
+         0         0         0         0         0         0         0         0
+-1.233E-02 3.117E-02-7.451E-03 6.258E-02         0         0         0
+         0         0         0-2.970E-02-2.556E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0  .333     -.102    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0-2.970E-02-2.556E-02-7.142E-02-1.278E-02
+         0         0 -.119      1.00     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+         0         0  .626      3.99     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+         0         0 -.119      1.00     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-2.970E-02-2.556E-02         0         0         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .333     -.102             0         0         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-2.970E-02-2.556E-02         0         0
+ -.197      .499     -.119      1.00             0         0         0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      .626      3.99             0         0         0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.119      1.00             0         0         0
+         0         0         0-2.970E-02-2.556E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0  .333     -.102    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0-2.970E-02-2.556E-02-7.142E-02-1.278E-02
+         0         0 -.119      1.00     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+         0         0  .626      3.99     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+         0         0 -.119      1.00     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-2.970E-02-2.556E-02         0         0         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .333     -.102             0         0         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-2.970E-02-2.556E-02         0         0
+ -.197      .499     -.119      1.00             0         0         0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      .626      3.99             0         0         0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.119      1.00             0         0         0
+         0         0         0-2.970E-02-2.556E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0  .333     -.102    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0-2.970E-02-2.556E-02-7.142E-02-1.278E-02
+         0         0 -.119      1.00     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+         0         0  .626      3.99     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+         0         0 -.119      1.00     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-2.970E-02-2.556E-02         0         0         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .333     -.102             0         0         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-2.970E-02-2.556E-02         0         0
+ -.197      .499     -.119      1.00             0         0         0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      .626      3.99             0         0         0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.119      1.00             0         0         0
+         0         0         0-2.970E-02-2.556E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0  .333     -.102    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0-2.970E-02-2.556E-02-7.142E-02-1.278E-02
+         0         0 -.119      1.00     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+         0         0  .626      3.99     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+         0         0 -.119      1.00     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-2.970E-02-2.556E-02         0         0         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .333     -.102             0         0         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-2.970E-02-2.556E-02         0         0
+ -.197      .499     -.119      1.00             0         0         0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      .626      3.99             0         0         0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.119      1.00             0         0         0
+         0         0         0-2.970E-02-2.556E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0  .333     -.102    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0-2.970E-02-2.556E-02-7.142E-02-1.278E-02
+         0         0 -.119      1.00     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+         0         0  .626      3.99     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+         0         0 -.119      1.00     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-2.970E-02-2.556E-02         0         0         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .333     -.102             0         0         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-2.970E-02-2.556E-02         0         0
+ -.197      .499     -.119      1.00             0         0         0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      .626      3.99             0         0         0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.119      1.00             0         0         0
+         0         0         0-2.970E-02-2.556E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0  .333     -.102    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0-2.970E-02-2.556E-02-7.142E-02-1.278E-02
+         0         0 -.119      1.00     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+         0         0  .626      3.99     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+         0         0 -.119      1.00     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-2.970E-02-2.556E-02         0         0         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .333     -.102             0         0         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-2.970E-02-2.556E-02         0         0
+ -.197      .499     -.119      1.00             0         0         0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      .626      3.99             0         0         0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.119      1.00             0         0         0
+         0         0         0-2.970E-02-2.556E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0  .333     -.102    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0-2.970E-02-2.556E-02-7.142E-02-1.278E-02
+         0         0 -.119      1.00     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+         0         0  .626      3.99     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+         0         0 -.119      1.00     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-2.970E-02-2.556E-02         0         0         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .333     -.102             0         0         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-2.970E-02-2.556E-02         0         0
+ -.197      .499     -.119      1.00             0         0         0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      .626      3.99             0         0         0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.119      1.00             0         0         0
+         0         0         0-2.970E-02-2.556E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0  .333     -.102    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0-2.970E-02-2.556E-02-7.142E-02-1.278E-02
+         0         0 -.119      1.00     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+         0         0  .626      3.99     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+         0         0 -.119      1.00     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-2.970E-02-2.556E-02         0         0         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .333     -.102             0         0         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-2.970E-02-2.556E-02         0         0
+ -.197      .499     -.119      1.00             0         0         0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      .626      3.99             0         0         0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.119      1.00             0         0         0
+         0         0         0-2.970E-02-2.556E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0  .333     -.102    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0-2.970E-02-2.556E-02-7.142E-02-1.278E-02
+         0         0-7.451E-03 6.258E-02-1.233E-02 3.117E-02         0         0
+         0         0         0         0         0         0         0         0
+         0         0 3.912E-02  .249    -1.490E-02  .125             0         0
+         0         0         0         0         0         0         0         0
+         0         0-7.451E-03 6.258E-02-1.233E-02 3.117E-02         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+-1.233E-02 3.117E-02-1.490E-02  .125    -1.233E-02 3.117E-02         0         0
+         0         0         0         0         0         0         0         0
+-1.490E-02  .125     7.823E-02  .499    -1.490E-02  .125             0         0
+         0         0         0         0         0         0         0         0
+-1.233E-02 3.117E-02-1.490E-02  .125    -1.233E-02 3.117E-02         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.238      1.99      1.25      7.98     -.238      1.99             0         0
+         0         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .668     -.205    -5.939E-02-5.120E-02         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02
+-1.233E-02 3.117E-02-1.490E-02  .125    -1.233E-02 3.117E-02         0         0
+         0         0         0         0         0         0         0         0
+-1.490E-02  .125     7.823E-02  .499    -1.490E-02  .125             0         0
+         0         0         0         0         0         0         0         0
+-1.233E-02 3.117E-02-1.490E-02  .125    -1.233E-02 3.117E-02         0
+         0-7.142E-02-1.278E-02-2.970E-02-2.556E-02         0         0         0
+         0         0         0         0         0         0         0         0
+         0-5.939E-02-5.120E-02  .333     -.102             0         0         0
+         0         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-2.970E-02-2.556E-02         0         0
+-1.233E-02 3.117E-02-7.451E-03 6.258E-02         0         0         0         0
+         0         0         0         0         0         0         0         0
+-1.490E-02  .125     3.912E-02  .249             0         0         0         0
+         0         0         0         0         0         0         0         0
+-1.233E-02 3.117E-02-7.451E-03 6.258E-02         0         0         0
+         0         0         0 -.475     -.409     -1.14     -.204             0
+         0         0         0         0         0         0         0         0
+         0         0         0  2.67     -.819     -.475     -.409             0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0
+         0         0-7.451E-03 6.258E-02-1.233E-02 3.117E-02         0         0
+         0         0         0         0         0         0         0         0
+         0         0 1.960E-02  .125    -7.451E-03 6.258E-02         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-2.970E-02-2.556E-02  .333     -.102    -2.970E-02-2.556E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0
+-1.233E-02 3.117E-02-1.490E-02  .125    -1.233E-02 3.117E-02         0         0
+         0         0         0         0         0         0         0         0
+-7.451E-03 6.258E-02 3.912E-02  .249    -7.451E-03 6.258E-02         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-2.970E-02-2.556E-02  .333     -.102    -2.970E-02-2.556E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.119      1.00      .626      3.99     -.119      1.00             0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-2.970E-02-2.556E-02  .333     -.102    -2.970E-02-2.556E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.119      1.00      .626      3.99     -.119      1.00             0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-2.970E-02-2.556E-02  .333     -.102    -2.970E-02-2.556E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.119      1.00      .626      3.99     -.119      1.00             0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-2.970E-02-2.556E-02  .333     -.102    -2.970E-02-2.556E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0
+ -.197      .499     -.238      1.99     -.197      .499             0         0
+         0         0         0         0         0         0         0         0
+ -.119      1.00      .626      3.99     -.119      1.00             0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0
+         0-7.142E-02-1.278E-02-5.939E-02-5.120E-02-7.142E-02-1.278E-02         0
+         0         0         0         0         0         0         0         0
+         0-2.970E-02-2.556E-02  .333     -.102    -2.970E-02-2.556E-02         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0
+-1.233E-02 3.117E-02-1.490E-02  .125    -1.233E-02 3.117E-02         0         0
+         0         0         0         0         0         0         0         0
+-7.451E-03 6.258E-02 3.912E-02  .249    -7.451E-03 6.258E-02         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0
+         0 -1.14     -.204     -.475     -.409             0         0         0
+         0         0         0         0         0         0         0         0
+         0 -.475     -.409      2.67     -.819             0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0
+-1.233E-02 3.117E-02-7.451E-03 6.258E-02         0         0         0         0
+         0         0         0         0         0         0         0         0
+-7.451E-03 6.258E-02 1.960E-02  .125             0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0
+ 
+ 
+ 

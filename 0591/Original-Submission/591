@@ -1,0 +1,1648 @@
+C     ALGORITHM 591, COLLECTED ALGORITHMS FROM ACM.
+C     ALGORITHM APPEARED IN ACM-TRANS. MATH. SOFTWARE, VOL.8, NO. 4,
+C     DEC., 1982, P.383-401.
+C  **A COMPREHENSIVE, MATRIX FREE ALGORITHM FOR ANALYSIS OF VARIANCE**  MAN   10
+C                                                                       MAN   20
+C  **STATISTICS COMPUTED**                                              MAN   30
+C                                                                       MAN   40
+C    1) CELL SUMS, FREQUENCIES, AND MEANS                               MAN   50
+C                                                                       MAN   60
+C    2) CLASSIFICATION SUMS, FREQUENCIES, AND MEANS                     MAN   70
+C                                                                       MAN   80
+C    3) RANK(DESIGN MATRIX FOR FULL MODEL)                              MAN   90
+C                                                                       MAN  100
+C    4) SSE(FULL MODEL) AND SSR(FULL MODEL)                             MAN  110
+C                                                                       MAN  120
+C    5) A G-INVERSE SOLUTION TO THE NORMAL EQUATIONS                    MAN  130
+C                                                                       MAN  140
+C    6) ESTIMATES OF EXPECTED CELL MEANS                                MAN  150
+C                                                                       MAN  160
+C    7) RANK(RESTRICTED DESIGN MATRIX FOR REDUCED MODEL)                MAN  170
+C                                                                       MAN  180
+C    8) SSE(REDUCED MODEL) AND SSR(REDUCED MODEL)                       MAN  190
+C                                                                       MAN  200
+C    9) THE F STATISTIC FOR A SPECIFIED HYPTOTHESIS                     MAN  210
+C                                                                       MAN  220
+C   10) PROBABILITY OF A GREATER F GIVEN THE HYPOTHESIS                 MAN  230
+C                                                                       MAN  240
+C  **FLOW OF CONTROL**                                                  MAN  250
+C                                                                       MAN  260
+C    1) FACTOR, LEVELS STATEMENT                                        MAN  270
+C                                                                       MAN  280
+C    2) VARIABLE FORMAT STATEMENT                                       MAN  290
+C                                                                       MAN  300
+C    3) DATA                                                            MAN  310
+C                                                                       MAN  320
+C    4) BLANK LINE (CARD)                                               MAN  330
+C                                                                       MAN  340
+C    5) OPTIONS STATEMENT/MODEL STATEMENT/HYPOTHESIS STATEMENT/BLANK    MAN  350
+C       LINE/E                                                          MAN  360
+C                                                                       MAN  370
+C       E ENDS PROCESSING, BLANK LINE SENDS CONTROL TO 1), STATEMENTS   MAN  380
+C       RETURN CONTROL TO 5) FOLLOWING EXECUTION.                       MAN  390
+C                                                                       MAN  400
+C  **FACTOR, LEVELS STATEMENT**                                         MAN  410
+C                                                                       MAN  420
+C    A DISTINCT ALPHABETIC CHARACTER IS USED TO NAME EACH FACTOR AND    MAN  430
+C    EACH SUBSCRIPT. THE STRING OF FACTOR SYMBOLS IS PLACED IN PARENS   MAN  440
+C    AND THEN PRECEDED BY THE LETTER F. THIS IS FOLLOWED BY THE LET-    MAN  450
+C    TER L AND A PARENTHESIZED LIST OF ASSOCIATED SUBSCRIPTS WITH THE   MAN  460
+C    NUMBER OF LEVELS FOR THE FACTOR IN PARENS FOLLOWING THE ASSOCI-    MAN  470
+C    ATED SUBSCRIPT.                                                    MAN  480
+C                                                                       MAN  490
+C    EXAMPLE FOR 3 FACTORS NAMED A, B, C, ASSOCIATED SUBSCRIPTS NAMED   MAN  500
+C    I, J, K, AND NUMBER OF LEVELS OF THE FACTORS EQUAL TO 5, 10, 15:   MAN  510
+C                                                                       MAN  520
+C      F(A,B,C) L(I(5),J(10),K(15))                                     MAN  530
+C                                                                       MAN  540
+C      COMMAS AND BLANKS ARE COSMETIC                                   MAN  550
+C                                                                       MAN  560
+C      ORDERING OF THE ASSOCIATED SUBSCRIPTS IS ASSUMED TO CORRESPOND   MAN  570
+C      TO THE ORDERING OF THE DATA. THE NUMBER OF OBSERVATIONS WITHIN   MAN  580
+C      THE (I,J,K) CELL DEPENDS UPON THE DATA; NO SUBSCRIPT SYMBOL IS   MAN  590
+C      USED TO DENOTE WITHIN CELL REPLICATION.                          MAN  600
+C                                                                       MAN  610
+C  **DATA**                                                             MAN  620
+C                                                                       MAN  630
+C    DATA INPUT FACILITIES ARE MINIMAL. DATA IS READ ONE OBSERVATION    MAN  640
+C    PER LINE WITH CELL INDICATORS PRECEDING THE OBSERVATION. CELL      MAN  650
+C    INDICATORS ARE THE FACTOR LEVELS FOR THE OBSERVATION; THERE IS     MAN  660
+C    NO INDICATOR FOR WITHIN CELL REPLICATION AND NO ENTRIES ARE MADE   MAN  670
+C    FOR MISSING CELLS. THE DATA MUST BE LEXICOGRAPHICALLY ORDERED SO   MAN  680
+C    THAT THE RIGHTMOST SUBSCRIPT (INDICATOR) MOVES MOST RAPIDLY. IN    MAN  690
+C    BATCH MODE, THE SAME VARIABLE FORMAT STATEMENT IS ALSO USED TO     MAN  700
+C    WRITE THE DATA. A CONSTANT (INDATA) IN THE PROGRAM DETERMINES      MAN  710
+C    THE INPUT UNIT FROM WHICH THE DATA IS READ.                        MAN  720
+C                                                                       MAN  730
+C    EXAMPLE FOR 3 FACTORS EACH AT 2 LEVELS WITH CELLS (1,2,2) AND      MAN  740
+C    (2,1,2) MISSING:                                                   MAN  750
+C                                                                       MAN  760
+C    (1X,3I2,F3.1)                                                      MAN  770
+C      1 1 1 41                                                         MAN  780
+C      1 1 1 45                                                         MAN  790
+C      1 1 2 35                                                         MAN  800
+C      1 2 1 53                                                         MAN  810
+C      1 2 1 62                                                         MAN  820
+C      1 2 1 56                                                         MAN  830
+C      2 1 1 47                                                         MAN  840
+C      2 2 1 55                                                         MAN  850
+C      2 2 2 59                                                         MAN  860
+C                                                                       MAN  870
+C  **OPTIONS**                                                          MAN  880
+C                                                                       MAN  890
+C    IDENTIFIER              FUNCTION OF OPTION               DEFAULT   MAN  900
+C    ----------  -------------------------------------------  -------   MAN  910
+C       S(D)     SIGNIFICANT DIGITS IN RESULTS                  D=5     MAN  920
+C    T(L*10**4)  TEST LEVEL                                    L=.05    MAN  930
+C       I(M)     MAXIMUM NUMBER OF ITERATIONS                  M=100    MAN  940
+C        R       RANK COMPUTATIONS (ITERATIVE)                  OFF     MAN  950
+C        V       ESTIMATES OF EXPECTED CELL MEANS               OFF     MAN  960
+C        G       G-INVERSE SOLUTION TO NORMAL EQUATIONS         OFF     MAN  970
+C        P       PROBABILITY VALUES FOR F STATISTICS            OFF     MAN  980
+C        Z       INTERMEDIATE OUTPUT                            OFF     MAN  990
+C        A       CELL SUMS, FREQUENCIES, AND MEANS              OFF     MAN 1000
+C        C       CLASSIFICATION SUMS, FREQUENCIES, AND MEANS    OFF     MAN 1010
+C                                                                       MAN 1020
+C  **OPTIONS STATEMENT**                                                MAN 1030
+C                                                                       MAN 1040
+C    STRING OF OPTION IDENTIFIERS, IN ANY ORDER, ARE PARENTHESIZED      MAN 1050
+C    AND PRECEDED BY THE LETTER O.                                      MAN 1060
+C                                                                       MAN 1070
+C    EXAMPLES WITH ALL OPTIONS IN DEFAULT STATUS                        MAN 1080
+C                                                                       MAN 1090
+C      1) TO COMPUTE RANK ITERATIVELY, TEST HYPOTHESES AT ONE PERCENT   MAN 1100
+C         LEVEL, AND OBTAIN INTERMEDIATE OUTPUT                         MAN 1110
+C                                                                       MAN 1120
+C           O(R,T(100),Z)                                               MAN 1130
+C                                                                       MAN 1140
+C      2) TO OBTAIN ESTIMATES OF EXPECTED CELL MEANS, A G-INVERSE       MAN 1150
+C         SOLUTION, AND 8 DIGIT ACCURACY                                MAN 1160
+C                                                                       MAN 1170
+C           O(V,G,S(8))                                                 MAN 1180
+C                                                                       MAN 1190
+C         COMMAS AND BLANKS ARE COSMETIC                                MAN 1200
+C                                                                       MAN 1210
+C         THE A AND C OPTIONS ARE IMMEDIATE AND WILL NOT REMAIN IN ON   MAN 1220
+C         STATUS; THE OTHER ON/OFF OPTIONS CHANGE STATUS WHENEVER THE   MAN 1230
+C         OPTION IDENTIFIER IS SPECIFIED. THE S, T, AND I OPTIONS DO    MAN 1240
+C         NOT RETURN TO DEFAULT STATUS.                                 MAN 1250
+C                                                                       MAN 1260
+C         WHEN RANK CANNOT BE COMPUTED NON-ITERATIVELY, IT WILL BE      MAN 1270
+C         COMPUTED ITERATIVELY ONLY WHEN THE R OPTION IS ON.            MAN 1280
+C                                                                       MAN 1290
+C         THE IDENTIFIER S(0) MAY BE USED TO COMPUTE RANK WITHOUT       MAN 1300
+C         COMPUTING SSR OR SSE.                                         MAN 1310
+C                                                                       MAN 1320
+C  **MODEL STATEMENT**                                                  MAN 1330
+C                                                                       MAN 1340
+C    EXAMPLES OF MODEL STATEMENT FOR 3 FACTORS:                         MAN 1350
+C                                                                       MAN 1360
+C      1) 3-WAY CROSSED CLASSIFICATION                                  MAN 1370
+C                                                                       MAN 1380
+C           M + A(I) + B(J) + C(K)                                      MAN 1390
+C                                                                       MAN 1400
+C      2) 3-WAY NESTED CLASSIFICATION                                   MAN 1410
+C                                                                       MAN 1420
+C           M + A(I) + B(IJ) + C(IJK)                                   MAN 1430
+C                                                                       MAN 1440
+C      3) FACTORS A AND C ARE CROSSED, FACTOR B IS NESTED WITHIN A,     MAN 1450
+C         AND THERE IS AN AC INTERACTION                                MAN 1460
+C                                                                       MAN 1470
+C           M + A(I) + B(IJ) + C(K) + AC(IK)                            MAN 1480
+C                                                                       MAN 1490
+C      4) FACTORS A AND B ARE CROSSED, FACTOR C IS NESTED WITHIN        MAN 1500
+C         BOTH A AND B, AND THERE IS AN AB INTERACTION                  MAN 1510
+C                                                                       MAN 1520
+C           M + A(I) + B(J) + AB(IJ) + C(IJK)                           MAN 1530
+C                                                                       MAN 1540
+C                                                                       MAN 1550
+C    RULES FOR CONSTRUCTING MODEL STATEMENT:                            MAN 1560
+C                                                                       MAN 1570
+C      1) BLANKS AND PLUSES ARE COSMETIC                                MAN 1580
+C                                                                       MAN 1590
+C      2) THE ASSOCIATED SUBSCRIPT OF A FACTOR MUST ALWAYS APPEAR       MAN 1600
+C         ALONG WITH THE FACTOR SYMBOL IN A MODEL TERM                  MAN 1610
+C                                                                       MAN 1620
+C      3) IF A FACTOR IS NESTED, IT MUST BE NESTED WITHIN A FACTOR      MAN 1630
+C         OR FACTORS APPEARING TO THE LEFT OF IT IN THE PREVIOUS        MAN 1640
+C         FACTOR, LEVELS STATEMENT                                      MAN 1650
+C                                                                       MAN 1660
+C      4) THE LETTER M (FOR MU) MUST BEGIN EACH MODEL STATEMENT         MAN 1670
+C                                                                       MAN 1680
+C      5) CONTINUATION TO THE NEXT LINE IS INDICATED BY A SLASH (/)     MAN 1690
+C         FOLLOWING THE LAST MODEL TERM ON THE CURRENT LINE             MAN 1700
+C                                                                       MAN 1710
+C      6) A FULL FACTORIAL MODEL MAY BE SPECIFIED BY AN ASTERISK (*)    MAN 1720
+C         FOLLOWING M                                                   MAN 1730
+C                                                                       MAN 1740
+C  **HYPOTHESIS STATEMENT**                                             MAN 1750
+C                                                                       MAN 1760
+C    BEGINS WITH THE LETTER H FOLLOWED BY THE MODEL TERM/S TO BE DE-    MAN 1770
+C    LETED FROM THE FULL MODEL IN ORDER TO FORM THE REDUCED MODEL OF    MAN 1780
+C    THE HYPOTHESIS.                                                    MAN 1790
+C                                                                       MAN 1800
+C    EXAMPLES APPLIED TO PREVIOUS MODEL STATEMENTS:                     MAN 1810
+C                                                                       MAN 1820
+C      1) TO TEST FOR NO B EFFECT IN THE 3-WAY CROSSED CLASSIFICATION   MAN 1830
+C                                                                       MAN 1840
+C           H  B(J)                                                     MAN 1850
+C                                                                       MAN 1860
+C      2) TO TEST FOR NO C EFFECT IN THE 3-WAY NESTED CLASSIFICATION    MAN 1870
+C                                                                       MAN 1880
+C           H  C(IJK)                                                   MAN 1890
+C                                                                       MAN 1900
+C      3) TO TEST FOR NO INTERACTION IN MODEL 3                         MAN 1910
+C                                                                       MAN 1920
+C           H  AC(IK)                                                   MAN 1930
+C                                                                       MAN 1940
+C      4) TO JOINTLY TEST FOR NO C EFFECT AND NO AB INTERACTION IN 4    MAN 1950
+C                                                                       MAN 1960
+C           H  AB(IJ)  C(IJK)                                           MAN 1970
+C                                                                       MAN 1980
+C  ******************************************************************   MAN 1990
+C MINI-AARDVARK BY W. J. HEMMERLE                                       MAN 2000
+C  ************************** MAIN PROGRAM **************************   MAN 2010
+C                                                                       MAN 2020
+C  INITIALIZES ARRAY CONSTANTS AND SETS DEFAULTS; PROCESSES THE FAC-    MAN 2030
+C  TOR, LEVELS STATEMENT TO FORM THE ARRAYS LSTFI, LE, LS, LV, AND      MAN 2040
+C  LLIM; COMPUTES CELL SUMS, CELL FREQUENCIES, AND THE SUM OF SQUARES   MAN 2050
+C  OF THE OBSERVATIONS AS IT READS THE DATA; PROCESSES OPTION STATE-    MAN 2060
+C  MENTS AND SETS OPTION ARGUMENTS AND INDICATORS; EXECUTES THE CELL    MAN 2070
+C  MEANS (A) OPTION AND/OR CLASSIFICATION MEANS (C) OPTION WHEN SPEC-   MAN 2080
+C  IFIED; READS MODEL/HYPOTHESIS STATEMENTS.                            MAN 2090
+C                                                                       MAN 2100
+C  ********************** ARRAYS AND DIMENSIONS *********************   MAN 2110
+C                                                                       MAN 2120
+C  THE FIXED DIMENSIONS OF THE MAIN PROGRAM LIMITS N, THE NUMBER OF     MAN 2130
+C  FACTORS, TO FIVE.  THESE DIMENSIONS MAY BE MODIFIED TO HANDLE UP TO  MAN 2140
+C  TEN FACTORS; HOWEVER, FIXED DIMENSIONING OF THE ARRAYS WITHIN THE    MAN 2150
+C  MAIN PROGRAM SHOULD BE CONSISTENT WITH THE FOLLOWING USAGE APPLIC-   MAN 2160
+C  ABLE TO ALL OF THE SUBROUTINES -                                     MAN 2170
+C                                                                       MAN 2180
+C  N = NUMBER OF FACTORS; M = 2**N; NCELLS = NUMBER OF CELLS.           MAN 2190
+C                                                                       MAN 2200
+C  ARRAY W LOGICALLY CONSISTS OF SIX CONTIGUOUS VECTORS IMPLICITLY      MAN 2210
+C  NAMED Y, D, D2, V, B, AND A.  THE FIRST 5 VECTORS HAVE SIZE NCELLS   MAN 2220
+C  AND THE 6TH VECTOR IS THE SIZE REQUIRED FOR A FACTORIAL DECOMPOSI-   MAN 2230
+C  TION.  CELL SUMS ARE STORED IN VECTOR Y; THE DIAGONAL MATRIX OF      MAN 2240
+C  CELL FREQUENCIES IS STORED IN VECTOR D; VECTOR D2 IS USED IN RE-     MAN 2250
+C  STRUCTURING CELL FREQUENCIES AS WELL AS FOR TEMPORARY STORAGE OF Y   MAN 2260
+C  IN COMPUTING RANK; VECTORS V,B, AND A ARE USED FOR MOST OF THE NU-   MAN 2270
+C  MERIC COMPUTATIONS INCLUDING THE ITERATIVE AOV ALGORITHM (SEE HEM-   MAN 2280
+C  MERLE, JASA 1974; HEMMERLE AND PIETTE, PROC. COMPUTER SCIENCE AND    MAN 2290
+C  STATISTICS 1975).                                                    MAN 2300
+C                                                                       MAN 2310
+C  NW = TOTAL SIZE OF ARRAY W (COMPUTED IN MAIN PROGRAM).               MAN 2320
+C                                                                       MAN 2330
+C  THE ARRAYS LSTFI AND LER HAVE SIZE M. ARRAY LSTFI IS USED IN THE     MAN 2340
+C  FORMATION AND MANIPULATION OF THE M ARRAYS OF THE FACTORIAL DECOM-   MAN 2350
+C  POSITION; ARRAY LER IS THE E/R LIST IN ONE-TO-ONE CORRESPONDENCE     MAN 2360
+C  WITH THE ARRAYS WITHIN THE FACTORIAL DECOMPOSITION.  ARRAYS LE,      MAN 2370
+C  LS, LV, AND LLIM ALL HAVE SIZE N.  LE AND LS ARE ALPHANUMERIC AR-    MAN 2380
+C  RAYS OF FACTOR SYMBOLS AND THEIR ASSOCIATED SUBSCRIPTS; LV IS AN     MAN 2390
+C  ARRAY OF NUMERICAL VALUES ASSIGNED TO THE FACTOR SYMBOLS AND SUB-    MAN 2400
+C  SCRIPTS; LLIM WILL CONTAIN THE NUMBER OF LEVELS FOR EACH FACTOR      MAN 2410
+C  (SEE HEMMERLE, JACM 1964; SCHLATER AND HEMMERLE, CACM 1966).         MAN 2420
+C                                                                       MAN 2430
+C  ARRAY LT IS A WORK ARRAY OF SIZE N; ARRAY LP IS ALSO A WORK ARRAY-   MAN 2440
+C  HOWEVER, IT HAS A FIXED SIZE OF 10.  ARRAY LD IS AN ALPHANUMERIC     MAN 2450
+C  ARRAY CONTAINING THE DIGITS 0 THROUGH 9; IT IS USED TO CONVERT AL-   MAN 2460
+C  PHANUMERIC INPUT TO NUMERIC.  ARRAY LO IS AN ALPHANUMERIC ARRAY OF   MAN 2470
+C  SIZE 10 CONTAINING THE SINGLE CHARACTER OPTION IDENTIFIERS.  ARRAY   MAN 2480
+C  IA IS AN ALPHANUMERIC INPUT BUFFER USED IN PROCESSING FACTOR, LEV-   MAN 2490
+C  ELS, OPTIONS, MODEL, AND HYPOTHESIS STATEMENTS AS WELL AS STORAGE    MAN 2500
+C  FOR A VARIABLE FORMAT STATEMENTS.                                    MAN 2510
+C                                                                       MAN 2520
+C  L = FIXED SIZE OF INPUT BUFFER IA (L=72 IN THIS PROGRAM).            MAN 2530
+C                                                                       MAN 2540
+C  ARRAY Q, THE ONLY MATRIX STORAGE, IS MAXMC*MAXMC WITH THE VALUE OF   MAN 2550
+C  MAXMC OPTIONAL; ARRAY QT OF SIZE MAXMC IS USED IN CONJUNCTION WITH   MAN 2560
+C  ARRAY Q.  BOTH ARE USED EXCLUSIVELY FOR COMPUTING RANK WHEN THERE    MAN 2570
+C  ARE NO MORE THAN MAXMC MISSING CELLS (SEE HEMMERLE, JASA 1979).      MAN 2580
+C                                                                       MAN 2590
+C  THE ARRAY W MAY BE ALLOCATED ALL OF THE AVAILABLE STORAGE NOT USED   MAN 2600
+C  BY THE OTHER ARRAYS AND THE PROGRAM.                                 MAN 2610
+C                                                                       MAN 2620
+C  ******************************************************************   MAN 2630
+      DIMENSION W(800), LSTFI(32), LER(32), LE(5), LS(5), LV(5), LLIM(5)MAN 2640
+      DIMENSION LT(5), LP(10), LD(10), LO(10), IA(72), Q(8,8), QT(8)    MAN 2650
+C  ************************ COMMON VARIABLES ************************   MAN 2660
+C                                                                       MAN 2670
+C  YPY = SUM OF SQUARES OF THE OBSERVATIONS; SSRM = REGRESSION SUM OF   MAN 2680
+C  SQUARES; SSEM = ERROR SUM OF SQUARES; IIN = INPUT UNIT FOR STATE-    MAN 2690
+C  MENTS; IOUT = OUTPUT UNIT; IROPT, IVOPT, IGOPT, AND IPOPT ARE 0/1    MAN 2700
+C  (OFF/ON) INDICATORS OR SWITCHES FOR THE R, V, G, P OPTIONS; IOFLAG   MAN 2710
+C  IS A 0/1 INDICATOR FOR INTERMEDIATE OUTPUT.                          MAN 2720
+C                                                                       MAN 2730
+C  IBST, IHST, IRST, ISST, AND IXST ARE 0/1 STATUS SWITCHES.  THE TWO   MAN 2740
+C  SWITCHES IBST AND IXST ARE USED IN AVOIDING UNNECESSARY ITERATION;   MAN 2750
+C  BOTH ARE TURNED ON WHEN THE EFFECTIVE X MATRIX IS SQUARE AND IBST    MAN 2760
+C  IS ALSO TURNED ON WHEN THE EFFECTIVE D MATRIX IS A SCALAR MULTIPLE   MAN 2770
+C  OF THE IDENTITY.  IHST IS UNUSED IN THIS VERSION; ISST IS TURNED     MAN 2780
+C  ON WHEN A MODEL OR HYPOTHESIS STATEMENT IS INVALID; IRST IS TURNED   MAN 2790
+C  ON WHEN THE MAXIMUM NUMBER OF ITERATIONS, MAXIT, IS EXCEEDED WHEN    MAN 2800
+C  COMPUTING RANK.                                                      MAN 2810
+C                                                                       MAN 2820
+C  ICD = M/H (MODEL/HYPOTHESIS STATEMENT).  NSUBS = EFFECTIVE NUMBER    MAN 2830
+C  OF FACTORS; LPOUT AND NO1 ARE PARAMETERS COMPUTED FOR RESTRUCTUR-    MAN 2840
+C  ING THE ARRAY OF CELL FREQUENCIES.  IDF, IDFM, AND IDFH CONTAIN      MAN 2850
+C  DEGREES OF FREEDOM ASSUMING FULL RANK AND EQUAL LEVELS.  (FOR DIS-   MAN 2860
+C  CUSSION OF EFFECTIVE MATRICES AND DATA RESTRUCTURING SEE HEMMERLE,   MAN 2870
+C  COMMUNICATIONS IN STATISTICS A 1980)                                 MAN 2880
+C                                                                       MAN 2890
+C  NCELLS = NUMBER OF CELLS.  LOCD1, LOCD2, LOCV, LOCB, AND LOCA ARE    MAN 2900
+C  THE BASE ADDRESSES OF THE VECTORS D, D2, V, B, AND A IN ARRAY W.     MAN 2910
+C  IRANKM AND IRANKR CONTAIN ZERO OR RANKS OF THE FULL AND REDUCED      MAN 2920
+C  MODELS (WHEN COMPUTED).  MAXIT = MAXIMUM NUMBER OF ITERATIONS        MAN 2930
+C                                                                       MAN 2940
+C  NOBS = NUMBER OF OBSERVATIONS; MAXDI AND MINDI ARE THE MAXIMUM AND   MAN 2950
+C  MINIMUM CELL FREQUENCIES.  FLEVEL IS THE PROBABILITY LEVEL FOR F     MAN 2960
+C  STATISTICS AND NOSIGD IS USED TO COMPUTE A RELATIVE TOLERANCE FOR    MAN 2970
+C  SSRM; BOTH ARE USED TO TERMINATE ITERATION.                          MAN 2980
+C                                                                       MAN 2990
+C  ******************************************************************   MAN 3000
+      COMMON /C1/ YPY, SSRM, SSEM, IIN, IOUT, IROPT, IVOPT, IGOPT,      MAN 3010
+     * IPOPT, IOFLAG, IBST, IHST, IRST, ISST, IXST, ICD, NSUBS, LPOUT,  MAN 3020
+     * NO1, IDF, IDFM, IDFR                                             MAN 3030
+      COMMON /C2/ NCELLS, LOCD1, LOCD2, LOCV, LOCB, LOCA, IRANKM,       MAN 3040
+     * IRANKR, MAXIT                                                    MAN 3050
+      COMMON /C3/ NOBS, MAXDI, MINDI, FLEVEL, NOSIGD                    MAN 3060
+C  **************************** PRECISION ***************************   MAN 3070
+C                                                                       MAN 3080
+C  THE PROGRAM HAS BEEN PREPARED FOR A MACHINE WITH 32 BIT WORDS IN     MAN 3090
+C  SINGLE PRECISION; ALL OF THE NUMERIC COMPUTATIONS ARE PERFORMED      MAN 3100
+C  USING DOUBLE PRECISION ARITHMETIC.  FOR MACHINES WITH LARGER WORD    MAN 3110
+C  LENGTHS (48-60 BITS) IN SINGLE PRECISION, THE PROGRAM MAY BE CON-    MAN 3120
+C  VERTED TO PERFORM SINGLE PRECISION ARITHMETIC BY SIMPLY DELETING     MAN 3130
+C  ALL DOUBLE PRECISION SPECIFICATION STATEMENTS AND REPLACING TWO      MAN 3140
+C  OCCURRENCES OF THE DOUBLE PRECISION ABSOLUTE VALUE, DABS, WITH THE   MAN 3150
+C  SINGLE PRECISION COUNTERPART, ABS.  THE MAIN PROGRAM AND SUBROU-     MAN 3160
+C  TINES SCAN, PART1, PART2, STEP, DECOMP, AND POOL EACH CONTAIN ONE    MAN 3170
+C  DOUBLE PRECISION SPECIFICATION STATEMENT; ALL OF THESE (7) STATE-    MAN 3180
+C  MENTS SHOULD BE DELETED IN CONVERTING TO SINGLE PRECISION.  THE      MAN 3190
+C  DABS FUNCTION IS USED IN TWO STATEMENTS IN SUBROUTINE PART2; THESE   MAN 3200
+C  STATEMENTS MUST BE MODIFIED WITH ABS REPLACING DABS.                 MAN 3210
+C                                                                       MAN 3220
+C  ******************************************************************   MAN 3230
+      DOUBLE PRECISION W, Q, QT, YPY, SSRM, SSEM, TEMP                  MAN 3240
+C  ************************ DATA STATEMENT **************************   MAN 3250
+C                                                                       MAN 3260
+C  THE PROGRAM IS COMPATIBLE WITH FORTRAN 77 WITH ONE EXCEPTION. THIS   MAN 3270
+C  EXCEPTION INVOLVES THE USE OF THE HOLLERITH DATA TYPE IN THE DATA    MAN 3280
+C  STATEMENT.  THIS USAGE IS STANDARD IN FORTRAN 66 BUT NOT FORTRAN     MAN 3290
+C  77.  APPENDIX C OF THE FORTRAN 77 STANDARDS DOCUMENT ANSI X3.9-      MAN 3300
+C  1978 PROVIDES GUIDELINES FOR THE INCLUSION OF THE HOLLERITH DATA     MAN 3310
+C  TYPE IN EXTENDED VERSIONS OF THE 77 STANDARD.  AMONG OTHER THINGS,   MAN 3320
+C  THESE GUIDELINES RECOMMEND THE USE OF INTEGER AND REAL VARIABLES     MAN 3330
+C  FOR HOLLERITH DATA; HOLLERITH VALUES MAY ONLY APPEAR IN DATA         MAN 3340
+C  STATEMENTS AND PARAMETER LISTS.  THE PROGRAM HANDLES HOLLERITH       MAN 3350
+C  DATA IN THIS PRESCRIBED MANNER.                                      MAN 3360
+C                                                                       MAN 3370
+C  ******************************************************************   MAN 3380
+      DATA LD(1), LD(2), LD(3), LD(4), LD(5), LD(6), LD(7), LD(8),      MAN 3390
+     * LD(9), LD(10) /1H0,1H1,1H2,1H3,1H4,1H5,1H6,1H7,1H8,1H9/          MAN 3400
+      DATA LO(1) /1HS/, LO(2) /1HT/, LO(3) /1HI/, LO(4) /1HR/, LO(5) /  MAN 3410
+     * 1HV/                                                             MAN 3420
+      DATA LO(6) /1HG/, LO(7) /1HP/, LO(8) /1HZ/, LO(9) /1HA/, LO(10) / MAN 3430
+     * 1HC/                                                             MAN 3440
+      DATA IF /1HF/, IL /1HL/, ID /1HD/, IO /1HO/, IM /1HM/, IH /1HH/,  MAN 3450
+     * IE /1HE/                                                         MAN 3460
+      DATA ILP /1H(/, IRP /1H)/, ISTAR /1H*/, IBLANK /1H /              MAN 3470
+C SET IBATCH=1 FOR BATCH PROCESSING; SET IBATCH=0 FOR INTERACTIVE USE   MAN 3480
+      IBATCH = 1                                                        MAN 3490
+C MAXN, MAXW, MAXMC, AND L MUST EQUAL DIMENSION OF LE, W, QT, AND IA    MAN 3500
+      MAXN = 5                                                          MAN 3510
+      MAXW = 800                                                        MAN 3520
+      MAXMC = 8                                                         MAN 3530
+      L = 72                                                            MAN 3540
+      IIN = 5                                                           MAN 3550
+      INDATA = 5                                                        MAN 3560
+      IOUT = 6                                                          MAN 3570
+C INITIALIZATION REQUIRED WHEN USING PART2 WITHOUT PART1                MAN 3580
+      IRANKM = 0                                                        MAN 3590
+      IRANKR = 0                                                        MAN 3600
+      IBST = 0                                                          MAN 3610
+C DEFAULT SETTING FOR ITERATION PARAMETERS AND OPTIONS                  MAN 3620
+      MAXIT = 100                                                       MAN 3630
+      NOSIGD = 5                                                        MAN 3640
+      FLEVEL = .05                                                      MAN 3650
+      IROPT = 0                                                         MAN 3660
+      IVOPT = 0                                                         MAN 3670
+      IGOPT = 0                                                         MAN 3680
+      IPOPT = 0                                                         MAN 3690
+      IOFLAG = 0                                                        MAN 3700
+C EXAMPLE OF F, L SPECIFICATION: F(A,B,C) L(I(3),J(10),K(5))            MAN 3710
+   10 IF (IBATCH.EQ.0) WRITE (IOUT,99999)                               MAN 3720
+99999 FORMAT (29H FACTOR, LEVEL SPECIFICATION-)                         MAN 3730
+      READ (IIN,99998) (IA(I),I=1,L)                                    MAN 3740
+99998 FORMAT (80A1)                                                     MAN 3750
+      IF (IBATCH.EQ.1) WRITE (IOUT,99997) (IA(I),I=1,L)                 MAN 3760
+99997 FORMAT (1H , 80A1)                                                MAN 3770
+C CREATE LIST LE OF FACTOR SYMBOLS AND DETERMINE N=NO. OF FACTORS       MAN 3780
+      II = 1                                                            MAN 3790
+      ICD = IF                                                          MAN 3800
+   20 IF (II.GT.L) GO TO 320                                            MAN 3810
+      IC = IGET(II,IA,L)                                                MAN 3820
+      IF (IC.EQ.IF) GO TO 20                                            MAN 3830
+      IF (IC.NE.ILP) GO TO 320                                          MAN 3840
+      N = 0                                                             MAN 3850
+   30 IF (II.GT.L) GO TO 320                                            MAN 3860
+      IC = IGET(II,IA,L)                                                MAN 3870
+      IF (IC.EQ.IRP) GO TO 40                                           MAN 3880
+      N = N + 1                                                         MAN 3890
+      IF (N.GT.MAXN) GO TO 320                                          MAN 3900
+      LE(N) = IC                                                        MAN 3910
+      GO TO 30                                                          MAN 3920
+C CREATE LIST LS OF SUBSCRIPT SYMBOLS AND LIST LLIM OF FACTOR LEVELS    MAN 3930
+   40 ICD = IL                                                          MAN 3940
+   50 IF (II.GT.L) GO TO 320                                            MAN 3950
+      IC = IGET(II,IA,L)                                                MAN 3960
+      IF (IC.EQ.IL) GO TO 50                                            MAN 3970
+      IF (IC.NE.ILP) GO TO 320                                          MAN 3980
+      DO 80 I=1,N                                                       MAN 3990
+        LEVEL = 0                                                       MAN 4000
+        IF (II.GT.L) GO TO 320                                          MAN 4010
+        IC = IGET(II,IA,L)                                              MAN 4020
+        LS(I) = IC                                                      MAN 4030
+   60   IF (II.GT.L) GO TO 320                                          MAN 4040
+        IC = IGET(II,IA,L)                                              MAN 4050
+        IF (IC.EQ.ILP) GO TO 60                                         MAN 4060
+        DO 70 J=1,10                                                    MAN 4070
+          IF (LD(J).EQ.IC) LEVEL = LEVEL*10 + J - 1                     MAN 4080
+   70   CONTINUE                                                        MAN 4090
+        IF (IC.NE.IRP) GO TO 60                                         MAN 4100
+        LLIM(I) = LEVEL                                                 MAN 4110
+   80 CONTINUE                                                          MAN 4120
+      IF (II.GT.L) GO TO 320                                            MAN 4130
+      IC = IGET(II,IA,L)                                                MAN 4140
+      IF (IC.NE.IRP) GO TO 320                                          MAN 4150
+C DETERMINE NCELLS=NO. OF CELLS AND M=2**N; CREATE LISTS LV AND LSTFI   MAN 4160
+      NCELLS = 1                                                        MAN 4170
+      NPRIME = 1                                                        MAN 4180
+      DO 90 I=1,N                                                       MAN 4190
+        NPRIME = NPRIME*(LLIM(I)+1)                                     MAN 4200
+        NCELLS = NCELLS*LLIM(I)                                         MAN 4210
+   90 CONTINUE                                                          MAN 4220
+      LSTFI(1) = NCELLS                                                 MAN 4230
+      M = 1                                                             MAN 4240
+      K1 = 2                                                            MAN 4250
+      DO 110 I=1,N                                                      MAN 4260
+        K2 = N - I + 1                                                  MAN 4270
+        DO 100 J=1,M                                                    MAN 4280
+          LSTFI(K1) = LSTFI(J)/LLIM(K2)                                 MAN 4290
+          K1 = K1 + 1                                                   MAN 4300
+  100   CONTINUE                                                        MAN 4310
+        LV(K2) = M                                                      MAN 4320
+        M = 2*M                                                         MAN 4330
+  110 CONTINUE                                                          MAN 4340
+C INITIALIZE POINTERS TO VECTORS IN W ARRAY; CHECK PROBLEM SIZE         MAN 4350
+      LOCD1 = NCELLS                                                    MAN 4360
+      LOCD2 = LOCD1 + NCELLS                                            MAN 4370
+      LOCV = LOCD2 + NCELLS                                             MAN 4380
+      LOCB = LOCV + NCELLS                                              MAN 4390
+      LOCA = LOCB + NCELLS                                              MAN 4400
+      NW = LOCA + NPRIME                                                MAN 4410
+      INCW = NW - MAXW                                                  MAN 4420
+      IF (INCW.GT.0) GO TO 330                                          MAN 4430
+C ZERO Y (CELL SUM VECTOR) AND D1 (CELL FREQUENCY VECTOR)               MAN 4440
+      DO 120 I=1,NCELLS                                                 MAN 4450
+        ID1 = LOCD1 + I                                                 MAN 4460
+        W(I) = 0                                                        MAN 4470
+        W(ID1) = 0                                                      MAN 4480
+  120 CONTINUE                                                          MAN 4490
+C READ INPUT DATA AND CHECK INDICATORS; COMPUTE CELL SUMS, CELL         MAN 4500
+C FREQUENCIES, NO. OF OBSERVATIONS, AND Y'Y.                            MAN 4510
+      WRITE (IOUT,99996)                                                MAN 4520
+99996 FORMAT (28H DATA FORMAT AND INPUT DATA-)                          MAN 4530
+      READ (INDATA,99998) (IA(I),I=1,L)                                 MAN 4540
+      IF (IBATCH.EQ.1) WRITE (IOUT,99997) (IA(I),I=1,L)                 MAN 4550
+      CALL LABEL(M, 0, LLIM, IOUT, N, LV, LP)                           MAN 4560
+      ICD = ID                                                          MAN 4570
+      YPY = 0                                                           MAN 4580
+      NOBS = 0                                                          MAN 4590
+      ITEMP = 0                                                         MAN 4600
+C FIRST COLUMN OF DATA CARD MUST BE BLANK WHEN USING BATCH              MAN 4610
+  130 READ (INDATA,IA) (LT(I),I=1,N), TEMP                              MAN 4620
+      IF (IBATCH.EQ.1) WRITE (IOUT,IA) (LT(I),I=1,N), TEMP              MAN 4630
+      IF (LT(1).EQ.0) GO TO 150                                         MAN 4640
+      I = 1                                                             MAN 4650
+      DO 140 J=1,N                                                      MAN 4660
+        I = I + (LT(J)-1)*LP(J)                                         MAN 4670
+  140 CONTINUE                                                          MAN 4680
+      IF (I.GT.NCELLS) GO TO 320                                        MAN 4690
+      IF (I.LT.ITEMP) GO TO 320                                         MAN 4700
+      ID1 = LOCD1 + I                                                   MAN 4710
+      W(I) = W(I) + TEMP                                                MAN 4720
+      W(ID1) = W(ID1) + 1.0D0                                           MAN 4730
+      NOBS = NOBS + 1                                                   MAN 4740
+      YPY = YPY + TEMP*TEMP                                             MAN 4750
+      ITEMP = I                                                         MAN 4760
+      GO TO 130                                                         MAN 4770
+C COMPUTE MAXIMUM AND MINIMUM CELL FREQUENCIES                          MAN 4780
+  150 MAXDI = 0                                                         MAN 4790
+      MINDI = NOBS                                                      MAN 4800
+      DO 160 I=1,NCELLS                                                 MAN 4810
+        ID1 = LOCD1 + I                                                 MAN 4820
+        ITEMP = W(ID1)                                                  MAN 4830
+        IF (ITEMP.GT.MAXDI) MAXDI = ITEMP                               MAN 4840
+        IF (ITEMP.LT.MINDI) MINDI = ITEMP                               MAN 4850
+  160 CONTINUE                                                          MAN 4860
+      LER(M) = 0                                                        MAN 4870
+C READ OPTIONS/MODEL/HYPOTHESIS/BLANK TRAILER/END CARD                  MAN 4880
+  170 IF (IBATCH.EQ.0) WRITE (IOUT,99995)                               MAN 4890
+99995 FORMAT (40H OPTIONS/MODEL/HYPOTHESIS SPECIFICATION-)              MAN 4900
+      READ (IIN,99998) (IA(I),I=1,L)                                    MAN 4910
+      IF (IBATCH.EQ.1) WRITE (IOUT,99997) (IA(I),I=1,L)                 MAN 4920
+      II = 1                                                            MAN 4930
+      IC = IGET(II,IA,L)                                                MAN 4940
+      ICD = IC                                                          MAN 4950
+      IF (IC.EQ.IM .OR. IC.EQ.IH) GO TO 180                             MAN 4960
+      IF (IC.EQ.IO) GO TO 190                                           MAN 4970
+      IF (IC.EQ.IBLANK .AND. II.GT.L) GO TO 10                          MAN 4980
+      IF (IC.EQ.IE) GO TO 340                                           MAN 4990
+      GO TO 320                                                         MAN 5000
+C SCAN MODEL/HYPOTHESIS STATEMENT AND PROCESS THE DATA                  MAN 5010
+C EXAMPLE OF MODEL SPECIFICATION: M+A(I)+B(J)+AB(IJ)+C(JK)              MAN 5020
+  180 CALL SCAN(II, M, LER, N, LE, LS, LV, LLIM, LP, L, IA, IBATCH)     MAN 5030
+      IF (ISST.EQ.1) GO TO 320                                          MAN 5040
+      CALL PART1(NW, W, M, LSTFI, LER, N, LV, LLIM, LT, LP, MAXMC, Q,   MAN 5050
+     * QT)                                                              MAN 5060
+      IF (NOSIGD.EQ.0) GO TO 170                                        MAN 5070
+      IF (IRST.EQ.1) GO TO 170                                          MAN 5080
+      CALL PART2(NW, W, M, LSTFI, LER, N, LE, LV, LLIM, LT, LP)         MAN 5090
+      GO TO 170                                                         MAN 5100
+C SCAN OPTIONS STATEMENT AND SET OPTIONS                                MAN 5110
+C EXAMPLE OF OPTIONS SPECIFICATION: O(S(0),I(50),R,Z)                   MAN 5120
+  190 IF (II.GT.L) GO TO 320                                            MAN 5130
+      IC = IGET(II,IA,L)                                                MAN 5140
+      IF (IC.NE.ILP) GO TO 320                                          MAN 5150
+  200 IF (II.GT.L) GO TO 320                                            MAN 5160
+      IC = IGET(II,IA,L)                                                MAN 5170
+      IF (IC.EQ.IRP) GO TO 310                                          MAN 5180
+      DO 210 I=1,10                                                     MAN 5190
+        IF (LO(I).EQ.IC) GO TO 220                                      MAN 5200
+  210 CONTINUE                                                          MAN 5210
+      GO TO 320                                                         MAN 5220
+  220 IF (I.GT.3) GO TO 250                                             MAN 5230
+C COMPUTE PARENTHESIZED VALUE FOR S, T, AND I OPTIONS                   MAN 5240
+      NUM = 0                                                           MAN 5250
+  230 IF (II.GT.L) GO TO 320                                            MAN 5260
+      IC = IGET(II,IA,L)                                                MAN 5270
+      IF (IC.EQ.ILP) GO TO 230                                          MAN 5280
+      DO 240 J=1,10                                                     MAN 5290
+        IF (LD(J).EQ.IC) NUM = NUM*10 + J - 1                           MAN 5300
+  240 CONTINUE                                                          MAN 5310
+      IF (IC.NE.IRP) GO TO 230                                          MAN 5320
+      IF (I.EQ.1) NOSIGD = NUM                                          MAN 5330
+      IF (I.EQ.2) FNUM = NUM                                            MAN 5340
+      IF (I.EQ.2) FLEVEL = FNUM/10000.0                                 MAN 5350
+      IF (I.EQ.3) MAXIT = NUM                                           MAN 5360
+      GO TO 200                                                         MAN 5370
+  250 IF (I.EQ.4) IROPT = 1 - IROPT                                     MAN 5380
+      IF (I.EQ.5) IVOPT = 1 - IVOPT                                     MAN 5390
+      IF (I.EQ.6) IGOPT = 1 - IGOPT                                     MAN 5400
+      IF (I.EQ.7) IPOPT = 1 - IPOPT                                     MAN 5410
+      IF (I.EQ.8) IOFLAG = 1 - IOFLAG                                   MAN 5420
+      IF (I.EQ.9) GO TO 260                                             MAN 5430
+      IF (I.EQ.10) GO TO 280                                            MAN 5440
+      GO TO 200                                                         MAN 5450
+C IMMEDIATE COMPUTATION OF CELL MEANS (A) OPTION                        MAN 5460
+  260 WRITE (IOUT,99994)                                                MAN 5470
+99994 FORMAT (35H CELL SUMS, FREQUENCIES, AND MEANS-/8H    CELL, 7X,    MAN 5480
+     * 3HSUM, 7X, 5HFREQ., 6X, 4HMEAN)                                  MAN 5490
+      DO 270 I=1,NCELLS                                                 MAN 5500
+        ID1 = LOCD1 + I                                                 MAN 5510
+        IF (W(ID1).EQ.0.0) WRITE (IOUT,99993) I                         MAN 5520
+        IF (W(ID1).GT.0.0) TEMP = W(I)/W(ID1)                           MAN 5530
+        IF (W(ID1).GT.0.0) WRITE (IOUT,99992) I, W(I), W(ID1), TEMP     MAN 5540
+  270 CONTINUE                                                          MAN 5550
+      GO TO 200                                                         MAN 5560
+99993 FORMAT (1H , I6, 12X, 14H(MISSING CELL))                          MAN 5570
+99992 FORMAT (1H , I6, 1X, E16.8, F5.0, 1X, E16.8)                      MAN 5580
+C IMMEDIATE COMPUTATION OF CLASSIFICATION MEANS (C) OPTION              MAN 5590
+  280 WRITE (IOUT,99991)                                                MAN 5600
+99991 FORMAT (45H CLASSIFICATION SUMS, FREQUENCIES, AND MEANS-)         MAN 5610
+      DO 290 I=1,NCELLS                                                 MAN 5620
+        IAA = LOCA + I                                                  MAN 5630
+        W(IAA) = W(I)                                                   MAN 5640
+  290 CONTINUE                                                          MAN 5650
+      CALL DECOMP(1, LOCA, IOUT, NW, W, M, LSTFI, N, LS, LV, LLIM, LP)  MAN 5660
+      DO 300 I=1,NCELLS                                                 MAN 5670
+        ID1 = LOCD1 + I                                                 MAN 5680
+        IAA = LOCA + I                                                  MAN 5690
+        W(IAA) = W(ID1)                                                 MAN 5700
+  300 CONTINUE                                                          MAN 5710
+      CALL DECOMP(2, LOCA, IOUT, NW, W, M, LSTFI, N, LS, LV, LLIM, LP)  MAN 5720
+      GO TO 200                                                         MAN 5730
+  310 WRITE (IOUT,99990) NOSIGD, FLEVEL, MAXIT, IROPT, IVOPT, IGOPT,    MAN 5740
+     * IPOPT                                                            MAN 5750
+99990 FORMAT (12H OPTIONS- S=, I2, 4H, T=, F6.4, 4H, I=, I3, 4H, R=,    MAN 5760
+     * I1, 4H, V=, I1, 4H, G=, I1, 4H, P=, I1)                          MAN 5770
+      GO TO 170                                                         MAN 5780
+  320 WRITE (IOUT,99989) ICD                                            MAN 5790
+99989 FORMAT (10H ERROR IN , A1, 14H SPECIFICATION)                     MAN 5800
+      IF (IBATCH.EQ.1) GO TO 340                                        MAN 5810
+      IF (ICD.EQ.IF .OR. ICD.EQ.IL) GO TO 10                            MAN 5820
+      IF (ICD.EQ.ID) GO TO 130                                          MAN 5830
+      GO TO 170                                                         MAN 5840
+  330 WRITE (IOUT,99988) INCW                                           MAN 5850
+99988 FORMAT (42H DIMENSION OF W ARRAY MUST BE INCREASED BY, I6)        MAN 5860
+  340 STOP                                                              MAN 5870
+      END                                                               MAN 5880
+C  ****************************** SCAN ******************************   SCA   10
+C                                                                       SCA   20
+C  PROCESSES THE MODEL/HYPOTHESIS STATEMENT TO CONSTRUCT/MODIFY THE     SCA   30
+C  E/R LIST (ARRAY LER); TURNS SWITCH ISST ON FOR AN INVALID STATE-     SCA   40
+C  MENT.  DETERMINES THE EFFECTIVE NUMBER OF FACTORS (NSUBS); TURNS     SCA   50
+C  SWITCH IXST ON WHEN THE EFFECTIVE X MATRIX IS SQUARE; COMPUTES THE   SCA   60
+C  PARAMETERS NEEDED IN RESTRUCTURING DATA (LPOUT AND NO1).  COMPUTES   SCA   70
+C  THE DEGREES OF FREEDOM APPLICABLE TO DATA WITH NO MISSING CELLS      SCA   80
+C  (IDFM AND IDFR).                                                     SCA   90
+C                                                                       SCA  100
+C  IPT = POINTER TO BEGINNING OF MODEL/HYPOTHESIS STATEMENT IN INPUT    SCA  110
+C  BUFFER; IBATCH = 1 (BATCH PROCESSING) OR IBATCH = 0 (INTERACTIVE)    SCA  120
+C                                                                       SCA  130
+C  (SEE MAIN PROGRAM COMMENTS FOR DESCRIPTION OF OTHER ARGUMENTS)       SCA  140
+C                                                                       SCA  150
+C  ******************************************************************   SCA  160
+      SUBROUTINE SCAN(IPT, M, LER, N, LE, LS, LV, LLIM, LP, L, IA,      SCA  170
+     * IBATCH)
+      COMMON /C1/ YPY, SSRM, SSEM, IIN, IOUT, IROPT, IVOPT, IGOPT,
+     * IPOPT, IOFLAG, IBST, IHST, IRST, ISST, IXST, ICD, NSUBS, LPOUT,
+     * NO1, IDF, IDFM, IDFR
+      DIMENSION LER(M), LE(N), LS(N), LV(N), LLIM(N), LP(10), IA(L)
+      DOUBLE PRECISION YPY, SSRM, SSEM
+      DATA ILP /1H(/, IRP /1H)/, IM /1HM/, IH /1HH/, ISTAR /1H*/,
+     * ISLASH /1H//
+      DATA IBLANK /1H /
+      ISST = 0
+      IXST = 0
+      M1 = M - 1
+      II = IPT
+      IF (II.GT.L) GO TO 350
+      IC = IGET(II,IA,L)
+      IF (ICD.EQ.IH) GO TO 20
+      IF (IC.EQ.ISTAR) GO TO 270
+C INITIALIZE E/R LIST TO ZEROES FOR M AND ABSOLUTE VALUES FOR H
+      DO 10 I=1,M1
+        LER(I) = 0
+   10 CONTINUE
+      LER(M) = 1
+   20 IF (LER(M).EQ.0) GO TO 350
+      DO 30 I=1,M1
+        LER(I) = IABS(LER(I))
+   30 CONTINUE
+      M2 = 2*M
+C SCAN TERM TO CONSTRUCT E/R LIST; ENTER NEGATIVES FOR H TERM
+   40 DO 50 I=1,N
+        LP(I) = M2
+   50 CONTINUE
+C SUM VALUES OF FACTOR SYMBOLS FOR E/R ENTRY; ZERO LP POSITIONS
+      NE = 0
+      NVS = 0
+   60 IFLAG = 0
+      DO 70 I=1,N
+        IF (IC.NE.LE(I)) GO TO 70
+        LP(I) = 0
+        IFLAG = 1
+        NE = NE + 1
+        NVS = NVS + LV(I)
+   70 CONTINUE
+      IF (IFLAG.NE.1) GO TO 80
+      IF (II.GT.L) GO TO 350
+      IC = IGET(II,IA,L)
+      GO TO 60
+   80 IF (NE.EQ.0) GO TO 350
+      IF (IC.NE.ILP) GO TO 350
+C SCAN SUBSCRIPTS; SET NONZERO LP ENTRIES TO NUMERICAL VALUES
+      NS = 0
+      NAS = 0
+   90 IF (II.GT.L) GO TO 350
+      IC = IGET(II,IA,L)
+      IFLAG = 0
+      DO 120 I=1,N
+        IF (IC.NE.LS(I)) GO TO 120
+        IF (LP(I).NE.0) LP(I) = LV(I)
+        IF (LP(I).EQ.0) NAS = NAS + 1
+C CHECK FOR INVALID NESTED TERM
+        DO 100 J=I,N
+          IF (LP(J).EQ.0) GO TO 110
+  100   CONTINUE
+        GO TO 350
+  110   IFLAG = 1
+        NS = NS + 1
+  120 CONTINUE
+      IF (IFLAG.NE.1) GO TO 130
+      GO TO 90
+  130 IF (NAS.NE.NE) GO TO 350
+      IF (IC.NE.IRP) GO TO 350
+      IF (NS.NE.NE) GO TO 150
+C CHECK FOR INVALID CROSSED TERM
+      DO 140 I=1,N
+        IF (LP(I).EQ.M2) GO TO 140
+        IF (LP(I).NE.0) GO TO 350
+  140 CONTINUE
+      I = M - NVS
+      ITEMP = 0
+      IF (ICD.EQ.IH) ITEMP = NVS + 1
+      IF (LER(I).NE.ITEMP) GO TO 350
+      LER(I) = NVS + 1
+      IF (ICD.EQ.IH) LER(I) = -LER(I)
+      GO TO 190
+C ENTER SUM FOR NESTED TERM INTO E/R POSITIONS TO POOL
+  150 DO 180 I=1,M1
+        NUM = I - NVS
+        DO 160 J=1,N
+          NUM = NUM - LP(J)
+          IF (NUM.GT.0) GO TO 160
+          IF (NUM.EQ.0) GO TO 170
+          NUM = NUM + LP(J)
+  160   CONTINUE
+        GO TO 180
+  170   K = M - I
+        ITEMP = 0
+        IF (ICD.EQ.IH) ITEMP = NVS + 1
+        IF (LER(K).NE.ITEMP) GO TO 350
+        LER(K) = NVS + 1
+        IF (ICD.EQ.IH) LER(K) = -LER(K)
+  180 CONTINUE
+  190 IF (II.GT.L) GO TO 200
+      IC = IGET(II,IA,L)
+      IF (IC.EQ.IBLANK .AND. II.GT.L) GO TO 200
+      IF (IC.NE.ISLASH) GO TO 40
+C READ MODEL OR HYPOTHESIS CONTINUATION CARD (SLASH FOLLOWS TERM)
+      READ (IIN,99999) (IA(I),I=1,L)
+99999 FORMAT (80A1)
+      IF (IBATCH.EQ.1) WRITE (IOUT,99998) (IA(I),I=1,L)
+99998 FORMAT (1H , 80A1)
+      II = 1
+      IC = IGET(II,IA,L)
+      GO TO 40
+C CHECK FOR INVALID HYPOTHESIS TERM
+  200 DO 220 I=1,M1
+        DO 210 J=I,M1
+          IF (LER(I).EQ.0) GO TO 210
+          IF (LER(I).EQ.(-LER(J))) GO TO 350
+  210   CONTINUE
+  220 CONTINUE
+C CONSTRUCT LP FROM E/R; DETERMINE EFFECTIVE FACTORS
+      NSUBS = N
+      DO 250 I=1,N
+        LP(I) = 0
+        INC1 = LV(I)
+        INC2 = LV(1)/INC1
+        LOC = 1
+        DO 240 J=1,INC2
+          DO 230 K=1,INC1
+            IF (LER(LOC).GT.0) LP(I) = LP(I) + 1
+            LOC = LOC + 1
+  230     CONTINUE
+          LOC = LOC + INC1
+  240   CONTINUE
+        IF (LP(I).EQ.0) NSUBS = NSUBS - 1
+  250 CONTINUE
+C DETERMINE IF THE EFFECTIVE X MATRIX IS SQUARE
+      IV = N - NSUBS + 1
+      DO 260 I=1,N
+        IF (LP(I).EQ.0) GO TO 260
+        IF (LP(I).NE.LV(IV)) GO TO 310
+  260 CONTINUE
+      GO TO 300
+C CONSTRUCT E/R LIST FOR COMPLETELY CROSSED MODEL
+  270 DO 280 I=1,M1
+        LER(I) = M - I + 1
+  280 CONTINUE
+      NSUBS = N
+      DO 290 I=1,N
+        LP(I) = LV(1)
+  290 CONTINUE
+  300 IXST = 1
+  310 IF (IOFLAG.EQ.1) WRITE (IOUT,99997) (LER(I),I=1,M)
+99997 FORMAT (10H E/R LIST-/(1H , 16I5))
+C COMPUTE PARAMETERS REQUIRED TO RESTRUCTURE CELL FREQUENCY ARRAY
+      LPOUT = 1
+      NO1 = 1
+      DO 320 I=1,N
+        IF (LP(I).EQ.0) LPOUT = LPOUT*LLIM(I)
+        IF (LP(I).NE.0) NO1 = NO1 + LV(I)
+  320 CONTINUE
+C COMPUTE DEGREES OF FREEDOM FOR FULL OR REDUCED MODEL
+      IDF = 0
+      DO 340 I=1,M
+        IF (LER(I).LE.0) GO TO 340
+        NO2 = M - I + 1
+        CALL LABEL(NO2, 0, LLIM, IOUT, N, LV, LP)
+        K = 1
+        DO 330 J=1,N
+          IF (LP(J).NE.0) K = K*(LLIM(J)-1)
+  330   CONTINUE
+        IDF = IDF + K
+  340 CONTINUE
+      IDFR = 0
+      IF (ICD.EQ.IH) IDFR = IDF
+      IF (ICD.EQ.IM) IDFM = IDF
+      RETURN
+  350 ISST = 1
+      RETURN
+      END
+C  ****************************** IGET ******************************   IGE   10
+C                                                                       IGE   20
+C  USED BY THE MAIN PROGRAM AND SCAN TO SEQUENTIALLY RETRIEVE CHARAC-   IGE   30
+C  TERS FROM THE INPUT BUFFER.                                          IGE   40
+C                                                                       IGE   50
+C  ARGUMENTS - ICURS = POSITION IN CHARACTER STRING; ISTRNG = CHARAC-   IGE   60
+C              TER STRING (INPUT BUFFER); LNGTH = LENGTH OF STRING.     IGE   70
+C                                                                       IGE   80
+C  ******************************************************************   IGE   90
+      FUNCTION IGET(ICURS, ISTRNG, LNGTH)                               IGE  100
+      DIMENSION ISTRNG(LNGTH)
+      DATA IBLANK /1H /, IPLUS /1H+/, ICOMMA /1H,/
+   10 IGET = ISTRNG(ICURS)
+      ICURS = ICURS + 1
+      IF (ICURS.GT.LNGTH) RETURN
+      IF (IGET.EQ.IBLANK .OR. IGET.EQ.IPLUS) GO TO 10
+      IF (IGET.EQ.ICOMMA) GO TO 10
+      RETURN
+      END
+C  ****************************** PART1 *****************************   PAR   10
+C                                                                       PAR   20
+C  RESTRUCTURES THE DATA (CELL FREQUENCIES) WHEN APPROPRIATE; CHECKS    PAR   30
+C  FOR BALANCE AND ALTERNATIVE NON-ITERATIVE COMPUTATIONS; TURNS IBST   PAR   40
+C  ON WHEN THE EFFECTIVE X MATRIX IS SQUARE OR THE EFFECTIVE D MATRIX   PAR   50
+C  IS A SCALAR MULTIPLE OF THE IDENTITY. COMPUTES RANK WITHOUT ITERA-   PAR   60
+C  TION IF POSSIBLE OR ITERATIVELY OTHERWISE WHEN THE RANK (R) OPTION   PAR   70
+C  IS SPECIFIED; TURNS SWITCH IRST ON IF THE MAXIMUM NUMBER OF ITERA-   PAR   80
+C  TIONS IS EXCEEDED IN COMPUTING RANK.                                 PAR   90
+C                                                                       PAR  100
+C  ******************************************************************   PAR  110
+      SUBROUTINE PART1(NW, W, M, LSTFI, LER, N, LV, LLIM, LT, LP,       PAR  120
+     * MAXMC, Q, QT)
+      COMMON /C1/ YPY, SSRM, SSEM, IIN, IOUT, IROPT, IVOPT, IGOPT,
+     * IPOPT, IOFLAG, IBST, IHST, IRST, ISST, IXST, ICD, NSUBS, LPOUT,
+     * NO1, IDF, IDFM, IDFR
+      COMMON /C2/ NCELLS, LOCD1, LOCD2, LOCV, LOCB, LOCA, IRANKM,
+     * IRANKR, MAXIT
+      DIMENSION W(NW), LSTFI(M), LER(M), LV(N), LLIM(N), LT(N), LP(10)
+      DIMENSION Q(MAXMC,MAXMC), QT(MAXMC)
+      DOUBLE PRECISION W, C, S, TRACE, TEMP, Q, QT, YPY, SSRM, SSEM
+      DATA IH /1HH/, IM /1HM/
+      IHST = 0
+      IRST = 0
+      IBST = 0
+      IRANK = 0
+      IF (NSUBS.EQ.N) GO TO 100
+C FORM RESTRUCTURED CELL FREQUENCY ARRAY (EFFECTIVE D MATRIX)
+      DO 10 I=1,NCELLS
+        ID1 = LOCD1 + I
+        IA = LOCA + I
+        W(IA) = W(ID1)
+   10 CONTINUE
+      CALL DECOMP(1, LOCA, IOUT, NW, W, M, LSTFI, N, LT, LV, LLIM, LP)
+      NS = LOCA
+      NN = M - NO1
+      DO 20 I=1,NN
+        NS = NS + LSTFI(I)
+   20 CONTINUE
+      CALL LABEL(NO1, 0, LLIM, IOUT, N, LV, LP)
+      CALL POOL(0, LOCD2, NS, NW, W, N, LLIM, LT, LP)
+C CHECK FOR A SQUARE EFFECTIVE X MATRIX
+   30 IF (IXST.EQ.1) GO TO 80
+      K = LOCD2 + 1
+      IFLAG = 0
+      DO 40 I=1,NCELLS
+        ID2 = LOCD2 + I
+        IF (W(ID2).EQ.0.0) GO TO 130
+        IF (W(ID2).NE.W(K)) IFLAG = 1
+   40 CONTINUE
+      IF (IFLAG.EQ.1) GO TO 70
+C THE EFFECTIVE D MATRIX IS A SCALAR TIMES THE IDENTITY
+      IRANK = IDF
+   50 DO 60 I=1,NCELLS
+        ID2 = LOCD2 + I
+        W(ID2) = W(ID2)/FLOAT(LPOUT)
+   60 CONTINUE
+      C = 1.0D0
+      IBST = 1
+      GO TO 120
+C ALL ELEMENTS OF THE EFFECTIVE D MATRIX ARE NONZERO
+   70 IRANK = IDF
+      GO TO 120
+C THE EFFECTIVE X MATRIX IS SQUARE
+   80 DO 90 I=1,NCELLS
+        ID2 = LOCD2 + I
+        IF (W(ID2).NE.0.0) IRANK = IRANK + 1
+   90 CONTINUE
+      IRANK = IRANK/LPOUT
+      GO TO 50
+  100 DO 110 I=1,NCELLS
+        ID1 = LOCD1 + I
+        ID2 = LOCD2 + I
+        W(ID2) = W(ID1)
+  110 CONTINUE
+      GO TO 30
+C RANK HAS BEEN DETERMINED (NONITERATIVELY OR ITERATIVELY)
+  120 IF (ICD.EQ.IH) IRANKR = IRANK
+      IF (ICD.EQ.IM) IRANKM = IRANK
+      GO TO 370
+  130 IF (ICD.EQ.IM) GO TO 140
+      IRANKR = 0
+      IF (IRANKM.NE.IDFM) GO TO 150
+      IRANKR = IDFR
+      IRANK = IDFR
+      GO TO 370
+  140 IRANKM = 0
+  150 IF (IROPT.EQ.0) GO TO 380
+C ITERATIVELY COMPUTE RANK OF FULL OR REDUCED MODEL
+      C = 1.0D0
+      RTOL = 0.1
+      NMC = 0
+      DO 160 I=1,NCELLS
+        ID1 = LOCD1 + I
+        ID2 = LOCD2 + I
+        IF (W(ID1).EQ.0.0) NMC = NMC + 1
+        W(ID2) = W(I)
+  160 CONTINUE
+      IF (NMC.GT.MAXMC) GO TO 310
+C COMPUTE Q, POWERS OF Q, AND RELATED TRACES (FEW EMPTY CELLS)
+      K = 1
+      IVEC = 0
+      DO 190 I=1,NCELLS
+        ID1 = LOCD1 + I
+        IF (W(ID1).NE.0.0) GO TO 190
+        DO 170 J=1,NCELLS
+          IV = LOCV + J
+          IB = LOCB + J
+          W(IV) = 0
+          W(IB) = 0
+          W(J) = 0
+          IF (J.EQ.I) W(J) = 1.0D0
+  170   CONTINUE
+        CALL STEP(3, C, S, NW, W, M, LSTFI, LER, N, LV, LLIM, LT, LP)
+        LL = 1
+        DO 180 J=1,NCELLS
+          ID1 = LOCD1 + J
+          IV = LOCV + J
+          IF (W(ID1).NE.0.0) GO TO 180
+          Q(K,LL) = W(IV)
+          LL = LL + 1
+  180   CONTINUE
+        K = K + 1
+  190 CONTINUE
+C POWER Q AND COMPUTE TR(I-Q**(2*K))
+      TEMP = IDF
+      DO 200 I=1,NMC
+        TEMP = TEMP - Q(I,I)
+  200 CONTINUE
+      IT = 0
+  210 IF (IOFLAG.EQ.1) WRITE (IOUT,99999) IT, TEMP
+99999 FORMAT (10H ITERATION, I3, 8H, TRACE=, F16.9)
+      DO 250 J=1,NMC
+        DO 230 I=J,NMC
+          QT(I) = 0
+          DO 220 K=1,NMC
+            QT(I) = QT(I) + Q(K,J)*Q(K,I)
+  220     CONTINUE
+  230   CONTINUE
+        DO 240 K=J,NMC
+          Q(K,J) = QT(K)
+  240   CONTINUE
+  250 CONTINUE
+      TRACE = IDF
+      DO 270 I=1,NMC
+        TRACE = TRACE - Q(I,I)
+        DO 260 J=I,NMC
+          Q(I,J) = Q(J,I)
+  260   CONTINUE
+  270 CONTINUE
+      IT = IT + 1
+      TEMP = TRACE - TEMP
+C TRACE IS MONOTONICALLY INCREASING
+      IF (TEMP.LE.RTOL) GO TO 280
+      IF (IT.GE.MAXIT) GO TO 360
+      TEMP = TRACE
+      GO TO 210
+  280 DO 290 I=1,NCELLS
+        ID2 = LOCD2 + I
+        W(I) = W(ID2)
+  290 CONTINUE
+C ADD ONE (BASED ON MONOTONICITY) TO OBTAIN INTEGER RANK
+  300 IRANK = TRACE + 1.0D0
+      GO TO 120
+C COMPUTE S FOR UNIT VECTORS (MANY EMPTY CELLS)
+  310 TRACE = 0
+      RTOL = RTOL/(FLOAT(NCELLS)-FLOAT(NMC))
+      DO 350 I=1,NCELLS
+        ID1 = LOCD1 + I
+        IF (W(ID1).EQ.0.0) GO TO 350
+        DO 320 J=1,NCELLS
+          IV = LOCV + J
+          IB = LOCB + J
+          W(IV) = 0
+          W(IB) = 0
+          W(J) = 0
+          IF (J.EQ.I) W(J) = 1.0D0
+  320   CONTINUE
+        IT = 0
+        TEMP = 0
+  330   CALL STEP(3, C, S, NW, W, M, LSTFI, LER, N, LV, LLIM, LT, LP)
+        IT = IT + 1
+        TEMP = S - TEMP
+C THE VALUE OF S IS MONOTONICALLY INCREASING
+        IF (TEMP.LE.RTOL) GO TO 340
+        IVEC = I
+        IF (IT.GE.MAXIT) GO TO 360
+        TEMP = S
+        GO TO 330
+  340   TRACE = TRACE + S
+        IF (IOFLAG.EQ.1) WRITE (IOUT,99998) I, IT, TRACE
+99998   FORMAT (7H VECTOR, I4, 12H, ITERATIONS, I4, 8H, TRACE=, F16.9)
+  350 CONTINUE
+      GO TO 280
+  360 WRITE (IOUT,99997) MAXIT, TEMP, RTOL, IVEC
+99997 FORMAT (11H MAXIMUM OF, I4, 34H ITERATIONS EXCEEDED IN COMPUTING ,
+     * 4HRANK/7H DELTA=, F22.9, 10X, 8HEPSILON=, F22.9, 10X, 7HVECTOR=,
+     * I10)
+      IF (NMC.GT.MAXMC) TRACE = TRACE + S
+      IRST = 1
+      GO TO 300
+  370 IF (IROPT.EQ.1) WRITE (IOUT,99996) ICD, IRANK
+99996 FORMAT (17H THE RANK OF THE , A1, 17H DESIGN MATRIX IS, I5)
+  380 RETURN
+      END
+C  ****************************** PART2 *****************************   PAR   10
+C                                                                       PAR   20
+C  COMPUTES SSE AND SSR FOR THE FULL MODEL (ICD = M); OUTPUTS ESTI-     PAR   30
+C  MATES OF EXPECTED CELL MEANS (THE VECTOR V) WHEN THE V OPTION IS     PAR   40
+C  SPECIFIED; COMPUTES A G-INVERSE SOLUTION TO THE NORMAL EQUATIONS     PAR   50
+C  WHEN THE G OPTION IS SPECIFIED.  COMPUTES SSR FOR THE REDUCED MOD-   PAR   60
+C  EL (ICD = H) AND AN F STATISTIC; COMPUTES PROBABILITY VALUES WHEN    PAR   70
+C  THE P OPTION IS SPECIFIED.  ALL COMPUTATIONS ARE NON-ITERATIVE IF    PAR   80
+C  SWITCH IBST IS ON (IBST = 1)                                         PAR   90
+C                                                                       PAR  100
+C  (SEE MAIN PROGRAM COMMENTS FOR A DESCRIPTION OF ARGUMENTS)           PAR  110
+C                                                                       PAR  120
+C  ******************************************************************   PAR  130
+      SUBROUTINE PART2(NW, W, M, LSTFI, LER, N, LE, LV, LLIM, LT, LP)   PAR  140
+      COMMON /C1/ YPY, SSRM, SSEM, IIN, IOUT, IROPT, IVOPT, IGOPT,
+     * IPOPT, IOFLAG, IBST, IHST, IRST, ISST, IXST, ICD, NSUBS, LPOUT,
+     * NO1, IDF, IDFM, IDFR
+      COMMON /C2/ NCELLS, LOCD1, LOCD2, LOCV, LOCB, LOCA, IRANKM,
+     * IRANKR, MAXIT
+      COMMON /C3/ NOBS, MAXDI, MINDI, FLEVEL, NOSIGD
+      DIMENSION W(NW), LSTFI(M), LER(M), LE(N), LV(N), LLIM(N), LT(N),
+     * LP(10)
+      DOUBLE PRECISION W, C, S, TEMP, YPY, SSRM, SSEM, DABS, F
+      DATA IBLANK /1H /, ISTAR /1H*/, IM /1HM/, IH /1HH/
+      FTOL = .005
+      STOL = (.05*YPY)/(10.0**NOSIGD)
+C ZERO THE VECTORS B AND V TO INITIALIZE THE ITERATIVE ALGORITHM
+      DO 10 I=1,NCELLS
+        IB = LOCB + I
+        IV = LOCV + I
+        W(IB) = 0
+        W(IV) = 0
+   10 CONTINUE
+      IT = 0
+      TEMP = 0
+      IF (IBST.EQ.1) GO TO 260
+      IF (ICD.EQ.IH) GO TO 170
+C COMPUTE SSR FOR THE FULL MODEL USING OPTIMUM C FOR CONVERGENCE
+      C = (FLOAT(MAXDI)+FLOAT(MINDI))/2.0
+      IF (MINDI.EQ.0) C = MAXDI
+   20 CALL STEP(1, C, S, NW, W, M, LSTFI, LER, N, LV, LLIM, LT, LP)
+      IT = IT + 1
+      TEMP = S - TEMP
+      IF (IOFLAG.EQ.1) WRITE (IOUT,99999) IT, ICD, S
+99999 FORMAT (10H ITERATION, I4, 5H, SSR, A1, 1H=, E16.8)
+      IF (DABS(TEMP).LE.STOL) GO TO 30
+      IF (IT.GE.MAXIT) GO TO 160
+      TEMP = S
+      GO TO 20
+C APPLY THE E OPERATOR TO THE VECTOR B
+   30 DO 40 I=1,NCELLS
+        IB = LOCB + I
+        IA = LOCA + I
+        W(IA) = W(IB)
+   40 CONTINUE
+      CALL DECOMP(0, LOCA, IOUT, NW, W, M, LSTFI, N, LT, LV, LLIM, LP)
+C COMPUTE SSR AND SSE FOR THE FULL MODEL
+   50 SSRM = S
+      SSEM = YPY - S
+      WRITE (IOUT,99998) IT, SSRM, SSEM
+99998 FORMAT (10H ITERATION, I4, 18H, SSR(FULL MODEL)=, E16.8, 1H,/14X,
+     * 18H  SSE(FULL MODEL)=, E16.8)
+      IF (IVOPT.EQ.0) GO TO 70
+      WRITE (IOUT,99997)
+99997 FORMAT (34H ESTIMATES OF EXPECTED CELL MEANS-/16H    CELL  ESTIMA,
+     * 8HTED MEAN)
+      DO 60 I=1,NCELLS
+        ID1 = LOCD1 + I
+        IV = LOCV + I
+        IF (W(ID1).EQ.0.0) WRITE (IOUT,99996) I, W(IV)
+        IF (W(ID1).GT.0.0) WRITE (IOUT,99995) I, W(IV)
+   60 CONTINUE
+99996 FORMAT (1H , I6, 1X, E16.8, 15H (MISSING CELL))
+99995 FORMAT (1H , I6, 1X, E16.8)
+   70 IF (IGOPT.EQ.0) GO TO 150
+C COMPUTE THE G-INVERSE SOLUTION TO THE NORMAL EQUATIONS
+      WRITE (IOUT,99994)
+99994 FORMAT (20H G-INVERSE SOLUTION-)
+C POOL ARRAYS OF "ESTIMATES" WITH EQUAL E/R LIST VALUES
+      NP = LOCA
+      DO 140 I=1,M
+        NO = LER(I)
+        IF (NO.LE.0) GO TO 130
+        NS = NP
+        NOP = M - I + 1
+        CALL LABEL(NOP, 0, LLIM, IOUT, N, LV, LP)
+C POSITIVE VALUES IN LLIM WILL CORRESPOND TO SUBSCRIPTS IN PRIMARY
+        DO 80 K=1,N
+          IF (LP(K).EQ.0) LLIM(K) = -LLIM(K)
+   80   CONTINUE
+        DO 100 J=I,M
+          IF (J.EQ.I) GO TO 90
+          IF (LER(J).NE.NO) GO TO 90
+          LER(J) = -NO
+          NOS = M - J + 1
+C OBTAIN MAP COEFFICIENTS FOR SECONDARY ARRAY AND POOL INTO PRIMARY
+          CALL LABEL(NOS, 0, LLIM, IOUT, N, LV, LP)
+          CALL POOL(1, NP, NS, NW, W, N, LLIM, LT, LP)
+   90     NS = NS + LSTFI(J)
+  100   CONTINUE
+        DO 110 K=1,N
+          LLIM(K) = IABS(LLIM(K))
+  110   CONTINUE
+C LABEL AND OUTPUT "ESTIMATES" FOR MODEL TERM
+        CALL LABEL(NO, IBLANK, LE, IOUT, N, LV, LP)
+        MST = LSTFI(I)
+        DO 120 K=1,MST
+          IA = NP + K
+          WRITE (IOUT,99995) K, W(IA)
+  120   CONTINUE
+  130   NP = NP + LSTFI(I)
+  140 CONTINUE
+  150 RETURN
+  160 WRITE (IOUT,99993) MAXIT, ICD, TEMP, STOL
+99993 FORMAT (11H MAXIMUM OF, I4, 34H ITERATIONS EXCEEDED IN COMPUTING ,
+     * 3HSSR, A1/7H DELTA=, E16.8, 10X, 8HEPSILON=, E16.8)
+      GO TO 30
+C SELECT C FOR MONOTONICITY OF SSR AND F
+  170 C = MAXDI
+C COMPUTE DEGREES OF FREEDOM TO USE FOR F STATISTIC
+  180 IF (IRANKM.EQ.0) GO TO 190
+      IF (IRANKR.EQ.0) GO TO 190
+      IDFD = NOBS - IRANKM
+      IDFN = IRANKM - IRANKR
+      WRITE (IOUT,99992) IDFN, IDFD
+99992 FORMAT (33H FROM RANK COMPUTATIONS- DF(NUM)=, I4, 10H, DF(DEN)=,
+     * I5)
+      GO TO 200
+  190 IDFD = NOBS - IDFM
+      IDFN = IDFM - IDFR
+      WRITE (IOUT,99991) IDFN, IDFD
+99991 FORMAT (50H ASSUMES FULL RANK AND EQUAL LEVELS WITH- DF(NUM)=,
+     * I4, 10H, DF(DEN)=, I5)
+  200 IF (IDFD*IDFN.LE.0) GO TO 150
+      IF (IBST.EQ.1) GO TO 220
+C COMPUTE MONOTONICALLY DECREASING APPROXIMATION TO F
+  210 CALL STEP(1, C, S, NW, W, M, LSTFI, LER, N, LV, LLIM, LT, LP)
+      IT = IT + 1
+  220 F = ((SSRM-S)/FLOAT(IDFN))/(SSEM/FLOAT(IDFD))
+      IF (IOFLAG.EQ.1) WRITE (IOUT,99999) IT, ICD, S
+C APPROXIMATION TO F PROBABILITY (SMILLIE AND ANSTEY)
+      U1 = 2.0/(9.0*FLOAT(IDFN))
+      U2 = 2.0/(9.0*FLOAT(IDFD))
+      F1 = F**(1.0/3.0)
+      U3 = ((1.0-U2)*F1-1.0+U1)/SQRT(2.0*(U2*F1*F1+U1))
+      U = ABS(U3)
+      PROB = 0.5/(1.0+(((.078108*U+.000972)*U+.230389)*U+.278393)*U)**4
+      IF (U3.LT.0.0) PROB = 1.0 - PROB
+      IF (IBST.EQ.1) GO TO 250
+      IF (IPOPT.EQ.1) GO TO 230
+      IF (PROB.GE.FLEVEL) GO TO 250
+  230 TEMP = TEMP - F
+      IF (DABS(TEMP).LE.FTOL) GO TO 250
+      IF (IT.GE.MAXIT) GO TO 240
+      TEMP = F
+      GO TO 210
+  240 WRITE (IOUT,99993) MAXIT, ICD, TEMP, FTOL
+  250 ISIG = ISTAR
+      IF (PROB.GE.FLEVEL) ISIG = IBLANK
+      WRITE (IOUT,99990) IT, F, ISIG, PROB, FLEVEL, S
+99990 FORMAT (10H ITERATION, I4, 4H, F=, F12.3, A1, 15H, PROB(F) .GT. ,
+     * F6.4, 16H VS. F LEVEL OF , F6.4/20H SSR(REDUCED MODEL)=, E16.8)
+      GO TO 150
+C BALANCED CASE; ONE ITERATION
+  260 CALL STEP(2, C, S, NW, W, M, LSTFI, LER, N, LV, LLIM, LT, LP)
+      IT = IT + 1
+      IF (ICD.EQ.IM) GO TO 50
+      GO TO 180
+      END
+C  ****************************** STEP ******************************   STE   10
+C                                                                       STE   20
+C  PERFORMS THE FOLLOWING SUB-STEPS OPERATING UPON THE VECTORS IN THE   STE   30
+C  W ARRAY                                                              STE   40
+C                                                                       STE   50
+C                           1) T = (Y-D*V)/C                            STE   60
+C                           2) V = V+T                                  STE   70
+C                           3) B = B+T                                  STE   80
+C                           4) T = R(T)                                 STE   90
+C                           5) V = V-T                                  STE  100
+C                           6) S = 2*Y*V-V*D*V                          STE  110
+C                                                                       STE  120
+C  VECTOR T CONSISTS OF THE FIRST NCELLS LOCATIONS IN VECTOR A OF W;    STE  130
+C  HOWEVER, ALL LOCATIONS IN VECTOR A ARE NEEDED IN SUB-STEP 4.  R(T)   STE  140
+C  IS THE RESIDUAL OPERATOR APPLIED TO VECTOR T; IT IS IMPLEMENTED      STE  150
+C  USING SUBROUTINES DECOMP, POOL, AND LABEL.                           STE  160
+C                                                                       STE  170
+C  SUB-STEPS 1 AND 6 ARE MODIFIED IN COMPUTING RANK WITH THE R OPTION   STE  180
+C  AND SUB-STEP 1 IS ALSO MODIFIED WHEN SWITCH IBST IS ON; ARGUMENT     STE  190
+C  IND CONTROLS THESE MODIFICATIONS.                                    STE  200
+C                                                                       STE  210
+C  IND = 1 (ITERATION FOR SSR); IND = 2 (NON-ITERATIVE, IBST IS ON);    STE  220
+C  IND = 3 (ITERATION FOR RANK)                                         STE  230
+C                                                                       STE  240
+C  S IS EITHER SSR (IND=2), AN APPROXIMATION TO SSR, (IND=1), OR PART   STE  250
+C  OF THE RANK APPROXIMATION (IND=3).  C IS A SCALAR CONSTANT SELECT-   STE  260
+C  ED FOR MONOTONICITY OF THE APPROXIMATION TO SSR OR FOR FASTER, BUT   STE  270
+C  NOT MONOTONE, CONVERGENCE.                                           STE  280
+C                                                                       STE  290
+C  (SEE MAIN PROGRAM COMMENTS FOR DESCRIPTION OF OTHER ARGUMENTS)       STE  300
+C                                                                       STE  310
+C  ******************************************************************   STE  320
+      SUBROUTINE STEP(IND, C, S, NW, W, M, LSTFI, LER, N, LV, LLIM, LT, STE  330
+     * LP)
+      DIMENSION W(NW), LSTFI(M), LER(M), LV(N), LLIM(N), LT(N), LP(10)
+      DOUBLE PRECISION W, C, S, T1, T2
+      S = 0
+      NCELLS = LSTFI(1)
+      DO 40 I=1,NCELLS
+C INCREMENT BASE ADDRESSES OF ARRAYS
+        ID1 = NCELLS + I
+        ID2 = ID1 + NCELLS
+        IV = ID2 + NCELLS
+        IB = IV + NCELLS
+        IA = IB + NCELLS
+C GENERAL ITERATION (IND=1); NON-ITERATIVE (IND=2); RANK (IND=3)
+        IF (IND.EQ.1) GO TO 20
+        IF (IND.EQ.2) GO TO 10
+        W(IA) = W(I) - W(IV)
+        IF (W(ID1).EQ.0.0) W(IA) = W(I)
+        GO TO 30
+   10   W(IA) = -W(IV)
+        IF (W(ID2).GT.0.0) W(IA) = W(IA) + W(I)/W(ID2)
+        GO TO 30
+   20   W(IA) = (W(I)-W(ID1)*W(IV))/C
+C V=V+A; B=B+A
+   30   W(IV) = W(IV) + W(IA)
+        W(IB) = W(IB) + W(IA)
+   40 CONTINUE
+C RESIDUAL OPERATOR
+      IA = IB
+      CALL DECOMP(0, IB, IOUT, NW, W, M, LSTFI, N, LT, LV, LLIM, LP)
+      IFLAG = 0
+      DO 70 I=1,M
+        IF (LER(I).GT.0) GO TO 60
+        IF (I.EQ.1) GO TO 50
+        NO = M - I + 1
+        CALL LABEL(NO, 0, LLIM, IOUT, N, LV, LP)
+        CALL POOL(IFLAG, IA, IB, NW, W, N, LLIM, LT, LP)
+   50   IFLAG = 1
+   60   IB = IB + LSTFI(I)
+   70 CONTINUE
+C V=V-T; S=2*Y*V-V*D*V
+      DO 90 I=1,NCELLS
+        ID1 = NCELLS + I
+        IV = ID2 + I
+        IA = IA + 1
+        IF (IFLAG.EQ.1) W(IV) = W(IV) - W(IA)
+        T1 = 2.0D0*W(I)
+        T2 = W(ID1)
+        IF (T2.EQ.0.0) GO TO 80
+        IF (IND.EQ.3) T2 = 1.0D0
+        T1 = T1 - W(IV)*T2
+   80   S = S + T1*W(IV)
+   90 CONTINUE
+      RETURN
+      END
+C  ***************************** DECOMP *****************************   DEC   10
+C                                                                       DEC   20
+C  OBTAINS A FACTORIAL DECOMPOSITION OF THE VECTOR T WHERE T CONSISTS   DEC   30
+C  OF THE FIRST NCELLS LOCATIONS OF THE VECTOR A (IN ARRAY W); THE      DEC   40
+C  FACTORIAL DECOMPOSITION IS FORMED IN VECTOR A AND OCCUPIES ALL THE   DEC   50
+C  LOCATIONS OF THIS VECTOR.  ALTERNATIVELY COMPUTES CLASSIFICATION     DEC   60
+C  SUMS/MEANS IN VECTOR A FOR RESTRUCTURING DATA OR FOR THE C OPTION.   DEC   70
+C  FOLLOWS THE ALGORITHM DESCRIBED IN HEMMERLE, STATISTICAL COMPUTA-    DEC   80
+C  TIONS ON A DIGITAL COMPUTER 1967.                                    DEC   90
+C                                                                       DEC  100
+C  IND = 0 (FACTORIAL DECOMPOSITION); IND = 1 (CLASSIFICATION SUMS);    DEC  110
+C  IND = 2 (CLASSIFICATION MEANS)                                       DEC  120
+C                                                                       DEC  130
+C  LOCA = BASE ADDRESS OF VECTOR A IN ARRAY W; IOUT = OUTPUT UNIT FOR   DEC  140
+C  CLASSIFICATIONS MEANS.                                               DEC  150
+C                                                                       DEC  160
+C  (SEE MAIN PROGRAM COMMENTS) FOR DESCRIPTION OF OTHER ARGUMENTS       DEC  170
+C                                                                       DEC  180
+C  ******************************************************************   DEC  190
+      SUBROUTINE DECOMP(IND, LOCA, IOUT, NW, W, M, LSTFI, N, LS, LV,    DEC  200
+     * LLIM, LP)
+C NOTE: THE ARGUMENTS LS,LV,LP, AND IOUT ARE USED ONLY FOR C MEANS
+      DOUBLE PRECISION W, TEMP, DNPM, CMEAN
+      DIMENSION W(NW), LSTFI(M), LS(N), LV(N), LLIM(N), LP(10)
+      DATA IDOT /1H./
+      LL = 1
+      MM = 1
+      NN = 1
+      LOCTWO = LOCA + 1
+   10 LOCONE = LOCA + 1
+      KK = LL
+C FIND NUMBER OF ELEMENTS IN THIS MEAN
+      K1 = N + 1 - NN
+      NPM = LLIM(K1)
+      DNPM = NPM
+   20 LOCTWO = LOCTWO + LSTFI(MM)
+C FIND NUMBER OF MEANS FOR EACH RESIDUAL
+      MEANST = LSTFI(MM+1)
+C FIND INCREMENT
+      K1 = M + 1 - KK
+      INC = LSTFI(K1)
+C FORM THE ARRAY OF MEANS
+      MD = 1
+      NO = M - MM
+      IF (IND.EQ.2) CALL LABEL(NO, IDOT, LS, IOUT, N, LV, LP)
+      DO 90 I=1,MEANST,INC
+        JTWO = I + INC - 1
+        DO 80 J=I,JTWO
+          L = MD
+          LD = MD
+          I1 = LOCTWO + J - 1
+          TEMP = 0.D0
+          DO 30 K=1,NPM
+            I2 = LOCONE + L - 1
+            TEMP = TEMP + W(I2)
+            L = L + INC
+   30     CONTINUE
+C DEVIATES (IND=0); SUMS (IND=1); CLASSIFICATION MEANS (IND=2)
+          IF (IND.EQ.0) GO TO 50
+          IF (IND.EQ.1) GO TO 40
+          IF (TEMP.EQ.0.0) WRITE (IOUT,99999) J
+          IF (TEMP.GT.0.0) CMEAN = W(I1)/TEMP
+          IF (TEMP.GT.0.0) WRITE (IOUT,99998) J, W(I1), TEMP, CMEAN
+99999     FORMAT (1H , I6, 4X, 29H(MISSING CLASSIFICATION CELL))
+99998     FORMAT (1H , I6, 1X, E16.8, F5.0, 1X, E16.8)
+   40     W(I1) = TEMP
+          GO TO 70
+   50     W(I1) = TEMP/DNPM
+C FORM DEVIATES
+          DO 60 K=1,NPM
+            I2 = LOCONE + LD - 1
+            W(I2) = W(I2) - W(I1)
+            LD = LD + INC
+   60     CONTINUE
+   70     MD = MD + 1
+   80   CONTINUE
+        MD = L - INC + 1
+   90 CONTINUE
+      IF (KK.EQ.1) GO TO 100
+      KK = KK - 1
+      MM = MM + 1
+      K1 = LL - KK
+      LOCONE = LOCONE + LSTFI(K1)
+      GO TO 20
+  100 IF (NN.EQ.N) RETURN
+      LL = LL + LL
+      NN = NN + 1
+      MM = MM + 1
+      GO TO 10
+      END
+C  ****************************** POOL ******************************   POO   10
+C                                                                       POO   20
+C  OPERATES UPON THE VECTORS IN ARRAY W, PRINCIPALLY THE ARRAYS OF A    POO   30
+C  FACTORIAL DECOMPOSITION WITHIN VECTOR A OF W.  EITHER MOVES THE      POO   40
+C  SECONDARY ARRAY INTO THE PRIMARY ARRAY, DUPLICATING ENTRIES WHERE    POO   50
+C  NEEDED, OR POOLS THE SECONDARY ARRAY AND THE PRIMARY ARRAY BY AD-    POO   60
+C  DITION INTO THE PRIMARY ARRAY (FOR DESCRIPTION OF MAPPING FUNCTION   POO   70
+C  SEE SCHLATER AND HEMMERLE, CACM 1966)                                POO   80
+C                                                                       POO   90
+C  IND = 0 (REPLACEMENT); IND = 1 (POOLING)                             POO  100
+C                                                                       POO  110
+C  NP = BASE ADDRESS OF PRIMARY ARRAY (WITHIN ARRAY W)                  POO  120
+C  NS = BASE ADDRESS OF SECONDARY ARRAY (WITHIN ARRAY W)                POO  130
+C                                                                       POO  140
+C  WHEN THE PRIMARY ARRAY HAS LESS THAN N SUBSCRIPTS, THE ENTRIES IN    POO  150
+C  LLIM CORRESPONDING TO THE MISSING SUBSCRIPTS MUST BE MADE NEGATIVE   POO  160
+C  PRIOR TO ENTRY AND THEN SET POSITIVE AGAIN AFTER RETURN; ARRAY LP    POO  170
+C  MUST CONTAIN THE COEFFICIENTS OF THE MAPPING FUNCTION UPON ENTRY.    POO  180
+C                                                                       POO  190
+C  (SEE MAIN PROGRAM COMMENTS FOR DESCRIPTION OF OTHER ARGUMENTS)       POO  200
+C                                                                       POO  210
+C  ******************************************************************   POO  220
+      SUBROUTINE POOL(IND, NP, NS, NW, W, N, LLIM, LT, LP)              POO  230
+      DIMENSION W(NW), LLIM(N), LT(N), LP(10)
+      DOUBLE PRECISION W, TEMP
+C NP=LOCATION OF PRIMARY ARRAY; NS=LOCATION OF SECONDARY ARRAY;
+C MAP COEFFICIENTS OBTAINED FROM LP; REPLACE (IND=0); ADD (IND .NE. 0)
+      LOC1 = NP
+      I = 1
+   10 DO 20 J=I,N
+        LT(J) = 1
+   20 CONTINUE
+   30 LOC1 = LOC1 + 1
+      LOC2 = NS + 1
+      DO 40 J=1,N
+        LOC2 = LOC2 + (LT(J)-1)*LP(J)
+   40 CONTINUE
+      TEMP = W(LOC2)
+      IF (IND.NE.0) TEMP = TEMP + W(LOC1)
+      W(LOC1) = TEMP
+      DO 50 J=1,N
+        K = N - J + 1
+        IF (LLIM(K).LT.0) GO TO 50
+        IF (LT(K).EQ.LLIM(K)) GO TO 50
+        LT(K) = LT(K) + 1
+        IF (K.EQ.N) GO TO 30
+        I = K + 1
+        GO TO 10
+   50 CONTINUE
+      RETURN
+      END
+C  ****************************** LABEL *****************************   LAB   10
+C                                                                       LAB   20
+C  DETERMINES THE SUBSCRIPTS OF THE PRIMARY ARRAY; CALCULATES COEFFI-   LAB   30
+C  CIENTS FOR MAPPING THE SECONDARY ARRAY INTO THE PRIMARY ARRAY.       LAB   40
+C  ALSO PREPARES LABELS FOR THE G-INVERSE SOLUTION AND CLASSIFICATION   LAB   50
+C  MEANS; EACH LABEL IS AN ALPHANUMERIC ARRAY OF SIZE 10.               LAB   60
+C                                                                       LAB   70
+C                                                                       LAB   80
+C                      (OUT)    ARGUMENTS      (IN)                     LAB   90
+C                                                                       LAB  100
+C                       LOA              NO   ICHAR  LIST               LAB  110
+C                                                                       LAB  120
+C               PRIMARY SUBSCRIPTS     M-I+1    0    LLIM               LAB  130
+C               MAP COEFFICIENTS       M-I+1    0    LLIM               LAB  140
+C               MODEL TERM LABEL       LER(I) BLANK   LE                LAB  150
+C               SUBSCRIPTS LABEL       M-I+1    .     LS                LAB  160
+C                                                                       LAB  170
+C               IN COMPUTING NO, I IS THE POSITION OF THE               LAB  180
+C               ARRAY WITHIN THE M ARRAYS (IN VECTOR A OF               LAB  190
+C               W) OR, FOR MODEL TERM LABELS, THE VALUE                 LAB  200
+C               OF THE E/R LIST (ARRAY LER) FOR THAT TERM               LAB  210
+C                                                                       LAB  220
+C  (SEE MAIN PROGRAM COMMENTS FOR DESCRIPTION OF OTHER ARGUMENTS)       LAB  230
+C                                                                       LAB  240
+C  ******************************************************************   LAB  250
+      SUBROUTINE LABEL(NO, ICHAR, LIST, IOUT, N, LV, LOA)               LAB  260
+      DIMENSION LIST(N), LV(N), LOA(10)
+      DATA IBLANK /1H /
+C MAP COEFFICIENTS: (NO=2**N-I+1,ICHAR=0,LIST=LLIM)
+C LABELS: MODEL TERM (NO=LER(I),ICHAR= ,LIST=LE)
+C         SUBSCRIPTS (NO=2**N-I+1,ICHAR=.,LIST=LS)
+      NUM = NO - 1
+      DO 10 I=N,10
+        LOA(I) = IBLANK
+   10 CONTINUE
+      DO 20 I=1,N
+        LOA(I) = ICHAR
+   20 CONTINUE
+      IF (NUM.EQ.0) GO TO 60
+      I = 0
+      J = 0
+   30 I = I + 1
+   40 J = J + 1
+      NUM = NUM - LV(J)
+      IF (NUM.GE.0) GO TO 50
+      NUM = NUM + LV(J)
+      IF (ICHAR.NE.IBLANK) GO TO 30
+      GO TO 40
+   50 LOA(I) = LIST(J)
+      IF (NUM.NE.0) GO TO 30
+   60 IF (ICHAR.EQ.0) GO TO 70
+      WRITE (IOUT,99999) (LOA(K),K=1,10)
+99999 FORMAT (1H , 10A1)
+      RETURN
+   70 DO 90 I=1,N
+        IF (LOA(I).EQ.0) GO TO 90
+        LOA(I) = 1
+        DO 80 J=I,N
+          IF (LOA(J).EQ.0) GO TO 80
+          LOA(I) = IABS(LOA(I)*LOA(J))
+   80   CONTINUE
+   90 CONTINUE
+      RETURN
+      END
+************************************************************************
+*   A COMPREHENSIVE, MATRIX FREE ALGORITHM FOR ANALYSIS OF VARIANCE    *
+*                           SAMPLE PROBLEMS                            *
+*                                                                      *
+*  THE FOLLOWING SIMPLE EXAMPLES HAVE BEEN PREPARED PRINCIPALLY TO     *
+*  ILLUSTRATE THE DIFFERENT FEATURES OF THE PROGRAM - OPTIONS, MODEL   *
+*  SPECIFICATION, COMPUTATIONS, OUTPUT - IN MANY DIFFERENT COMBINA-    *
+*  TIONS.  THEY DO NOT NECESSARILY REPRESENT THE MOST LIKELY USE OF    *
+*  THE PROGRAM IN ANALYZING EACH SET OF DATA.  THE UNBALANCED DATA     *
+*  SETS USED IN THE FIRST TWO EXAMPLES WERE TAKEN FROM LINEAR MODELS   *
+*  BY SEARLE.  THE FIRST DATA SET IS USED IN CHAPTER 7 TO ILLUSTRATE   *
+*  THE TWO-WAY CLASSIFICATION WITH INTERACTION.  THE SECOND IS USED    *
+*  IN CHAPTER 6 TO ILLUSTRATE THE TWO-WAY NESTED CLASSIFICATION.  THE  *
+*  THIRD EXAMPLE INVOLVING BALANCED DATA WITH 2 CROSSED FACTORS, 2     *
+*  NESTED FACTORS, AND INTERACTION TERMS APPEARS IN APPENDIX B OF STA- *
+*  TISTICAL COMPUTATIONS ON A DIGITAL COMPUTER BY HEMMERLE.  THE FINAL *
+*  EXAMPLE, A LATIN SQUARE, WAS EXTRACTED FROM STATISTICAL METHODS BY  *
+*  SNEDECOR (5TH EDITION, PAGE 308).  THESE SAMPLE PROBLEMS HAVE ALL   *
+*  BEEN RUN IN BATCH MODE.                                             *
+*     THE DATA BEGINS AFTER THE NEXT LINE.                             *
+************************************************************************
+  F(A,B) L(I(3),J(4))
+(1X,2I2,F4.0)
+  1 1   8
+  1 1  13
+  1 1   9
+  1 3  12
+  1 4   7
+  1 4  11
+  2 1   6
+  2 1  12
+  2 2  12
+  2 2  14
+  3 2   9
+  3 2   7
+  3 3  14
+  3 3  16
+  3 4  10
+  3 4  14
+  3 4  11
+  3 4  13
+ 
+  O(S(8),Z,A,C,R)
+  M+A(I)+B(J)+AB(IJ)
+  H  AB(IJ)
+  H  A(I)
+  H  B(J)
+  O(P)
+  H  AB(IJ)
+  O(Z,V,G)
+  M+A(I)+B(J)
+ 
+  F(A,B) L(I(2),J(3))
+(1X,2I2,F4.0)
+  1 1   5
+  1 2   8
+  1 2  10
+  1 2   9
+  2 1   8
+  2 1  10
+  2 2   6
+  2 2   2
+  2 2   1
+  2 2   3
+  2 3   3
+  2 3   7
+ 
+  O(Z,C,P,V,G)
+  M+A(I)+B(IJ)
+  H  B(IJ)
+  H  A(I)
+  O(Z,V,G)
+  M+A(I)+B(IJ)
+  O(G)
+  M+A(I)
+  H  A(I)
+ 
+  F(A,B,C,D) L(I(2),J(2),K(2),L(2))
+(1X,4I2,F5.2)
+  1 1 1 1 6.01
+  1 1 1 1 5.95
+  1 1 1 1 5.85
+  1 1 1 1 6.43
+  1 1 1 2 6.35
+  1 1 1 2 7.00
+  1 1 1 2 5.90
+  1 1 1 2 6.00
+  1 1 2 1 6.00
+  1 1 2 1 7.15
+  1 1 2 1 7.35
+  1 1 2 1 7.20
+  1 1 2 2 7.10
+  1 1 2 2 6.15
+  1 1 2 2 7.50
+  1 1 2 2 7.15
+  1 2 1 1 5.87
+  1 2 1 1 6.18
+  1 2 1 1 5.90
+  1 2 1 1 6.33
+  1 2 1 2 5.84
+  1 2 1 2 5.55
+  1 2 1 2 6.03
+  1 2 1 2 6.64
+  1 2 2 1 6.08
+  1 2 2 1 6.17
+  1 2 2 1 6.13
+  1 2 2 1 7.62
+  1 2 2 2 6.55
+  1 2 2 2 9.40
+  1 2 2 2 7.20
+  1 2 2 2 6.66
+  2 1 1 1 6.00
+  2 1 1 1 5.80
+  2 1 1 1 6.60
+  2 1 1 1 5.54
+  2 1 1 2 5.50
+  2 1 1 2 5.45
+  2 1 1 2 6.00
+  2 1 1 2 6.05
+  2 1 2 1 6.25
+  2 1 2 1 5.75
+  2 1 2 1 5.60
+  2 1 2 1 6.40
+  2 1 2 2 6.17
+  2 1 2 2 6.33
+  2 1 2 2 6.32
+  2 1 2 2 5.97
+  2 2 1 1 6.30
+  2 2 1 1 6.35
+  2 2 1 1 7.00
+  2 2 1 1 9.05
+  2 2 1 2 6.55
+  2 2 1 2 5.90
+  2 2 1 2 5.67
+  2 2 1 2 6.30
+  2 2 2 1 5.30
+  2 2 2 1 6.10
+  2 2 2 1 6.50
+  2 2 2 1 6.95
+  2 2 2 2 6.10
+  2 2 2 2 6.10
+  2 2 2 2 6.30
+  2 2 2 2 6.75
+ 
+  O(Z,A,C,R,V)
+  M+A(I)+B(IJ)+C(K)+AC(IK)+BC(IJK)/
+  +D(IJL)+CD(IJKL)
+  H A(I)
+  H B(IJ)
+  O(Z)
+  H C(K)
+  H AC(IK)
+  H BC(IJK)
+  H D(IJL)
+  H CD(IJKL)
+  O(V,G)
+  M+A(I)+C(K)+AC(IK)
+ 
+  F(R,C,T) L(I(3),J(3),K(3))
+(1X,3I2,F6.0)
+  1 1 1   608
+  1 2 2   885
+  1 3 3   940
+  2 1 2   715
+  2 2 3  1087
+  2 3 1   766
+  3 1 3   844
+  3 2 1   711
+  3 3 2   832
+ 
+  O(Z,R,V,G)
+  M+R(I)+C(J)+T(K)
+  H  R(I)
+  H  C(J)
+  H  T(K)
+  E

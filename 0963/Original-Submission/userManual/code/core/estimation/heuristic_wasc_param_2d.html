@@ -1,0 +1,140 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+                "http://www.w3.org/TR/REC-html40/loose.dtd">
+<html>
+<head>
+  <title>Description of heuristic_wasc_param_2d</title>
+  <meta name="keywords" content="heuristic_wasc_param_2d">
+  <meta name="description" content="HEURISTIC_WASC_PARAM Obtains heuristic parameter estimates for a WASC model.">
+  <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+  <meta name="generator" content="m2html v1.5 &copy; 2003-2005 Guillaume Flandin">
+  <meta name="robots" content="index, follow">
+  <link type="text/css" rel="stylesheet" href="../../../m2html.css">
+</head>
+<body>
+<a name="_top"></a>
+<div><a href="../../../index.html">Home</a> &gt;  <a href="../../index.html">code</a> &gt; <a href="#">core</a> &gt; <a href="index.html">estimation</a> &gt; heuristic_wasc_param_2d.m</div>
+
+<!--<table width="100%"><tr><td align="left"><a href="../../../index.html"><img alt="<" border="0" src="../../../left.png">&nbsp;Master index</a></td>
+<td align="right"><a href="index.html">Index for code/core/estimation&nbsp;<img alt=">" border="0" src="../../../right.png"></a></td></tr></table>-->
+
+<h1>heuristic_wasc_param_2d
+</h1>
+
+<h2><a name="_name"></a>PURPOSE <a href="#_top"><img alt="^" border="0" src="../../../up.png"></a></h2>
+<div class="box"><strong>HEURISTIC_WASC_PARAM Obtains heuristic parameter estimates for a WASC model.</strong></div>
+
+<h2><a name="_synopsis"></a>SYNOPSIS <a href="#_top"><img alt="^" border="0" src="../../../up.png"></a></h2>
+<div class="box"><strong>function [mu, Sigma_0, M, Q, rho, beta] = heuristic_wasc_param_2d(y_t, dt) </strong></div>
+
+<h2><a name="_description"></a>DESCRIPTION <a href="#_top"><img alt="^" border="0" src="../../../up.png"></a></h2>
+<div class="fragment"><pre class="comment">HEURISTIC_WASC_PARAM Obtains heuristic parameter estimates for a WASC model.
+
+  [mu, Sigma_0, M, Q, rho, beta] = heuristic_pcsv_param(y_t, dt)
+    calculates parameter estimates for a WASC model with the time series
+    y_t using a heuristic approach. The results are supposed to be used
+    as starting points for an iterative optimization algorithm.
+
+    INPUT y_t: A Txn matrix representing the log prices
+           dt: The time difference in the observed series y_t
+
+ created by Benedikt Rudolph
+ DATE: 17-Oct-2012</pre></div>
+
+<!-- crossreference -->
+<h2><a name="_cross"></a>CROSS-REFERENCE INFORMATION <a href="#_top"><img alt="^" border="0" src="../../../up.png"></a></h2>
+This function calls:
+<ul style="list-style-image:url(../../../matlabicon.gif)">
+</ul>
+This function is called by:
+<ul style="list-style-image:url(../../../matlabicon.gif)">
+<li><a href="../../../code/main/wasc_estimation.html" class="code" title="">wasc_estimation</a>	</li></ul>
+<!-- crossreference -->
+
+
+
+<h2><a name="_source"></a>SOURCE CODE <a href="#_top"><img alt="^" border="0" src="../../../up.png"></a></h2>
+<div class="fragment"><pre>0001 <a name="_sub0" href="#_subfunctions" class="code">function [mu, Sigma_0, M, Q, rho, beta] = heuristic_wasc_param_2d(y_t, dt)</a>
+0002 <span class="comment">%HEURISTIC_WASC_PARAM Obtains heuristic parameter estimates for a WASC model.</span>
+0003 <span class="comment">%</span>
+0004 <span class="comment">%  [mu, Sigma_0, M, Q, rho, beta] = heuristic_pcsv_param(y_t, dt)</span>
+0005 <span class="comment">%    calculates parameter estimates for a WASC model with the time series</span>
+0006 <span class="comment">%    y_t using a heuristic approach. The results are supposed to be used</span>
+0007 <span class="comment">%    as starting points for an iterative optimization algorithm.</span>
+0008 <span class="comment">%</span>
+0009 <span class="comment">%    INPUT y_t: A Txn matrix representing the log prices</span>
+0010 <span class="comment">%           dt: The time difference in the observed series y_t</span>
+0011 <span class="comment">%</span>
+0012 <span class="comment">% created by Benedikt Rudolph</span>
+0013 <span class="comment">% DATE: 17-Oct-2012</span>
+0014 
+0015   [T, n] = size(y_t);
+0016   r = diff(y_t);
+0017   <span class="comment">% Obtain mu and Sigma_0 == Sigma_infty</span>
+0018   Sigma_0 = cov(r)/dt;
+0019   mu = mean(r)'/dt + (0.5*diag(Sigma_0));
+0020   <span class="comment">% Calculate a rolling time series of covariance matrices as a basis</span>
+0021   <span class="comment">% for the calculation of Q, M and beta</span>
+0022   roll_period = 25;
+0023   S = zeros(n, n, T-roll_period);
+0024   <span class="keyword">for</span> k=1:(T-roll_period)
+0025     S(:,:,k) = cov(diff(y_t(k:(k+roll_period-1),:)))/dt;
+0026   <span class="keyword">end</span>
+0027   <span class="comment">% Calculate moments of dS and S</span>
+0028   dS = diff(S, 1, 3); <span class="comment">% first-order difference along third dimension</span>
+0029   K = size(dS,3);
+0030   E = @(a) a'*mean(dS,3)*a;
+0031   V = @(a) mean( (arrayfun(@(k) a'*dS(:,:,k)*a, 1:K) - E(a)).^2 );
+0032   Cov = @(a,g) mean( <span class="keyword">...</span>
+0033                 (arrayfun(@(k) a'*dS(:,:,k)*a, 1:K) - E(a)) <span class="keyword">...</span>
+0034             .*  (arrayfun(@(k) g'*dS(:,:,k)*g, 1:K) - E(g)) );
+0035   KS = size(S,3);
+0036   ES = @(a) a'*mean(S,3)*a;
+0037   VS = @(a) mean( (arrayfun(@(k) a'*S(:,:,k)*a, 1:KS) - ES(a)).^2 );
+0038   K = @(a) 2*ES(a)^2 / VS(a);
+0039   a1 = [1;0];
+0040   a2 = [0;1];
+0041   a12 = [1;1];
+0042   <span class="comment">% Obtain beta</span>
+0043   beta = K(a12);
+0044   beta = max(beta, 9);
+0045   <span class="comment">% Obtain Q</span>
+0046   Q = zeros(n);
+0047   Q(1,1) = sqrt( V(a1) / (4*Sigma_0(1,1)*dt) );
+0048   Q(2,2) = sqrt( V(a2) / (4*Sigma_0(2,2)*dt) );
+0049   Q(1,2) = -Cov(a1,a2) / (4*Sigma_0(1,2)*Q(1,1)*dt);
+0050   <span class="comment">% Obtain M as solution to A*M = b</span>
+0051   A = zeros(3);
+0052   A(1,1) = 2*Sigma_0(1,1);
+0053   A(1,2) = 2*Sigma_0(1,2);
+0054   A(2,2) = 2*Sigma_0(1,2);
+0055   A(2,3) = 2*Sigma_0(2,2);
+0056   A(3,1) = 2*(Sigma_0(1,1)+Sigma_0(1,2));
+0057   A(3,2) = 2*(Sigma_0(1,1)+2*Sigma_0(1,2)+Sigma_0(2,2));
+0058   A(3,3) = 2*(Sigma_0(2,2)+Sigma_0(1,2));
+0059   b = zeros(3,1);
+0060   b(1) = E(a1)/dt - beta*a1'*(Q'*Q)*a1;
+0061   b(2) = E(a2)/dt - beta*a2'*(Q'*Q)*a2;
+0062   b(3) = E(a12)/dt - beta*a12'*(Q'*Q)*a12;
+0063   m = A \ b;
+0064   M = [m(1), m(2); m(2), m(3)];
+0065   <span class="comment">% Obtain rho</span>
+0066   period_length = 50;
+0067   number_of_periods = floor((T-1)/period_length)-1;
+0068   dZ = zeros(number_of_periods*n, 1);
+0069   dW = zeros(number_of_periods*n, n);
+0070   S_last = Sigma_0;
+0071   <span class="keyword">for</span> k=1:number_of_periods
+0072     idx = (k*period_length):((k+1)*period_length);
+0073     period_returns = r(idx, :);
+0074     S = cov(period_returns);
+0075     dS = (S - S_last) / period_length;
+0076     dY = mean(period_returns);
+0077     sqrt_S = chol(S);
+0078     dZ((n*(k-1)+1):(n*k)) = sqrt_S \ (dY' - (mu - diag(S))*dt);
+0079     dW((n*(k-1)+1):(n*k), :) = (2*sqrt_S*Q) \ (dS-(beta*(Q'*Q)+2*M*S)*dt);
+0080   <span class="keyword">end</span>
+0081   rho = (dW \ dZ);
+0082 <span class="keyword">end</span></pre></div>
+<hr><address>Generated on Mon 29-Apr-2013 19:29:13 by <strong><a href="http://www.artefact.tk/software/matlab/m2html/" title="Matlab Documentation in HTML">m2html</a></strong> &copy; 2005</address>
+</body>
+</html>

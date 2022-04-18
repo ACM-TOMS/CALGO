@@ -1,0 +1,540 @@
+\documentclass{article}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{url}
+\usepackage{hyperref}
+
+\title{PDHSEQR User's Guide}
+\author{Robert Granat\thanks{
+Department of Computing Science and HPC2N,
+Ume{\aa} University,
+SE-901~87 Ume{\aa}, Sweden.
+Email: \texttt{\{granat,bokg,myshao\}@cs.umu.se}\,.},
+Bo K{\aa}gstr\"om$^*$,
+Daniel Kressner\thanks{
+MATHICSE ANCHP,
+EPF Lausanne,
+CH-1015 Lausanne, Switzerland.
+Email: \texttt{daniel.kressner@epfl.ch}\,.},
+and Meiyue Shao$^{*,\dagger}$}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+PDHSEQR is a parallel ScaLAPACK-style library for solving nonsymmetric
+standard eigenvalue problems.
+The library is written in Fortran~90 and targets distributed memory HPC systems.
+Using the small-bulge multishift QR
+algorithm with aggressive early deflation,
+it computes the real Schur decomposition $H=ZTZ^T$ of an upper Hessenberg
+matrix~$H\in\mathbb{R}^{n\times n}$, such that~$Z$ is orthogonal and~$T$ is
+quasi-upper triangular.
+This document concerns the usage of PDHSEQR and is a supplement to the
+article~\cite{GKKS2013}.
+For the description of the algorithm and implementation, we refer
+to~\cite{GKKS2013} and the references therein (especially,
+\cite{BBM2002a,BBM2002b,GKK2009,GKK2010,KKS2012}).
+
+\section{Installation}
+In the following, an installation guide is provided.
+It is assumed that the user is working in a Unix-like system.
+
+\subsection{Prerequisites}
+To build the library, the following software is required.
+\begin{itemize}
+\item A Fortran 90/95 compiler.
+\item The MPI library, e.g., OpenMPI or MPICH.
+\item An optimized BLAS library, e.g., ATLAS or OpenBLAS.
+\item The LAPACK library.
+\item The ScaLAPACK library (including BLACS and PBLAS).
+\end{itemize}
+
+\subsection{How to compile the library}
+\begin{paragraph}
+{Download location.}~\\
+The software version published by ACM TOMS can be downloaded from CALGO~\cite{CALGO}.
+The latest version of the source code (with bug fixes) as well as the
+associated documents are available on the PDHSEQR homepage~\cite{home}.
+\end{paragraph}
+
+\begin{paragraph}
+{Files in the tar-ball.}~\\
+The following command unpacks the tar-ball and creates a directory
+\texttt{pdhseqr/}, which is the root directory of the library.\\
+\medskip
+\fbox{\hbox to\textwidth{$\strut$\texttt{~tar xzfv pdhseqr.tar.gz}}}\\
+\medskip
+Inside the root directory, there are several files and directories:\\
+\medskip
+\fbox{\hbox to\textwidth{$\strut$\texttt{~EXAMPLES/~MAKE\_INC/~Makefile%
+~make.inc~README~SRC/~TESTING/~TOOLS/~TUNING/~ug.pdf}}}\\
+\medskip
+Below is an overview of these items.
+\begin{itemize}
+\item \texttt{EXAMPLES/} This directory contains two simple drivers.
+\item \texttt{MAKE\_INC/} This directory contains several templates of
+\texttt{make.inc} for GNU, Intel, and PathScale compilers.
+\item \texttt{Makefile} The Makefile for building the library.
+This file does \emph{not} need to be modified.
+\item \texttt{make.inc}
+\emph{This is the only file which requires modifications when building the
+library}.
+It contains compiler settings and external libraries for the Makefile.
+The user is required to modify this file according to the target computational
+environment before compiling the library.
+Several templates of this file are provided in the directory
+\texttt{MAKE\_INC}.
+\item \texttt{README}
+A shorter version of this document containing a quick installation guide.
+\item \texttt{SRC/}
+This directory contains source code for all computational routines of the
+library.
+\item \texttt{TESTING/} This directory contains testing examples.
+\item \texttt{TOOLS/} This directory contains several auxiliary routines
+(e.g., random number/matrix generators, input/output routines).
+\item \texttt{TUNING/} This directory contains auto-tuning scripts.
+\item \texttt{ug.pdf}
+The User's Guide of PDHSEQR (i.e., this document).
+\end{itemize}
+\end{paragraph}
+
+\begin{paragraph}
+{Build the library.}~\\
+Once \texttt{make.inc} is properly modified according to the computational
+environment, the library can be built by\\
+\medskip
+\fbox{\hbox to\textwidth{$\strut$\texttt{~make all}}}\\
+\medskip
+in the root directory of PDHSEQR.
+This generates the library archive \texttt{libpdhseqr.a} in the root
+directory, two examples in \texttt{EXAMPLES/}, and test programs in
+\texttt{TESTING/}.
+The script \texttt{quicktest.sh} in \texttt{TESTING}, which performs twelve
+quick tests, needs to be run after the compilation.
+Hopefully the following result will be displayed on the screen:\\
+\fbox{\vtop{\hbox to\textwidth{$\strut$%
+\texttt{~ \%           7 out of           7 tests passed!}}
+\hbox to\textwidth{$\strut$%
+\texttt{~ \%           5 out of           5 tests passed!}}}}\\
+This means that the Schur decomposition has been successfully computed for
+seven random matrices and five benchmark matrices, indicating that the
+compilation has been successful.
+We recommend that the script \texttt{runquick.sh} in \texttt{TESTING} is also
+run once to make sure that the parallel code works properly.
+You may need to modify the MPI execution command in this script according to
+your system (e.g., \texttt{mpirun}, \texttt{mpiexec}, etc.).
+If everything works out, 20 lines of information summarizing the 120 tests
+will be displayed and written to the file \texttt{summary.txt}.
+We also provide \texttt{runall.sh} with many large test cases in the same
+directory.
+(Running this set of tests may take \emph{very long}!)
+\end{paragraph}
+
+
+\section{Using the package}
+\subsection{ScaLAPACK data layout convention}
+\begin{figure}\centering
+\includegraphics[scale=0.75]{layout.0}
+\caption{The 2D block-cyclic data layout across a $2\times3$ processor grid.
+For example, processor $(0,0)$ owns all highlighted blocks.
+Picture from~\cite{GKKS2013}.}
+\label{fig:layout}
+\end{figure}
+
+In ScaLAPACK, the $p=p_rp_c$ processors are usually arranged into a
+$p_r\times p_c$ grid.
+Matrices are distributed across the rectangular processor grid in a \emph{2D
+block-cyclic layout} with block size $m_b\times n_b$ (see Figure~\ref{fig:layout} for an example).
+The information regarding the data layout is stored in an \emph{array
+descriptor} so that the mapping between the entries of the global matrix and their
+corresponding locations in the memory hierarchy can be established.
+We adopt ScaLAPACK's data layout convention and require that the $n\times
+n$ input matrices $H$ and $Z$ have identical data layout with square data
+blocks (i.e., $m_b=n_b$). The processor grid, however, does not need to be square.
+A distributed matrix~$H$ is referenced by two arrays
+\texttt{H} (local matrix entries) and \texttt{DESCH} (array descriptor).
+A typical setting of \texttt{DESCH} is listed below.
+\begin{itemize}
+\item \texttt{DESCH(1)}:
+Type of the matrix.
+In our case, \texttt{DESCH(1) = 1} since $H$ is stored as a dense matrix.
+\item \texttt{DESCH(2)}:
+The handle of the BLACS context.
+\item \texttt{DESCH(3)}, \texttt{DESCH(4)}:
+The size of $H$, i.e., \texttt{DESCH(5) = DESCH(6) = }$n$.
+\item \texttt{DESCH(5)}, \texttt{DESCH(6)}:
+Blocking factors $m_b$ and $n_b$.
+We require that \texttt{DESCH(5) = DESCH(6)}.
+\item \texttt{DESCH(7)}, \texttt{DESCH(8)}:
+The process row and column that contain $h_{11}$.
+Usually, \texttt{DESCH(7) = DESCH(8) = 0}.
+\item \texttt{DESCH(9)}:
+Leading dimension of the local part of~$H$ on the current processor.
+This value needs to be at least one, even if the local part is empty.
+\end{itemize}
+
+\subsection{Calling sequence}
+The main functionality of this package is to compute the real Schur
+decomposition of an upper Hessenberg matrix using the routine
+\texttt{PDHSEQR}.
+The
+ScaLAPACK routine \texttt{PDGEHRD} can be used to transform a general square matrix to Hessenberg form, see the test programs in \texttt{TESTING/} for
+examples.
+The interface of \texttt{PDHSEQR} displayed below follows the convention of
+LAPACK/ScaLAPACK routines~\cite{LAPACK,ScaLAPACK}. \\
+\newsavebox{\verbboxpdhseqr}
+\begin{lrbox}{\verbboxpdhseqr}
+\begin{minipage}{\textwidth}
+\begin{verbatim}
+      SUBROUTINE PDHSEQR( JOB, COMPZ, N, ILO, IHI, H, DESCH, WR, WI, Z,
+     $                    DESCZ, WORK, LWORK, IWORK, LIWORK, INFO )
+*
+*     .. Scalar Arguments ..
+      INTEGER            IHI, ILO, INFO, LWORK, LIWORK, N
+      CHARACTER          COMPZ, JOB
+*     ..
+*     .. Array Arguments ..
+      INTEGER            DESCH( * ) , DESCZ( * ), IWORK( * )
+      DOUBLE PRECISION   H( * ), WI( N ), WORK( * ), WR( N ), Z( * )
+\end{verbatim}
+\end{minipage}
+\end{lrbox}
+\newsavebox{\verbboxdhseqr}
+\begin{lrbox}{\verbboxdhseqr}
+\begin{minipage}{\textwidth}
+\begin{verbatim}
+      SUBROUTINE DHSEQR( JOB, COMPZ, N, ILO, IHI, H, LDH, WR, WI, Z,
+     $                   LDZ, WORK, LWORK, INFO )
+\end{verbatim}
+\end{minipage}
+\end{lrbox}
+\newsavebox{\verbboxpdlahqr}
+\begin{lrbox}{\verbboxpdlahqr}
+\begin{minipage}{\textwidth}
+\begin{verbatim}
+      SUBROUTINE PDLAHQR( WANTT, WANTZ, N, ILO, IHI, A, DESCA, WR, WI,
+     $                    ILOZ, IHIZ, Z, DESCZ, WORK, LWORK, IWORK,
+     $                    ILWORK, INFO )
+\end{verbatim}
+\end{minipage}
+\end{lrbox}
+\medskip
+%\begin{figure*}
+\noindent
+\fbox{\usebox{\verbboxpdhseqr}}
+\medskip
+
+\noindent For comparison, the (nearly identical) interface of the LAPACK routine \texttt{DHSEQR}.\\
+\medskip
+\noindent
+\fbox{\usebox{\verbboxdhseqr}}
+\medskip
+Also, the interface of the ScaLAPACK auxiliary routine
+\texttt{PDLAHQR} is similar.\\
+\medskip
+\noindent
+\fbox{\usebox{\verbboxpdlahqr}}
+\medskip
+%\end{figure*}
+Therefore, it may not require much effort to switch existing code calling \texttt{PDLAHQR} to
+\texttt{PDHSEQR}.
+
+An example for calling \texttt{PDHSEQR} is provided in the test program
+(\texttt{TESTING/driver.f}).
+We advice that \texttt{PDHSEQR} is called twice---the first call for
+performing a workspace query (by setting \texttt{LWORK = -1}) and the second
+call for actually performing the computation.
+
+Below is a detailed list of the arguments.
+\begin{itemize}
+\item \texttt{JOB}: (global input) \texttt{CHARACTER*1}.\\
+\texttt{JOB = 'E'}: Compute eigenvalues only;\\
+\texttt{JOB = 'S'}: Compute eigenvalues and the Schur form $T$.
+
+\item \texttt{COMPZ} (global input) \texttt{CHARACTER*1}.\\
+\texttt{COMPZ = 'N'}: Schur vectors (i.e., $Z$) are not computed;\\
+\texttt{COMPZ = 'I'}: $Z$ is initialized to the identity matrix and both~$H$
+and~$Z$ are returned;\\
+\texttt{COMPZ = 'V'}: $Z$ must contain an orthogonal matrix~$Q$ on entry, and
+the product $QZ$ is returned.
+
+\item \texttt{N}: (global input) \texttt{INTEGER}.\\
+The order of the Hessenberg matrix~$H$ (and~$Z$).
+
+\item \texttt{ILO}, \texttt{IHI}: (global input) \texttt{INTEGER}.\\
+It is assumed that~$H$ is already upper triangular in rows and columns
+(\texttt{1:ILO-1}) and (\texttt{IHI+1:N}).
+They are normally set by a previous call to \texttt{PDGEBAL}, and then passed
+to \texttt{PDGEHRD} when the matrix output by \texttt{PDGEBAL} is reduced to
+Hessenberg form.
+Otherwise \texttt{ILO = 1} and \texttt{IHI = N} should be used, which
+guarantees that $Z$ is orthogonal on exit of \texttt{PDHSEQR}.
+
+\item \texttt{H}: (global input/output) \texttt{DOUBLE PRECISION} array of
+dimension \texttt{(DESCH(9),*)}.\\
+\texttt{DESCH}: (global and local input) \texttt{INTEGER} array descriptor of
+dimension~9.\\
+\texttt{H} and \texttt{DESCH} define the distributed matrix~$H$.\\
+On entry, \texttt{H} contains the upper Hessenberg matrix~$H$.\\
+On exit, if \texttt{JOB = 'S'}, $H$ is quasi-upper triangular in rows and
+columns (\texttt{ILO:IHI}), with $1\times1$ and $2\times2$ blocks on the main
+diagonal.
+The $2\times2$ diagonal blocks (corresponding to complex conjugate pairs of
+eigenvalues) are returned in standard form, with $h_{ii}=h_{i+1,i+1}$ and
+$h_{i+1,i}h_{i,i+1}<0$.
+If \texttt{INFO = 0} and \texttt{JOB = 'E'}, the contents of~$H$ are
+unspecified on exit.
+
+\item \texttt{WR}, \texttt{WI}: (global output) \texttt{DOUBLE PRECISION}
+array of dimension \texttt{N}.\\
+The eigenvalues of \texttt{H(ILO:IHI,IHO:IHI)} are stored in
+\texttt{WR(ILO:IHI)} and \texttt{WI(ILO:IHI)} where \texttt{WR} contains the
+real parts and \texttt{WI} contains the imaginary parts, respectively.\\
+If two eigenvalues are computed as a complex conjugate pair, they are stored
+in consecutive elements of \texttt{WR} and \texttt{WI}, say the \texttt{i}-th
+and (\texttt{i+1})-th, with \texttt{WI(i) > 0} and \texttt{WI(i+1) < 0}.\\
+If \texttt{JOB = 'S'}, the eigenvalues are stored in the same order as on the
+diagonal of the Schur form returned in~$H$.
+
+\item \texttt{Z}: (global input/output) \texttt{DOUBLE PRECISION} array of
+dimension \texttt{(DESCZ(9),*)}.\\
+\texttt{DESCZ}: (global and local input) \texttt{INTEGER} array descriptor of
+dimension~9.\\
+\texttt{Z} and \texttt{DESCZ} define the distributed matrix~$Z$.\\
+If \texttt{COMPZ = 'V'}, on entry \texttt{Z} must contain the current
+matrix~$Z$ of accumulated transformations from, e.g., \texttt{PDGEHRD},
+and on exit \texttt{Z} has been updated.\\
+If \texttt{COMPZ = 'N'}, \texttt{Z} is not referenced.\\
+If \texttt{COMPZ = 'I'}, on entry \texttt{Z} does not need be set and on exit,
+if INFO = 0, \texttt{Z} contains the orthogonal matrix~$Z$ of the Schur
+vectors of~$H$.
+
+\item \texttt{WORK}: (local workspace) \texttt{DOUBLE PRECISION} array of
+dimension \texttt{LWORK}.\\
+\texttt{LWORK}: (local input) \texttt{INTEGER}.\\
+In case \texttt{LWORK = -1}, a workspace query will be performed and on exit,
+\texttt{WORK(1)} is set to the required length of the double precision
+workspace.
+No computation is performed in this case.
+
+\item \texttt{IWORK}: (local workspace) \texttt{INTEGER} array of dimension
+\texttt{LIWORK}.\\
+\texttt{LIWORK}: (local input) \texttt{INTEGER}.\\
+In case \texttt{LIWORK = -1}, a workspace query will be performed and on exit,
+\texttt{IWORK(1)} is set to the required length of the integer workspace.
+No computation is performed in this case.
+
+\item \texttt{INFO}: (global output) \texttt{INTEGER}.\\
+If \texttt{INFO = 0}, \texttt{PDHSEQR} returns successfully.\\
+If \texttt{INFO < 0}, let $i=-\texttt{INFO}$, then the $i$-th argument had an
+illegal value.\\
+(See below for exceptions with $i=7777$ or $i=8888$.)\\
+If \texttt{INFO > 0}, then \texttt{PDHSEQR} failed to compute all of the
+eigenvalues.
+(This is a rare case.)
+Elements \texttt{(1:ILO-1)} and \texttt{(INFO+1:N)} of \texttt{WR} and
+\texttt{WI} contain the eigenvalues which have been successfully computed.
+Let~$U$ be the orthogonal matrix logically produced in the computation
+(regardless of \texttt{COMPZ}, i.e., no matter whether it is explicitly
+formulated or not).
+Then on exit,
+\[
+\begin{cases}
+H_{in}U=U^TH_{out},~Z=U,
+& \text{if \texttt{INFO > 0}, \texttt{COMPZ = 'I'},}\\
+H_{in}U=U^TH_{out},~Z_{out}=Z_{in}U,
+& \text{if \texttt{INFO > 0}, \texttt{COMPZ = 'V'}.}
+\end{cases}
+\]
+If \texttt{INFO = 7777} or \texttt{INFO = 8888}, please send a bug report to
+the authors.
+\end{itemize}
+
+\subsection{Example programs}
+We provide two simple examples in the directory \texttt{EXAMPLES/}.
+The program 
+\texttt{example1.f} generates a $500\times500$ random matrix and computes
+its Schur decomposition, while \texttt{example2.f} reads the benchmark
+matrix OLM500%
+\footnote{Downloaded from
+\url{ftp://math.nist.gov/pub/MatrixMarket2/NEP/olmstead/olm500.mtx.gz}.}
+in the Matrix Market format~\cite{MatrixMarket}.
+
+To compute eigenvalues of other matrices, the following lines of the example
+program need to be adjusted:
+\begin{itemize}
+\item Line~40: Matrix size and the block factor.
+\item Lines~50--51: Make sure to provide sufficient memory.
+\item Line~222: Replace the matrix generator
+\texttt{PDMATGEN2}/\texttt{PQRRMMM} by your own matrix.
+\end{itemize}
+
+\section{Tuning of parameters$^\star$}
+The instructions below are intended for experienced users.
+Other users may want to skip reading this section.
+
+In \texttt{SRC/pilaenvx.f} and \texttt{SRC/piparmq.f}, there are several
+machine-dependent parameters, see~\cite{GKKS2013} for details.
+On contemporary architectures, we expect that most of the default values provided in the source code
+yield reasonable performance.
+However, for \texttt{PILAENVX(ISPEC=12, 14, 23)} some fine tuning might be
+helpful.
+The package offers two scripts in the directory
+\texttt{TUNING/} that aim at tuning these three parameters.
+
+Before starting the tuning procedure, you first need to choose a frequently
+used block factor ($n_b$) and modify the corresponding value in
+\texttt{tune1.in}, \texttt{tune2\_1.in}, \texttt{tune2\_2.in}, and
+\texttt{tune2\_3.in}.
+You also need to adjust the MPI execution command according to your system in
+the scripts \texttt{tune1.sh} and \texttt{tune2.sh}.
+
+\begin{itemize}
+\item The first script \texttt{tune1.sh} searches suitable settings for
+\texttt{PILAENVX(ISPEC=12, 23)}.
+It performs the tests described in \texttt{tune1.in} on $1\times1$,
+$2\times2$, $4\times4$, $8\times8$ processor grids, and analyzes the collected
+data by the code \texttt{tune1.f}.
+This procedure usually takes 1--4 hours.
+When completed, it reports suggestions on the parameters in the file
+\texttt{suggestion1.txt}.
+You should then modify the constants \texttt{NMIN} (Line~$193$ in
+\texttt{SRC/piparmq.f}) and \texttt{NTHRESH} (Line~$648$ in
+\texttt{SRC/pilaenvx.f}) in accordance with these suggestions.
+
+\item The second script \texttt{tune2.sh} searches suitable settings for
+\texttt{PILAENVX(ISPEC=14)}.
+This set of tests should only be done after running \texttt{tune1.sh}
+and modifying
+the parameters in \texttt{SRC/pilaenvx.f}, \texttt{SRC/piparmq.f}, and
+\texttt{TUNING/piparmq.f} correspondingly.
+Then the library should be compiled again with the new settings:\\
+\medskip
+\fbox{\hbox to 0.9\textwidth{$\strut$%
+\texttt{~make clean; make all; make tuning}}}\\
+%\medskip
+Finally, the script \texttt{tune2.sh} is executed.
+This set of tests takes a long time (up to 1--2 days).
+If all tests are completed successfully, \texttt{tune2.f} computes
+and reports the suggested settings for the parameters in
+\texttt{suggestions2.txt}.
+You should then update \texttt{SRC/piparmq.f} (Line~197) and rebuild the
+library.
+This completes the tuning procedure.
+
+If some of the tests are interrupted, due to an error, it may not be necessary to rerun
+the whole set of tests.
+You can also manually collect the execution times for each test into
+\texttt{summary2.txt} and apply \texttt{tune2.f} to determine the parameter suggestions.
+\end{itemize}
+
+It is possible to run both tuning scripts on other processor
+grids (besides the default $2\times2$, $4\times4$, $8\times8$).
+This, however, requires to not only adjust the scripts \texttt{tune*.sh} but also the
+programs \texttt{tune*.f} correspondingly.
+
+
+\section{Terms of Usage}
+Use of the ACM Algorithm is subject to the ACM Software Copyright and License
+Agreement~\cite{ACMSoftware}.
+Furthermore, any use of the PDHSEQR library should be acknowledged by
+citing the corresponding paper~\cite{GKKS2013}. Depending on the context, the
+citation of the papers~\cite{GKK2009,GKK2010,KKS2012} is also encouraged.
+
+\section{Summary}
+The use of the software library PDHSEQR is presented in this document.
+Currently only the double precision version is provided; a complex version of
+the software (\texttt{PZHSEQR}) is planned for future releases.
+Comments, suggestions, and bug reports from users are welcome.
+The latest version of the software and documents are always available from the
+website of PDHSEQR~\cite{home}.
+
+\section*{Acknowledgements}
+The authors are grateful to Bj\"orn Adlerborn and Lars Karlsson for
+discussions and comments, and to {\AA}ke Sandgren for support at High
+Performance Computing Center North (HPC2N).
+They also thank David Guerrero, Rodney James, Julien Langou, Jack Poulson,
+Jose Roman, as well as anonymous users from IBM for helpful feedback.
+
+\begin{thebibliography}{10}
+
+\bibitem{ACMSoftware}
+{ACM} software license agreement.
+\newblock See \url{http://www.acm.org/publications/policies/softwarecrnotice}.
+
+\bibitem{CALGO}
+Collected algorithms of the {ACM}.
+\newblock See \url{http://calgo.acm.org/}.
+
+\bibitem{home}
+{PDHSEQR} homepage.
+\newblock See \url{http://www8.cs.umu.se/~myshao/software/pdhseqr/}.
+
+\bibitem{LAPACK}
+E.~Anderson, Z.~Bai, C.~H. Bischof, S.~Blackford, J.~W. Demmel, J.~J. Dongarra,
+  J.~J.~D. Croz, A.~Greenbaum, S.~J. Hammarling, A.~McKenney, and D.~C.
+  Sorensen.
+\newblock {\em {LAPACK} User's Guide, 3rd Edition}.
+\newblock Society for Industrial and Applied Mathematics, Philadelphia, PA,
+  USA, 1999.
+
+\bibitem{MatrixMarket}
+Z.~Bai, D.~Day, J.~W. Demmel, and J.~J. Dongarra.
+\newblock A test matrix collection for non-{Hermitian} eigenvalue problems
+  (release 1.0).
+\newblock Technical Report CS-97-355, Department of Computer Science,
+  University of Tennessee, 1997.
+\newblock Also available online from http://math.nist.gov/MatrixMarket.
+
+\bibitem{ScaLAPACK}
+L.~S. Blackford, J.~Choi, A.~Cleary, E.~D'Azevedo, J.~W. Demmel, I.~Dhillon,
+  J.~J. Dongarra, S.~Hammarling, G.~Henry, A.~Petitet, K.~Stanley, D.~Walker,
+  and R.~C. Whaley.
+\newblock {\em {ScaLAPACK} User's Guide}.
+\newblock Society for Industrial and Applied Mathematics, Philadelphia, PA,
+  USA, 1997.
+
+\bibitem{BBM2002a}
+K.~Braman, R.~Byers, and R.~Mathias.
+\newblock The multishift {QR} algorithm. {Part I}: Maintaining well-focused
+  shifts and level 3 performance.
+\newblock {\em {SIAM} J. Matrix Anal. Appl.}, 23(4):929--947, 2002.
+
+\bibitem{BBM2002b}
+K.~Braman, R.~Byers, and R.~Mathias.
+\newblock The multishift {QR} algorithm. {Part II}: Aggressive early deflation.
+\newblock {\em {SIAM} J. Matrix Anal. Appl.}, 23(4):948--973, 2002.
+
+\bibitem{GKK2009}
+R.~Granat, B.~K{\aa}gstr\"om, and D.~Kressner.
+\newblock Parallel eigenvalue reordering in real {Schur} forms.
+\newblock {\em Concurrency and Computat.: Pract. Exper.}, 21(9):1225--1250,
+  2009.
+
+\bibitem{GKK2010}
+R.~Granat, B.~K{\aa}gstr\"om, and D.~Kressner.
+\newblock A novel parallel {QR} algorithm for hybrid distributed memory {HPC}
+  systems.
+\newblock {\em {SIAM} J. Sci. Comput.}, 32(4):2345--2378, 2010.
+
+\bibitem{GKKS2013}
+R.~Granat, B.~K{\aa}gstr\"om, D.~Kressner, and M.~Shao.
+\newblock Algorithm xxx: Parallel library software for the multishift {QR} algorithm with
+  aggressive early deflation.
+\newblock {\em ACM Trans. Math. Software}.
+\newblock (to appear).
+
+\bibitem{KKS2012}
+B.~K{\aa}gstr\"om, D.~Kressner, and M.~Shao.
+\newblock On aggressive early deflation in parallel variants of the {QR}
+  algorithm.
+\newblock In K.~J\'onasson, editor, {\em Applied Parallel and Scientific
+  Computing (PARA 2010)}, volume 7133 of {\em Lecture Notes in Comput. Sci.},
+  pages 1--10, Berlin, 2012. Spring{\-}er-Ver{\-}lag.
+
+\end{thebibliography}
+
+\end{document}

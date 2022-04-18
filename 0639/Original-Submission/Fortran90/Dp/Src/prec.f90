@@ -1,0 +1,3 @@
+MODULE prec
+  INTEGER, PARAMETER :: wp = KIND(0.0D0)
+END MODULE prec

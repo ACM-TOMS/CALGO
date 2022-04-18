@@ -1,0 +1,2204 @@
+C      ALGORITHM 714, COLLECTED ALGORITHMS FROM ACM.
+C      THIS WORK PUBLISHED IN TRANSACTIONS ON MATHEMATICAL SOFTWARE,
+C      VOL. 19, NO. 1, MARCH, 1993, PP. 1-21.
+C----------------------------------------------------------------------
+C  Program to test CABS
+C
+C  Accuracy tests are based on the identities
+C
+C            cabs((3x,4x)) = 5x
+C     and
+C            cabs((5x,12x)) = 13x
+C
+C  Data required:
+C
+C     None
+C
+C  Subprograms required from this package:
+C
+C     MACHAR - An environmental inquiry program providing
+C              information on the floating point arithmetic
+C              system.  Note that the call to MACHAR can
+C              be deleted provided the following six
+C              parameters are assigned the values indicated:
+C
+C              IBETA  - the radix of the floating point system;
+C              IT     - the number of base-IBETA digits in the
+C                       significand of a floating-point number;
+C              XMIN   - The smallest non-vanishing floating-point
+C                       power of the radix;
+C              XMAX   - The largest finite floating-point no.
+C
+C     REN(K) - a function subprogram returning random real
+C              numbers uniformly distributed over (0,1)
+C
+C
+C  Generic Fortran subprograms required:
+C
+C     ABS, LOG, MAX, REAL (or DBLE), SQRT
+C
+C  The program as given here must be modified before compiling.
+C   If a single (double) precision version is desired, change all
+C   occurrences of CS (CD) in columns 1 and 2 to blanks.  For a
+C   calibration version, change all occurrences of CS and of CC
+C   in columns 1 and 2 to blanks.
+C
+C  Latest revision - November 7, 1990
+C
+C  Author - W. J. Cody
+C           Argonne National Laboratory
+C
+C----------------------------------------------------------------------
+      INTEGER I,IBETA,IEXP,IOUT,IRND,IT,I1,J,K1,K2,K3,MACHEP,
+     1        MAXEXP,MINEXP,N,NDUM,NEGEP,NGRD
+CS    REAL
+CD    DOUBLE PRECISION
+     1   A,AIT,ALL9,ALBETA,B,BETA,CONV,DEL,EIGHT,EPS,EPSNEG,FIVE,FOUR,
+     2   ONE,REN,R6,R7,SIXTEN,THREE,TWELVE,TWENTY,W,X,XL,XMAX,XMIN,XN,
+     3   X1,Y,Z,ZERO
+CS    COMPLEX
+CD    COMPLEX*16
+     1   CONVC,CX
+CC   2   ,FABS
+C----------------------------------------------------------------------
+C  Mathematical constants
+C----------------------------------------------------------------------
+      DATA IOUT/6/
+CS    DATA ONE,ZERO,TWENTY,ALL9/1.0E0,0.0E0,2.0E1,-999.0E0/
+CS    DATA THREE,FOUR,FIVE,TWELVE/3.0E0,4.0E0,5.0E0,12.0E0/
+CS    DATA EIGHT,SIXTEN/8.0E0,16.0E0/
+CD    DATA ONE,ZERO,TWENTY,ALL9/1.0D0,0.0D0,2.0D1,-999.0D0/
+CD    DATA THREE,FOUR,FIVE,TWELVE/3.0D0,4.0D0,5.0D0,12.0D0/
+CD    DATA EIGHT,SIXTEN/8.0D0,16.0D0/
+C----------------------------------------------------------------------
+C  Statement functions for conversion between integer and float
+C----------------------------------------------------------------------
+CS    CONV(NDUM) = REAL(NDUM)
+CS    CONVC(X,Y) = CMPLX(X,Y)
+CD    CONV(NDUM) = DBLE(NDUM)
+CD    CONVC(X,Y) = DCMPLX(X,Y)
+C----------------------------------------------------------------------
+      CALL MACHAR(IBETA,IT,IRND,NGRD,MACHEP,NEGEP,IEXP,MINEXP,
+     1            MAXEXP,EPS,EPSNEG,XMIN,XMAX)
+      BETA = CONV(IBETA)
+      ALBETA = LOG(BETA)
+      AIT = CONV(IT)
+      A = ONE
+      B = TWENTY
+      N = 2000
+      XN = CONV(N)
+      DEL = (B - A) / XN
+      I1 = 0
+C-----------------------------------------------------------------
+C  Random argument accuracy tests
+C-----------------------------------------------------------------
+      DO 300 J = 1, 2
+         K1 = 0
+         K3 = 0
+         X1 = ZERO
+         R6 = ZERO
+         R7 = ZERO
+         XL = A
+         DO 200 I = 1, N
+            X = DEL * REN(I1) + XL
+            IF (J .EQ. 1) THEN
+                  Y = X * EIGHT
+                  Z = X + Y
+                  X = Z - Y
+                  Y = X * FIVE
+                  CX = CONVC(THREE*X,FOUR*X)
+               ELSE
+                  Y = X * (SIXTEN + SIXTEN)
+                  Z = X + Y
+                  X = Z - Y
+                  Y = X * TWELVE + X
+                  CX = CONVC(FIVE*X,TWELVE*X)
+            END IF
+            Z = ABS(CX)
+CC          Z = FABS(CX)
+            W = (Z - Y) / Z
+C-----------------------------------------------------------------------
+C  Accumulate results
+C-----------------------------------------------------------------------
+            IF (W .GT. ZERO) THEN
+                  K1 = K1 + 1
+               ELSE IF (W .LT. ZERO) THEN
+                  K3 = K3 + 1
+            END IF
+            W = ABS(W)
+            IF (W .GT. R6) THEN
+               R6 = W
+               X1 = X
+            END IF
+            R7 = R7 + W * W
+            XL = XL + DEL
+  200    CONTINUE
+C-----------------------------------------------------------------------
+C  Process and output statistics
+C-----------------------------------------------------------------------
+         K2 = N - K1 - K3
+         R7 = SQRT(R7/XN)
+         IF (J .EQ. 1) THEN
+               WRITE (IOUT,1000)
+            ELSE
+               WRITE (IOUT,1005)
+         END IF
+         WRITE (IOUT,1010) N,A,B
+         WRITE (IOUT,1011) K1,K2,K3
+         WRITE (IOUT,1020) IT,IBETA
+         IF (R6 .NE. ZERO) THEN
+               W = LOG(ABS(R6))/ALBETA
+            ELSE
+               W = ALL9
+         END IF
+         WRITE (IOUT,1021) R6,IBETA,W,X1
+         W = MAX(AIT+W,ZERO)
+         WRITE (IOUT,1022) IBETA,W
+         IF (R7 .NE. ZERO) THEN
+               W = LOG(ABS(R7))/ALBETA
+            ELSE
+               W = ALL9
+         END IF
+         WRITE (IOUT,1023) R7,IBETA,W
+         W = MAX(AIT+W,ZERO)
+         WRITE (IOUT,1022) IBETA,W
+  300 CONTINUE
+C-----------------------------------------------------------------
+C  Special tests
+C-----------------------------------------------------------------
+      WRITE (IOUT,1040)
+      X = XMIN
+      CX = CONVC(THREE*X,FOUR*X)
+      Y = FIVE*X
+      WRITE (IOUT,1041)
+      Z = ABS(CX)
+      WRITE (IOUT,1042) Z,Y
+CC    Z = FABS(CX)
+C-----------------------------------------------------------------
+C  Test of error returns
+C-----------------------------------------------------------------
+      WRITE (IOUT,1050)
+      X = XMAX/SIXTEN
+      CX = CONVC(FIVE*X,TWELVE*X)
+      WRITE (IOUT,1051) CX
+      Z = ABS(CX)
+CC    Z = FABS(CX)
+      WRITE (IOUT,1055) Z
+      X = XMAX/FOUR
+      CX = CONVC(THREE*X,XMAX)
+      WRITE (IOUT,1052) CX
+      Z = ABS(CX)
+CC    Z = FABS(CX)
+      WRITE (IOUT,1055) Z
+      WRITE (IOUT,1100)
+      STOP
+C-----------------------------------------------------------------
+ 1000 FORMAT('1Test of CABS((3X,4X)) vs 5X'//)
+ 1005 FORMAT(//' Test of CABS((5X,12X)) vs 13X'//)
+ 1010 FORMAT(I7,' Random values of X were drawn from the interval '/
+     1 6X,'(',E15.4,',',E15.4,')'//)
+ 1011 FORMAT(3X,' CABS was larger',I6,' times,'/
+     1     12X,' agreed',I6,' times, and'/
+     2     8X,'was smaller',I6,' times.'//)
+ 1020 FORMAT(' There are',I4,' base',I4,
+     1    ' significant digits in a floating-point number'//)
+ 1021 FORMAT(' The maximum relative error of',E15.4,' = ',I4,' **',
+     1  F7.2/4X,'occurred for X =',E17.6)
+ 1022 FORMAT(' The estimated loss of base',I4,
+     1  ' significant digits is',F7.2//)
+ 1023 FORMAT(' The root mean square relative error was',E15.4,
+     1    ' = ',I4,' **',F7.2)
+ 1040 FORMAT(//' Test of special arguments'//)
+ 1041 FORMAT(' Test of |(3*XMIN,4*XMIN)| vs 5*XMIN.'/
+     1       ' This should not trigger an error message'//)
+ 1042 FORMAT(' CABS((3*XMIN,4*XMIN)) = ',E15.7/
+     2       ' 5*XMIN                = ',E15.7//)
+ 1050 FORMAT(' Test of error returns'//)
+ 1051 FORMAT(' CABS will be called with the argument',(E15.4,E15.4)/
+     1       ' This should not trigger an error message'//)
+ 1052 FORMAT(' CABS will be called with the argument',(E15.4,E15.4)/
+     1       ' This should trigger an error message'//)
+ 1055 FORMAT(' CABS returned the value ',E15.4///)
+ 1100 FORMAT(' This concludes the tests')
+C---------- Last card of CABS Test Program ----------
+      END
+ 
+CC    COMPLEX FUNCTION FABS(CX)
+C----------------------------------------------------------------------
+C  Calibration function for cabs tests.
+C
+C  Latest revision - October 31, 1990
+C
+C  Author - W. J. Cody
+C           Argonne National Laboratory
+C
+C----------------------------------------------------------------------
+CC    COMPLEX CX
+CC    COMPLEX*16 DCX
+C----------------------------------------------------------------------
+CC    DCX = CX
+CC    FABS = ABS(DCX)
+CC    RETURN
+C---------- Last line of FABS ----------
+CC    END
+ 
+C----------------------------------------------------------------------
+C  Program to test CEXP
+C
+C  Accuracy tests are based on the identity
+C
+C            exp(z) = exp(z-w)*exp(w)
+C
+C  Data required:
+C
+C     None
+C
+C  Subprograms required from this package:
+C
+C     MACHAR - An environmental inquiry program providing
+C              information on the floating point arithmetic
+C              system.  Note that the call to MACHAR can
+C              be deleted provided the following four
+C              parameters are assigned the values indicated:
+C
+C              IBETA  - the radix of the floating point system;
+C              IT     - the number of base-IBETA digits in the
+C                       significand of a floating-point number;
+C              XMIN   - the smallest non-vanishing floating-point
+C                       power of the radix;
+C              XMAX   - the largest finite floating-point no.
+C
+C     REN(K) - a function subprogram returning random real
+C              numbers uniformly distributed over (0,1)
+C
+C     RESET, TABLAT, REPORT - programs to report results.
+C
+C
+C  Generic Fortran subprograms required:
+C
+C         AIMAG (or DIMAG), AINT, CMPLX (or DCMPLX), EXP,
+C
+C         LOG, REAL (or DBLE), SQRT
+C
+C
+C  Latest revision - October 31, 1990
+C
+C  Author - W. J. Cody
+C           Argonne National Laboratory
+C
+C----------------------------------------------------------------------
+C  Declare named common
+C----------------------------------------------------------------------
+      COMMON /ELEFUN/ CF1,CF2,CF3,CV,CX,CX1,CX2,CX3,CY1,CY2,CY3,
+     1       CZ,CZZ,AIT,ALBETA,AX,AY,BX,BY,RX6,RX7,RY6,RY7,R6,R7,XN,
+     2       IBETA,IT,KX1,KX2,KX3,KY1,KY2,KY3,K1,K2,K3,N,
+     3       IFLAG,RFLAG,PFLAG
+      LOGICAL IFLAG,RFLAG,PFLAG
+      INTEGER IBETA,IT,KX1,KX2,KX3,KY1,KY2,KY3,K1,K2,K3,N
+CS    REAL
+CD    DOUBLE PRECISION
+     1       AIT,ALBETA,AX,AY,BX,BY,RX6,RX7,RY6,RY7,R6,R7,XN
+CS    COMPLEX
+CD    COMPLEX*16
+     1       CF1,CF2,CF3,CV,CX,CX1,CX2,CX3,CY1,CY2,CY3,CZ,CZZ
+C----------------------------------------------------------------------
+C  Declare local variables
+C----------------------------------------------------------------------
+      INTEGER I,IEXP,IOUT,IRND,I1,J,MACHEP,MAXEXP,MINEXP,NDUM,
+     1        NEGEP,NGRD
+CS    REAL
+CD    DOUBLE PRECISION
+     1   BETA,CONV,CONVI,CONVR,DELX,DELY,EPS,EPSNEG,
+     2   HALF,ONE,ONEP6,ONE16,REN,SIXTEN,TEN,THREE,
+     3   W,X,XL,XMAX,XMIN,Y,ZERO
+CS    COMPLEX
+CD    COMPLEX*16
+     1   CDEL,CONVC,CY,EXPDEL,ZDUM
+CC   2   ,FEXP
+C----------------------------------------------------------------------
+C  Mathematical constants
+C----------------------------------------------------------------------
+      DATA IOUT/6/
+CS    DATA ZERO,ONE16,HALF,ONE/0.0E0,0.0625E0,0.5E0,1.0E0/
+CS    DATA ONEP6,THREE,TEN,SIXTEN/1.625E0,3.0E0,10.0E0,16.0E0/
+CS    DATA EXPDEL/(6.2416044877018563681E-2,6.6487597751003112768E-2)/
+CS    DATA CDEL/(0.0625E0,0.0625E0)/
+CD    DATA ZERO,ONE16,HALF,ONE/0.0D0,0.0625D0,0.5D0,1.0D0/
+CD    DATA ONEP6,THREE,TEN,SIXTEN/1.625D0,3.0D0,10.0D0,16.0D0/
+CD    DATA EXPDEL/(6.2416044877018563681D-2,6.6487597751003112768D-2)/
+CD    DATA CDEL/(0.0625D0,0.0625D0)/
+C----------------------------------------------------------------------
+C  Statement functions for conversion between integer or complex
+C  and float
+C----------------------------------------------------------------------
+CS    CONV(NDUM) = REAL(NDUM)
+CS    CONVR(ZDUM) = REAL(ZDUM)
+CS    CONVI(ZDUM) = AIMAG(ZDUM)
+CS    CONVC(X,Y) = CMPLX(X,Y)
+CD    CONV(NDUM) = DBLE(NDUM)
+CD    CONVR(ZDUM) = DBLE(ZDUM)
+CD    CONVI(ZDUM) = DIMAG(ZDUM)
+CD    CONVC(X,Y) = DCMPLX(X,Y)
+C----------------------------------------------------------------------
+      CALL MACHAR(IBETA,IT,IRND,NGRD,MACHEP,NEGEP,IEXP,MINEXP,
+     1            MAXEXP,EPS,EPSNEG,XMIN,XMAX)
+      BETA = CONV(IBETA)
+      ALBETA = LOG(BETA)
+      AIT = CONV(IT)
+      AX = ZERO
+      BX = ONE
+      AY = ONE16
+      BY = BX
+      N = 2000
+      XN = CONV(N)
+      I1 = 0
+      RFLAG = .TRUE.
+      IFLAG = .TRUE.
+      PFLAG = .FALSE.
+C---------------------------------------------------------------------
+C  Random argument accuracy tests
+C---------------------------------------------------------------------
+      DO 300 J = 1, 3
+         CALL RESET
+         DELX = (BX - AX) / XN
+         DELY = (BY - AY)
+         XL = AX
+         DO 200 I = 1, N
+            X = DELX * REN(I1) + XL
+            Y = DELY * REN(I1) + AY
+C-----------------------------------------------------------------
+C  Carefully purify arguments and evaluate identities
+C-----------------------------------------------------------------
+            CX = CONVC(X,Y)
+            CY = CX - CDEL
+            CZ = EXP(CX)
+            CZZ = EXP(CY)
+CC          CZ = FEXP(CX)
+CC          CZZ = FEXP(CY)
+            CZZ = CZZ + CZZ*EXPDEL
+C-----------------------------------------------------------------
+C  Accumulate results
+C-----------------------------------------------------------------
+            CALL TABLAT
+            XL = XL + DELX
+  200    CONTINUE
+C-----------------------------------------------------------------
+C  Process and output statistics
+C-----------------------------------------------------------------
+         WRITE (IOUT,1000)
+         CALL REPORT(IOUT)
+         IF (J .EQ. 1) THEN
+               AX = ONEP6
+               BX = THREE
+            ELSE
+               AX = SIXTEN
+               BX = AX + ONE
+         END IF
+         AY = AX
+         BY = BX
+  300 CONTINUE
+C---------------------------------------------------------------------
+C  Special tests
+C---------------------------------------------------------------------
+      WRITE (IOUT,1025)
+      WRITE (IOUT,1030)
+      DO 320 I = 1, 5
+         X = REN(I1) * BETA
+         Y = REN(I1) * BETA
+         CX = CONVC(X,Y)
+         CY = -CX
+         CZ = EXP(CX) * EXP(CY) - ONE
+         WRITE (IOUT,1070) CX, CZ
+  320 CONTINUE
+      WRITE (IOUT,1040)
+      CX = CONVC(ZERO,ZERO)
+      CZ = EXP(CX) - ONE
+      WRITE (IOUT,1041) CZ
+      WRITE (IOUT,1045)
+      CX = CONVC(ZERO,TEN)
+      CZ = EXP(CX)
+      X = COS(TEN)
+      Y = SIN(TEN)
+      W = (CONVR(CZ)-X)/X
+      WRITE (IOUT,1046) W
+      W = (CONVI(CZ)-Y)/Y
+      WRITE (IOUT,1047) W
+      CX = CONVC(TEN,ZERO)
+      CZ = EXP(CX)
+      X = EXP(TEN)
+      W = (CONVR(CZ)-X)/X
+      WRITE (IOUT,1048) W
+      WRITE (IOUT,1050)
+      WRITE (IOUT,1052)
+      X = AINT(LOG(XMIN))
+      CX = CONVC(X,ONE)
+      CZ = EXP(CX)
+      WRITE (IOUT,1056) CX,CZ
+      Y = SQRT(XMAX)
+      X = AINT(LOG(XMAX))
+      CX = CONVC(X,ONE)
+      CZ = EXP(CX)
+      WRITE (IOUT,1056) CX,CZ
+      CX = CONVC (X*HALF,TEN)
+      CY = CX * HALF
+      CZ = EXP(CX)
+      CZZ = EXP (CY)
+      CZZ = CZZ * CZZ
+      WRITE (IOUT,1057) CX, CZ, CY, CZZ
+C---------------------------------------------------------------------
+C  Test of error returns
+C---------------------------------------------------------------------
+      WRITE (IOUT,1060)
+      X = -ONE / SQRT(XMIN)
+      CX = CONVC(X,ONE)
+      WRITE (IOUT,1061) CX
+      WRITE (IOUT,1062)
+      CZ = EXP(CX)
+      WRITE (IOUT,1065) CZ
+      Y = SQRT(XMAX)
+      CX = CONVC(TEN,Y)
+      WRITE (IOUT,1061) CX
+      WRITE (IOUT,1063)
+      CZ = EXP(CX)
+      WRITE (IOUT,1065) CZ
+      CX = CONVC(-X,-ONE)
+      WRITE (IOUT,1061) CX
+      WRITE (IOUT,1064)
+      CZ = EXP(CX)
+      WRITE (IOUT,1065) CZ
+      WRITE (IOUT,1100)
+      STOP
+C---------------------------------------------------------------------
+ 1000 FORMAT(' Test of EXP(Z) vs EXP(Z-DEL)EXP(DEL), DEL = '
+     1       '(1/16,1/16)'//)
+ 1025 FORMAT(' Special tests'//)
+ 1030 FORMAT(' The identity  EXP(Z)*EXP(-Z) = 1.0  will be tested.'//
+     1      8X,'Z',24X,'F(Z)*F(-Z) - 1'/)
+ 1040 FORMAT(//' Test of special arguments'//)
+ 1041 FORMAT(' EXP(0.0,0.0) - 1.0E0 = (',(E15.7,E15.7),')'/)
+ 1045 FORMAT(//' Test cos(y), sin(y), and exp(x)'//)
+ 1046 FORMAT(' [REAL(EXP(0,10)) - COS(10)]/COS(10) = ',E15.7/)
+ 1047 FORMAT(' [IMAG(EXP(0,10)) - SIN(10)]/SIN(10) = ',E15.7/)
+ 1048 FORMAT(' [REAL(EXP(10,0)) - EXP(10)]/EXP(10) = ',E15.7/)
+ 1050 FORMAT(//' Tests near extreme arguments'//)
+ 1052 FORMAT(' The real part of the first result below may underflow.'/)
+ 1056 FORMAT(' EXP(',(E13.6,E13.6),') = (',(E13.6,E13.6),')'/)
+ 1057 FORMAT(/' If EXP(',(E13.6,E13.6),') = (',(E13.6,E13.6),
+     1 ') is not about'/' EXP(',(E13.6,E13.6),')**2 = (',
+     2 (E13.6,E13.6),'), there is an'/' argument reduction error'//)
+ 1060 FORMAT(' Test of error returns'/)
+ 1061 FORMAT(/' EXP will be called with the argument (',
+     1          (E15.4,E15.4),')'/)
+ 1062 FORMAT(' The real component of the argument is so negative'/
+     1        ' that the real exponential should underflow to zero.'/
+     2        ' Thus, the result should be (0,0).'/)
+ 1063 FORMAT(' The imaginary component of the argument is too large'/
+     1        ' for the sin and cos computations to make sense.'/)
+ 1064 FORMAT(' The real component of the argument is so large'/
+     1        ' that the real exponential should overflow.  The'/
+     2        ' result should be (inf,inf) with an error return.'/)
+ 1065 FORMAT(' EXP returned the value (',(E15.4,E15.4),')'//)
+ 1070 FORMAT(2(E15.7,E15.7)/)
+ 1100 FORMAT(' This concludes the tests')
+C---------- Last card of CEXP Test Program ----------
+      END
+ 
+CC    COMPLEX FUNCTION FEXP(CX)
+C----------------------------------------------------------------------
+C  Calibration function for cexp tests.
+C
+C  Latest revision - July 12, 1990
+C
+C  Author - W. J. Cody
+C           Argonne National Laboratory
+C
+C----------------------------------------------------------------------
+CC    COMPLEX CX
+CC    COMPLEX*16 DCX
+C----------------------------------------------------------------------
+CC    DCX = CX
+CC    FEXP = EXP(DCX)
+CC    RETURN
+C---------- Last line of FEXP ----------
+CC    END
+C----------------------------------------------------------------------
+C  Program to test CLOG
+C
+C  Accuracy tests are based on the identity
+C
+C            log(z) = log(z*z)/2
+C     and
+C            log(z) = log(17z/16) - log(17/16)
+C
+C  Data required:
+C
+C     None
+C
+C  Subprograms required from this package:
+C
+C     MACHAR - An environmental inquiry program providing
+C              information on the floating point arithmetic
+C              system.  Note that the call to MACHAR can
+C              be deleted provided the following four
+C              parameters are assigned the values indicated:
+C
+C              IBETA  - the radix of the floating point system;
+C              IT     - the number of base-IBETA digits in the
+C                       significand of a floating-point number;
+C              XMIN   - the smallest non-vanishing floating-point
+C                       power of the radix;
+C              XMAX   - the largest finite floating-point no.
+C
+C     REN(K) - a function subprogram returning random real
+C              numbers uniformly distributed over (0,1)
+C
+C     RESET, TABLAT, REPORT - programs to report results.
+C
+C
+C  Generic Fortran subprograms required:
+C
+C         CMPLX (or DCMPLX), LOG, REAL (or DBLE), SQRT
+C
+C  The program as given here must be modified before compiling.
+C   If a single (double) precision version is desired, change all
+C   occurrences of CS (CD) in columns 1 and 2 to blanks.  For a
+C   calibration version, change all occurrences of CS and of CC
+C   in columns 1 and 2 to blanks.
+C
+C  Latest revision - November 20, 1990
+C
+C  Author - W. J. Cody
+C           Argonne National Laboratory
+C
+C----------------------------------------------------------------------
+C  Declare named common
+C----------------------------------------------------------------------
+      COMMON /ELEFUN/ CF1,CF2,CF3,CV,CX,CX1,CX2,CX3,CY1,CY2,CY3,
+     1       CZ,CZZ,AIT,ALBETA,AX,AY,BX,BY,RX6,RX7,RY6,RY7,R6,R7,XN,
+     2       IBETA,IT,KX1,KX2,KX3,KY1,KY2,KY3,K1,K2,K3,N,
+     3       IFLAG,RFLAG,PFLAG
+      LOGICAL IFLAG,RFLAG,PFLAG
+      INTEGER IBETA,IT,KX1,KX2,KX3,KY1,KY2,KY3,K1,K2,K3,N
+CS    REAL
+CD    DOUBLE PRECISION
+     1       AIT,ALBETA,AX,AY,BX,BY,RX6,RX7,RY6,RY7,R6,R7,XN
+CS    COMPLEX
+CD    COMPLEX*16
+     1       CF1,CF2,CF3,CV,CX,CX1,CX2,CX3,CY1,CY2,CY3,CZ,CZZ
+C----------------------------------------------------------------------
+C  Declare local variables
+C----------------------------------------------------------------------
+      INTEGER I,IEXP,IOUT,IRND,I1,J,MACHEP,MAXEXP,MINEXP,NDUM,
+     1        NEGEP,NGRD
+CS    REAL
+CD    DOUBLE PRECISION
+     1   BETA,CONV,DELX,DELY,EPS,EPSNEG,HALF,ONE,REN,SCALE,TEN,
+     2   THOUS,W,X,XL,XMAX,XMIN,Y,Z,ZERO
+CS    COMPLEX
+CD    COMPLEX*16
+     1   CONVC,CY
+CC   2   ,FLOG
+C----------------------------------------------------------------------
+C  Mathematical constants
+C----------------------------------------------------------------------
+      DATA IOUT/6/
+CS    DATA ZERO,HALF,ONE,TEN,THOUS/0.0E0,0.5E0,1.0E0,10.0E0,1.0E3/
+CD    DATA ZERO,HALF,ONE,TEN,THOUS/0.0D0,0.5D0,1.0D0,10.0D0,1.0D3/
+C----------------------------------------------------------------------
+C  Statement functions for conversion between integer or complex
+C  and float
+C----------------------------------------------------------------------
+CS    CONV(NDUM) = REAL(NDUM)
+CS    CONVC(X,Y) = CMPLX(X,Y)
+CD    CONV(NDUM) = DBLE(NDUM)
+CD    CONVC(X,Y) = DCMPLX(X,Y)
+C----------------------------------------------------------------------
+      CALL MACHAR(IBETA,IT,IRND,NGRD,MACHEP,NEGEP,IEXP,MINEXP,
+     1            MAXEXP,EPS,EPSNEG,XMIN,XMAX)
+      BETA = CONV(IBETA)
+      ALBETA = LOG(BETA)
+      AIT = CONV(IT)
+      I1 = IT/2 + 4
+      SCALE = BETA ** I1
+      AX = ONE + ONE
+      BX = TEN
+      AY = ZERO
+      BY = BX
+      N = 2000
+      XN = CONV(N)
+      I1 = 0
+      RFLAG = .TRUE.
+      IFLAG = .TRUE.
+      PFLAG = .FALSE.
+C---------------------------------------------------------------------
+C  Random argument accuracy tests
+C---------------------------------------------------------------------
+      DO 300 J = 1, 3
+         CALL RESET
+         DELX = (BX - AX) / XN
+         DELY = (BY - AY)
+         XL = AX
+         DO 200 I = 1, N
+            X = DELX * REN(I1) + XL
+            Y = DELY * REN(I1) + AY
+C-----------------------------------------------------------------
+C  Purify argument and evaluate identities
+C-----------------------------------------------------------------
+            Z = X * SCALE
+            W = Z + X
+            X = W - Z
+            Z = Y * SCALE
+            W = Z + Y
+            Y = W - Z
+            CX = CONVC(X,Y)
+            Z = X*X - Y*Y
+            W = X*Y
+            CY = CONVC(Z,W+W)
+            CZ = LOG(CX)
+            CZZ = LOG(CY)
+CC          CZ = FLOG(CX)
+CC          CZZ = FLOG(CY)
+            CZZ = CZZ * HALF
+C-----------------------------------------------------------------
+C  Accumulate results
+C-----------------------------------------------------------------
+            CALL TABLAT
+            XL = XL + DELX
+  200    CONTINUE
+C-----------------------------------------------------------------
+C  Process and output statistics
+C-----------------------------------------------------------------
+         WRITE (IOUT,1000)
+         CALL REPORT(IOUT)
+         IF (J .EQ. 1) THEN
+               AX = THOUS
+               BX = AX + AX
+               AY = -AX
+               BY = -BX - BX
+            ELSE
+               AX = EPS
+               BX = HALF*HALF
+               AY = -AX
+               BY = -BX
+         END IF
+  300 CONTINUE
+C-----------------------------------------------------------------
+C  Special tests
+C-----------------------------------------------------------------
+      WRITE (IOUT,1025)
+      WRITE (IOUT,1030)
+      DO 320 I = 1, 5
+         X = REN(I1) * TEN
+         Y = REN(I1) * TEN
+         CX = CONVC(X,Y)
+         CY = ONE / CX
+         CZ = LOG(CX) + LOG(CY)
+         WRITE (IOUT,1031) CX,CZ
+  320 CONTINUE
+      WRITE (IOUT,1040)
+      CX = CONVC(ONE,ZERO)
+      CZ = LOG(CX)
+      WRITE (IOUT,1041) CZ
+      WRITE (IOUT,1050)
+      CX = CONVC(XMIN,XMIN)
+      WRITE (IOUT,1061) CX
+      CZ = LOG(CX)
+      WRITE (IOUT,1051) CX,CZ
+      CX = CONVC(XMAX,XMAX)
+      WRITE (IOUT,1061) CX
+      CZ = LOG(CX)
+      WRITE (IOUT,1052) CX,CZ
+C-----------------------------------------------------------------
+C  Test of error returns
+C-----------------------------------------------------------------
+      WRITE (IOUT,1060)
+      CX = CONVC(ZERO,ZERO)
+      WRITE (IOUT,1062) CX
+      CZ = LOG(CX)
+      WRITE (IOUT,1065) CZ
+      WRITE (IOUT,1100)
+      STOP
+C---------------------------------------------------------------------
+ 1000 FORMAT(' Test of LOG(Z) vs LOG(Z*Z)/2'//)
+ 1025 FORMAT(' Special tests'//)
+ 1030 FORMAT(' The identity  LOG(Z) = -LOG(1/Z)  will be tested.'//
+     1      15X,'Z',22X,'LOG(Z) + LOG(1/Z)'/)
+ 1031 FORMAT(2(E15.7,E15.7)/)
+ 1040 FORMAT(//' Test of special arguments'//)
+ 1041 FORMAT(' LOG(1.0,0.0) = (',(E15.7,E15.7),')'//)
+ 1050 FORMAT(//' Tests near extreme arguments.  These should not,'
+     1         ' but may'/' trigger error messages'//)
+ 1051 FORMAT(' LOG(XMIN,XMIN) = LOG(',(E15.7,E15.7),') ='/40X,'(',
+     1         (E15.7,E15.7),')'/)
+ 1052 FORMAT(' LOG(XMAX,XMAX) = LOG(',(E15.7,E15.7),') ='/40X,'(',
+     1         (E15.7,E15.7),')'/)
+ 1060 FORMAT(' Test of error returns'/)
+ 1061 FORMAT(/' LOG will be called with the argument (',
+     1          (E15.4,E15.4),')'//)
+ 1062 FORMAT(/' LOG will be called with the argument (',
+     1          (E15.4,E15.4),')'/
+     2        ' This should trigger an error message'//)
+ 1065 FORMAT(' LOG returned the value (',(E15.4,E15.4),')'//)
+ 1100 FORMAT(' This concludes the tests')
+C---------- Last card of CLOG Test Program ----------
+      END
+CC    COMPLEX FUNCTION FLOG(CX)
+C----------------------------------------------------------------------
+C  Calibration function for clog tests.
+C
+C  Latest revision - October 31, 1990
+C
+C  Author - W. J. Cody
+C           Argonne National Laboratory
+C
+C----------------------------------------------------------------------
+CC    COMPLEX CX
+CC    COMPLEX*16 DCX
+C----------------------------------------------------------------------
+CC    DCX = CX
+CC    FLOG = LOG(DCX)
+CC    RETURN
+C---------- Last line of FLOG ----------
+CC    END
+ 
+ 
+C----------------------------------------------------------------------
+C  Program to test complex power (exponentiation)
+C
+C  Accuracy tests are based on the identity
+C
+C            z = z ** (1,0)
+C
+C            z * z = Z ** (2,0)
+C     and
+C            z ** w = (z*z) ** (w/2)
+C
+C  Data required:
+C
+C     None
+C
+C  Subprograms required from this package:
+C
+C     MACHAR - An environmental inquiry program providing
+C              information on the floating point arithmetic
+C              system.  Note that the call to MACHAR can
+C              be deleted provided the following four
+C              parameters are assigned the values indicated:
+C
+C              IBETA  - the radix of the floating point system;
+C              IT     - the number of base-IBETA digits in the
+C                       significand of a floating-point number;
+C              MAXEXP - the smallest integer power of FLOAT(IBETA)
+C                       that causes overflow;
+C              XMIN   - the smallest non-vanishing floating-point
+C                       power of the radix.
+C
+C     REN(K) - a function subprogram returning random real
+C              numbers uniformly distributed over (0,1)
+C
+C     RESET, TABLAT, REPORT - programs to report results.
+C
+C
+C  Generic Fortran subprograms required:
+C
+C         ABS, CMPLX (or DCMPLX), LOG, REAL (or DBLE)
+C
+C  Latest revision - November 29, 1990
+C
+C  Author - W. J. Cody
+C           Argonne National Laboratory
+C
+C----------------------------------------------------------------------
+C  Declare named common
+C----------------------------------------------------------------------
+      COMMON /ELEFUN/ CF1,CF2,CF3,CV,CX,CX1,CX2,CX3,CY1,CY2,CY3,
+     1       CZ,CZZ,AIT,ALBETA,AX,AY,BX,BY,RX6,RX7,RY6,RY7,R6,R7,XN,
+     2       IBETA,IT,KX1,KX2,KX3,KY1,KY2,KY3,K1,K2,K3,N,
+     3       IFLAG,RFLAG,PFLAG
+      LOGICAL IFLAG,RFLAG,PFLAG
+      INTEGER IBETA,IT,KX1,KX2,KX3,KY1,KY2,KY3,K1,K2,K3,N
+CS    REAL
+CD    DOUBLE PRECISION
+     1       AIT,ALBETA,AX,AY,BX,BY,RX6,RX7,RY6,RY7,R6,R7,XN
+CS    COMPLEX
+CD    COMPLEX*16
+     1       CF1,CF2,CF3,CV,CX,CX1,CX2,CX3,CY1,CY2,CY3,CZ,CZZ
+C----------------------------------------------------------------------
+C  Declare local variables
+C----------------------------------------------------------------------
+      INTEGER I,IEXP,IOUT,IRND,I1,J,MACHEP,MAXEXP,MINEXP,NDUM,
+     1        NEGEP,NGRD
+CS    REAL
+CD    DOUBLE PRECISION
+     1   BETA,CONV,CONVR,C1,C2,DELX,DELY,EPS,EPSNEG,FOUR,HALF,
+     2   ONE,REN,SCALE,TEN,W,X,XL,XMAX,XMIN,Y,ZERO
+CS    COMPLEX
+CD    COMPLEX*16
+     1   CONE,CONVC,CTWO,CY
+CC   2   ,FPOW
+C----------------------------------------------------------------------
+C  Mathematical constants
+C----------------------------------------------------------------------
+      DATA IOUT/6/
+CS    DATA ZERO,HALF,ONE,FOUR,TEN/0.0E0,0.5E0,1.0E0,4.0E0,10.0E0/
+CS    DATA CONE,CTWO/(1.0E0,0.0E0),(2.0E0,0.0E0)/
+CS    DATA C1,C2/0.95E0,1.05E0/
+CD    DATA ZERO,HALF,ONE,FOUR,TEN/0.0D0,0.5D0,1.0D0,4.0D0,10.0D0/
+CD    DATA CONE,CTWO/(1.0D0,0.0D0),(2.0D0,0.0D0)/
+CD    DATA C1,C2/0.95D0,1.05D0/
+C----------------------------------------------------------------------
+C  Statement functions for conversion between integer or complex
+C  and float
+C----------------------------------------------------------------------
+CS    CONV(NDUM) = REAL(NDUM)
+CS    CONVC(X,Y) = CMPLX(X,Y)
+CS    CONVR(CY) = REAL(CY)
+CD    CONV(NDUM) = DBLE(NDUM)
+CD    CONVC(X,Y) = DCMPLX(X,Y)
+CD    CONVR(CY) = DBLE(CY)
+C----------------------------------------------------------------------
+      CALL MACHAR(IBETA,IT,IRND,NGRD,MACHEP,NEGEP,IEXP,MINEXP,
+     1            MAXEXP,EPS,EPSNEG,XMIN,XMAX)
+      BETA = CONV(IBETA)
+      ALBETA = LOG(BETA)
+      AIT = CONV(IT)
+      I1 = IT/2 + 4
+      SCALE = BETA ** I1
+      AX = ONE
+      BX = TEN
+      AY = ZERO
+      BY = BX
+      N = 2000
+      XN = CONV(N)
+      I1 = 0
+      RFLAG = .TRUE.
+      IFLAG = .TRUE.
+      PFLAG = .FALSE.
+C---------------------------------------------------------------------
+C  Random argument accuracy tests
+C---------------------------------------------------------------------
+      DO 300 J = 1, 3
+         CALL RESET
+         DELX = (BX - AX) / XN
+         DELY = (BY - AY)
+         XL = AX
+         DO 200 I = 1, N
+            X = DELX * REN(I1) + XL
+            Y = DELY * REN(I1) + AY
+C-----------------------------------------------------------------
+C  Carefully purify arguments and evaluate identities
+C-----------------------------------------------------------------
+            CX = CONVC(X,Y)
+            IF (J .EQ. 1) THEN
+                  CX = CONVC(X,Y)
+                  CZ = CX ** CONE
+CC                CZ = FPOW(CX,CONE)
+                  CZZ = CX
+               ELSE IF (J .EQ. 2) THEN
+  100             W = ABS(Y/X)
+                  IF ((W .GT. C1) .AND. (W .LT. C2)) THEN
+                     Y = DELY * REN(I1) + AY
+                     GO TO 100
+                  END IF
+                  CX = CONVC(X,Y)
+                  CZ = CX * SCALE
+                  CY = CX + CZ
+                  CX = CY - CZ
+                  CZ = CX ** CTWO
+CC                CZ = FPOW(CX,CTWO)
+                  CZZ = CX * CX
+               ELSE IF (J .EQ. 3) THEN
+                  CX = CONVC(X,Y)
+                  X = DELY * REN(I1) + AX
+                  Y = DELY * REN(I1) + AY
+                  CZ = CX * SCALE
+                  CY = CX + CZ
+                  CX = CY - CZ
+                  CY = CONVC(X,Y)
+                  CV = CY
+                  CZ = CX ** CY
+                  CZZ = (CX*CX) ** (CY*HALF)
+CC                CZ = FPOW(CX,CY)
+CC                CZZ = FPOW(CX*CX,CY*HALF)
+            END IF
+C-----------------------------------------------------------------
+C  Accumulate results
+C-----------------------------------------------------------------
+            CALL TABLAT
+            XL = XL + DELX
+  200    CONTINUE
+C-----------------------------------------------------------------
+C  Process and output statistics
+C-----------------------------------------------------------------
+         IF (J .EQ. 1) THEN
+               WRITE (IOUT,1000)
+            ELSE IF (J .EQ. 2) THEN
+               WRITE (IOUT,1001)
+            ELSE
+               WRITE (IOUT,1002)
+               WRITE (IOUT,1003)
+         END IF
+         CALL REPORT(IOUT)
+         IF (J .EQ. 2) THEN
+            PFLAG = .TRUE.
+            AX = FOUR
+            AY = AX
+         END IF
+  300 CONTINUE
+C-----------------------------------------------------------------
+C  Special tests
+C-----------------------------------------------------------------
+      WRITE (IOUT,1025)
+      WRITE (IOUT,1030)
+      DO 320 I = 1, 5
+         X = REN(I1) * TEN
+         Y = REN(I1) * TEN
+         CX = CONVC(X,Y)
+         X = REN(I1) * TEN
+         Y = REN(I1) * TEN
+         CZ = CONVC(X,Y)
+         CY = ONE / CX
+         CZZ = (CX**CZ - CY**(-CZ))/ABS(CX**CZ)
+CC       CZZ = (FPOW(CX,CZ) - FPOW(CY,-CZ))/ABS(FPOW(CX,CZ))
+         WRITE (IOUT,1031) CX,CZ,CZZ
+  320 CONTINUE
+      WRITE (IOUT,1040)
+      Y = BETA * XMIN
+      CX = CONVC(BETA,Y)
+      W = CONV(MAXEXP-1)
+      CY = CONVC(W,ZERO)
+      CZ = CX ** CY
+CC    CZ = FPOW(CX,CY)
+      X = BETA
+      DO 330 I = 3, MAXEXP
+         X = X * BETA
+  330 CONTINUE
+      CZZ = X * CONVC(ONE,XMIN*W)
+      WRITE (IOUT,1041) CZ,CZZ
+      WRITE (IOUT,1042) CZ-CZZ
+C-----------------------------------------------------------------
+C  Test of error returns
+C-----------------------------------------------------------------
+      WRITE (IOUT,1060)
+      WRITE (IOUT,1061)
+      CX = CONVC(ZERO,ZERO)
+      CZ = CX ** CX
+      WRITE (IOUT,1065) CZ
+      WRITE (IOUT,1100)
+      STOP
+C---------------------------------------------------------------------
+ 1000 FORMAT(' Test of Z ** (1,0) vs Z'//)
+ 1001 FORMAT(' Test of Z ** (2,0) vs Z*Z'//)
+ 1002 FORMAT(' Test of Z**W vs (Z*Z) ** (W/2)'//)
+ 1003 FORMAT(' *****************************************************'/
+     1       ' * Very large MRE values are the norm for this test; *'/
+     2       ' * the frequency of exact agreement is meaningful.   *'/
+     3       ' *****************************************************'//)
+ 1025 FORMAT(' Special tests'//)
+ 1030 FORMAT(' The identity  Z**W = (1/Z)**(-W)  will be tested.'//
+     1      11X,'Z',21X,'W',10X,'(Z**W - (1/Z)**(-W))/CABS(Z**W)'/)
+ 1031 FORMAT(2(E11.4,E11.4),(E15.7,E15.7)/)
+ 1040 FORMAT(//' Test near an extreme argument.  This should not,'
+     1         ' but may'/' trigger an error message'//)
+ 1041 FORMAT(' (BETA,BETA*XMIN)**(MAXEXP-1,0)       = ',
+     1       '(',(E15.7,E15.7),')'/
+     2       ' BETA**(MAXEXP-1)*(1,(MAXEXP-1)*XMIN) = ',
+     3       '(',(E15.7,E15.7),')')
+ 1042 FORMAT(' Difference ',26X,'= ','(',(E15.7,E15.7),')'//)
+ 1060 FORMAT(' Test of error returns'/)
+ 1061 FORMAT(/' Test of (0,0) ** (0,0).'/
+     1        ' This should trigger an error message'//)
+ 1065 FORMAT(' Test returned the value (',(E15.4,E15.4),')'//)
+ 1100 FORMAT(' This concludes the tests')
+C---------- Last card of CPOW Test Program ----------
+      END
+ 
+CC    COMPLEX FUNCTION FPOW(CX,CY)
+C----------------------------------------------------------------------
+C  Calibration function for complex power tests.
+C
+C  Latest revision - October 31, 1990
+C
+C  Author - W. J. Cody
+C           Argonne National Laboratory
+C
+C----------------------------------------------------------------------
+CC    COMPLEX CX,CY
+CC    COMPLEX*16 DCX,DCY
+C----------------------------------------------------------------------
+CC    DCX = CX
+CC    DCY = CY
+CC    FPOW = DCX ** DCY
+CC    RETURN
+C---------- Last line of FPOW ----------
+CC    END
+ 
+C---------------------------------------------------------------------
+C  Program to test CSIN/CCOS
+C
+C  Accuracy tests are based on the identities
+C
+C            sin(z) = sin(z-w)*cos(w) + cos(z-w)*sin(w)
+C     and
+C            cos(z) = cos(z-w)*cos(w) - sin(z-w)*sin(w)
+C
+C  Data required:
+C
+C     None
+C
+C  Subprograms required from this package:
+C
+C     MACHAR - An environmental inquiry program providing
+C              information on the floating point arithmetic
+C              system.  Note that the call to MACHAR can
+C              be deleted provided the following five
+C              parameters are assigned the values indicated:
+C
+C              IBETA  - the radix of the floating point system;
+C              IT     - the number of base-IBETA digits in the
+C                       significand of a floating-point number;
+C              XMAX   - the largest finite floating-point no.
+C
+C     REN(K) - a function subprogram returning random real
+C              numbers uniformly distributed over (0,1)
+C
+C     RESET, TABLAT, REPORT - programs to report results.
+C
+C
+C  Generic Fortran subprograms required:
+C
+C         ABS, AIMAG (or DIMAG), CMPLX (or DCMPLX), COS,
+C
+C         LOG, MAX, REAL (or DBLE), SIN
+C
+C
+C  Latest revision - October 31, 1990
+C
+C  Author - W. J. Cody
+C           Argonne National Laboratory
+C
+C----------------------------------------------------------------------
+C  Declare named common
+C----------------------------------------------------------------------
+      COMMON /ELEFUN/ CF1,CF2,CF3,CV,CX,CX1,CX2,CX3,CY1,CY2,CY3,
+     1       CZ,CZZ,AIT,ALBETA,AX,AY,BX,BY,RX6,RX7,RY6,RY7,R6,R7,XN,
+     2       IBETA,IT,KX1,KX2,KX3,KY1,KY2,KY3,K1,K2,K3,N,
+     3       IFLAG,RFLAG,PFLAG
+      LOGICAL IFLAG,RFLAG,PFLAG
+      INTEGER IBETA,IT,KX1,KX2,KX3,KY1,KY2,KY3,K1,K2,K3,N
+CS    REAL
+CD    DOUBLE PRECISION
+     1       AIT,ALBETA,AX,AY,BX,BY,RX6,RX7,RY6,RY7,R6,R7,XN
+CS    COMPLEX
+CD    COMPLEX*16
+     1       CF1,CF2,CF3,CV,CX,CX1,CX2,CX3,CY1,CY2,CY3,CZ,CZZ
+C----------------------------------------------------------------------
+C  Declare local variables
+C----------------------------------------------------------------------
+      INTEGER I,IEXP,IOUT,IRND,I1,J,MACHEP,MAXEXP,MINEXP,NDUM,
+     1        NEGEP,NGRD
+CS    REAL
+CD    DOUBLE PRECISION
+     1   ALXMAX,BETA,BETAP,C,CONV,CONVR,CONVI,DELX,DELY,ELEVEN,EPS,
+     2   EPSNEG,HALF,ONE,REN,SIXTEN,TEN,W,X,XL,XMAX,XMIN,Y,ZERO
+CS    COMPLEX
+CD    COMPLEX*16
+     1   CC,CONVC,CDEL,SINDEL,COSDEL,CS,CY,SIN11A,SIN11B,SIN22A,
+     2   SIN22B,ZDUM
+CC   3   ,FSIN,FCOS
+C----------------------------------------------------------------------
+C  Mathematical constants
+C----------------------------------------------------------------------
+      DATA IOUT/6/
+CS    DATA ZERO,HALF,ONE/0.0E0,0.5E0,1.0E0/
+CS    DATA TEN,ELEVEN,SIXTEN/10.0E0,11.0E0,16.0E0/
+CS    DATA SINDEL/(6.2581348413276935585E-2,6.2418588008436587236E-2)/
+CS    DATA COSDEL/(-2.5431314180235545803E-6,-3.9062493377261771826E-3)/
+CS    DATA SIN11A/(-134167.0E0,+593.0E0)/
+CS    DATA SIN22A/(-1187.0E0,-134163.0E0)/
+CS    DATA SIN11B/(-3.2928849557976510994E-1,7.8989452897413630729E-1)/
+CS    DATA SIN22B/(-5.6815858848429427210E-1,-3.8738909081835398666E-1)/
+CS    DATA CDEL/(0.0625,0.0625)/
+CD    DATA ZERO,HALF,ONE/0.0D0,0.5D0,1.0D0/
+CD    DATA TEN,ELEVEN,SIXTEN/10.0D0,11.0D0,16.0D0/
+CD    DATA SINDEL/(6.2581348413276935585D-2,6.2418588008436587236D-2)/
+CD    DATA COSDEL/(-2.5431314180235545803D-6,-3.9062493377261771826D-3)/
+CD    DATA SIN11A/(-134167.0D0,+593.0D0)/
+CD    DATA SIN22A/(-1187.0D0,-134163.0D0)/
+CD    DATA SIN11B/(-3.2928849557976510994D-1,7.8989452897413630729D-1)/
+CD    DATA SIN22B/(-5.6815858848429427210D-1,-3.8738909081835398666D-1)/
+CD    DATA CDEL/(0.0625,0.0625)/
+C----------------------------------------------------------------------
+C  Statement functions for conversion between integer or complex
+C  and float
+C----------------------------------------------------------------------
+CS    CONV(NDUM) = REAL(NDUM)
+CS    CONVC(X,Y) = CMPLX(X,Y)
+CS    CONVR(ZDUM) = REAL(ZDUM)
+CS    CONVI(ZDUM) = AIMAG(ZDUM)
+CD    CONV(NDUM) = DBLE(NDUM)
+CD    CONVC(X,Y) = DCMPLX(X,Y)
+CD    CONVR(ZDUM) = DBLE(ZDUM)
+CD    CONVI(ZDUM) = DIMAG(ZDUM)
+C----------------------------------------------------------------------
+      CALL MACHAR(IBETA,IT,IRND,NGRD,MACHEP,NEGEP,IEXP,MINEXP,
+     1            MAXEXP,EPS,EPSNEG,XMIN,XMAX)
+      BETA = CONV(IBETA)
+      ALBETA = LOG(BETA)
+      AIT = CONV(IT)
+      AX = ONE/SIXTEN
+      BX = ONE
+      AY = ZERO
+      BY = ONE
+      N = 2000
+      XN = CONV(N)
+      I1 = 0
+      IFLAG = .FALSE.
+      RFLAG = .TRUE.
+      PFLAG = .FALSE.
+C-----------------------------------------------------------------
+C  Random argument accuracy tests
+C-----------------------------------------------------------------
+      DO 300 J = 1, 3
+         CALL RESET
+         DELX = (BX - AX) / XN
+         DELY = (BY - AY)
+         XL = AX
+         DO 200 I = 1, N
+            X = DELX * REN(I1) + XL
+            Y = DELY * REN(I1) + AY
+            CX = CONVC(X,Y)
+C----------------------------------------------------------------
+C  Carefully purify arguments and evaluate identities
+C----------------------------------------------------------------
+            CY = CX - CDEL
+            CS = SIN(CY)
+            CC = COS(CY)
+CC          CS = FSIN(CY)
+CC          CC = FCOS(CY)
+            IF (J .NE. 3) THEN
+                  CZ = SIN(CX)
+CC                CZ = FSIN(CX)
+                  CZZ = CS + (CS*COSDEL+CC*SINDEL)
+               ELSE
+                  CZ = COS(CX)
+CC                CZ = FCOS(CX)
+                  CZZ = CC + (CC*COSDEL-CS*SINDEL)
+            END IF
+C-----------------------------------------------------------------
+C  Accumulate results
+C-----------------------------------------------------------------
+            CALL TABLAT
+            XL = XL + DELX
+  200    CONTINUE
+C---------------------------------------------------------------------
+C  Process and output statistics
+C---------------------------------------------------------------------
+         IF (J .NE. 3) THEN
+               WRITE (IOUT,1000)
+            ELSE
+               WRITE (IOUT,1005)
+         END IF
+         CALL REPORT(IOUT)
+         IF (J .EQ. 1) THEN
+               AX = SIXTEN
+               BX = AX+ONE
+         END IF
+         AY = AX
+         BY = BX
+         IFLAG = .TRUE.
+  300 CONTINUE
+C-----------------------------------------------------------------
+C  Special tests
+C-----------------------------------------------------------------
+      WRITE (IOUT,1025)
+      C = ONE / BETA ** (IT/2)
+      X = ELEVEN
+      Y = X + ONE + HALF
+      X = X + X
+      CX = CONVC(X+C,Y)
+      CY = CONVC(X-C,Y)
+      CZ = (SIN(CX) - SIN(CY)) / (C + C)
+      WRITE (IOUT,1026) CZ
+      WRITE (IOUT,1030)
+      DO 320 I = 1, 5
+         X = REN(I1) * TEN
+         Y = REN(I1) * TEN
+         CX = CONVC(X,Y)
+         CZ = SIN(CX) + SIN(-CX)
+         WRITE (IOUT,1060) CX, CZ
+  320 CONTINUE
+      WRITE (IOUT,1040)
+      X = ELEVEN
+      Y = X + ONE + HALF
+      CX = CONVC(X,Y)
+      CZ = SIN (CX)
+      CS = (CZ-SIN11A)-SIN11B
+      C = CONVI(CS)/CONVI(CZ)
+      IF (C .NE. ZERO) THEN
+            W = LOG(ABS(C))/ALBETA+AIT
+         ELSE
+            W = ZERO
+      END IF
+      W = MAX(W,ZERO)
+      WRITE (IOUT,1042) CX,CZ,IBETA,W
+      IF (W .LT. ONE) THEN
+            WRITE (IOUT,1046)
+         ELSE
+            WRITE (IOUT,1048)
+      END IF
+      X = X + X
+      CX = CONVC(X,Y)
+      CZ = SIN (CX)
+      CS = (CZ-SIN22A)-SIN22B
+      C = CONVR(CS)/CONVR(CZ)
+      IF (C .NE. ZERO) THEN
+            W = LOG(ABS(C))/ALBETA+AIT
+         ELSE
+            W = ZERO
+      END IF
+      W = MAX(W,ZERO)
+      WRITE (IOUT,1044) CX,CZ,IBETA,W
+      IF (W .LT. ONE) THEN
+            WRITE (IOUT,1046)
+         ELSE
+            WRITE (IOUT,1048)
+      END IF
+C-----------------------------------------------------------------
+C  Test of error returns
+C-----------------------------------------------------------------
+      WRITE (IOUT,1050)
+      ALXMAX = LOG(XMAX)-HALF
+      CX = CONVC(ONE,ALXMAX)
+      WRITE (IOUT,1053) CX
+      CY = SIN(CX)
+      WRITE (IOUT,1055) CY
+      BETAP = BETA ** IT
+      CX = CONVC(BETAP,ONE)
+      WRITE (IOUT,1052) CX
+      CY = SIN(CX)
+      WRITE (IOUT,1055) CY
+      CX = CONVC(ONE,BETAP)
+      WRITE (IOUT,1052) CX
+      CY = SIN(CX)
+      WRITE (IOUT,1055) CY
+      WRITE (IOUT,1100)
+      STOP
+C----------------------------------------------------------------
+ 1000 FORMAT(' Test of SIN(X) vs SIN(W+D), W = X-D, D = (1/16,1/16)'//)
+ 1005 FORMAT(' Test of COS(X) vs COS(W+D), W = X-D, D = (1/16,1/16)'//)
+ 1025 FORMAT(' Special Tests'//)
+ 1026 FORMAT(' If (',(F9.1,F7.1),') is not almost (-134163,1188),'/
+     1   14X,25HSIN has the wrong period.  //)
+ 1030 FORMAT(' The identity   SIN(-Z) = -SIN(Z)   will be tested.'//
+     1      16X,'X',23X,'F(Z) + F(-Z)'/)
+ 1040 FORMAT(/' Test the significance in the real or imaginary'
+     1  ' components near'/' the zeros of the real sin'
+     2  ' or cos.'/)
+ 1042 FORMAT(' SIN(',(E15.7,E15.7),') = (',(E15.7,E15.7),')'/
+     1  ' The estimated loss of base ',I4,' digits in the'
+     2  ' imaginary component is ',F7.2)
+ 1044 FORMAT(' SIN(',(E15.7,E15.7),') = (',(E15.7,E15.7),')'/
+     1  ' The estimated loss of base ',I4,' digits in the'
+     2  ' real component is ',F7.2)
+ 1046 FORMAT(' This is acceptable'/)
+ 1048 FORMAT(' This is too large'/)
+ 1050 FORMAT(' Test of error returns'//)
+ 1052 FORMAT(' SIN will be called with the argument (',(E15.4,E15.4),
+     1       ')'/' This should trigger an error message'//)
+ 1053 FORMAT(' SIN will be called with the argument (',(E15.4,E15.4),
+     1       ')'/' This should not trigger an error message'//)
+ 1055 FORMAT(' SIN returned the value (',(E15.4,E15.4),')'///)
+ 1060 FORMAT(2(E15.7,E15.7)/)
+ 1100 FORMAT(' This concludes the tests')
+C---------- Last card of CSIN/CCOS Test Program ----------
+      END
+ 
+CC    COMPLEX FUNCTION FSIN(CX)
+C----------------------------------------------------------------------
+C  Calibration function for csin tests.
+C
+C  Latest revision - October 31, 1990
+C
+C  Author - W. J. Cody
+C           Argonne National Laboratory
+C
+C----------------------------------------------------------------------
+CC    COMPLEX CX
+CC    COMPLEX*16 DCX
+C----------------------------------------------------------------------
+CC    DCX = CX
+CC    FSIN = SIN(DCX)
+CC    RETURN
+C---------- Last line of FSIN ----------
+CC    END
+ 
+CC    COMPLEX FUNCTION FCOS(CX)
+C----------------------------------------------------------------------
+C  Calibration function for ccos tests.
+C
+C  Latest revision - October 31, 1990
+C
+C  Author - W. J. Cody
+C           Argonne National Laboratory
+C
+C----------------------------------------------------------------------
+CC    COMPLEX CX
+CC    COMPLEX*16 DCX
+C----------------------------------------------------------------------
+CC    DCX = CX
+CC    FCOS = COS(DCX)
+CC    RETURN
+C---------- Last line of FCOS ----------
+CC    END
+ 
+C----------------------------------------------------------------------
+C  Program to test CSQRT
+C
+C  Accuracy tests are based on the identity
+C
+C            z = sqrt(z*z)
+C
+C  Data required:
+C
+C     None
+C
+C  Subprograms required from this package:
+C
+C     MACHAR - An environmental inquiry program providing
+C              information on the floating point arithmetic
+C              system.  Note that the call to MACHAR can
+C              be deleted provided the following four
+C              parameters are assigned the values indicated:
+C
+C              IBETA  - the radix of the floating point system;
+C              IT     - the number of base-IBETA digits in the
+C                       significand of a floating-point number;
+C              XMIN   - the smallest non-vanishing floating-point
+C                       power of the radix;
+C              XMAX   - the largest finite floating-point no.
+C
+C     REN(K) - a function subprogram returning random real
+C              numbers uniformly distributed over (0,1)
+C
+C     RESET, TABLAT, REPORT - programs to report results.
+C
+C
+C  Generic Fortran subprograms required:
+C
+C         ABS, CMPLX (or DCMPLX), LOG, REAL (or DBLE), SQRT
+C
+C  The program as given here must be modified before compiling.
+C   If a single (double) precision version is desired, change all
+C   occurrences of CS (CD) in columns 1 and 2 to blanks.  For a
+C   calibration version, change all occurrences of CS and of CC
+C   in columns 1 and 2 to blanks.
+C
+C  Latest revision - November 15, 1990
+C
+C  Author - W. J. Cody
+C           Argonne National Laboratory
+C
+C----------------------------------------------------------------------
+C  Declare named common
+C----------------------------------------------------------------------
+      COMMON /ELEFUN/ CF1,CF2,CF3,CV,CX,CX1,CX2,CX3,CY1,CY2,CY3,
+     1       CZ,CZZ,AIT,ALBETA,AX,AY,BX,BY,RX6,RX7,RY6,RY7,R6,R7,XN,
+     2       IBETA,IT,KX1,KX2,KX3,KY1,KY2,KY3,K1,K2,K3,N,
+     3       IFLAG,RFLAG,PFLAG
+      LOGICAL IFLAG,RFLAG,PFLAG
+      INTEGER IBETA,IT,KX1,KX2,KX3,KY1,KY2,KY3,K1,K2,K3,N
+CS    REAL
+CD    DOUBLE PRECISION
+     1       AIT,ALBETA,AX,AY,BX,BY,RX6,RX7,RY6,RY7,R6,R7,XN
+CS    COMPLEX
+CD    COMPLEX*16
+     1       CF1,CF2,CF3,CV,CX,CX1,CX2,CX3,CY1,CY2,CY3,CZ,CZZ
+C----------------------------------------------------------------------
+C  Declare local variables
+C----------------------------------------------------------------------
+      INTEGER I,IEXP,IOUT,IRND,I1,J,MACHEP,MAXEXP,MINEXP,NDUM,
+     1        NEGEP,NGRD
+CS    REAL
+CD    DOUBLE PRECISION
+     1   BETA,CONV,DELX,DELY,EPS,EPSNEG,ONE,REN,SCALE,TEN,
+     2   W,X,XL,XMAX,XMIN,Y,Z,ZERO
+CS    COMPLEX
+CD    COMPLEX*16
+     1   CONVC,CY
+CC   2   ,FSQRT
+C----------------------------------------------------------------------
+C  Mathematical constants
+C----------------------------------------------------------------------
+      DATA IOUT/6/
+CS    DATA ZERO,ONE,TEN/0.0E0,1.0E0,10.0E0/
+CD    DATA ZERO,ONE,TEN/0.0D0,1.0D0,10.0D0/
+C----------------------------------------------------------------------
+C  Statement functions for conversion between integer or complex
+C  and float
+C----------------------------------------------------------------------
+CS    CONV(NDUM) = REAL(NDUM)
+CS    CONVC(X,Y) = CMPLX(X,Y)
+CD    CONV(NDUM) = DBLE(NDUM)
+CD    CONVC(X,Y) = DCMPLX(X,Y)
+C----------------------------------------------------------------------
+      CALL MACHAR(IBETA,IT,IRND,NGRD,MACHEP,NEGEP,IEXP,MINEXP,
+     1            MAXEXP,EPS,EPSNEG,XMIN,XMAX)
+      BETA = CONV(IBETA)
+      ALBETA = LOG(BETA)
+      AIT = CONV(IT)
+      I1 = IT/2 + 4
+      SCALE = BETA ** I1
+      AX = ZERO
+      BX = TEN
+      AY = AX
+      BY = BX
+      N = 2000
+      XN = CONV(N)
+      I1 = 0
+      RFLAG = .TRUE.
+      IFLAG = .TRUE.
+      PFLAG = .FALSE.
+C---------------------------------------------------------------------
+C  Random argument accuracy tests
+C---------------------------------------------------------------------
+      DO 300 J = 1, 2
+         CALL RESET
+         DELX = (BX - AX) / XN
+         DELY = BY - AY
+         XL = AX
+         DO 200 I = 1, N
+            X = DELX * REN(I1) + XL
+            Y = DELY * REN(I1)
+C-----------------------------------------------------------------
+C  Carefully purify arguments and evaluate identities
+C-----------------------------------------------------------------
+            Z = X * SCALE
+            W = Z + X
+            X = W - Z
+            Z = Y * SCALE
+            W = Z + Y
+            Y = W - Z
+            CX = CONVC(X,Y)
+            Z = X*X - Y*Y
+            W = X*Y
+            CY = CONVC(Z,W+W)
+            CZZ = CX
+            IF (J .EQ. 1) THEN
+                  CZ = SQRT(CY)
+CC                CZ = FSQRT(CY)
+               ELSE
+                  CZ = -SQRT(CY)
+CC                CZ = -FSQRT(CY)
+            END IF
+C-----------------------------------------------------------------
+C  Accumulate results
+C-----------------------------------------------------------------
+            CALL TABLAT
+            XL = XL + DELX
+  200    CONTINUE
+C-----------------------------------------------------------------
+C  Process and output statistics
+C-----------------------------------------------------------------
+         IF (J .EQ. 1) THEN
+               WRITE (IOUT,1000)
+            ELSE
+               WRITE (IOUT,1001)
+         END IF
+         CALL REPORT(IOUT)
+         BX = -BX * BX
+         BY = -BX
+  300 CONTINUE
+C-----------------------------------------------------------------
+C  Special tests
+C-----------------------------------------------------------------
+      WRITE (IOUT,1040)
+      CX = CONVC(ONE,ZERO)
+      CZ = SQRT(CX)
+      WRITE (IOUT,1041) CZ
+      WRITE (IOUT,1050)
+      CX = CONVC(XMIN,XMIN)
+      WRITE (IOUT,1061) CX
+      CZ = SQRT(CX)
+      WRITE (IOUT,1051) CX,CZ
+      CX = CONVC(XMAX,XMAX)
+      WRITE (IOUT,1061) CX
+      CZ = SQRT(CX)
+      WRITE (IOUT,1052) CX,CZ
+      WRITE (IOUT,1100)
+      STOP
+C---------------------------------------------------------------------
+ 1000 FORMAT(' Test of SQRT(Z*Z) vs Z'//)
+ 1001 FORMAT(' Test of -SQRT(Z*Z) vs Z'//)
+ 1040 FORMAT(//' Test of special arguments'//)
+ 1041 FORMAT(' SQRT(1.0,0.0) = (',(E15.7,E15.7),')'//)
+ 1050 FORMAT(//' Tests near extreme arguments.  These should not,'
+     1         ' but may'/' trigger error messages'//)
+ 1051 FORMAT(' SQRT(XMIN,XMIN) = SQRT(',(E15.7,E15.7),') ='/40X,'(',
+     1         (E15.7,E15.7),')'/)
+ 1052 FORMAT(' SQRT(XMAX,XMAX) = SQRT(',(E15.7,E15.7),') ='/40X,'(',
+     1         (E15.7,E15.7),')'/)
+ 1061 FORMAT(/' SQRT will be called with the argument (',
+     1          (E15.4,E15.4),')'//)
+ 1100 FORMAT(' This concludes the tests')
+C--------- Last card of CSQRT Test Program ----------
+      END
+ 
+CC    COMPLEX FUNCTION FSQRT(CX)
+C----------------------------------------------------------------------
+C  Calibration function for csqrt tests.
+C
+C  Latest revision - October 10, 1990
+C
+C  Author - W. J. Cody
+C           Argonne National Laboratory
+C
+C----------------------------------------------------------------------
+CC    COMPLEX CX
+CC    COMPLEX*16 DCX
+C----------------------------------------------------------------------
+CC    DCX = CX
+CC    FSQRT = SQRT(DCX)
+CC    RETURN
+C---------- Last line of FSQRT ----------
+CC    END
+ 
+      SUBROUTINE MACHAR(IBETA,IT,IRND,NGRD,MACHEP,NEGEP,IEXP,MINEXP,
+     1                   MAXEXP,EPS,EPSNEG,XMIN,XMAX)
+C-----------------------------------------------------------------------
+C  This Fortran 77 subroutine is intended to determine the parameters
+C   of the floating-point arithmetic system specified below.  The
+C   determination of the first three uses an extension of an algorithm
+C   due to M. Malcolm, CACM 15 (1972), pp. 949-951, incorporating some,
+C   but not all, of the improvements suggested by M. Gentleman and S.
+C   Marovich, CACM 17 (1974), pp. 276-277.  An earlier version of this
+C   program was published in the book Software Manual for the
+C   Elementary Functions by W. J. Cody and W. Waite, Prentice-Hall,
+C   Englewood Cliffs, NJ, 1980.
+C
+C  The program as given here must be modified before compiling.  If
+C   a single (double) precision version is desired, change all
+C   occurrences of CS (CD) in columns 1 and 2 to blanks.
+C
+C  Parameter values reported are as follows:
+C
+C       IBETA   - the radix for the floating-point representation
+C       IT      - the number of base IBETA digits in the floating-point
+C                 significand
+C       IRND    - 0 if floating-point addition chops
+C                 1 if floating-point addition rounds, but not in the
+C                   IEEE style
+C                 2 if floating-point addition rounds in the IEEE style
+C                 3 if floating-point addition chops, and there is
+C                   partial underflow
+C                 4 if floating-point addition rounds, but not in the
+C                   IEEE style, and there is partial underflow
+C                 5 if floating-point addition rounds in the IEEE style,
+C                   and there is partial underflow
+C       NGRD    - the number of guard digits for multiplication with
+C                 truncating arithmetic.  It is
+C                 0 if floating-point arithmetic rounds, or if it
+C                   truncates and only  IT  base  IBETA digits
+C                   participate in the post-normalization shift of the
+C                   floating-point significand in multiplication;
+C                 1 if floating-point arithmetic truncates and more
+C                   than  IT  base  IBETA  digits participate in the
+C                   post-normalization shift of the floating-point
+C                   significand in multiplication.
+C       MACHEP  - the largest negative integer such that
+C                 1.0+FLOAT(IBETA)**MACHEP .NE. 1.0, except that
+C                 MACHEP is bounded below by  -(IT+3)
+C       NEGEPS  - the largest negative integer such that
+C                 1.0-FLOAT(IBETA)**NEGEPS .NE. 1.0, except that
+C                 NEGEPS is bounded below by  -(IT+3)
+C       IEXP    - the number of bits (decimal places if IBETA = 10)
+C                 reserved for the representation of the exponent
+C                 (including the bias or sign) of a floating-point
+C                 number
+C       MINEXP  - the largest in magnitude negative integer such that
+C                 FLOAT(IBETA)**MINEXP is positive and normalized
+C       MAXEXP  - the smallest positive power of  BETA  that overflows
+C       EPS     - the smallest positive floating-point number such
+C                 that  1.0+EPS .NE. 1.0. In particular, if either
+C                 IBETA = 2  or  IRND = 0, EPS = FLOAT(IBETA)**MACHEP.
+C                 Otherwise,  EPS = (FLOAT(IBETA)**MACHEP)/2
+C       EPSNEG  - A small positive floating-point number such that
+C                 1.0-EPSNEG .NE. 1.0. In particular, if IBETA = 2
+C                 or  IRND = 0, EPSNEG = FLOAT(IBETA)**NEGEPS.
+C                 Otherwise,  EPSNEG = (IBETA**NEGEPS)/2.  Because
+C                 NEGEPS is bounded below by -(IT+3), EPSNEG may not
+C                 be the smallest number that can alter 1.0 by
+C                 subtraction.
+C       XMIN    - the smallest non-vanishing normalized floating-point
+C                 power of the radix, i.e.,  XMIN = FLOAT(IBETA)**MINEXP
+C       XMAX    - the largest finite floating-point number.  In
+C                 particular  XMAX = (1.0-EPSNEG)*FLOAT(IBETA)**MAXEXP
+C                 Note - on some machines  XMAX  will be only the
+C                 second, or perhaps third, largest number, being
+C                 too small by 1 or 2 units in the last digit of
+C                 the significand.
+C
+C     Latest revision - December 4, 1987
+C
+C     Author - W. J. Cody
+C              Argonne National Laboratory
+C
+C-----------------------------------------------------------------------
+      INTEGER I,IBETA,IEXP,IRND,IT,ITEMP,IZ,J,K,MACHEP,MAXEXP,
+     1        MINEXP,MX,NEGEP,NGRD,NXRES
+CS    REAL
+CD    DOUBLE PRECISION
+     1   A,B,BETA,BETAIN,BETAH,CONV,EPS,EPSNEG,ONE,T,TEMP,TEMPA,
+     2   TEMP1,TWO,XMAX,XMIN,Y,Z,ZERO
+C-----------------------------------------------------------------------
+CS    CONV(I) = REAL(I)
+CD    CONV(I) = DBLE(I)
+      ONE = CONV(1)
+      TWO = ONE + ONE
+      ZERO = ONE - ONE
+C-----------------------------------------------------------------------
+C  Determine IBETA, BETA ala Malcolm.
+C-----------------------------------------------------------------------
+      A = ONE
+   10 A = A + A
+         TEMP = A+ONE
+         TEMP1 = TEMP-A
+         IF (TEMP1-ONE .EQ. ZERO) GO TO 10
+      B = ONE
+   20 B = B + B
+         TEMP = A+B
+         ITEMP = INT(TEMP-A)
+         IF (ITEMP .EQ. 0) GO TO 20
+      IBETA = ITEMP
+      BETA = CONV(IBETA)
+C-----------------------------------------------------------------------
+C  Determine IT, IRND.
+C-----------------------------------------------------------------------
+      IT = 0
+      B = ONE
+  100 IT = IT + 1
+         B = B * BETA
+         TEMP = B+ONE
+         TEMP1 = TEMP-B
+         IF (TEMP1-ONE .EQ. ZERO) GO TO 100
+      IRND = 0
+      BETAH = BETA / TWO
+      TEMP = A+BETAH
+      IF (TEMP-A .NE. ZERO) IRND = 1
+      TEMPA = A + BETA
+      TEMP = TEMPA+BETAH
+      IF ((IRND .EQ. 0) .AND. (TEMP-TEMPA .NE. ZERO)) IRND = 2
+C-----------------------------------------------------------------------
+C  Determine NEGEP, EPSNEG.
+C-----------------------------------------------------------------------
+      NEGEP = IT + 3
+      BETAIN = ONE / BETA
+      A = ONE
+      DO 200 I = 1, NEGEP
+         A = A * BETAIN
+  200 CONTINUE
+      B = A
+  210 TEMP = ONE-A
+         IF (TEMP-ONE .NE. ZERO) GO TO 220
+         A = A * BETA
+         NEGEP = NEGEP - 1
+      GO TO 210
+  220 NEGEP = -NEGEP
+      EPSNEG = A
+C-----------------------------------------------------------------------
+C  Determine MACHEP, EPS.
+C-----------------------------------------------------------------------
+      MACHEP = -IT - 3
+      A = B
+  300 TEMP = ONE+A
+         IF (TEMP-ONE .NE. ZERO) GO TO 320
+         A = A * BETA
+         MACHEP = MACHEP + 1
+      GO TO 300
+  320 EPS = A
+C-----------------------------------------------------------------------
+C  Determine NGRD.
+C-----------------------------------------------------------------------
+      NGRD = 0
+      TEMP = ONE+EPS
+      IF ((IRND .EQ. 0) .AND. (TEMP*ONE-ONE .NE. ZERO)) NGRD = 1
+C-----------------------------------------------------------------------
+C  Determine IEXP, MINEXP, XMIN.
+C
+C  Loop to determine largest I and K = 2**I such that
+C         (1/BETA) ** (2**(I))
+C  does not underflow.
+C  Exit from loop is signaled by an underflow.
+C-----------------------------------------------------------------------
+      I = 0
+      K = 1
+      Z = BETAIN
+      T = ONE + EPS
+      NXRES = 0
+  400 Y = Z
+         Z = Y * Y
+C-----------------------------------------------------------------------
+C  Check for underflow here.
+C-----------------------------------------------------------------------
+         A = Z * ONE
+         TEMP = Z * T
+         IF ((A+A .EQ. ZERO) .OR. (ABS(Z) .GE. Y)) GO TO 410
+         TEMP1 = TEMP * BETAIN
+         IF (TEMP1*BETA .EQ. Z) GO TO 410
+         I = I + 1
+         K = K + K
+      GO TO 400
+  410 IF (IBETA .EQ. 10) GO TO 420
+      IEXP = I + 1
+      MX = K + K
+      GO TO 450
+C-----------------------------------------------------------------------
+C  This segment is for decimal machines only.
+C-----------------------------------------------------------------------
+  420 IEXP = 2
+      IZ = IBETA
+  430 IF (K .LT. IZ) GO TO 440
+         IZ = IZ * IBETA
+         IEXP = IEXP + 1
+      GO TO 430
+  440 MX = IZ + IZ - 1
+C-----------------------------------------------------------------------
+C  Loop to determine MINEXP, XMIN.
+C  Exit from loop is signaled by an underflow.
+C-----------------------------------------------------------------------
+  450 XMIN = Y
+         Y = Y * BETAIN
+C-----------------------------------------------------------------------
+C  Check for underflow here.
+C-----------------------------------------------------------------------
+         A = Y * ONE
+         TEMP = Y * T
+         IF (((A+A) .EQ. ZERO) .OR. (ABS(Y) .GE. XMIN)) GO TO 460
+         K = K + 1
+         TEMP1 = TEMP * BETAIN
+         IF ((TEMP1*BETA .NE. Y) .OR. (TEMP .EQ. Y)) THEN
+               GO TO 450
+            ELSE
+               NXRES = 3
+               XMIN = Y
+         END IF
+  460 MINEXP = -K
+C-----------------------------------------------------------------------
+C  Determine MAXEXP, XMAX.
+C-----------------------------------------------------------------------
+      IF ((MX .GT. K+K-3) .OR. (IBETA .EQ. 10)) GO TO 500
+      MX = MX + MX
+      IEXP = IEXP + 1
+  500 MAXEXP = MX + MINEXP
+C-----------------------------------------------------------------
+C  Adjust IRND to reflect partial underflow.
+C-----------------------------------------------------------------
+      IRND = IRND + NXRES
+C-----------------------------------------------------------------
+C  Adjust for IEEE-style machines.
+C-----------------------------------------------------------------
+      IF (IRND .GE. 2) MAXEXP = MAXEXP - 2
+C-----------------------------------------------------------------
+C  Adjust for machines with implicit leading bit in binary
+C  significand, and machines with radix point at extreme
+C  right of significand.
+C-----------------------------------------------------------------
+      I = MAXEXP + MINEXP
+      IF ((IBETA .EQ. 2) .AND. (I .EQ. 0)) MAXEXP = MAXEXP - 1
+      IF (I .GT. 20) MAXEXP = MAXEXP - 1
+      IF (A .NE. Y) MAXEXP = MAXEXP - 2
+      XMAX = ONE - EPSNEG
+      IF (XMAX*ONE .NE. XMAX) XMAX = ONE - BETA * EPSNEG
+      XMAX = XMAX / (BETA * BETA * BETA * XMIN)
+      I = MAXEXP + MINEXP + 3
+      IF (I .LE. 0) GO TO 520
+      DO 510 J = 1, I
+          IF (IBETA .EQ. 2) XMAX = XMAX + XMAX
+          IF (IBETA .NE. 2) XMAX = XMAX * BETA
+  510 CONTINUE
+  520 RETURN
+C---------- LAST CARD OF MACHAR ----------
+      END
+      FUNCTION REN(K)
+C---------------------------------------------------------------------
+C  Random number generator - based on Algorithm 266 by Pike and
+C   Hill (modified by Hansson), Communications of the ACM,
+C   Vol. 8, No. 10, October 1965.
+C
+C  This subprogram is intended for use on computers with
+C   fixed point wordlength of at least 29 bits.  It is
+C   best if the floating-point significand has at most
+C   29 bits.
+C
+C  Latest revision - March 19, 1987
+C
+C  Author - W. J. Cody
+C           Argonne National Laboratory
+C
+C---------------------------------------------------------------------
+      INTEGER IY,J,K
+CS    REAL             CONV,C1,C2,C3,ONE,REN
+CD    DOUBLE PRECISION CONV,C1,C2,C3,ONE,REN
+      DATA IY/100001/
+CS    DATA ONE,C1,C2,C3/1.0E0,2796203.0E0,1.0E-6,1.0E-12/
+CD    DATA ONE,C1,C2,C3/1.0D0,2796203.0D0,1.0D-6,1.0D-12/
+C---------------------------------------------------------------------
+C  Statement functions for conversion between integer and float
+C---------------------------------------------------------------------
+CS    CONV(J) = REAL(J)
+CD    CONV(J) = DBLE(J)
+C---------------------------------------------------------------------
+      J = K
+      IY = IY * 125
+      IY = IY - (IY/2796203) * 2796203
+      REN = CONV(IY) / C1 * (ONE + C2 + C3)
+      RETURN
+C---------- Last card of REN ----------
+      END
+      SUBROUTINE TABLAT
+C----------------------------------------------------------------------
+C  Subroutine to tabulate the results of tests for complex
+C  functions.
+C
+C  Generic Fortran subprograms required:
+C
+C         ABS, AIMAG (or DIMAG), REAL (or DBLE)
+C
+C  Latest revision - October 11, 1990
+C
+C  Author - W. J. Cody
+C           Argonne National Laboratory
+C
+C----------------------------------------------------------------------
+C  Declare named common
+C----------------------------------------------------------------------
+      COMMON /ELEFUN/ CF1,CF2,CF3,CV,CX,CX1,CX2,CX3,CY1,CY2,CY3,
+     1       CZ,CZZ,AIT,ALBETA,AX,AY,BX,BY,RX6,RX7,RY6,RY7,R6,R7,XN,
+     2       IBETA,IT,KX1,KX2,KX3,KY1,KY2,KY3,K1,K2,K3,N,
+     3       IFLAG,RFLAG,PFLAG
+      LOGICAL IFLAG,RFLAG,PFLAG
+      INTEGER IBETA,IT,KX1,KX2,KX3,KY1,KY2,KY3,K1,K2,K3,N
+CS    REAL
+CD    DOUBLE PRECISION
+     1       AIT,ALBETA,AX,AY,BX,BY,RX6,RX7,RY6,RY7,R6,R7,XN
+CS    COMPLEX
+CD    COMPLEX*16
+     1       CF1,CF2,CF3,CV,CX,CX1,CX2,CX3,CY1,CY2,CY3,CZ,CZZ
+C----------------------------------------------------------------------
+C  Declare local variables
+C----------------------------------------------------------------------
+CS    REAL
+CD    DOUBLE PRECISION
+     1   CONVR,CONVI,ONE,W,Z,ZERO,ZZ
+CS    COMPLEX
+CD    COMPLEX*16
+     1   CW,CZERO,ZDUM
+C----------------------------------------------------------------------
+C  Mathematical constants
+C----------------------------------------------------------------------
+CS    DATA ONE,ZERO/1.0E0,0.0E0/
+CS    DATA CZERO/(0.0E0,0.0E0)/
+CD    DATA ONE,ZERO/1.0D0,0.0D0/
+CD    DATA CZERO/(0.0D0,0.0D0)/
+C----------------------------------------------------------------------
+C  Statement functions for conversion between complex and float
+C----------------------------------------------------------------------
+CS    CONVR(ZDUM) = REAL(ZDUM)
+CS    CONVI(ZDUM) = AIMAG(ZDUM)
+CD    CONVR(ZDUM) = DBLE(ZDUM)
+CD    CONVI(ZDUM) = DIMAG(ZDUM)
+C-----------------------------------------------------------------
+C Handle vector error
+C-----------------------------------------------------------------
+      IF (CZ .NE. CZERO) THEN
+            CW = (CZ-CZZ)/CZ
+         ELSE
+            CW = ONE
+      END IF
+      W = ABS(CW)
+      IF (W .LT. ZERO) THEN
+            K1 = K1 + 1
+         ELSE IF (W .GT. ZERO) THEN
+            K3 = K3 + 1
+      END IF
+      IF (W .GT. R6) THEN
+         R6 = W
+         CX1 = CX
+         IF (PFLAG) CY1 = CV
+         CF1 = CZ
+      END IF
+      R7 = R7 + W*W
+C-----------------------------------------------------------------
+C Handle error in real component
+C-----------------------------------------------------------------
+      IF (RFLAG) THEN
+         Z = CONVR(CZ)
+         ZZ = CONVR(CZZ)
+         IF (Z .NE. ZERO) THEN
+               W = (Z-ZZ)/Z
+            ELSE
+               W = ONE
+         END IF
+         IF (W .LT. ZERO) THEN
+               KX1 = KX1 + 1
+            ELSE IF (W .GT. ZERO) THEN
+               KX3 = KX3 + 1
+         END IF
+         W = ABS(W)
+         IF (W .GT. RX6) THEN
+            RX6 = W
+            CX2 = CX
+            IF (PFLAG) CY2 = CV
+            CF2 = CZ
+         END IF
+         RX7 = RX7 + W*W
+      END IF
+C-----------------------------------------------------------------
+C Handle error in imaginary component
+C-----------------------------------------------------------------
+      IF (IFLAG) THEN
+         Z = CONVI(CZ)
+         ZZ = CONVI(CZZ)
+         IF (Z .NE. ZERO) THEN
+               W = (Z-ZZ)/Z
+            ELSE
+               W = ONE
+         END IF
+         IF (W .LT. ZERO) THEN
+               KY1 = KY1 + 1
+            ELSE IF (W .GT. ZERO) THEN
+               KY3 = KY3 + 1
+         END IF
+         W = ABS(W)
+         IF (W .GT. RY6) THEN
+            RY6 = W
+            CX3 = CX
+            IF (PFLAG) CY3 = CV
+            CF3 = CZ
+         END IF
+         RY7 = RY7 + W*W
+      END IF
+      RETURN
+C---------- Last line of TABLAT ----------
+      END
+*
+      SUBROUTINE REPORT(IOUT)
+C----------------------------------------------------------------------
+C  Subroutine to print the results of tests for complex functions.
+C
+C  Generic Fortran subprograms required:
+C
+C         ABS, LOG, MAX, SQRT
+C
+C  Latest revision - October 11, 1990
+C
+C  Author - W. J. Cody
+C           Argonne National Laboratory
+C
+C----------------------------------------------------------------------
+C  Declare named common
+C----------------------------------------------------------------------
+      COMMON /ELEFUN/ CF1,CF2,CF3,CV,CX,CX1,CX2,CX3,CY1,CY2,CY3,
+     1       CZ,CZZ,AIT,ALBETA,AX,AY,BX,BY,RX6,RX7,RY6,RY7,R6,R7,XN,
+     2       IBETA,IT,KX1,KX2,KX3,KY1,KY2,KY3,K1,K2,K3,N,
+     3       IFLAG,RFLAG,PFLAG
+      LOGICAL IFLAG,RFLAG,PFLAG
+      INTEGER IBETA,IT,KX1,KX2,KX3,KY1,KY2,KY3,K1,K2,K3,N
+CS    REAL
+CD    DOUBLE PRECISION
+     1       AIT,ALBETA,AX,AY,BX,BY,RX6,RX7,RY6,RY7,R6,R7,XN
+CS    COMPLEX
+CD    COMPLEX*16
+     1       CF1,CF2,CF3,CV,CX,CX1,CX2,CX3,CY1,CY2,CY3,CZ,CZZ
+C----------------------------------------------------------------------
+C  Declare local variables
+C----------------------------------------------------------------------
+      INTEGER IOUT
+CS    REAL
+CD    DOUBLE PRECISION
+     1   ALL9,W,ZERO
+C----------------------------------------------------------------------
+C  Mathematical constants
+C----------------------------------------------------------------------
+CS    DATA ALL9,ZERO/-999.0E0,0.0E0/
+CD    DATA ALL9,ZERO/-999.0D0,0.0D0/
+C----------------------------------------------------------------------
+         WRITE (IOUT,1000) N,AX,BX,AY,BY
+C-----------------------------------------------------------------
+C Report vector error
+C-----------------------------------------------------------------
+         WRITE (IOUT,1001)
+         K2 = N - K3 - K1
+         R7 = SQRT(R7/XN)
+         WRITE (IOUT,1011) K1,K2,K3
+         WRITE (IOUT,1020) IT,IBETA
+         IF (R6 .NE. ZERO) THEN
+               W = LOG(ABS(R6))/ALBETA
+            ELSE
+               W = ALL9
+         END IF
+         IF (.NOT. PFLAG) THEN
+               WRITE (IOUT,1021) R6,IBETA,W,CX1,CF1
+            ELSE
+               WRITE (IOUT,1022) R6,IBETA,W,CX1,CY1,CF1
+         END IF
+         W = MAX(AIT+W,ZERO)
+         WRITE (IOUT,1023) IBETA,W
+         IF (R7 .NE. ZERO) THEN
+               W = LOG(ABS(R7))/ALBETA
+            ELSE
+               W = ALL9
+         END IF
+         WRITE (IOUT,1024) R7,IBETA,W
+         W = MAX(AIT+W,ZERO)
+         WRITE (IOUT,1023) IBETA,W
+C-----------------------------------------------------------------
+C Report error in real component
+C-----------------------------------------------------------------
+         IF (RFLAG) THEN
+            WRITE (IOUT,1002)
+            KX2 = N - KX3 - KX1
+            RX7 = SQRT(RX7/XN)
+            WRITE (IOUT,1011) KX1,KX2,KX3
+            WRITE (IOUT,1020) IT,IBETA
+            IF (RX6 .NE. ZERO) THEN
+                  W = LOG(ABS(RX6))/ALBETA
+               ELSE
+                  W = ALL9
+            END IF
+            IF (.NOT. PFLAG) THEN
+                  WRITE (IOUT,1021) RX6,IBETA,W,CX2,CF2
+               ELSE
+                  WRITE (IOUT,1022) RX6,IBETA,W,CX2,CY2,CF2
+            END IF
+            W = MAX(AIT+W,ZERO)
+            WRITE (IOUT,1023) IBETA,W
+            IF (RX7 .NE. ZERO) THEN
+                  W = LOG(ABS(RX7))/ALBETA
+               ELSE
+                  W = ALL9
+            END IF
+            WRITE (IOUT,1024) RX7,IBETA,W
+            W = MAX(AIT+W,ZERO)
+            WRITE (IOUT,1023) IBETA,W
+         END IF
+C-----------------------------------------------------------------
+C Report error in imaginary component
+C-----------------------------------------------------------------
+         IF (IFLAG) THEN
+            WRITE (IOUT,1003)
+            KY2 = N - KY3 - KY1
+            RY7 = SQRT(RY7/XN)
+            WRITE (IOUT,1011) KY1,KY2,KY3
+            WRITE (IOUT,1020) IT,IBETA
+            IF (RY6 .NE. ZERO) THEN
+                  W = LOG(ABS(RY6))/ALBETA
+               ELSE
+                  W = ALL9
+            END IF
+            IF (.NOT. PFLAG) THEN
+                  WRITE (IOUT,1021) RY6,IBETA,W,CX3,CF3
+               ELSE
+                  WRITE (IOUT,1022) RY6,IBETA,W,CX3,CY3,CF3
+            END IF
+            W = MAX(AIT+W,ZERO)
+            WRITE (IOUT,1023) IBETA,W
+            IF (RY7 .NE. ZERO) THEN
+                  W = LOG(ABS(RY7))/ALBETA
+               ELSE
+                  W = ALL9
+            END IF
+            WRITE (IOUT,1024) RY7,IBETA,W
+            W = MAX(AIT+W,ZERO)
+            WRITE (IOUT,1023) IBETA,W
+         END IF
+      RETURN
+C-----------------------------------------------------------------
+ 1000 FORMAT(I7,' Random arguments were tested from the box'/
+     1 6X,'(',E15.4,',',E15.4,')'/6X,'(',E15.4,',',E15.4,1H)//)
+ 1001 FORMAT(' First, report the vector error'//)
+ 1002 FORMAT(' Then, report the error in the real component.'//)
+ 1003 FORMAT(' Then, report the error in the imaginary component.'//)
+ 1011 FORMAT(' Test function was larger',I6,' times,'/
+     1     18X,' agreed',I6,' times, and'/
+     2   14X,'was smaller',I6,' times.'//)
+ 1020 FORMAT(' There are',I4,' base',I4,
+     1    ' significant digits in a floating-point number.'//)
+ 1021 FORMAT(' The maximum relative error of',E15.4,' = ',I4,' **',
+     1  F7.2/4X,'occurred for Z =',(E17.6,E17.6)/
+     2       4X,'with a value of ',(E17.6,E17.6))
+ 1022 FORMAT(' The maximum relative error of',E15.4,' = ',I4,' **',
+     1  F7.2/4X,'occurred for Z =',(E17.6,E17.6)/
+     2       13X,'and W =',(E17.6,E17.6)/
+     3       4X,'with a value of ',(E17.6,E17.6))
+ 1023 FORMAT(' The estimated loss of base',I4,
+     1  ' significant digits is',F7.2//)
+ 1024 FORMAT(' The root mean square relative error was',E15.4,
+     1    ' = ',I4,' **',F7.2)
+C---------- Last line of REPORT ----------
+      END
+*
+      SUBROUTINE RESET
+C----------------------------------------------------------------------
+C  Subroutine to reset the paramaters for tests for complex
+C  functions.
+C
+C  Latest revision - October 15, 1990
+C
+C  Author - W. J. Cody
+C           Argonne National Laboratory
+C
+C----------------------------------------------------------------------
+C  Declare named common
+C----------------------------------------------------------------------
+      COMMON /ELEFUN/ CF1,CF2,CF3,CV,CX,CX1,CX2,CX3,CY1,CY2,CY3,
+     1       CZ,CZZ,AIT,ALBETA,AX,AY,BX,BY,RX6,RX7,RY6,RY7,R6,R7,XN,
+     2       IBETA,IT,KX1,KX2,KX3,KY1,KY2,KY3,K1,K2,K3,N,
+     3       IFLAG,RFLAG,PFLAG
+      LOGICAL IFLAG,RFLAG,PFLAG
+      INTEGER IBETA,IT,KX1,KX2,KX3,KY1,KY2,KY3,K1,K2,K3,N
+CS    REAL
+CD    DOUBLE PRECISION
+     1       AIT,ALBETA,AX,AY,BX,BY,RX6,RX7,RY6,RY7,R6,R7,XN
+CS    COMPLEX
+CD    COMPLEX*16
+     1       CF1,CF2,CF3,CV,CX,CX1,CX2,CX3,CY1,CY2,CY3,CZ,CZZ
+C----------------------------------------------------------------------
+C  Declare local variables
+C----------------------------------------------------------------------
+CS    REAL
+CD    DOUBLE PRECISION
+     1   ZERO
+CS    COMPLEX
+CD    COMPLEX*16
+     1   CZERO
+C-----------------------------------------------------------------
+CS    DATA CZERO/(0.0E0,0.0E0)/
+CS    DATA ZERO/0.0E0/
+CD    DATA CZERO/(0.0D0,0.0D0)/
+CD    DATA ZERO/0.0D0/
+C-----------------------------------------------------------------
+      K1 = 0
+      K3 = 0
+      KX1 = 0
+      KX3 = 0
+      KY1 = 0
+      KY3 = 0
+      CX1 = CZERO
+      CX2 = CZERO
+      CX3 = CZERO
+      CY1 = CZERO
+      CY2 = CZERO
+      CY3 = CZERO
+      CF1 = CZERO
+      CF2 = CZERO
+      CF3 = CZERO
+      R6 = ZERO
+      R7 = ZERO
+      RX6 = ZERO
+      RX7 = ZERO
+      RY6 = ZERO
+      RY7 = ZERO
+      RETURN
+C---------- Last line of RESET ----------
+      END

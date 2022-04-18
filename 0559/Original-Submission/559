@@ -1,0 +1,557 @@
+C     PROGRAM DRIVER(INPUT,OUTPUT,TAPE5=INPUT,TAPE6=OUTPUT)
+      DIMENSION A(4,4), B(4), C(4,4), D(4), G(4), H(4), U(4), IP(4),
+     *  X(4)
+      DIMENSION DJNORM(1)
+      DIMENSION DMCX(4), AA(4,4), BB(4), CC(4,4), DD(4)
+      DIMENSION NN(12), MM(12), KEYKEY(12)
+      DATA NN     /0,1,1,3,3,3,3,3,4,4,4,4/
+      DATA MM     /0,0,1,0,1,2,3,4,0,3,0,2/
+      DATA KEYKEY /1,1,1,1,1,1,1,1,2,2,3,3/
+      DATA MAXRA, MAXRC, MAXCAS /4,4,12/
+      DATA TAU /1.E-12/
+C
+C         THE PURPOSE OF THIS DRIVER IS TO DEMONSTRATE THE USE OF
+C         SUBROUTINE HSQP
+C
+C         TEST CASES ARE SPECIFIED BY THE CONTENTS OF THE
+C         ARRAYS NN(), MM(), AND KEYKEY().
+C         KEY = 1 SETS A AND C NONSINGULAR.
+C             = 2 SETS RANK OF A = MIN( N, 2)
+C                 AND RANK OF C = MIN( M, N, 2)
+C             = 3 SETS C NONSINGULAR AND ALL ELTS OF A = 0.
+C
+C         SET TAU TO ABOUT 100 TIMES THE MACHINE PRECISION.
+C
+      DO 230 KASE=1,MAXCAS
+      N = NN(KASE)
+      M = MM(KASE)
+      KEY = KEYKEY(KASE)
+      WRITE (6,1001) KASE, N, M, KEY, TAU
+C
+C         DEFINE OBJECTIVE FUNCTION
+C
+      IF (N.LE.0) GO TO 160
+      DO 60 I=1,N
+      B(I) = FLOAT(I) - .05 * FLOAT(I)**2
+      BB(I) = B(I)
+      DO 50 J=I,N
+      GO TO (10, 20, 30), KEY
+ 10   A(I,J) = 1./(FLOAT(J-I)+.3+.01*FLOAT(I))
+      GO TO 40
+ 20   A(I,J) = FLOAT(I+J)
+      GO TO 40
+ 30   A(I,J) = 0.
+ 40   CONTINUE
+      A(J,I) = A(I,J)
+      AA(I,J) = A(I,J)
+      AA(J,I) = A(J,I)
+ 50   CONTINUE
+ 60   CONTINUE
+C
+C         DEFINE CONSTRAINTS
+C
+      IF (M.LE.0) GO TO 120
+      DO 110 I=1,M
+      D(I) = FLOAT(I+1) - .05 * FLOAT(I+1)
+      DD(I) = D(I)
+      DO 100 J=1,N
+      C(I,J) = FLOAT(I-J+4)
+      GO TO (70, 80, 70), KEY
+ 70   C(I,J) = 1./(FLOAT(J-I)+.2+.01*FLOAT(I+J))
+      GO TO 90
+ 80   C(I,J) = FLOAT(I-J+4)
+ 90   CONTINUE
+      CC(I,J) = C(I,J)
+ 100  CONTINUE
+ 110  CONTINUE
+ 120  CONTINUE
+      WRITE (6,1002)
+      DO 130 I=1,N
+      WRITE (6,1008) (A(I,J),J=1,N), B(I)
+ 130  CONTINUE
+      IF (M.LE.0) GO TO 150
+      WRITE (6,1003)
+      DO 140 I=1,M
+      WRITE (6,1008) (C(I,J),J=1,N), D(I)
+ 140  CONTINUE
+ 150  CONTINUE
+ 160  CONTINUE
+C
+C         CALL HSQP TO SOLVE PROBLEM
+C
+      CALL HSQP(A, B, C, D, M, N, TAU, G, H, U, IP, MAXRA, MAXRC,
+     *  DJNORM, X, KRANK)
+C
+C         WRITE SOLUTION VECTOR
+C
+      WRITE (6,1007) DJNORM(1), KRANK
+      IF (DJNORM(1).LT.0. .OR. N.LE.0) GO TO 220
+      WRITE (6,1006) (X(I),I=1,N)
+C
+C         CHECK CONSTRAINTS.
+C
+      IF (M.LE.0) GO TO 190
+      DO 180 I=1,M
+      DMCX(I) = DD(I)
+      DO 170 J=1,N
+      DMCX(I) = DMCX(I) - CC(I,J)*X(J)
+ 170  CONTINUE
+ 180  CONTINUE
+      WRITE (6,1004) (DMCX(I),I=1,M)
+ 190  CONTINUE
+C
+C         EVALUATE OBJECTIVE FUNCTION.
+C
+      VALUE = 0.
+      DO 210 J=1,N
+      SUM = 0.
+      DO 200 I=1,N
+      SUM = SUM + X(I)*AA(I,J)
+ 200  CONTINUE
+      VALUE = VALUE + (0.5*SUM+BB(J))*X(J)
+ 210  CONTINUE
+      WRITE (6,1005) VALUE
+ 220  CONTINUE
+ 230  CONTINUE
+      STOP
+ 1001 FORMAT (51H0**************************************************/
+     */31H  CASE    N    M  KEY       TAU/1X,4I5,E10.3)
+ 1002 FORMAT (26H0 AUGMENTED MATRIX (A:B) =)
+ 1003 FORMAT (26H0 AUGMENTED MATRIX (C:D) =)
+ 1004 FORMAT (33H0 CONSTRAINT RESIDUALS  D - C*X =/(1X, 8E14.3))
+ 1005 FORMAT (32H0 VALUE OF OBJECTIVE FUNCTION = , E20.6)
+ 1006 FORMAT (16H0SOLUTION VECTOR/(1X, 8E14.6))
+ 1007 FORMAT (24H0PROJECTED GRADIENT NORM, 5X, E20.8/ 13H0RANK OF PROJ,
+     *  20HECTED HESSIAN MATRIX, 5X, I10)
+ 1008 FORMAT (1X, 8E14.6)
+      END
+      SUBROUTINE HSQP(A,B,C,D,M,N,TAU,G,H,U,IP,MAXRA,MAXRC,DJNORM,X,
+     $    KRANK)
+C
+C
+      DIMENSION B(1),D(1),G(1),H(1),U(1),IP(1),DJNORM(1),X(1)
+      DIMENSION A(MAXRA,1),C(MAXRC,1)
+C
+C         PROGRAMMER AND DATE:  J.T.BETTS, JAN. 1978.
+C
+C         PURPOSE:  GIVEN AN M X N MATRIX C (OF RANK M), AN M VECTOR D,
+C         AN N X N SYMMETRIC MATRIX A, AND AN N VECTOR B, FIND THE
+C         STATIONARY POINT X OF THE QUADRATIC
+C
+C         J = .5*(X**T)*A*X + (B**T)*X
+C
+C         SUBJECT TO THE CONSTRAINTS
+C
+C         C*X = D,
+C
+C         IF A STATIONARY POINT DOES NOT EXIST THE ALGORITHM WILL FIND
+C         A POINT WHICH SATISFIES THE CONSTRAINTS AND MINIMIZES THE
+C         NORM OF THE GRADIENT OF J PROJECTED ON THE CONSTRAINT SURFACE.
+C
+C         ALGORITHM;  ORTHOGONAL DECOMPOSITION OF C MATRIX USING
+C         HOUSEHOLDER TRANSFORMATIONS, FOLLOWED BY APPLICATION OF THE
+C         OPTIMALITY CONDITIONS IN THE REDUCED VARIABLES.
+C
+C         INPUT:
+C
+C            A      N X N SYMMETRIC HESSIAN MATRIX
+C            B      N DIMENSIONAL GRADIENT VECTOR
+C            C      M X N JACOBIAN MATRIX (RANK M)
+C            D      M DIMENSIONAL CONSTRAINT VECTOR
+C            M      THE NUMBER OF CONSTRAINTS
+C            N      THE NUMBER OF VARIABLES
+C            TAU    PSEUDORANK TEST PARAMETER.  FOR A MACHINE WITH K
+C                   SIGNIFICANT FIGURES AN APPROPRIATE VALUE IS
+C                   TAU = 1.E-(K-2).
+C            G      AUXILIARY STORAGE (LENGTH M)
+C            H      AUXILIARY STORAGE (LENGTH N-M)
+C            U      AUXILIARY STORAGE (LENGTH N-M)
+C            IP     AUXILIARY STORAGE (LENGTH N-M)
+C            MAXRA  MAXIMUM ROW DIMENSION OF A (MAXRA X N)
+C         X MAXRC  MAXIMUM ROW DIMENSION OF C (MAXRC X M)
+C
+C         OUTPUT:
+C
+C            DJNORM    IF DJNORM .GE. 0. IT IS THE NORM OF THE PROJECTED
+C                   GRADIENT OF THE CONSTRAINED QUADRATIC FORM.
+C                   IF DJNORM = 0. X IS A STATIONARY POINT OF THE
+C                   CONSTRAINED QUADRATIC FORM.
+C                   DJNORM = -1. MEANS INPUT ERRORS.      NO X COMPUTED.
+C                   DJNORM = -2. MEANS RANK(C) .LT. M.    NO X COMPUTED.
+C            X      COMPUTED SOLUTION VECTOR.  IT IS A STATIONARY POINT
+C                   IF DJNORM = 0.
+C            KRANK  PSEUDORANK OF PROJECTED HESSIAN MATRIX (K2**T)*A*K2.
+C                   IF KRANK = N-M, X IS THE UNIQUE SOLUTION.
+C                   IF KRANK .LT. N-M, X IS THE MINIMUM LENGTH SOLUTION.
+C
+C         NOTE:     THE INPUT VALUES OF A,B,C, AND D ARE DESTROYED.
+C
+C ----------------------------------------------------------------------
+C
+C         INITIALIZATION
+C
+      KRANK = 0
+      MP1 = M + 1
+      NMM = N - M
+      DJNORM(1) = -1.
+C
+C         CHECK FOR INPUT ERRORS
+C
+      IF(N.LE.0.OR.N.GT.MAXRA.OR.M.GT.MAXRC.OR.M.GT.N
+     $  .OR. M .LT. 0) RETURN
+C
+C         COMPUTE TOLERANCE, ATOL, FOR PSEUDORANK OF A.
+C
+      TEMP = 0.
+      DO 20 J = 1,N
+      SUMSQ = 0.
+      DO 10 I = 1,N
+      SUMSQ = SUMSQ + A(I,J)**2
+ 10   CONTINUE
+      TEMP = AMAX1(TEMP,SUMSQ)
+ 20   CONTINUE
+      ATOL = TAU*SQRT(TEMP)
+C
+C         IF THE PROBLEM IS UNCONSTRAINED GO TO STEP 6
+C
+      IF(M.EQ.0) GO TO 140
+C
+C ----------------------------------------------------------------------
+C
+C         STEP. 1.  COMPUTE ORTHOGONAL MATRIX K.  TRIANGULARIZE C.
+C
+      DO 30 I = 1,M
+      CALL H12(1,I,I+1,N,C(I,1),MAXRC,G(I),C(I+1,1),MAXRC,1,M-I)
+ 30   CONTINUE
+C
+C ----------------------------------------------------------------------
+C
+C         STEP 2.  COMPUTE Y1HAT BY SOLVING THE LOWER TRIANGULAR
+C         SYSTEM C*Y1 = D.  STORE IN X.
+C
+      TEMP = 0.
+      DO 50 J=1,M
+      DO 40 I=J,M
+      TEMP=AMAX1(TEMP,ABS(C(I,J)))
+ 40   CONTINUE
+ 50   CONTINUE
+      CTOL = TAU*TEMP
+      DO 90 I = 1,M
+      IM1 = I - 1
+      X(I) = D(I)
+      IF(I .EQ. 1) GO TO 70
+      DO 60 J = 1,IM1
+      X(I) = X(I) - C(I,J)*X(J)
+ 60   CONTINUE
+ 70   CONTINUE
+      IF(ABS(C(I,I)) .GT. CTOL) GO TO 80
+      DJNORM(1) = -2.
+      RETURN
+ 80   CONTINUE
+      X(I) = X(I)/C(I,I)
+ 90   CONTINUE
+C
+C         WHEN THERE ARE NO DEGREES OF FREEDOM GO TO STEP 8
+C
+      IF(M .LT. N) GO TO 100
+      DJNORM(1) = 0.
+      GO TO 190
+ 100  CONTINUE
+C
+C ----------------------------------------------------------------------
+C
+C         STEP 3.  COMPUTE ATILDA = (K**T)*A
+C
+      DO 110 I = 1,M
+      CALL H12(2,I,I+1,N,C(I,1),MAXRC,G(I),A,1,MAXRA,N)
+ 110  CONTINUE
+C
+C ----------------------------------------------------------------------
+C
+C         STEP 4.  FORM THE LAST N-M ROWS OF AHAT = ATILDA*K;  I.E.
+C         COMPUTE A21HAT = (K2**T)*A*K1 AND A22HAT = (K2**T)*A*K2
+C
+      DO 120 I = 1,M
+      CALL H12(2,I,I+1,N,C(I,1),MAXRC,G(I),A(MP1,1),MAXRA,1,NMM)
+ 120  CONTINUE
+C
+C ----------------------------------------------------------------------
+C
+C         STEP 5.  COMPUTE BTILDA = (K**T)*B
+C
+      DO 130 I = 1,M
+      CALL H12(2,I,I+1,N,C(I,1),MAXRC,G(I),B,1,1,1)
+ 130  CONTINUE
+C
+C ----------------------------------------------------------------------
+C
+C         STEP 6.  COMPUTE B2HAT = -B2TILDA - A21HAT*Y1HAT
+C
+ 140  CONTINUE
+      DO 170 I = MP1,N
+      B(I) = -B(I)
+      IF(M .EQ. 0) GO TO 160
+      DO 150 J = 1,M
+      B(I) = B(I) - A(I,J)*X(J)
+ 150  CONTINUE
+ 160  CONTINUE
+ 170  CONTINUE
+C
+C ----------------------------------------------------------------------
+C
+C         STEP 7. SOLVE A22HAT*Y2 = B2HAT FOR Y2 USING HFTI
+C
+C
+C
+      CALL HFTI(A(MP1,MP1),MAXRA,NMM,NMM,B(MP1),1,1,ATOL,KRANK,
+     $    DJNORM,H,U,IP)
+C
+      DO 180 I = MP1,N
+      X(I) = B(I)
+ 180  CONTINUE
+C
+C         IF THE PROBLEM IS UNCONSTRAINED, RETURN.
+C
+      IF(M.EQ.0) RETURN
+C
+C ----------------------------------------------------------------------
+C
+C         STEP 8.  COMPUTE X = K*Y
+C
+ 190  CONTINUE
+      DO 200 K = 1,M
+      I = MP1 - K
+      CALL H12(2,I,I+1,N,C(I,1),MAXRC,G(I),X,1,1,1)
+ 200  CONTINUE
+C
+      RETURN
+      END
+      SUBROUTINE H12(MODE,LPIVOT,L1,M,U,IUE,UP,C,ICE,ICV,NCV)
+C
+C
+C         ALGORITHM H12:  C.L. LAWSON AND R.J. HANSON, "SOLVING LEAST
+C         SQUARES PROBLEMS", PRENTICE-HALL,1974. APPENDIX C,P. 308.
+C
+C
+C         PURPOSE:  CONSTRUCTION AND/OR APPLICATION OF A SINGLE
+C         HOUSEHOLDER TRANSFORMATION ...  Q = I + U*(U**T)/B
+C
+C         MODE = 1 OR 2 TO SELECT ALGORITHM H1 OR H2.
+C         LPIVOT IS THE INDEX OF THE PIVOT ELEMENT
+C         L1,M   IF L1.LE.M THE TRANSFORMATION WILL BE CONSTRUCTED TO
+C                ZERO ELEMENTS INDEXED FROM L1 THROUGH M.  IF L1.GT.M
+C                THE SUBROUTINE DOES AN IDENTITY TRANSFORMATION.
+C         U(),IUE,UP    ON ENTRY TO H1 U() CONTAINS THE PIVOT VECTOR.
+C                IUE IS THE STORAGE INCREMENT BETWEEN ELEMENTS.  ON EXIT
+C                FROM H1 U() AND UP CONTAIN QUANTITIES DEFINING THE
+C                VECTOR U OF THE HOUSEHOLDER TRANSFORMATION. ON ENTRY TO
+C                H2 U() AND UP SHOULD CONTAIN QUANTITIES PREVIOUSLY
+C                COMPUTED BY H1.  THESE WILL NOT BE MODIFIED BY H2.
+C         C()    ON ENTRY TO H1 OR H2 C() CONTAINS A MATRIX WHICH WILL
+C                BE REGARDED AS A SET OF VECTORS TO WHICH THE
+C                HOUSEHOLDER TRANSFORMATION IS TO BE APPLIED.  ON EXIT
+C                C() CONTAINS THE SET OF TRANSFORMED VECTORS.
+C         ICE    STORAGE INCREMENT BETWEEN ELEMENTS OF VECTORS IN C()
+C         ICV    STORAGE INCREMENT BETWEEN VECTORS IN C().
+C         NCV    NUMBER OF VECTORS IN C() TO BE TRANSFORMED. IF NCV.LE.0
+C                NO OPERATIONS WILL BE DONE ON C().
+C
+      DIMENSION U(IUE,M),C(1)
+      DOUBLE PRECISION SM,B
+C
+      IF(0.GE.LPIVOT.OR.LPIVOT.GE.L1.OR.L1.GT.M) RETURN
+      CL = ABS(U(1,LPIVOT))
+      IF(MODE.EQ.2) GO TO 60
+C
+C         CONSTRUCT THE TRANSFORMATION.
+C
+      DO 10 J = L1,M
+ 10   CL = AMAX1(ABS(U(1,J)),CL)
+      IF(CL) 130,130,20
+ 20   CLINV = 1./CL
+      SM = (DBLE(U(1,LPIVOT))*CLINV)**2
+      DO 30 J = L1,M
+ 30   SM = SM + (DBLE(U(1,J))*CLINV)**2
+C
+C         CONVERT DBLE. PREC. SM TO SNGL. PREC. SM1
+C
+      SM1 = SM
+      CL = CL*SQRT(SM1)
+      IF(U(1,LPIVOT)) 50,50,40
+ 40   CL = -CL
+ 50   UP = U(1,LPIVOT) - CL
+      U(1,LPIVOT) = CL
+      GO TO 70
+C
+C         APPLY THE TRANSFORMATION I + U*(U**T)/B TO C
+C
+ 60   IF(CL) 130,130,70
+ 70   IF(NCV.LE.0) RETURN
+      B = DBLE(UP)*U(1,LPIVOT)
+C
+C         B MUST BE NONPOSITIVE HERE.  IF B=0 RETURN
+C
+      IF(B) 80,130,130
+ 80   B = 1.D0/B
+      I2 = 1 - ICV + ICE*(LPIVOT-1)
+      INCR = ICE*(L1-LPIVOT)
+      DO 120 J = 1,NCV
+      I2 = I2 + ICV
+      I3 = I2 + INCR
+      I4 = I3
+      SM = C(I2)*DBLE(UP)
+      DO 90 I = L1,M
+      SM = SM + C(I3)*DBLE(U(1,I))
+ 90   I3 = I3 + ICE
+      IF(SM) 100,120,100
+ 100  SM = SM*B
+      C(I2) = C(I2) + SM*DBLE(UP)
+      DO 110 I = L1,M
+      C(I4) = C(I4) + SM*DBLE(U(1,I))
+ 110  I4 = I4 + ICE
+ 120  CONTINUE
+ 130  RETURN
+      END
+      SUBROUTINE HFTI(A,MDA,M,N,B,MDB,NB,TAU,KRANK,RNORM,H,G,IP)
+C
+C
+C         PURPOSE:  SOLVE THE MATRIX LINEAR LEAST SQUARE PROBLEM
+C                             MIN NORM(A*X - B)
+C                   WHERE A IS MXN,  B IS MXNB,  X IS NXNB.
+C
+C     REF.  C.L. LAWSON AND R.J. HANSON, "SOLVING LEAST SQUARES PROBLEMS
+C         PRENTICE-HALL,1974.   ALGORITHM HFTI, APPENDIX C.,P.290.
+C
+C
+      DIMENSION A(MDA,N),B(MDB,NB),H(N),G(N),IP(N),RNORM(NB)
+      DOUBLE PRECISION SM,DZERO
+C
+      SZERO = 0.
+      DZERO = 0.D0
+      FACTOR = .001
+C
+      K = 0
+      LDIAG = MIN0(M,N)
+      IF(LDIAG.LE.0) GO TO 270
+C
+      DO 80 J = 1,LDIAG
+      IF(J.EQ.1) GO TO 20
+C
+C         UPDATE SQUARED COLUMN LENGTHS AND FIND LMAX
+C
+      LMAX = J
+      DO 10 L = J,N
+      H(L) = H(L) - A(J-1,L)**2
+      IF(H(L).GT.H(LMAX)) LMAX = L
+ 10   CONTINUE
+      IF(FACTOR*H(LMAX)) 20,20,50
+C
+C         COMPUTE SQUARED COLUMN LENGTHS AND FIND LMAX
+C
+ 20   LMAX = J
+      DO 40 L = J,N
+      H(L) = 0.
+      DO 30 I = J,M
+ 30   H(L) = H(L) + A(I,L)**2
+      IF(H(L).GT.H(LMAX)) LMAX = L
+ 40   CONTINUE
+      HMAX = H(LMAX)
+C
+C         LMAX HAS BEEN DETERMINED.  DO COLUMN INTERCHANGES IF NEEDED.
+C
+ 50   CONTINUE
+      IP(J) = LMAX
+      IF(IP(J).EQ.J) GO TO 70
+      DO 60 I = 1,M
+      TMP = A(I,J)
+      A(I,J) = A(I,LMAX)
+ 60   A(I,LMAX) = TMP
+      H(LMAX) = H(J)
+C
+C         COMPUTE THE J-TH TRANSFORMATION AND APPLY IT TO A AND B.
+C
+ 70   CALL H12(1,J,J+1,M,A(1,J),1,H(J),A(1,J+1),1,MDA,N-J)
+ 80   CALL H12(2,J,J+1,M,A(1,J),1,H(J),B,1,MDB,NB)
+C
+C         DETERMINE THE PSEUDORANK,K, USING THE TOLERANCE, TAU
+C
+      DO 90 J = 1,LDIAG
+      IF(ABS(A(J,J)).LE.TAU) GO TO 100
+ 90   CONTINUE
+      K = LDIAG
+      GO TO 110
+ 100  K = J - 1
+ 110  KP1 = K + 1
+C
+C         COMPUTE THE NORMS OF THE RESIDUAL VECTORS.
+C
+      IF(NB.LE.0) GO TO 140
+      DO 130 JB = 1,NB
+      TMP = SZERO
+      IF(KP1.GT.M) GO TO 130
+      DO 120 I = KP1,M
+ 120  TMP = TMP + B(I,JB)**2
+ 130  RNORM(JB) = SQRT(TMP)
+ 140  CONTINUE
+C
+C         SPECIAL FOR PSEUDORANK = 0.
+C
+      IF(K.GT.0) GO TO 160
+      IF(NB.LE.0) GO TO 270
+      DO 150 JB = 1,NB
+      DO 150 I = 1,N
+ 150  B(I,JB) = SZERO
+      GO TO 270
+C
+C         IF THE PSEUDORANK IS LESS THAN N COMPUTE HOUSEHOLDER
+C         DECOMPOSITION OF FIRST K ROWS.
+C
+ 160  IF(K.EQ.N) GO TO 180
+      DO 170 II = 1,K
+      I = KP1 - II
+ 170  CALL H12(1,I,KP1,N,A(I,1),MDA,G(I),A,MDA,1,I-1)
+ 180  CONTINUE
+C
+C
+      IF(NB.LE.0) GO TO 270
+      DO 260 JB = 1,NB
+C
+C         SOLVE THE K BY K TRIANGULAR SYSTEM
+C
+      DO 210 L = 1,K
+      SM = DZERO
+      I = KP1 - L
+      IF(I.EQ.K) GO TO 200
+      IP1 = I + 1
+      DO 190 J = IP1,K
+ 190  SM = SM + DBLE(A(I,J))*DBLE(B(J,JB))
+ 200  SM1 = SM
+ 210  B(I,JB) = (B(I,JB)-SM1)/A(I,I)
+C
+C         COMPLETE COMPUTATION OF SOLUTION VECTOR
+C
+      IF(K.EQ.N) GO TO 240
+      DO 220 J = KP1,N
+ 220  B(J,JB) = SZERO
+      DO 230 I = 1,K
+ 230  CALL H12(2,I,KP1,N,A(I,1),MDA,G(I),B(1,JB),1,MDB,1)
+C
+C         REORDER THE SOLUTION VECTOR TO COMPENSATE FOR THE COLUMN
+C         INTERCHANGES.
+C
+ 240  DO 250 JJ = 1,LDIAG
+      J = LDIAG + 1 - JJ
+      IF(IP(J).EQ.J) GO TO 250
+      L = IP(J)
+      TMP = B(L,JB)
+      B(L,JB) = B(J,JB)
+      B(J,JB) = TMP
+ 250  CONTINUE
+ 260  CONTINUE
+C
+C         THE SOLUTION VECTORS, X, ARE NOW IN THE FIRST N ROWS OF THE
+C         ARRAY B(.)
+C
+ 270  KRANK = K
+      RETURN
+      END

@@ -1,0 +1,327 @@
+\section{Parameters}
+\label{PARAM}
+In addition to {\sf objPoly}, {\sf ineqPolySys}, {\sf lbd} and {\sf ubd} for  describing a POP in the
+SparsePOP format, the MATLAB
+function sparsePOP.m has {\sf param} as an input argument. It is a structure consisting of
+many parameters that control the performance of the function. Table \ref{tableOfparam}
+shows the list of parameters defined in SparsePOP. The default values of all parameters are given in the
+MATLAB function defaultParameters.m. They can be modified if necessary.
+
+\begin{table}[htdp]
+\caption{The fields of {\sf param}, default values and possible values}
+\begin{center}
+\begin{tabular}{c|c|c}
+field of {\sf param} & default values &  possible values\\
+\hline
+% 1. Parameters to control the basic relaxation scheme.
+{\sf relaxOrder} & $\omega_{\max}$ & a positive integer not less than $\omega_{\max}$\\
+{\sf sparseSW} & 1 & 0 and 1\\
+%\hline
+{\sf multiCliquesFactor} & 1 & 0, 1 and 'objPoly.dimVar' \\
+%\hline
+% 2. Switch to handle numerical difficulties.
+{\sf scalingSW} & 1 & 0 and 1\\
+%\hline
+{\sf boundSW} & 1 & 0, 1 and 2\\
+%\hline
+{\sf eqTolerance} & 0.0 & 0.0 and a positive real number $>$  1.0e-10\\
+%\hline
+{\sf perturbation} & 0.0 & 0.0 and a positive real number $>$ 1.0e-10 \\
+%\hline
+{\sf reduceMomentMatSW} & 1 & 0 and 1\\
+%\hline
+{\sf complementaritySW} & 1 & 0 and 1\\
+%\hline
+% 3. Parameters for SDP solvers.
+{\sf SeDuMiSW} & 1 & 0 and 1\\
+%\hline
+{\sf SeDuMiOutFile} & 0 & 0, 1 and a file name\\
+%\hline
+{\sf SeDuMiEpsilon} & 1.0e-9 & a positive real value\\
+%\hline
+{\sf sdpaDataFile} & {\sf ' '} & {\sf ' '} and a file name with the extension .dat-s\\
+%\hline
+% 4. Parameters for printing numerical results.
+{\sf detailedInfFile} & {\sf ' '} & {\sf ' '} and a file name\\
+%\hline
+{\sf printFileName} & 1 & 1 and a file name\\
+%\hline
+{\sf printLevel} & {\sf [}2,2{\sf ]} & 0,1 or 2 for both elements \\
+%\hline
+% 5. Parameters to use Symbolic Math Toolbox and C++ subrouties
+{\sf symbolicMath} & 1& 0 and 1\\
+%\hline
+{\sf mex} & 1 & 0 and 1\\
+%\hline
+\hline
+\end{tabular}
+\end{center}
+\label{tableOfparam}
+\end{table}
+These parameters can be divided into five categories:
+\begin{enumerate}
+\item  Parameters for controlling the basic relaxation scheme.
+\item  Switches for techniques to reduce numerical difficulties.
+\item  Parameters for  SDP solvers.
+\item  Parameters for printing.
+\item  Parameters for Symbolic Math Toolbox and C++ subroutines.
+\end{enumerate}
+
+% Skim 5/15/07
+\subsection{Parameters to choose the relaxation method}
+
+%We first need to specify
+The relaxation order should be specified as 
+\begin{eqnarray*}
+& & \mbox{{\sf param.relaxOrder} }  =\omega \geq \omega_{\max} = \max \{ \omega_k : k =0,1,\ldots,m \}
+\end{eqnarray*}
+% {\sf param.relaxOrder} $=\omega \geq \omega_{\max}$
+to execute the sparse or dense SDP relaxation for a POP,
+where 
+\begin{eqnarray*}
+% & & \omega_{\max} = \max \{ \omega_k : k =0,1,\ldots,m \}, \\
+& & \omega_k = \lceil \deg(f_k(\x)) / 2 \rceil \ (k=0,1,2,\ldots,m). 
+\end{eqnarray*}
+% $\omega_{\max}$ is defined by (\ref{omegaMax}) for a POP of the form (\ref{POP0}).
+The default is {\sf param.relaxOrder} $= \omega_{\max}$. If the accuracy of the obtained approximate optimal solution
+% Skim 5/15/07
+is not satisfactory,  increasing the relaxation order {\sf param.relaxOrder} $=\omega \geq \omega_{\max}$ is
+one way to obtain more accurate optimal solution.
+We should mention, however, that increasing the relaxation order may take more cpu time and
+numerical difficulty might occur while solving the SDP relaxation problem.
+
+The type of SDP relaxation can be chosen by setting
+{\sf  param.sparseSW} $=0$ for the dense relaxation
+based on  \cite{LAS01}, or $=1$ for the sparse relaxation based on \cite{WAKI04}.
+The sparsity of
+the sparse SDP relaxation problem is varied by {\sf param.multiCliquesFactor}.
+Suppose that {\sf param.sparseSW}$= 1$; otherwise this parameter is not relevant.
+The purpose of this parameter is to strengthen the sparse relaxation
+by taking the union of some of the maximal cliques $C_{\ell}$ $(\ell=1,2,\ldots,p)$
+of a chordal extension $G(N,E')$ of the
+csp graph induced from the POP (\ref{POP0}) for $\widetilde{C}_k$ $(k=1,2,\ldots,m)$.
+Let $\rho_{\max}$ denote the maximum over  $\sharp C_{\ell}$ $(\ell=1,2,\ldots,p)$,
+where $\sharp C_{\ell}$ denotes the cardinality of $C_{\ell}$.
+Recall that  $F_k = \{ i : x_i \mbox{ appears in } f_k(x) \geq 0 \}$.
+Let $J_k = \{ \ell : F_k \subset C_{\ell} \}$.
+Take one clique from $C_{\ell} \ (\ell \in J_k)$ for $\widetilde{C}_k$.
+Add another clique
+ from $C_{\ell} \ (\ell \in J_k)$ to $\widetilde{C}_k$ if
+ $\sharp \left(\widetilde{C}_k \bigcup C_{\ell}\right)$ does not exceed
+ {\sf param.multiCliquesFactor} $\times \rho_{\max}$.
+ Repeat this procedure to obtain the union $\widetilde{C}_k$ of some cliques from $C_{\ell}
+\ (\ell \in J_k)$.
+If {\sf param.multiCliquesFactor} $ = 0$, then $\widetilde{C}_k$ consists of a single clique
+$C_{\ell}$ for some $\ell \in J_k$.
+If {\sf param.multiCliquesFactor}$=${\sf objPoly.dimVar}, then $\widetilde{C}_k$ consists
+of the union of all $C_{\ell} \ (\ell \in J_k)$. The
+default value is $1$, which means that
+the cardinality of $\widetilde{C}_k$  is bounded by $\rho_{\max}$. If the accuracy of the obtained
+% Skim 5/15/07
+approximate optimal solution is not satisfactory,  sparsePOP.m can be executed again with
+the choice of either {\sf param.multiCliquesFactor}$=${\sf objPoly.dimVar} or {\sf  param.sparseSW} $=0$
+before increasing the relaxation order {\sf param.relaxOrder} $=\omega$.
+
+% Skim 5/15/07
+\subsection{Switches for techniques to handle numerical difficulties}
+
+Because the POP (\ref{POP0}) is basically a hard optimization problem,
+% Skim 5/15/07
+numerical difficulties are often unavoidable while solving its SDP relaxation,
+and/or an inaccurate approximate solution might be obtained.
+The switches described in this subsection  are intended to prevent numerical
+difficulties from occuring, and improve the accuracy of an obtained solution.
+
+With {\sf param.scalingSW}$=1$, the objective polynomial,
+constraint polynomials, lower and upper bounds are
+ scaled such that the maximum of $\{ |\mbox{lower bound of $x_j$}|,
+ | \mbox{upper bound of $x_j$} | \} $ $= 1$ $(j \in J)$
+ and that the maximum absolute value of the coefficients of all monomials in each
+ polynomial is $1$, where $J$ denotes the set of indices $j$ for which
+ the variable $x_j$ has finite lower and upper bounds;
+ $-1.0$e+$10 < $ lbd$(j) \leq $ ubd$(j) < 1.0$e+$10$.
+This scaling technique is very effective to improve the numerical stability
+when solving the resulting SDP relaxation. The default is  {\sf param.scalingSW}  $=1$.
+
+Appropriate bounds are added  for all linearized
+variables $y_{\salpha}$ $(\balpha \in \widetilde{\FC})$ if {\sf param.boundSW} $= 1$.
+If {\sf param.boundSW}$=2$, some redundant bounds of variables $y_{\salpha}$ are
+% Skim 5/15/07 generated
+removed from the added  bounds for all $y_{\salpha}$. Otherwise, no
+bounds are added to $y_{\salpha}$. The default is  {\sf param.boundSW}$= 2$.
+In particular, when every variable $x_j$
+is scaled such that lbd$(j) = 0$ and
+ubd$(j)=1$ $(j=1,2,\ldots,n)$, the bounds
+$0 \leq y_{\salpha} \leq 1$ $(\balpha \in \widetilde{\FC})$
+are added. Empirically, we know such a bounding is very effective to improve
+the numerical stability in solving the SDP relaxation. Therefore,
+% Skim 5/15/07
+our recommendation is to
+modify a POP so that every variable $x_j$ is nonnegative and
+has a finite positive upper bound; then the desired scaling and bounding of
+variables $y_{\salpha}$ $(\balpha \in \widetilde{\FC})$ are performed in
+ sparsePOP.m by taking {\sf param.scalingSW} $=1$
+and {\sf param.boundSW} $= 1 \mbox{ or } 2$.
+
+The parameter {\sf param.eqTolerance} is used to
+convert  every equality constraint into two inequality constraints;
+if $1.0$e-$10 < $ {\sf param.eqTolerance},
+then  each equality constraint is replaced by
+$f(x) = 0$ by $ f(x) \geq$ {\sf $-$param.eqTolerance}  and $ -f(x) \geq$ {\sf $-$param.eqTolerance}.
+When SeDuMi displays  numerical difficulty while solving
+the SDP relaxation of a POP with equality constraints,
+this technique with $1.0$e-$3 \leq $ {\sf param.eqTolerance} $\leq 1.0$e-$7$
+often provides a more stable SDP relaxation problem that can be solved by
+SeDuMi. The default is {\sf param.eqTolerance} $=0$, {\it i.e.},
+% Skim 5/15/07
+no conversion of the equality constraints is specified.
+
+Perturbing the objective polynomial to compute an optimal
+solution of a POP with multiple optimal solutions is described in
+Section 5. See also Section 5.1 of \cite{WAKI04}.
+The parameter {\sf param.perturbation} is used for this purpose.
+If $1.0$e-$10 < $ {\sf param.perturbation}, then
+% Skim 5/15/07
+the objective polynomial $f_0(x)$ is modified to  $f_0(\x) + \p^T \x$,
+where $0 \leq p_i \leq$ {\sf param.perturbation}. Otherwise,
+% Skim 5/15/07
+no perturbation is performed. The default value for {\sf param.perturbation} is $0.0$, {\it i.e.},
+no perturbation of the objective polynomial is desired.
+
+% Skim 5/15/07
+%When the SDP relaxation is too large to be solved,
+The parameter
+{\sf  param.reduceMomentMatSW} is intended for SDP relaxations too large to solve.
+%% Waki: 2007/12/03 PSDP --> SDP relaxation problem
+If {\sf  param.}{\sf reduceMomentMatSW} $=1$, then  sparsePOP.m
+eliminates redundant elements
+of $\AC_{\omega}^{C_{\ell}}$ $(\ell=1,2,\ldots,p)$
+in the %PSDP (\ref{PolySDP0})
+SDP relaxation problem
+using the method proposed in the paper \cite{KOJ03a}.
+See also \cite{WAKI04}.
+
+When the complementarity condition exists
+in the constraints of a POP, % to be solved,
+we can set {\sf param.}{\sf complementaritySW} $ = 1$.
+Suppose that $x_i x_j = 0$ appears as an equality constraint.
+%% Waki: 2007/12/03 PSDP --> SDP relaxation problem
+Then, any variable $y_{\alpha}$
+corresponding to a monomial $\x^{\salpha}$ such that $\alpha_i \geq 1$
+and $\alpha_j \geq 1$ is set to zero and eliminated from the %PSDP (\ref{PolySDP0})
+SDP relaxation problem.
+The default is  {\sf param.complementaritySW} $ = 0$.
+
+\subsection{Parameters for  SDP solvers}
+
+
+The function sparsePOP.m can provide three kinds of output for the SDP
+relaxation problem:
+information on the problem itself such as
+the size and the nonzero elements of the constraint matrix of the problem,
+data on an approximate optimal solution of the problem obtained by SeDuMi,
+and SDPA sparse format data of the problem.
+
+% Skim 5/15/07
+For infomation on the problem and data on the obtained optimal solution,
+SeDuMi should be called from the function
+SDPrelaxation.m or SDPrelaxationMex.m
+by setting {\sf param.SeDuMiSW}$=1$.
+Users can increase or decrease the desired accuracy of the optimal value and
+optimal solutions of an SDP relaxation problem by providing a smaller or larger
+value for {\sf param.SeDuMiEpsilon} that corresponds to the parameter
+ {\sf pars.eps} in SeDuMi.
+The parameter {\sf param.SeDuMiOutFile} is used in connection with
+the parameter {\sf param.SeDuMiSW}$=1$.
+The default value of {\sf param.SeDuMiOutFile}$=1$ is used to display the output from SeDuMi
+on the screen. If  the name of
+a file such as {\sf param.SeDuMiOutFile} $=$ 'SeDuMi.out' is assigned,
+the output from SeDuMi is written in the file. Information from SeDuMi is
+not displayed if  {\sf param.SeDuMiOutFile} $=0$.
+%display no information from SeDuMi.
+The value $0$ for {\sf param.SeDuMiSW} is for just printing  information
+on the problem  without solving  the SDP relaxation problem.
+The default value for  {\sf param.SeDuMiSW} is $1$.
+
+%% Waki 2007/12/06
+% Skim 12/22/07
+In SparsePOP,  SeDuMi \cite{STRUM99} is used for solving SDPs  because
+SeDuMi seems to have better numerical stability than other SDP solvers.  
+The use of   an iterative method (a variant of CG method) for solving ill-conditional linear systems in SeDuMi
+leads to more accurate optimal solutions than other SDP solvers. % for SDP problems with free variables.
+Also, SparsePOP can provide SDPA sparse format data for (\ref{POP0}) and a file that contains
+ necessary information to extract an approximated solution of (\ref{POP0}).
+
+% Skim 5/15/07
+SDPA sparse  format data of the SDP relaxation problem can be also obtained by
+assigning the name of a file for SDPA sparse format data to
+the parameter {\sf param.sdpaDataFile}, for example,  {\sf param.sdpaDataFile} $=$ 'test.dat-s'.
+With the SDPA sparse format input file 'test.dat-s',
+ the SDP relaxation problem can be solved later by using some software packages
+such as SDPA \cite{YAMASHITA03} and SDPT3 \cite{SDPT3}.
+%% Waki: 2007/12/03 [] --> ''
+The default is  {\sf param.sdpaDataFile} %$= [ \ ]$,
+$ = $ '', {\it i.e.}, no SDPA sparse format  data
+is created.
+
+%% Waki 2007/12/06
+% Skim 12/22/07
+ If  the name of a file for SDPA sparse format data is provided, SparsePOP also generates the file containing necessary information for extracting an approximated solution of (\ref{POP0}) from the SDP relaxation problem. %We can construct  an approximated solution of (\ref{POP0}) from the solution of the SDP relaxation %problem by %using information of this file.
+The file has the extension ``info" and  the structure of the file is as follows:
+\begin{table}[htdp]
+%\begin{center}
+\begin{tabular}{ccc}
+%$s$&  & & \\
+%$c$&  & & \\
+$k_1$&$a_1$&$b_1$\\
+$k_2$&$a_2$&$b_2$\\
+$\vdots$&&\\
+$k_j$&$a_j$&$b_j$\\
+$\vdots$&&\\
+$k_n$&$a_n$&$b_n$
+\end{tabular}
+%\end{center}
+\label{structureOfinfo}
+\end{table}%
+%% Waki 2007/12/06
+Here $k_1, \ldots, k_n$ are integers, and $a_1,\ldots, a_n$ and $b_1,\ldots, b_n$ are real numbers. After solving the SDP relaxation problem  in SDPA sparse format by an SDP solver,
+ if $k_j = -1$ for some $j$, set $x_{j}=b_j$. Otherwise, set $x_{j} = a_j y_{k_j}+b_j$, where $y_{k_j}$ is the $k_j$th element of the optimal solution of the primal of SDP relaxation problem in SDPA sparse 
+format. Then, $\x$ is an approximated solution for (\ref{POP0}) computed by SparsePOP.
+
+\subsection{Parameters for printing numerical results}
+
+% Skim 5/15/07
+Whether we have {\sf param.SeDuMiSW}$=1$ or $0$, we can store
+detailed information of the POP and its SDP relaxation in a file specified using
+ {\sf param.detailedInfFile}; for example,  {\sf param.detailedInfFile} $=$ 'details.out'.
+ %% Waki: 2007/12/03 [] --> ''
+The default is  {\sf param.detailedInfFile} $=$ '', {\it i.e.}, no detailed information is printed.
+
+{\sf param.printFileName} is the parameter for displaying the computational results, % of SeDuMi,
+such as {\sf param}, {\sf SDPinfo}, and {\sf POP}. That is, {\sf param.printFileName}$=1$
+is for displaying the results  on screen, and {\sf param.printFileName}$=0$ prevents them
+from displaying.
+In addition,
+the name of a file to {\sf param.printFileName}  can be  assigned to print the results in the file, such as
+{\sf param.printFileName}$=$'result.out'.
+
+% Skim 5/15/07
+The default value 2 for {\sf param.printLevel(1)} is used to display the computational result
+with an approximate optimal solution of the POP on screen. Setting {\sf param.printLevel(1)}$=1$
+ stops displaying an approximate optimal solution of the POP on the screen.
+%set {\sf param.printLevel(1)}$=1$.
+The value $0$ for {\sf param.printLevel(1)} displays no  computational result on the screen.
+The default value 2 for {\sf param.printLevel(2)} is used to write the computational result with
+an approximate optimal solution of the POP in a file whose name is defined by
+{\sf param.printFileName}. Setting {\sf param.printLevel(2)}$=1$ prevents
+printing an approximate optimal solution on the file.
+If {\sf param.printLevel(2)}$=0$, no information is written in the file.
+
+\subsection{Parameters to use Symbolic Math Toolbox and C++ subroutines}
+
+% Skim 5/15/07
+The parameter {\sf param.symbolicMath} indicates whether
+Symbolic Math Toolbox can be utilized for reading a POP in the GAMS scalar format, or not.
+Setting {\sf param.symbolicMath}$=1$ means that functions of Symbolic Math Toolbox can
+be used. See also the last paragraph of Section 3.1.  C++ subroutines can be used by
+setting the parameter {\sf param.mex}$=1$.

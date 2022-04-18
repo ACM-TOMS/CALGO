@@ -1,0 +1,990 @@
+\listfiles
+\documentclass[manuscript, screen]{acmart}
+%\setcitestyle{super,sort&compress}
+\citestyle{acmauthoryear}
+\usepackage{booktabs} % For formal tables
+\usepackage{tabto}
+\usepackage[ruled]{algorithm2e} % For algorithms
+
+\usepackage{amsmath}
+\usepackage{url}
+\usepackage{tabularx}
+
+% Metadata Information
+%\acmJournal{CIE}
+%\acmVolume{9}
+%\acmNumber{4}
+%\acmArticle{39}
+%\acmYear{2010}
+%\acmMonth{3}
+
+%\acmBadgeL[http://ctuning.org/ae/ppopp2016.html]{ae-logo}
+%\acmBadgeR[http://ctuning.org/ae/ppopp2016.html]{ae-logo}
+
+% Copyright
+%\setcopyright{acmcopyright}
+%\setcopyright{acmlicensed}
+%\setcopyright{rightsretained}
+%\setcopyright{usgov}
+%\setcopyright{usgovmixed}
+%\setcopyright{cagov}
+%\setcopyright{cagovmixed}
+
+% DOI
+\acmDOI{N/A}
+
+
+% Document starts
+\begin{document}
+% Title portion
+\title{FEA\_Mesher2D Documentation} 
+% \titlenote{This is a titlenote}
+ \subtitle{Finite Element Analysis Boundary Layer Triangular Mesh Generator}
+% \subtitlenote{Subtitle note}
+\author{Juliette Pardue}
+\authornote{The corresponding author}
+\orcid{0000-0003-3519-5146}
+\email{jpardue@cs.odu.edu}
+\author{Andrey Chernikov}
+\email{achernik@cs.odu.edu}
+\affiliation{%
+  \institution{Old Dominion University}
+  \department{Department of Computer Science}
+  \city{Norfolk}
+  \state{VA}
+  \postcode{23529}
+  \country{USA}
+}
+
+\begin{abstract}
+This work is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License. To view a copy of this license, visit \url{http://creativecommons.org/licenses/by-nc-sa/4.0/} or send a letter to Creative Commons, PO Box 1866, Mountain View, CA 94042, USA.
+\end{abstract}
+
+\thanks{Author's addresses: J. Pardue {and} A. Chernikov, Computer Science Department, Old Dominion University, Norfolk, VA 23529.}
+
+\maketitle
+
+\section{Introduction}
+FEA\_Mesher2D is a parallel triangular mesh generator that is capable of generating boundary layer meshes, suitable for finite element analysis simulations, and isotropic mesh regions. FEA\_Mesher2D generates a high-fidelity, anisotropic boundary layer mesh from a user-defined growth function, generates a globally Delaunay, graded, isotropic mesh region in parallel, resolves potential interpolation errors in the boundary layer caused by the local mesh density, resolves self intersections and multi-element intersections in the boundary layer, is a push-button mesh generator so no human interaction is required after startup, and is scalable and efficient.
+
+Information regarding the implementation of FEA\_Mesher2D is available in the paper titled, "An Efficient Parallel Anisotropic Delaunay Mesh Generator for Two-Dimensional Finite Element Analysis" by Juliette Pardue and Andrey Chernikov.
+
+\section{Installation}
+The following packages are required to be properly configured before building the application.
+\begin{itemize}
+\item C++11 compiler or later
+\item C11 compiler or later
+\item MPI Version 3 Implementation
+\item POSIX Threads Implementation
+\item CMake Version 3 or later
+\end{itemize}
+
+To compile the application, run the $compile.sh$ script\\
+The build script assumes that you have gcc and g++ set to the C and C++ compiler of your choice. The build script will find your system's MPI libraries if they are correctly installed and loaded. The application will be built in the FEA\_Mesher2D directory where the compilation script is. If you want to change the directory where the application is built, you can set the location in src/CMakeLists.txt as the $CMAKE\_RUNTIME\_OUTPUT\_DIRECTORY$
+
+\section{Usage}
+The class MeshGenerator is the object that the end user will interact with. An example of a sample calling procedure is shown in main.cpp. The functions the end user should be concerned with are:
+\begin{itemize}
+\item readInputModel(string filename)\\
+Reads the input model referenced by the path $filename$
+\item setBoundaryLayerGrowthFunction(double first\_thickness, double growth\_rate, int initial\_layers)\\
+Sets the growth function used to generate the anisotropic boundary layer.\\
+$first\_thickness$ is the distance from the geometry that the points in the first layer will be placed.\\
+$growth\_rate$ is the geometric rate at which each layer's thickness will grow from the previous layer. A value of 1 causes all layers to have the same thickness at $first\_thickness$. A value greater than 1 cause subsequent layers to grow in thickness, which is the intended usage.\\ 
+$initial\_layers$ is the number of anisotropic layers that will be originally grown from the geometry. Some triangles in some layers will be removed due to intersections or a poor quality shape. 
+\item setFarFieldDistance(double chord\_lengths)\\
+Sets the distance for the domain away from the geometry that will be meshed. A square is generated that encloses the domain and each side is $chord\_lengths$ in each direction $(+x, -x, +y, -y)$ from the center of the mesh. One chord length is the length of the input geometry in the x-direction. 
+\item useUniformTrianglesForInviscidRegion()\\
+This is an optional command. By default, the inviscid region uses smaller triangles near the geometry and grades to larger triangles farther away from the geometry. This function is called if you want the same sized triangles to be used for the entirety of the inviscid region.
+\item meshDomain()\\
+This is where the action happens. This function creates all the mesh vertices and mesh triangles using the number of processes launched by MPI.
+\item collectFinalMesh()\\
+This function collects all of the mesh entities on the root process so that the mesh can be output.
+\end{itemize}
+
+Four output formats are available, and the user may implement their own output format by adding and implementing a function in the class MeshGenerator. The "output" folder is where mesh files will be written to. The four provided output formats are:
+\begin{itemize}
+\item outputTecplot() - used for Tecplot
+\item outputShowMe() - used for Shewchuk's "Show Me" application
+\item outputFUN3D() - .msh file used for the flow solver FUN3D
+\item outputVTK() - .vtk format, can be used with ParaView
+\end{itemize}
+
+\subsection{Input Geometry File Format}
+The following describes how a user should format their input files. 
+\begin{itemize}
+\item First line: $number\_of\_points, number\_of\_elements$\\
+The number of elements is the number of polygons that are in the input geometry. The points should be ordered counter-clockwise for each element.
+\item Next $number\_of\_points$ lines: $id, x_coordinate, y_coordinate, element_id$\\
+$id$'s should start at zero and increment. $element_id$ is the corresponding element that the point is part of. The first element should be 0 and all points that are part of element 0 should appear before any points of element 1.
+\item Next line: $number\_of\_edges$\\
+This should be the same as $number\_of\_points$ since each polygon should be water tight and simple, meaning each point is incident upon two edges.
+\item Next $number\_of\_edges$ lines: $id, point\_a\_id, point\_b\_id$\\
+$id$'s should start at zero and increment. 
+\item Next line: $number\_of\_holes$\\
+This should be the same as the $number\_of\_elements$. One hole should be defined for each element. A hole is a point inside the element's polygon, not on an edge of the element's polygon.
+\item Next $number\_of\_holes$ lines: $id, x_coordinate, y_coordinate$\\
+$id$'s should start at zero and increment.
+\end{itemize}
+
+Three properly formatted input files are provided in the geometry folder with this package:
+\begin{itemize}
+\item naca0012.poly - Standard benchmark airfoil
+\item wright1903.poly - Wright Brother's 1903 airfoil used for the first flight
+\item airfoil30p30n.poly - Complex airfoil with three elements
+\end{itemize}
+
+\begin{table}
+ \begin{tabularx}{\textwidth}{|| X | l | l | l | l | l ||} 
+ \hline
+ File & $first\_thickness$ & $growth\_rate$ & $initial\_layers$ & $chord\_lengths$ & Uniform Inviscid Region \\ [0.5ex] 
+ \hline\hline
+\hline 
+naca0012.poly & 0.0001 & 1.15 & 30 & 2 & Yes \\ [1ex] 
+\hline
+wright1903.poly & 0.00005 & 1.10 & 50 & 30 & No \\ [1ex] 
+\hline
+airfoil30p30n.poly & 0.000075 & 1.10 & 30 & 10 & No \\ [1ex] 
+\hline
+\end{tabularx}
+\caption{Suggested Input Parameters}
+\label{input_suggestions}
+\end{table}
+
+The output meshes in the VTK format of the suggested input parameters of the three provided geometries are located in the output folder.
+
+\section{FEA\_Mesher2D Objects}
+This section details the different classes, structs, and namespaces used for data structures in the application.
+
+\subsection{ADT2D}
+The ADT2D class is used to efficiently determine if there are intersections while generating the boundary layer. Each ray segment or border segment has their axis-aligned bounding box projected to a 4-dimensional halfspace. The 4D points are stored in an alternating digital tree (ADT) and recursive searching is used to check for overlaps in the axis-aligned bounding boxes, or extent boxes.
+
+Class members:
+\begin{itemize}
+\item ADT2DElement* root - Root element of the tree, default initialized to nullptr
+\end{itemize}
+
+Public member functions:
+\begin{itemize}
+\item ADT2D() - Sets $root$ to $nullptr$
+
+\item ADT2D(ADT2D\&\& other)
+
+\item \textasciitilde{}ADT2D() - Cascades deletion of all $ADT2DElement$s in the tree by starting with $root$
+%
+
+\item void removeFirst(int id, const double* extent) - Removes the first occurrence of a 4D point in the tree that overlaps with a provided extent box\\
+Input:\\
+$id$ - the identifier of the 4D point to remove\\
+$extent$ - starting memory address for the testing extent box
+
+\item std::vector<int> retrieve(const double* extent) const - Retrieves the 4D points that overlap with a provided extent box\\
+Input:\\
+$extent$ - starting memory address for the testing extent box\\
+Output:\\
+vector of ids of the 4D points that overlap
+
+\item void store(int id, const double* x) - Stores an extent box as a 4D point\\
+Input:\\
+$id$ - non-unique identifier\\
+$x$ - starting memory address for the 4D point
+\end{itemize}
+
+\subsection{ADT2DElement}
+
+The ADT2DElement class is used to store individual nodes of the alternating digital tree.
+
+Class members:
+\begin{itemize}
+\item int $id$ - Non-unique identifier
+\item ADT2DElement* $left\_child$ - Initialized to $nullptr$
+\item int $level$ - Used to determine which child to pick
+\item std::array<double, 4> $object$ - The 4D point that the user provided
+\item ADT2DElement* $right\_child$ - Initialized to $nullptr$
+\item std::array<double, 4> $x\_max$ - The upper bound of this element's domain
+\item std::array<double, 4> $x\_min$ - The lower bound of this element's domain
+\end{itemize}
+
+Public member functions:
+\begin{itemize}
+\item ADT2DElement(int adt\_level, const std::array<double, 4>\& x\_minimum, const std::array<double, 4>\& x\_maximum, int element\_id, const double* object\_coordinates)
+
+\item \textasciitilde{}ADT2DElement()
+%
+
+\item bool containsHyperRectangle(const std::array<double, 4>\& a, const std::array<double, 4>\& b) const - Returns true if the hyper-rectangle is inside this element's domain\\
+Input:\\
+$a$ - the lower point of the hyper-rectangle\\
+$b$ - the upper point of the hyper-rectangle
+
+\item bool hyperRectangleContainsObject(const std::array<double, 4>\& a, const std::array<double, 4>\& b) const - Returns true if the user-provided 4D point lies inside the hyper-rectangle
+Input:\\
+$a$ - the lower point of the hyper-rectangle\\
+$b$ - the upper point of the hyper-rectangle
+\end{itemize}
+
+\subsection{ADT2DExtent}
+The ADT2DExtent class is used so that the user can interact with the ADT without having to worry about the coordinate transformations.
+
+Class members:
+\begin{itemize}
+\item ADT2D $adt$ - The underlying ADT used to store the elements
+\item ADTSpaceTransformer $space\_transformer$ - Performs the coordinate transformations to unit space or real space
+\end{itemize}
+
+Public member functions:
+\begin{itemize}
+\item ADT2DExtent(const Extent\& domain) - Input:\\
+$domain$ - the 2D bounding box that will be projected to a 4D point and used as the root of the ADT
+
+\item \textasciitilde{}ADT2DExtent()
+%
+
+\item void removeFirst(int id, const Extent\& extent) - Removes the first occurrence of a 4D point in the ADT that overlaps with a provided bounding box\\
+Input:\\
+$id$ - the identifier of the 4D point to remove\\
+$extent$ - the 2D bounding box that will be projected to a 4D point
+
+\item std::vector<int> retrieve(const Extent\& domain) const - Searches the ADT for elements that contain the provided bounding box\\
+Input:\\
+$domain$ - the 2D bounding box that will be projected to a 4D point and checked for overlaps with other elements\\
+Output:\\
+vector of ids of the 4D points that overlap
+
+\item void store(int id, const Extent\& extent) - Stores a 4D point in unit space in the ADT\\
+Input:\\
+$id$ - the non-unique identifier for the new element\\
+$extent$ - the 2D bounding box that will be projected to a 4D point
+
+\end{itemize}
+
+\subsection{ADT2DSpaceTransformer}
+The ADTSpaceTransformer class is used as a helper class with the $ADT2D$ class. This class provides the coordinate transformations from unit space to real space and real space to unit space
+
+Class members:
+\begin{itemize}
+\item Extent $extent$ - The real domain
+
+\item double $over\_scale$ - Used to convert from real space to unit space\\
+Equal to $1/scale$
+
+\item double $scale$ - Used to convert from unit space to real space\\
+The length of the longest side of the domain
+\end{itemize}
+
+Public member functions:
+\begin{itemize}
+\item ADTSpaceTransformer(const Extent\& domain) - Input:\\
+$domain$ - the 2D bounding box that will represent the real domain
+
+\item \textasciitilde{}ADTSpaceTransformer()
+%
+
+\item inline const Extent\& getDomain() const - Returns the domain in real space
+
+\item inline std::array<double, 2> toRealSpace(const std::array<double, 2>\& unit\_point) const
+
+\item inline std::array<double, 2> toUnitSpace(const std::array<double, 2>\& real\_point) const
+\end{itemize}
+
+\subsection{Application}
+
+The Application namespace is used as set of helper functions to perform floating-point comparisons and basic mathematical point and Euclidean vector operations.\\
+std::array<double, 2> is used to represent point and vector types, $point\_t$ and $vector\_t$, respectively.
+ 
+Namespace members:
+\begin{itemize}
+\item static const double $precision$ - Constant used as the floating-point precision for floating-point comparisons
+\item static const double $degree_radian_ratio$ - Constant used to convert between radians and degrees
+\end{itemize}
+
+Namespace functions:
+\begin{itemize}
+\item inline double angleBetweenEdgeAndAxis(const point\_t\& a, const point\_t\& b, bool axis) - Computes the angle between edge $ab$ and the x-axis or y-axis
+
+\item inline double angleBetweenVectors(const vector\_t\& u, const vector\_t\& v)
+
+\item inline bool areEqual(const double\& a, const double\& b) - Returns true if the difference is less than $precision$
+
+\item inline bool areEqual(const point\_t\& a, const point\_t\& b)
+
+\item inline double calculateDistance(const point\_t\& a, const point\_t\& b)
+
+\item inline double calculateMagnitude(const vector\_t\& v)
+
+\item inline std::array<point\_t, 2> computeBoundingBox(std::vector<point\_t>::iterator first, std::vector<point\_t>::iterator last)
+
+\item std::array<point\_t, 2> computeBoundingBox(std::vector<Vertex>::iterator first, std::vector<Vertex>::iterator last)
+
+\item inline double crossProduct(const vector\_t\& a, const vector\_t\& b)
+
+\item inline double degreesToRadians(double angle)
+
+\item inline double dotProduct(const vector\_t\& a, const vector\_t\& b)
+
+\item inline double elapsedMsecs(const timeval\& start, const timeval\& stop)
+
+\item bool isClockwise(std::vector<Vertex>::iterator first, std::vector<Vertex>::iterator last)
+
+\item inline bool isZero(const double\& value) - Returns true if value is less than $precision$
+
+\item inline point\_t midPoint(const point\_t\& a, const point\_t\& b) 
+
+\item inline bool pointRightOfEdge(const point\_t\& a, const point\_t\& b, const point\_t\& t)
+
+\item inline double radiansToDegrees(double radians)
+
+\item inline int relativeQuadrantToControlPoint(const point\_t\& p, const point\_t\& control) - The $control$ point is treated as the origin\\
+The top-right quadrant is 0, the top-left quadrant is 1, the bottom-left quadrant is 2, and the bottom-right quadrant is 3
+
+\item inline double triangleArea(const point\_t\& a, const point\_t\& b, const point\_t\& c) - The triangle defined by $abc$ should be wound counter-clockwise for a positive area
+
+\item inline double vectorDifference(const vector\_t\& a, const vector\_t\& b)
+
+\end{itemize}
+
+\subsection{BoundaryLayerMesh}
+
+The BoundaryLayerMesh class is responsible for generating the high-fidelity anisotropic boundary layer points, edges, and initial subdomains that will be triangulated. This class checks for intersections in the boundary layer and resolves them, smooths poor quality ray regions, adds points to ensure a smooth transition to the inviscid region, and removes points that would result in poor quality triangles.
+
+Class members:
+\begin{itemize}
+\item std::vector<long> $boundary\_layer\_element\_start$ - The id of the first vertex of each element that is not on the model's surface
+\item double $chord\_length$ - The distance along the x-axis of the input model
+\item double $cusp\_angle\_tolerance$ - Ray angles larger than this value, but less than $trailing\_edge\_angle\_tolerance$ will be marked as a cusp
+\item std::vector<int> $cusps$
+\item std::vector<Edge> $edges$
+\item double $growth\_rate$
+\item std::vector<double> $holes$
+\item std::vector<bl\_subdomain\_t> $initial\_subdomains$
+\item InviscidRegionMesh* $inviscid\_region$ - The neighboring inviscid region
+\item std::vector<std::tuple<int, int, double>> $large\_angles$
+\item double $last\_thickness$ - The thickness of the final layer of the boundary layer
+\item std::vector<double> $layer\_offsets$ - The thicknesses of each layer
+\item std::vector<Vertex> $local\_vertices$ - A process' subset of the boundary layer vertices that it created
+\item long $max\_boundary\_layer\_vertex\_id$
+\item std::vector<AABB> $max\_element\_extent\_boxes$ - The largest extent box of each element
+\item AABB $max\_extent\_box$ - The extent box that contains the entire boundary layer
+\item int $max\_layers$ - The maximum number of layers that can exist in the boundary layer. This value is used for gradation control and is set to $1.25 * num\_layers$
+\item std::array<double, 2> $mesh\_center$
+\item MeshGenerator\& $mesher$ - The owning MeshGenerator
+\item int $next\_edge\_id$
+\item int $next\_recv\_process$ - Used by the root process to distribute initial subdomains
+\item long $next\_vertex\_id$
+\item int $num\_elements$
+\item int $num\_enclosing\_edges$
+\item int $num\_layers$
+\item int $num\_model\_edges$
+\item int $num\_model\_vertices$
+\item double $ray\_angle\_tolerance$ - If the angle between two rays is greater than this value, then those rays will be added to $large\_angles$
+\item std::vector<int> $ray\_element\_start$ - The index of the first ray of each element
+\item std::vector<Ray> $rays$
+\item std::vector<int> $sharp\_trailing\_edges$
+\item std::vector<int> $surface\_element\_start$ - The id of the first vertex of each element
+\item int $total\_initial\_subdomains$
+\item double $trailing\_edge\_angle\_tolerance$ - Ray angles larger than this value will be marked as being a sharp trailing edge
+\item std::vector<std::vector<Vertex*>> $transition\_vertices$ - The vertices that are on the enclosing border of the boundary layer
+\item std::vector<Vertex> $vertices$
+\end{itemize}
+
+Public member functions:
+\begin{itemize}
+\item BoundaryLayerMesh(MeshGenerator\& owning\_mesher)
+
+\item \textasciitilde{}BoundaryLayerMesh()
+%
+
+\item void createBoundaryLayerSubdomains() - Creates the initial boundary layer subdomains
+
+\item void decomposeInitialSubdomains() - Decomposes the initial subdomains of the boundary layer until each process has a subdomain or a subdomain cannot be further decomposed
+
+\item void initializeModelSurface(std::string filename) - Reads the input model referenced by the path filename
+
+\item void insertBoundaryLayerPoints()
+
+\item void receiveInitialSubdomains()
+
+\item void setGrowthFunction(double first\_layer\_thickness, double layer\_growth\_rate, int initial\_layers) - Sets the growth function used to generate the anisotropic triangles\\
+Input:\\
+$first\_layer\_thickness$ - the distance from the geometry that the points in the first layer will be placed\\
+$layer\_growth\_rate$ - the geometric rate at which each layer's thickness will grow from the previous layer. A value of 1 causes all layers to have the same thickness as $first\_layer\_thickness$. A value greater than 1 causes subsequent layers to grow in thickness\\
+$initial\_layers$ - the number of anisotropic layers that will be originally grown from the geometry. Some triangles in some layers will be removed due to intersections or a poor quality shape
+\end{itemize}
+
+\subsection{BoundaryLayerSubdomain}
+The BoundaryLayerSubdomain class is responsible for performing the paraboloid and lower convex hull decomposition steps in order to split a BoundaryLayerSubdomain into two new subdomains. The BoundaryLayerSubdomain class is also responsible for calling Triangle to triangulate its vertices.
+
+Class members:
+\begin{itemize}
+\item bool $axis$ - The coordinate-axis orthogonal to the cut axis
+\item int $decomposition\_level$ - Represents how many times this subdomain has been decomposed
+\item static int $decomposition\_threshold$ - The maximum number of times a subdomain can be decomposed
+\item std::vector<std::array<long, 2>> $edges$
+\item std::vector<Vertex> $lower\_convex\_hull$ - The vertices that lie on the lower convex hull of the flattened paraboloid in the vertical plane
+\item static long $max\_vertex\_id$ - The maximum id for all of the boundary layer vertices
+\item Vertex* $median\_vertex$ - The median vertex along the coordinate-axis specified by $axis$
+\item std::shared\_ptr<BoundaryLayerSubdomain> $sub\_subdomain$ - The other subdomain that is formed by a decomposition step
+\item std::array<std::vector<Vertex>*, 2> $vertices$ - The memory addresses of $x\_vertices$ and $y\_vertices$
+\item std::vector<Vertex> $x\_vertices$ - The vertices sorted lexicographically by their x-coordinates
+\item std::vector<Vertex> $y\_vertices$ - The vertices sorted lexicographically by their y-coordinates
+\end{itemize}
+
+Public member functions:
+\begin{itemize}
+\item BoundaryLayerSubdomain()
+
+\item \textasciitilde{}BoundaryLayerSubdomain()
+%
+
+\item Decomposition decompose() - Decomposes this subdomain into two new subdomains
+
+\item void mesh(BoundaryLayerMesh\& owning\_mesh) - Triangulates this subdomain and returns the output to $owning\_mesh$
+
+\item void recvSubdomain(int source)
+
+\item void sendSubdomain(int destination)
+\end{itemize}
+
+\subsection{Edge}
+The Edge class is responsible for storing information about mesh edges.
+
+Class members:
+\begin{itemize}
+\item int $id$ - Unique identifier
+\item int $type$ - Classification\\
+0 for constrained\\
+1 for geometry\\
+2 for farfield boundary\\
+3 for boundary layer outer border
+\item std::array<long, 2> $vertices$ - Identifiers of its endpoints
+\end{itemize}
+
+Public member functions:
+\begin{itemize}
+\item Edge() - Default constructor\\
+Sets everything to -1
+
+\item Edge(int edge\_id, const Vertex\& vertex\_a, const Vertex\& vertex\_b, int edge\_type) - Input:\\
+$edge\_id$ - unique identifier\\
+$vertex\_a$ - reference to starting endpoint\\
+$vertex\_b$ - reference to ending endpoint\\
+$edge\_type$ - classification of the type of edge
+
+\item Edge(int edge\_id, long vertex\_a, long vertex\_b, int edge\_type) - Input\\
+$edge\_id$ - unique identifier\\
+$vertex\_a$ - id of starting endpoint\\
+$vertex\_b$ - id of ending endpoint\\
+$edge\_type$ - classification of the type of edge
+
+\item \textasciitilde{}Edge()
+%
+
+\item static MPI\_Datatype createMPIDatatype() - Defines the memory layout used for MPI communications
+
+\item int getId() const
+
+\item int getType() const
+
+\item long getVertexId(int index) const
+
+\item std::array<long, 2> getVertices() const
+
+\item void print() const
+
+\item void setType(int edge\_type)
+
+\item void setVertices(Vertex\& vertex\_a, Vertex\& vertex\_b) - Sets the endpoint ids\\
+Input:\\
+$vertex\_a$ - reference to starting endpoint\\
+$vertex\_b$ - reference to ending endpoint
+
+\item bool shouldBeInFinalMesh() const - Returns true if the edge is part of the geometry or farfield boundary\\
+Used to apply boundary conditions
+\end{itemize}
+
+\subsection{GeoPrimitives}
+This set of classes are used as helper objects for performing the boundary layer intersections tests.\\
+
+The AABB class is used to prune the search space of candidate rays when checking for boundary layer intersections. This class is also used for the sizing function for the inviscid region triangles.
+
+Class members:
+\begin{itemize}
+\item std::array<double, 2> $high$ - The upper point of the bounding box
+\item std::array<double, 2> $low$ - The lower point of the bounding box
+\end{itemize}
+
+Public member functions:
+\begin{itemize}
+\item AABB()
+
+\item AABB(std::array<double, 2> lo, std::array<double, 2> hi)
+
+\item AABB(std::array<std::array<double, 2>, 2> bounding\_box)
+
+\item \textasciitilde{}AABB()
+%
+\item bool containsPortionOf(Segment s) const
+
+\item Extent getExtent() const
+
+\item std::array<double, 2> getHighPoint() const
+
+\item std::array<double, 2> getLowPoint() const
+
+\item void inflateDomain(double inflation) - Expands the domain by $inflation$ units in each direction $(+x, -x, +y, -y)$
+
+\item bool intersects(const AABB\& other) const
+
+\item void setDomain(std::array<std::array<double, 2>, 2> bounding\_box)
+\end{itemize}
+
+The Extent class is used with the ADT when performing the boundary layer intersection checks.
+
+Class members:
+\begin{itemize}
+\item std::array<double, 2> $hi$ - The upper point of the extent box
+\item std::array<double, 2> $lo$ - The lower point of the extent box
+\end{itemize}
+
+Public member functions:
+\begin{itemize}
+\item Extent()
+
+\item Extent(const std::array<double, 2>\& low, const std::array<double, 2>\& high)
+
+\item \textasciitilde{}Extent()
+%
+
+\item bool contains(const Extent\& extent) const
+\end{itemize}
+
+The Segment class is used for the boundary layer intersection checks.
+
+Class members:
+\begin{itemize}
+\item std::array<double, 2> $a$ - The starting endpoint
+\item std::array<double, 2> $b$ - The ending endpoint
+\end{itemize}
+
+Public member functions:
+\begin{itemize}
+\item Segment()
+
+\item Segment(const Segment\& s)
+
+\item Segment(std::array<double, 2> p1, std::array<double, 2> p2)
+
+\item \textasciitilde{}Segment()
+%
+
+\item bool doesIntersect(const Segment\& s) const
+
+\item Extent getExtent() const
+\item std::array<double, 2> getPointA() const
+\item std::array<double, 2> getPointB() const
+
+\item std::vector<std::array<double, 2>> intersectsAt(const Segment\& s) const
+
+\item Orientation orientation2D(const std::array<double, 2>\& t) const - Determines if a test point lies on, left, or right of the directed line $ab$
+
+\item void setA(std::array<double, 2> p)
+\item void setB(std::array<double, 2> p)
+
+\end{itemize}
+\subsection{InviscidRegionMesh}
+
+The InviscidRegionMesh class is responsible for creating the isotropic nearbody and inviscid subdomains. It also contains tunable parameters to control the function that determines the desired triangle size for a point in space. These parameters are $fast\_growth$ which controls the distance where the size of triangles will grow at a more rapid rate and $uniform$ which uses the size of the triangles in the nearbody region for the entirety of the inviscid region. The last parameter is $decoupling\_work\_threshold$. If you want smaller subdomains during the initial decoupling procedure, then decrease this number. The smaller the subdomains, the more subdomains there are, and the more concurrency that can be exploited.
+
+Class members:
+\begin{itemize}
+\item std::vector<std::array<double, 2>> $aabb\_centers$ - The center points of each input geometry element's bounding box
+
+\item const int $decoupling\_work\_threshold$ - The largest an inviscid subdomain can be in terms of estimated number of triangles
+
+\item double $farfield$ - The distance in chord lengths for the domain away from the geometry that will be meshed
+
+\item std::vector<Edge> $farfield\_edges$ - The edges that make up the outer border of the domain\\
+Used to apply boundary conditions for the flow solver
+
+\item double $fast\_growth$ - Number of chord lengths where triangles past this distance will grow at a faster rate
+    
+\item std::priority\_queue<std::shared\_ptr<InviscidRegionSubdomain>, std::vector<std::shared\_ptr<InviscidRegionSubdomain>>, std::less<std::shared\_ptr<InviscidRegionSubdomain>>> $initial\_subdomains$ - Stores the subdomain with the largest estimated number of triangles on top\\
+Yes std::less should be used for this because std::greater would put the smallest estimated subdomain on top
+
+\item double $isotropic\_area$ - The average area of triangles in the nearbody region.\\
+Used as the base size to grow from when creating a graded inviscid region, where triangles are larger the further they are away from the boundary layer
+
+\item MeshGenerator\& $mesher$ - The MeshGenerator that this inviscid region mesh belongs to
+
+\item std::array<std::array<double, 2>, 4> $nearbody\_box$ - The bounding box of the nearbody region
+
+\item int $next\_edge\_id$
+
+\item long $next\_vertex\_id$
+
+\item std::vector<double> $triangle\_aabb\_centers$ - Used to call Triangle, contains the same data as $aabb\_centers$
+
+\item bool $uniform$ - True to generate uniform triangles with size $isotropic\_area$ in the entirety of the inviscid region
+\end{itemize}
+
+Public member functions:
+\begin{itemize}
+\item InviscidRegionMesh(MeshGenerator\& owning\_mesher)
+
+\item \textasciitilde{}InviscidRegionMesh()
+%
+
+\item void createInitialSubdomains() - Creates the initial nearbody subdomain and four inviscid subdomains that extent all the way to the farfield
+
+\item void decoupleInitialSubdomains() - Decouples all subdomains larger than $decoupling\_work\_threshold$\\
+Processes will send and receive subdomains from each other until everyone has some subdomains
+
+\item void receiveInitialSubdomains() - Called by all other processes except the root
+
+\item void setFarFieldDistance(double chord\_lengths) - A square is generated that encloses the domain and each side is $chord\_lengths$ in each direction $(+x, -x, +y, -y)$ from the center of the mesh. One chord length is the length of the input geometry in the x-direction. 
+
+\item void setNearBodyBoundingBox(std::vector<std::array<std::array<double, 2>, 2>>\& extents) - 
+
+\item void synchronizeInviscidParameters() - Called by all processes so everyone has the same values of the parameters used for the triangle sizing functions
+
+\item void useUniformTriangles()
+\end{itemize}
+
+\subsection{InviscidRegionSubdomain}
+
+Class members:
+\begin{itemize}
+\item int $cost$ - Estimated number of triangles that will be in this subdomain
+\item std::vector<std::array<long, 2>> $edges$
+\item bool $nearboy$ - True if the subdomain contains a portion of the input geometry
+\item std::vector<Vertex> $vertices$ - Wound counter-clockwise
+\end{itemize}
+
+Public member functions:
+\begin{itemize}
+\item InviscidRegionSubdomain() - Sets $nearbody$ to false
+
+\item InviscidRegionSubdomain(bool nearbody\_subdomain)
+
+\item \textasciitilde{}InviscidRegionSubdomain()
+%
+
+\item void createBorder() - Creates the counter-clockwise edges
+
+\item MPI\_Datatype createMPIDataType() - Defines the memory layout used for MPI communications
+
+\item std::array<double, 2> getCenterPoint() const - Gets the center point of this subdomain's bounding box
+
+\item std::array<std::array<double, 2>, 2> getExtentBox() const - Computes the bounding box, used to compute the estimated number of triangles in the subdomain and to determine the center point
+
+\item void mesh(InviscidRegionMesh\& owning\_mesh) - Refines this subdomain and passes the resulting mesh back to $owning\_mesh$\\
+This subdomain can be destroyed after this function returns
+
+\item void recvSubdomain(int source)
+
+\item void sendSubdomain(int destination)
+
+\end{itemize}
+
+\subsection{MeshGenerator}
+
+Class members:
+\begin{itemize}
+\item BoundaryLayerMesh $boundary\_layer$
+
+\item std::vector<std::shared\_ptr<BoundaryLayerSubdomain>> $boundary\_layer\_subdomains$
+
+\item int $final\_edges$ - Number of edges on the input geometry plus the edges on the farfield\\
+Used to apply boundary conditions
+
+\item std::vector<std::array<long, 3>> $final\_triangles$ - The endpoint vertex ids of the resulting mesh triangles
+
+\item std::vector<std::array<double, 2>> $final\_vertices$ - The x and y coordinates of the resulting mesh vertices
+
+\item std::unordered\_map<long, long> $global\_to\_final$ - Maps the non-sequential global id of a mesh vertex to its id in the resulting mesh
+
+\item std::string $input\_name$ - The name of the input file\\
+Used to name the output files
+
+\item InviscidRegionMesh $inviscid\_region$
+
+\item std::priority\_queue<std::shared\_ptr<InviscidRegionSubdomain>, std::vector<std::shared\_ptr<InviscidRegionSubdomain>>, std::less<std::shared\_ptr<InviscidRegionSubdomain>>> $inviscid\_subdomains$ - Holds all of the inviscid subdomains for a process\\
+std::less makes it so the subdomain at the top of the queue is the most expensive
+
+\item MeshingManager $manager$
+
+\item bool $meshing$ - Flag that denotes if the worker thread is currently triangulating or refining a subdomain
+
+\item long $next\_final\_id$ - Unique sequential identifier to assign to the next final vertex that will be registered
+
+\item std::queue<TriangleData> $outbox$ - Holds the triangulated or refined subdomain meshes
+
+\item const int $processes$ - Number of distributed MeshGenerators working
+
+\item const int $rank$ - Unique id for this process
+
+\item pthread\_mutex\_t $subdomain\_mutex$ - Used to synchronize access to $inviscid\_subdomains$ between the manager and worker thread
+
+\item std::vector<long> $subdomain\_num\_triangles$ - Number of triangles in each resulting subdomain mesh
+\end{itemize}
+
+Public member functions:
+\begin{itemize}
+\item MeshGenerator()
+
+\item \textasciitilde{}MeshGenerator()
+%
+
+\item void collectFinalMesh() - Collects all of the mesh entities on the root process so that the mesh can be output
+
+\item void meshDomain() - This function creates all the mesh vertices and mesh triangles using the number of processes launched by MPI
+
+\item void outputFUN3D() - Outputs the final mesh as a .msh file used for the flow solver FUN3D
+\item void outputShowMe() - Outputs files for Shewchuk's "Show Me" application
+\item void outputTecplot() - Outputs the final mesh as a Tecplot file
+\item void outputVTK() - Outputs the final mesh in the .vtk format, suitable for ParaView
+
+\item void readInputModel(std::string filename) - Reads the input model referenced by the path $filename$
+
+\item void setBoundaryLayerGrowthFunction(double first\_thickness, double growth\_rate, int initial\_layers) - Sets the growth function used to generate the anisotropic boundary layer\\
+Input:\\
+$first\_thickness$ - the distance from the geometry that the points in the first layer will be placed\\
+$growth\_rate$ - the geometric rate at which each layer's thickness will grow from the previous layer. A value of 1 causes all layers to have the same thickness as $first\_thickness$. A value greater than 1 causes subsequent layers to grow in thickness, which is the intended usage\\ 
+$initial\_layers$ - the number of anisotropic layers that will be originally grown from the geometry. Some triangles in some layers will be removed due to intersections or a poor quality shape
+
+\item void setFarFieldDistance(double chord\_lengths) - Sets the distance for the domain away from the geometry that will be meshed\\
+Input:\\
+$chord\_lengths$ - the distance in each direction $(+x, -x, +y, -y)$ from the center of the mesh. One chord length is the length of the input geometry in the x-direction
+
+\item void useUniformTrianglesForInviscidRegion() - Uses the same sized triangles to mesh the entirety of the inviscid region\\
+By default, the inviscid region uses smaller triangles near the geometry and grades to larger triangles farther away from the geometry
+
+
+\end{itemize}
+
+\subsection{MeshingManager}
+The MeshingManager class is responsible for managing the progress of the MeshGenerator it is associated with. The MeshingManager will periodically update MeshGenerator's $work\_units$ estimate, check for messages, send and request work to and from other processes for load balancing. The MeshingManager of the root process keeps track of all of the finished processes and notifies everyone once all processes are finished meshing their subdomains. There are some tunable parameters in this class for the load balancing. You may need to tweak $low\_work\_threshold$ and/or $min\_work\_threshold$ for how aggressive you want the load balancing.
+
+Class members:
+\begin{itemize}
+\item bool $all\_finished$
+\item bool $finished$ - True if the MeshGenerator has no subdomains remaining, and all other processes have a low amount of work
+\item int $finished\_processes$ - The root keeps track of this value
+\item int $low\_work\_threshold$ - A process will request work if their $work\_units$ fall below this value
+\item MeshGenerator\& $mesher$ - The mesher that will be managed
+\item int $min\_work\_threshold$ - The minimum value that $low\_work\_threshold$ can reach
+\item std::vector<std::array<int, 2>> $work\_loads$ - Contains candidate processes to request work from if this process' $work\_units$ falls below $low\_work\_threshold$
+\item std::atomic\_int $work\_units$ - The current work load estimate for the number of remaining subdomains\\
+Concurrent accesses are well-defined
+\item int* $work\_units\_memory$ - The underlying storage used by $work\_units\_window$
+\item MPI\_Win $work\_units\_window$ - The MPI object that facilitates RMA operations for checking how much work each process has
+
+\end{itemize}
+
+Public member functions:
+\begin{itemize}
+\item MeshingManager(MeshGenerator\& owning\_mesher) - Input:\\
+$owning\_mesher$ - The MeshGenerator that this object will manage
+
+\item \textasciitilde{}MeshingManager()
+%
+
+\item void manageMeshingProgress() - The main loop to manage progress once the MeshGenerator starts meshing its subdomains
+\end{itemize}
+
+\subsection{MPICommunications}
+The MPICommunications namespace provides a templated wrapper for many of the MPI operations used in FEA\_Mesher2D.
+
+Namespace functions:
+\begin{itemize}
+\item void initialize() - Wrapper for MPI\_Init
+\item void finalize() - Wrapper for MPI\_Finalize
+\item int myRank()
+\item int numberOfProcesses()
+\item MPI\_Datatype getType(int value) - Returns MPI\_INT
+\item MPI\_Datatype getType(size\_t value) - Returns MPI\_LONG
+\item MPI\_Datatype getType(long value) - Returns MPI\_LONG
+\item MPI\_Datatype getType(double value) - Returns MPI\_DOUBLE
+\end{itemize}
+
+Templated namespace functions:\\
+All of these functions are wrappers for their corresponding MPI call and are templated by template<typename T>
+\begin{itemize}
+\item void Send(std::vector<T>\& send\_buffer, int size, int destination
+
+\item void Send(MPI\_Datatype datatype, T\& value, int destination)
+
+\item void Recv(std::vector<T>\& recv\_buffer, int size, int source)
+
+\item void Recv(MPI\_Datatype datatype, T\& value, int source)
+
+\item void Scatter(std::vector<T>\& send\_buffer, T\& recv\_value, int root)
+
+\item void Scatterv(std::vector<T>\& send\_buffer, std::vector<T>\& recv\_buffer, int root)
+
+\item void Gather(T value, std::vector<T>\& recv\_buffer, int root)
+
+\item void Gatherv(MPI\_Datatype datatype, const std::vector<T>\& send\_buffer, std::vector<T>\& recv\_buffer, int root)
+
+\item void Gatherv(const std::vector<T>\& send\_buffer, std::vector<T>\& recv\_buffer, int root)
+
+\item void Broadcast(T\& value, int root)
+
+\item void Broadcast(std::vector<T>\& buffer, int buffer\_size, int root)
+
+\item void Broadcast(std::vector<T>\& buffer, int root)
+\end{itemize}
+
+\subsection{Ray}
+The Ray class is responsible for storing information about the normals emitting from the input geometry. Rays are used to generate the anisotropic boundary layer and are smoothed, clipped, and grown to create valid and high-fidelity triangles.
+
+Class members:
+\begin{itemize}
+\item bool can\_grade - Flag to denote if this ray can have more points past $last\_layer$
+\item int element - The input geometry element that this ray is incident upon
+\item int endpoint\_id - The mesh id for the surface vertex that this ray is emitted from
+\item int last\_layer - The index of the last layer, essentially, the number of layers
+\item long last\_vertex\_id - The id of the vertex at $last\_layer$ of this ray
+\item std::array<double, 2> normal\_vector - The unit vector where points will be inserted along
+\item std::array<double, 2> point - The endpoint or base of the ray
+\end{itemize}
+
+Public member functions:
+\begin{itemize}
+\item Ray() - Only used to allocate memory for MPI communications
+
+\item Ray(const Vertex\& end\_point, std::array<double, 2> normal, int layers, int element\_id) - Used when creating the fans at trailing edges\\
+Input:\\
+$end\_point$ - the input geometry vertex that will be the base of the ray\\
+$normal$ - the unit vector that points will be inserted along\\
+$layers$ - the number of points to insert along $normal\_vector$\\
+$element\_id$ - the input geometry element that the ray is incident upon
+
+\item Ray(const Vertex\& end\_point, int layers, const BoundaryLayerMesh\& owning\_mesh) - Used when creating the initial rays from the input geometry\\
+Input:\\
+$end\_point$ - the input geometry vertex that will be the base of the ray\\
+$layers$ - the number of points to insert along $normal\_vector$\\
+$owning\_mesh$ - the mesh that this ray is a part of, used to calculate $normal\_vector$
+
+\item \textasciitilde{}Ray()
+%
+
+\item void calculateNormalVector(const std::array<double, 2>\& prev\_point, const std::array<double, 2>\& next\_point) - Calculates the unique, topological normal that points outwards from the model\\
+Input:\\
+$prev\_point$ - the neighboring point before this ray's endpoint\\
+$next\_point$ - the neighboring point after this ray's endpoint
+
+\item void decreaseLayers(int desired) - Bounds checking to make sure the new value of $last\_layer$ is less than the previous value, but not less than zero
+Input:\\
+$desired$ - the new value of $last\_layer$
+
+\item double getMagnitude() const - Gets the length of $normal\_vector$
+    
+\item long layerVertexID(int layer) const - Gets the vertex id at the requested layer
+
+\item std::array<double, 2> pointAtDistance(double distance) const - Calculates the location of a point inserted along $normal\_vector$ from $point$\\
+Input:\\
+$distance$ - the distance along $normal\_vector$ from $point$
+
+\end{itemize}
+
+\subsection{Triangle}
+The Triangle package by Jonathan Shewchuk is used as the off-the-shelf Delaunay triangulator and refiner for meshing the subdomains. Only one function is used by $FEA\_Mesher2D$, the triangulate function.\\
+
+void triangulate(char* triswitches, struct triangulateio* in, struct triangulateio* out, struct triangulateio* vorout, double iso\_area, int u, int comps, double* centers)\\
+Input:\\
+$triswitches$ - The command that controls how Triangle functions\\
+$in$ - The input data structure used which stores the vertices, edges, and holes of a subdomain\\
+$out$ - The output data structure used which stores the mesh vertices and mesh triangles\\
+$vorout$ - Not used with our application\\
+$iso\_area$ - The isotropic area to use for the sizing function\\
+$u$ - A flag to represent if uniformly-sized triangles should be used in the inviscid region\\
+$comps$ - The number of elements in the input geometry\\
+$centers$ - The center point of each of the input geometry's elements
+
+\subsection{TriangleData}
+The TriangleData struct is responsible for holding the output from calls to Triangle.
+
+Class members:
+\begin{itemize}
+\item std::vector<long> $global\_ids$ - Unique global identifiers for the vertices
+\item int $num\_triangles$
+\item int* $triangles$ - Starting memory address for the endpoints of the mesh triangles\\
+Length is equal to three times $num\_triangles$
+\item double* $vertices$ - Starting memory address for the coordinates of the vertices\\
+Length is equal to twice the size of $global\_ids$
+\end{itemize}
+
+Public member functions:
+\begin{itemize}
+\item TriangleData(double*\& vertices\_in, int num\_triangles\_in, int*\& triangles\_in, std::vector<long>\& global\_ids\_in) - Acquires ownership of $vertices\_in$, $triangles\_in$, and $global\_ids\_in$ and sets the arguments to a null state
+\item TriangleData(TriangleData\&\& td)
+\item \textasciitilde{}TriangleData()
+%
+\end{itemize}
+
+\subsection{Vertex}
+The Vertex class is responsible for storing information about mesh vertices.
+
+Class members:
+\begin{itemize}
+\item bool $boundary$ - Flag for if the vertex is on a boundary edge
+\item std::array<double, 2> $coordinates$ - The x and y coordinates of the point
+\item static MPI\_Datatype $datatype$ - Defines the memory layout used for MPI communications
+\item long $id$ - Unique identifier
+\item bool $lower\_convex\_hull$ - Flag for if the vertex is on the lower convex hull when decomposing the boundary layer
+\item std::array<double, 2> $projected$ - The coordinates of the projected point on the vertical plane for decomposing the boundary layer
+\end{itemize}
+
+Public member functions:
+\begin{itemize}
+\item Vertex() - Sets $id$ to -1
+
+\item Vertex(std::array<double, 2> point, bool boundary, long id) - Input:\\
+$point$ - the x and y coordinates\\
+$boundary$ - true if the vertex is on a boundary edge\\
+$id$ - unique identifier
+
+\item \textasciitilde{}Vertex()
+%
+
+\item void calculateProjected(Vertex* median, bool axis) - Calculates the project coordinates of this vertex on the paraboloid\\
+Input:\\
+$base$ - the base of the paraboloid\\
+$axis$ - the non-z axis that is used in the vertical plane
+
+\item static void createMPIDataType() - Sets $datatype$\\
+Only needs to be called once by each process
+
+\item bool getBoundary() const
+
+\item double getCoordinate(int index) const - x-coordinate is $index$ 0 \& y-coordinate is $index$ 1
+
+\item long getID() const
+
+\item static MPI\_Datatype getMPIDataType()
+
+\item std::array<double, 2> getPoint() const
+
+\item double getProjected(int index) const - Projected x-coordinate is $index$ 0 \& projected y-coordinate is $index$ 1
+
+\item bool orientation2D(const Vertex* a, const Vertex\& b) const - Used to determine if a vertex should be part of the lower convex hull when decomposing the boundary layer\\
+Answers the question: which side of the directed line a->b does this vertex lie towards\\
+Input:\\
+$a$ - pointer to the starting vertex of the directed line\\
+$b$ - reference to the ending vertex of the directed line
+
+\item void print() const - Prints to std::cout
+
+\item void setBoundary(bool b)
+
+\item void setLowerConvexHull(bool exist)
+
+\item void setCoordinate(int index, double coordinate) - Sets the x-coordinate or y-coordinate to $coordinate$ if $index$ is 0 or 1, respectively
+
+\item bool useLowerConvexHull() - Returns true and sets to false if this vertex is on the lower convex hull when decomposing the boundary layer
+\end{itemize}
+
+
+
+\end{document}

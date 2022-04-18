@@ -1,0 +1,176 @@
+Date: Thu, 02 Feb 95 15:00:37 +0000
+
+This is a transcription of Algorithm 001 from the Collected Algorithms of
+the ACM.
+
+The original was in Algol, and I had to substitute subindices by the
+more common notation (also valid in Algol) of square brackets.
+
+I also include an example full implementation of the algorithm in C (not
+that it is such a lot more younger computer language either) ;-)
+
+In any case, it is a nice algorithm for a parallel implementation... And #1!
+
+				jr
+
+			Jose R. Valverde
+		European Bioinformatics Institute
+			txomsy@ebi.ac.uk
+
+---------------------------------------------------------------------------
+1. QuadI
+	R. J. Herbold
+	National Bureau of Standards, Washington 25, D. C.
+	
+comment	QuadI is useful when integration of several func-
+	tions of same limits at same time using same
+	point rule is desired. The interval (a, b) is di-
+	vided into m equal subintervals for an n-point
+	quadrature integration. p is the number of func-
+	tions to be integrated. W[k] and u[k] are normalized
+	weights and abscissas respectively, where
+	k = 1, 2, 3, ..., n. u[k] must be in ascending order.
+	P(B,j) =: (c) is a procedure which must be sup-
+	plied by the programmer. It evaluates (c) the
+	function (as indicated by j) for B. I[j] is the result
+	of integration for function j.;
+
+procedure QuadI (a, b, m, n, p, w[k], u[k], P(B,j) =:(c)) =: (I[j])
+	  begin
+
+QuadI:		h := (b - a) / m
+	  for	j := 1 (1) p; I[j] := 0
+	  	A := a - h / 2
+	  for	i := 1(1)m
+L1:	  begin	A := A + h
+	  for	k := 1 (1) n
+L2:	  begin B := A + (h / 2) * u[k]
+	  for	j :=1 (1) p
+L3:	  begin P(B,j) =:(c)
+	  	I[j] := I[j] + W[k] * c	end L3 ; end L2
+	  	  end L
+	  for	j := 1 (1) p
+	  	I[j] := (h / 2) * I[j]
+	  return
+	  integer (j, k, i)
+	  end	QuadI
+
+
+------------------------------------------------------------------------
+
+Which I understand to be translated into something like this in C:
+
+--------
+
+/* QuadI:
+ *	QuadI is useful when integration of several func-
+ *	tions of same limits at same time using same
+ *	point rule is desired. The interval (a, b) is di-
+ *	vided into m equal subintervals for an n-point
+ *	quadrature integration. p is the number of func-
+ *	tions to be integrated. W[k] and u[k] are normalized
+ *	weights and abscissas respectively, where
+ *	k = 1, 2, 3, ..., n. u[k] must be in ascending order.
+ *	P(B,j) =: (c) is a procedure which must be sup-
+ *	plied by the programmer. It evaluates (c) the
+ *	function (as indicated by j) for B. I[j] is the result
+ *	of integration for function j.;
+ */
+
+/* Note that in this implementation QuadI allocates its result
+ * from dynamic memory. Hence the caller should free() the
+ * pointer (array) returned by QuadI when finished using it.
+ *
+ * Implementation notes:
+ *	To implement function P, I have indexed all the
+ *	functions to be integrated into an array. P only
+ *	looks up the function to apply using the index
+ *	and returns the result given by the function.
+ *
+ * Personal note: this is just but a parallel implementation of
+ *	an integration method. Given the properties of the
+ *	method I don't think much is saved using it in current
+ *	uniprocessors. But it is a nice example of parallel
+ *	processing and could do well in a multiprocessor or
+ *	other parallel computer.
+ *
+ * Implemented by:
+ *	Jose R. Valverde
+ *	European Bioinformatics Institute.
+ *	Jose.Valverde@ebi.ac.uk			(currently)
+ *
+ *	JRValverde@enlil.iib.uk			(oldies, still valid)
+ *	JRamon@mvax.fmed.uam.es
+ *
+ * Disclaimer:
+ *	I made this out of my wits. The European Bioinformatics Institute
+ *	does not guarantee or otherwise support or accept any liability
+ *	in any manner whatsoever (nor explicit or implicit or ever) with
+ *	respect to this software.
+ *
+ *	Jose R. Valverde. 1 - February - 1995.
+ */
+
+/* Let's have first the following p functions which we want to
+ * integrate over the same interval simultaneously: */
+
+double function_1(double);
+double function_2(double);
+/*...*/
+double function_p(double);
+
+/* This is an array of functions that take a double argument and
+ * return a double value, in which we store the addresses of the
+ * functions.  */
+
+double (*(array_of_functions[])(double)) = {
+					function_1,
+					function_2,
+					/* ... */
+					function_p}
+
+double P(B, j)
+double B;
+int j;
+{
+	return (*(array_of_functions[j]))( B );
+}
+
+double *QuadI(a, b, m, n, p, w, u, P)
+double a, b;			/* interval limits */
+int m;				/* number of subintervals */
+int n;				/* for an n-point quadrature integration */
+double *w;			/* normalized weights: array of n values */
+double *u;			/* abscissas: array of n values */
+P;				/* function that evaluates c, the function */
+				/* (as indicated by j) for B */
+				
+{				/* QuadI */
+
+    double h;		/* subinterval size */
+    double *I;		/* Result vector. Should be freed by caller! */
+    double A, B, c;
+    int i, j, k;
+	
+    I = (double *) malloc(n * sizeof double);
+	
+    h = (b - a) / m;	/* compute subinterval size */
+    for (j = 0; j < p; j++)
+	I[j] = 0.0;	/* Initialize result vector */
+    A := a - h / 2;
+    for (i = 0; i < m; i++) {		/* L1 */
+	A += h;
+	for (k = 0; k < n; k++) {	/* L2 */
+	    B := A + (h / 2) * u[k];
+	    for (j = 0; j < p; j++) {	/* L3 */
+		c = P(B, j);
+		I[j] = I[j] + w[k] * c;
+	    }				/* L3 */
+	}				/* L2 */
+    }					/* L1 */
+    for (j = 0; j < p; j++)
+	I[j] = (h / 2) * I[j];
+
+    return I;
+}
+

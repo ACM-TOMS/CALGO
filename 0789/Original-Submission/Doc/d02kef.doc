@@ -1,0 +1,524 @@
+   IMPORTANT: For a complete specification of the routine see the 
+              NAG Fortran Library Handbook. 
+              Terms marked //...// may be implementation dependent. 
+  
+ A. Purpose 
+  
+   //D02KEF// finds a specified eigenvalue of a regular singular 
+   second-order Sturm-Liouville system of the form
+     (p(x)y')' + Q(x;lambda)y = 0
+   on a finite or infinite range (a,b) with boundary conditions at a and b,
+   using a Pruefer transformation and a shooting method. It also reports
+   values of the eigenfunction and its derivatives. Provision is made for
+   discontinuities in the coefficient functions or their derivatives.
+  
+ B. Specification 
+  
+        SUBROUTINE //D02KEF//(XPOINT, M, MATCH, COEFFN, BDYVAL, K, 
+       1                      TOL, ELAM, DELAM, HMAX, MAXIT, MAXFUN, 
+       2                      MONIT, REPORT, IFAIL) 
+        INTEGER               NXP, IC1, K, MAXIT, MAXFUN, IFAIL 
+        //real//              XPOINT(M), TOL, ELAM, DELAM, HMAX(2,M) 
+        EXTERNAL              COEFFN, BDYVAL, MONIT, REPORT 
+  
+ C. Parameters 
+  
+    1: XPOINT(M) - //real// array.                             Input 
+     On entry: the points where the boundary conditions computed by 
+     BDYVAL are to be imposed, and also any break-points, i.e. 
+     XPOINT(1) to XPOINT(m) must contain values x(1),...,x(m) such 
+     that 
+       x(1) <= x(2) < x(3) < ... < x(m-1) <= x(m) 
+     with the following meanings: 
+     (a) x(1) and x(m) are the left and right end-points, a and b, 
+         of the domain of definition of the Sturm-Liouville system 
+         if these are finite. If either a or b is infinite, the 
+         corresponding value x(1) or x(m) may be a more-or-less 
+         arbitrarily `large' number of appropriate sign. 
+     (b) x(2) and x(m-1) are the Boundary Matching Points (BMP's), 
+         that is the points at which the left and right boundary 
+         conditions computed in BDYVAL are imposed. 
+         If the left-hand end-point is a regular point then the user 
+         should set x(2) = x(1) (= a), while if it is a singular 
+         point the user must set x(2) > x(1). Similarly 
+         x(m-1) = x(m) (= b) if the right-hand end-point is regular, 
+         and x(m-1) < x(m) if it is singular. 
+     (c) The remaining m - 4 points x(3),...,x(m-2), if any, define 
+         `break-points' which divide the interval [x(2),x(m-1)] into 
+         m - 3 sub-intervals 
+           i(1) = [x(2),x(3)], ..., i(m-3) = [x(m-2),x(m-1)] 
+         Numerical integration of the differential equation is 
+         stopped and restarted at each break-point. In simple cases 
+         no break-points are needed. However if p(x) or q(x;lambda) 
+         are given by different formulae in different parts of the 
+         range, then integration is more efficient if the range is 
+         broken up by break-points in the appropriate way. Similarly 
+         points where any jumps occur in p(x) or q(x;lambda), or in 
+         their derivatives up to the fifth order, should appear as 
+         break-points. 
+  
+     Constraint: X(1) <= X(2) < ... < X(M-1) <= X(M). 
+  
+    2: M - INTEGER.                                            Input 
+     On entry: the number of points in the array XPOINT. 
+  
+     Constraint: M >= 4. 
+  
+    3: MATCH - INTEGER.                                 Input/Output 
+     On entry: MATCH must be set to the index of the `break-point' 
+     to be used as the matching point (see Section 8.3 of the 
+     routine document in the NAG Fortran Library Manual). If MATCH 
+     is set to a value outside the range [2,m-1] then a default 
+     value is taken, corresponding to the break-point nearest the 
+     centre of the interval [XPOINT(2),XPOINT(m-1)]. 
+  
+     On exit: the index of the break-point actually used as the 
+     matching point. 
+  
+    4: COEFFN - SUBROUTINE, supplied by the user. External Procedure 
+     COEFFN must compute the values of the coefficient functions 
+     p(x) and q(x;lambda) for given values of x and lambda. Section 
+     3 of the routine document in the NAG Fortran Library Manual 
+     states conditions which p and q must satisfy. 
+     Its specification is: 
+  
+ |    SUBROUTINE COEFFN(P, Q, DQDL, X, ELAM, JINT) 
+ |    //real//   P, Q, DQDL, X, ELAM 
+ |    INTEGER    JINT 
+  
+ |    1: P - //real//.                                        Output 
+ |     On exit: the value of p(x) for the current value of x. 
+  
+ |    2: Q - //real//.                                        Output 
+ |     On exit: the value of q(x;lambda) for the current value of x 
+ |     and the current trial value of lambda. 
+  
+ |    3: DQDL - //real//.                                     Output 
+ |     On exit: the value of (pd q)/(pd lambda)(x;lambda) for the 
+ |     current value of x and the current trial value of lambda. 
+ |     However DQDL is only used in error estimation and an 
+ |     approximation (say to within 20%) will suffice. 
+  
+ |    4: X - //real//.                                         Input 
+ |     On entry: the current value of x. 
+  
+ |    5: ELAM - //real//.                                      Input 
+ |     On entry: the current trial value of the eigenvalue parameter 
+ |     lambda. 
+  
+ |    6: JINT - INTEGER.                                       Input 
+ |     On entry: the index j of the sub-interval i(j) (see 
+ |     specification of XPOINT) in which x lies. 
+  
+ |   See Sections 8.4 and 9 of the routine document in the NAG 
+ |   Fortran Library Manual for examples. COEFFN must be declared as 
+ |   EXTERNAL in the (sub)program from which //D02KEF// is called. 
+ |   Parameters denoted as Input must **not** be changed by this 
+ |   procedure. 
+  
+    5: BDYVAL - SUBROUTINE, supplied by the user. External Procedure 
+     BDYVAL must define the boundary conditions. For each end-point, 
+     BDYVAL must return (in YL or YR) values of y(x) and p(x)y'(x) 
+     which are consistent with the boundary conditions at the 
+     end-points; only the ratio of the values matters. Here x is a 
+     given point (XL or XR) equal to, or close to, the end-point. 
+     For a **regular** end-point (a, say), x = a; and a boundary 
+     condition of the form 
+       c(1)y(a) + c(2)y'(a) = 0 
+     can be handled by returning constant values in YL, e.g. 
+     YL(1) = c(2) and YL(2) = -c(1)p(a). 
+     For a **singular** end-point however, YL(1) and YL(2) will in 
+     general be functions of XL and ELAM, and YR(1) and YR(2) 
+     functions of XR and ELAM, usually derived analytically from a 
+     power-series or asymptotic expansion. Examples are given in 
+     Sections 8.5 and 9 of the routine document in the NAG Fortran 
+     Library Manual. 
+     Its specification is: 
+  
+ |    SUBROUTINE BDYVAL(XL, XR, ELAM, YL, YR) 
+ |    //real//   XL, XR, ELAM, YL(3), YR(3) 
+  
+ |    1: XL - //real//.                                        Input 
+ |     On entry: if a is a regular end-point of the system (so that 
+ |     a = x(1) = x(2)), then XL contains a. If a is a singular 
+ |     point (so that a <= x(1) < x(2)), then XL contains a point x 
+ |     such that x(1) < x <= x(2)). 
+  
+ |    2: XR - //real//.                                        Input 
+ |     On entry: if b is a regular end-point of the system (so that 
+ |     x(m-1) = x(m) = b), then XR contains b. If b is a singular 
+ |     point (so that x(m-1) < x(m) <= b), then XR contains a point 
+ |     x such that x(m-1) <= x < x(m). 
+  
+ |    3: ELAM - //real//.                                      Input 
+ |     On entry: the current trial value of lambda. 
+  
+ |    4: YL(3) - //real// array.                              Output 
+ |     On exit: YL(1) and YL(2) should contain values of y(x) and 
+ |     p(x)y'(x) respectively (not both zero) which are consistent 
+ |     with the boundary condition at the left-hand end-point, given 
+ |     by x = XL. YL(3) should not be set. 
+  
+ |    5: YR(3) - //real// array.                              Output 
+ |     On exit: YR(1) and YR(2) should contain values of y(x) and 
+ |     p(x)y'(x) respectively (not both zero) which are consistent 
+ |     with the boundary condition at the right-hand end-point, 
+ |     given by x = XR. YR(3) should not be set. 
+  
+ |   BDYVAL must be declared as EXTERNAL in the (sub)program from 
+ |   which //D02KEF// is called. Parameters denoted as Input must 
+ |   **not** be changed by this procedure. 
+  
+    6: K - INTEGER.                                            Input 
+     On entry: the index k of the required eigenvalue when the 
+     eigenvalues are ordered 
+     lambda(0) < lambda (1) < lambda(2) < ... < lambda(k) < ... . 
+  
+     Constraint: K >= 0. 
+  
+    7: TOL - //real//.                                         Input 
+     On entry: the tolerance parameter which determines the accuracy 
+     of the computed eigenvalue. The error estimate held in DELAM on 
+     exit satisfies the mixed absolute/relative error test 
+       DELAM <= TOL*max(1.0,abs(ELAM))                           (*) 
+     where ELAM is the final estimate of the eigenvalue. DELAM is 
+     usually somewhat smaller than the right-hand side of (*) but 
+     not several orders of magnitude smaller. 
+  
+     Constraint: TOL > 0.0. 
+  
+    8: ELAM - //real//.                                 Input/Output 
+     On entry: an initial estimate of the eigenvalue lambda-tilde. 
+  
+     On exit: the final computed estimate, whether or not an error 
+     occurred. 
+  
+    9: DELAM - //real//.                                Input/Output 
+     On entry: an indication of the scale of the problem in the 
+     lambda-direction. DELAM holds the initial `search step' 
+     (positive or negative). Its value is not critical but the first 
+     two trial evaluations are made at ELAM and ELAM + DELAM, so the 
+     routine will work most efficiently if the eigenvalue lies 
+     between these values. A reasonable choice (if a closer bound is 
+     not known) is half the distance between adjacent eigenvalues in 
+     the neighbourhood of the one sought. In practice, there will 
+     often be a problem, similar to the one in hand but with known 
+     eigenvalues, which will help one to choose initial values for 
+     ELAM and DELAM. 
+     If DELAM = 0.0 on entry, it is given the default value of 
+     0.25*max(1.0,abs(ELAM)). 
+  
+     On exit: with IFAIL = 0, DELAM holds an estimate of the 
+     absolute error in the computed eigenvalue, that is 
+     abs(lambda-tilde-ELAM) approximately equal to DELAM. (In 
+     Section 8.2 of the routine document in the NAG Fortran Library 
+     Manual we discuss the assumptions under which this is true.) 
+     The true error is rarely more than twice, or less than a tenth, 
+     of the estimated error. 
+     With IFAIL <> 0, DELAM may hold an estimate of the error, or 
+     its initial value, depending on the value of IFAIL. See Section 
+     D for further details. 
+  
+   10: HMAX(2,M) - //real// array.                      Input/Output 
+     On entry: HMAX(1,j) a maximum step size to be used by the 
+     differential equation code in the jth sub-interval i(j) (as 
+     described in the specification of parameter XPOINT), for 
+     j = 1,2,...,m-3. If it is zero the routine generates a maximum 
+     step size internally. 
+     It is recommended that HMAX(1,j) be set to zero unless the 
+     coefficient functions p and q have features (such as a narrow 
+     peak) within the jth sub-interval that could be `missed' if a 
+     long step were taken. In such a case HMAX(1,j) should be set to 
+     about half the distance over which the feature should be 
+     observed. Too small a value will increase the computing time 
+     for the routine. See Section 8 of the routine document in the 
+     NAG Fortran Library Manual for further suggestions. 
+     The rest of the array is used as workspace. 
+  
+     On exit: HMAX(1,m-1) and HMAX(1,m) contain the sensitivity 
+     coefficients sigma(l),sigma(r), described in Section 8.6 of the 
+     routine document in the NAG Fortran Library Manual. Other 
+     entries contain diagnostic output in case of an error (see 
+     Section D). 
+  
+   11: MAXIT - INTEGER.                                 Input/Output 
+     On entry: a bound on n(r), the number of root-finding 
+     iterations allowed, that is the number of trial values of 
+     lambda that are used. If MAXIT <= 0, no such bound is assumed. 
+     (See also under MAXFUN.) 
+  
+     Suggested value: MAXIT = 0. 
+  
+     On exit: MAXIT will have been decreased by the number of 
+     iterations actually performed, whether or not it was positive 
+     on entry. 
+  
+   12: MAXFUN - INTEGER.                                       Input 
+     On entry: a bound on n(f), the number of calls to COEFFN made 
+     in any one root-finding iteration. If MAXFUN <= 0, no such 
+     bound is assumed. 
+  
+     Suggested value: MAXFUN = 0. 
+     MAXFUN and MAXIT may be used to limit the computational cost of 
+     a call to //D02KEF//, which is roughly proportional to 
+     n(r)*n(f). 
+  
+   13: MONIT - SUBROUTINE, supplied by the user.  External Procedure 
+     MONIT is called by //D02KEF// at the end of each root-finding 
+     iteration and allows the user to monitor the course of the 
+     computation by printing out the parameters (see Section 8 of 
+     the routine document in the NAG Fortran Library Manual for an 
+     example). 
+     If no monitoring is required, the dummy subroutine D02KAY may 
+     be used. (D02KAY is included in the NAG Fortran Library. In 
+     some implementations of the Library the name is changed to 
+     KAYD02: refer to the Users' Note for your implementation.) 
+     Its specification is: 
+  
+ |    SUBROUTINE MONIT(MAXIT, IFLAG, ELAM, FINFO) 
+ |    INTEGER    MAXIT, IFLAG 
+ |    //real//   ELAM, FINFO(15) 
+  
+ |    1: MAXIT - INTEGER.                                      Input 
+ |     On entry: the current value of the parameter MAXIT of 
+ |     //D02KEF//; this is decreased by one at each iteration. 
+  
+ |    2: IFLAG - INTEGER.                                      Input 
+ |     On entry: IFLAG describes what phase the computation is in, 
+ |     as follows: 
+ |     IFLAG < 0 
+ |       an error occurred in the computation of the `miss-distance' 
+ |       at this iteration; an error exit from //D02KEF// with 
+ |       IFAIL = -IFLAG will follow. 
+ |     IFLAG = 1 
+ |       the routine is trying to bracket the eigenvalue 
+ |       lambda-tilde. 
+ |     IFLAG = 2 
+ |       the routine is converging to the eigenvalue lambda-tilde 
+ |       (having already bracketed it). 
+  
+ |    3: ELAM - //real//.                                      Input 
+ |     On entry: the current trial value of lambda. 
+  
+ |    4: FINFO(15) - //real// array.                           Input 
+ |     On entry: information about the behaviour of the shooting 
+ |     method, and diagnostic information in the case of errors. It 
+ |     should **not** normally be printed in full if no error has 
+ |     occurred (that is, if IFLAG > 0), though the first few 
+ |     components may be of interest to the user. In case of an 
+ |     error (IFLAG < 0) all the components of FINFO should be 
+ |     printed. The contents of FINFO are as follows: 
+ |     FINFO(1): the current value of the `miss-distance' or 
+ |     `residual' function f(lambda) on which the shooting method is 
+ |     based. (See Section 8.2 of the routine document in the NAG 
+ |     Fortran Library Manual for further notes on it.) FINFO(1) is 
+ |     set to zero if IFLAG < 0. 
+ |     FINFO(2): an estimate of the quantity 
+ |     partial derivative(lambda) defined as follows. Consider the 
+ |     perturbation in the miss-distance f(lambda) that would result 
+ |     if the local error, in the solution of the differential 
+ |     equation, were always positive and equal to its maximum 
+ |     permitted value. Then partial derivative(lambda) is the 
+ |     perturbation in lambda that would have the same effect on 
+ |     f(lambda). Thus, at the zero of 
+ |     f(lambda),abs(partial derivative(lambda)) is an approximate 
+ |     bound on the perturbation of the zero (that is the 
+ |     eigenvalue) caused by errors in numerical solution. If 
+ |     partial derivative(lambda) is very large then it is possible 
+ |     that there has been a programming error in COEFFN such that q 
+ |     is independent of lambda. If this is the case, an error exit 
+ |     with IFAIL = 5 should follow. FINFO(2) is set to zero if 
+ |     IFLAG < 0. 
+ |     FINFO(3): the number of internal iterations, using the same 
+ |     value of lambda and tighter accuracy tolerances, needed to 
+ |     bring the accuracy (that is the value of 
+ |     partial derivative(lambda)) to an acceptable value. Its value 
+ |     should normally be 1.0, and should almost never exceed 2.0. 
+ |     FINFO(4): the number of calls to COEFFN at this iteration. 
+ |     FINFO(5): the number of successful steps taken by the 
+ |     internal differential equation solver at this iteration. A 
+ |     step is successful if it is used to advance the integration 
+ |     (cf. COUT(8) in specification of //D02PAF//). 
+ |     FINFO(6): the number of unsuccessful steps used by the 
+ |     internal integrator at this iteration (cf. COUT(9) in 
+ |     specification of //D02PAF//). 
+ |     FINFO(7): the number of successful steps at the maximum step 
+ |     size taken by the internal integrator at this iteration (cf. 
+ |     COUT(3) in specification of //D02PAF//). 
+ |     FINFO(8): is not used. 
+ |     FINFO(9) to FINFO(15): set to zero, unless IFLAG < 0 in which 
+ |     case they hold the following values describing the point of 
+ |     failure: 
+ |     FINFO(9): contains the index of the sub-interval where 
+ |     failure occurred, in the range 1 to m - 3. In case of an 
+ |     error in BDYVAL, it is set to 0 or m - 2 depending on whether 
+ |     the left or right boundary condition caused the error. 
+ |     FINFO(10): the value f the independent variable x, the point 
+ |     at which error occurred. In case of an error in BDYVAL, it is 
+ |     set to the value of XL or XR as appropriate (see the 
+ |     specification of BDYVAL). 
+ |     FINFO(11), FINFO(12), FINFO(13): the current values of the 
+ |     Pruefer dependent variables beta, phi and rho respectively. 
+ |     These are set to zero in case of an error in BDYVAL. 
+ |     FINFO(14): the local-error tolerance being used by the 
+ |     internal integrator at the point of failure. This is set to 
+ |     zero in the case of an error in BDYVAL. 
+ |     FINFO(15): the last integration mesh point. This is set to 
+ |     zero in the case of an error in BDYVAL. 
+  
+ |   MONIT must be declared as EXTERNAL in the (sub)program from 
+ |   which //D02KEF// is called. Parameters denoted as Input must 
+ |   **not** be changed by this procedure. 
+  
+   14: REPORT - SUBROUTINE, supplied by the user. External Procedure 
+     This routine provides the means by which the user may compute 
+     the eigenfunction y(x) and its derivative at each integration 
+     mesh point x. (See Section 8 of the routine document in the NAG 
+     Fortran Library Manual for an example). 
+     Its specification is: 
+  
+ |    SUBROUTINE REPORT (X, V, JINT) 
+ |    INTEGER    JINT 
+ |    //real//   X, V(3) 
+  
+ |    1: X - //real//.                                         Input 
+ |     On entry: the current value of the independent variable x. 
+ |     See Section 8.3 of the routine document in the NAG Fortran 
+ |     Library Manual for the order in which values of x are 
+ |     supplied. 
+  
+ |    2: V(3) - //real// array.                                Input 
+ |     On entry: V(1), V(2), V(3) hold the current values of the 
+ |     Pruefer variables beta, phi, rho respectively. 
+  
+ |    3: JINT - INTEGER.                                       Input 
+ |     On entry: JINT indicates the sub-interval between 
+ |     break-points in which X lies exactly as for the routine 
+ |     COEFFN, **except** that at the extreme left end-point (when 
+ |     x = XPOINT(2)) JINT is set to 0 and at the extreme right 
+ |     end-point (when x = x(r) = XPOINT(m-1)) JINT is set to m - 2. 
+  
+ |   REPORT must be declared as EXTERNAL in the (sub)program from 
+ |   which //D02KEF// is called. Parameters denoted as Input must 
+ |   **not** be changed by this procedure. 
+  
+   15: IFAIL - INTEGER.                                 Input/Output 
+     On entry: IFAIL must be set to 0, -1 or 1. For users not 
+     familiar with this parameter (described in Chapter P01 in the 
+     NAG Fortran Library Manual or this HELP system) the recommended 
+     value is 0. 
+  
+     On exit: IFAIL = 0 unless the routine detects an error (see 
+     Section D). 
+  
+ D. Error Indicators and Warnings 
+  
+   Errors detected by the routine: 
+  
+   IFAIL = 1 
+     A parameter error. All parameters (except IFAIL) are left 
+     unchanged. The reason for the error is shown by the value of 
+     HMAX(2,1) as follows: 
+     HMAX(2,1) = 1: M < 4; 
+     HMAX(2,1) = 2: K < 0; 
+     HMAX(2,1) = 3: TOL <= 0.0; 
+     HMAX(2,1) = 4: XPOINT(1) to XPOINT(m) are not in ascending 
+     order. 
+     HMAX(2,2) gives the position i in XPOINT where this was 
+     detected. 
+  
+   IFAIL = 2 
+     At some call to BDYVAL, invalid values were returned, that is, 
+     either YL(1) = YL(2) = 0.0, or YR(1) = YR(2) = 0.0 (a 
+     programming error in BDYVAL). See the last call of MONIT for 
+     details. 
+     This error exit will also occur if p(x) is zero at the point 
+     where the boundary condition is imposed. Probably BDYVAL was 
+     called with XL equal to a singular end-point a or with XR equal 
+     to a singular end-point b. 
+     This error exit is caused by being unable to set up or solve 
+     the differential equation at some iteration, and will be 
+     immediately preceded by a call of MONIT giving diagnostic 
+     information. 
+  
+   IFAIL = 3 
+     At some point between XL and XR the value of p(x) computed by 
+     COEFFN became zero or changed sign. See the last call of MONIT 
+     for details. 
+     This error exit is caused by being unable to set up or solve 
+     the differential equation at some iteration, and will be 
+     immediately preceded by a call of MONIT giving diagnostic 
+     information. 
+  
+   IFAIL = 4 
+     MAXIT > 0 on entry, and after MAXIT iterations the eigenvalue 
+     had not been found to the required accuracy. 
+  
+   IFAIL = 5 
+     The `bracketing' phase (with parameter IFLAG of MONIT equal to 
+     1) failed to bracket the eigenvalue within ten iterations. This 
+     is caused by an error in formulating the problem (for example, 
+     q is independent of lambda), or by very poor initial estimates 
+     of ELAM, DELAM. 
+     On exit ELAM and ELAM + DELAM give the end-points of the 
+     interval within which no eigenvalue was located by the routine. 
+  
+   IFAIL = 6 
+     MAXFUN > 0 on entry, and the last iteration was terminated 
+     because more than MAXFUN calls to COEFFN were used. See the 
+     last call of MONIT for details. 
+     This error exit is caused by being unable to set up or solve 
+     the differential equation at some iteration, and will be 
+     immediately preceded by a call of MONIT giving diagnostic 
+     information. 
+  
+   IFAIL = 7 
+     To obtain the desired accuracy the local error tolerance was 
+     set so small at the start of some sub-interval that the 
+     differential equation solver could not choose an initial step 
+     size large enough to make significant progress. See the last 
+     call of MONIT for diagnostics. 
+     This error exit is caused by being unable to set up or solve 
+     the differential equation at some iteration, and will be 
+     immediately preceded by a call of MONIT giving diagnostic 
+     information. 
+  
+   IFAIL = 8 
+     At some point inside a sub-interval the step size in the 
+     differenital equation solver was reduced to a value too small 
+     to make significant progress (for the same reasons as with 
+     IFAIL = 7). This could be due to pathological behaviour of p(x) 
+     and q(x;lambda) or to an unreasonable accuracy requirement or 
+     to the current value of lambda making the equations `stiff'. 
+     See the last call of MONIT for details. 
+     This error exit is caused by being unable to set up or solve 
+     the differential equation at some iteration, and will be 
+     immediately preceded by a call of MONIT giving diagnostic 
+     information. 
+  
+   IFAIL = 9 
+     TOL is too small for the problem being solved and the 
+     //machine precision// is being used. The final value of ELAM 
+     should be a very good approximation to the eigenvalue. 
+  
+   IFAIL = 10 
+     //C05AZF//, called by //D02KEF//, has terminated with the error 
+     exit corresponding to a pole of the residual function 
+     f(lambda). This error exit should not occur, but if it does, 
+     try solving the problem again with a smaller value for TOL. 
+  
+   IFAIL = 11 
+     A serious error has occurred in D02KDY. Check all subroutine 
+     calls and array dimensions. Seek expert help. 
+     HMAX(2,1) holds the failure exit number from D02KDY. This error 
+     exit is caused by being unable to set up or solve the 
+     differential equation at some iteration, and will be 
+     immediately preceded by a call of MONIT giving diagnostic 
+     information. 
+  
+   IFAIL = 12 
+     A serious error has occurred in //C05AZF//. Check all 
+     subroutine calls and array dimensions. Seek expert help. 
+     HMAX(2,1) holds the failure exit number from C05AZF. HMAX(2,2) 
+     holds the value of parameter IND of //C05AZF//. 
+

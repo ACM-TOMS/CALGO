@@ -1,0 +1,383 @@
+      SUBROUTINE QR2NOZ(NM, N, LOW, IGH, H, WR, WI, IERR)               QR2   10
+C PURPOSE
+C THE FORTRAN SUBROUTINE QR2NOZ COMPUTES THE EIGENVALUES OF A REAL
+C      UPPER HESSENBERG MATRIX USING THE QR METHOD AND REDUCES THE
+C      MATRIX TO A STANDARDIZED QUASI-TRIANGULAR FORM.  COMPUTATIONS
+C      ARE DONE IN REAL ARITHMETIC.
+C THE SUBROUTINE STATEMENT IS
+C    SUBROUTINE QR2NOZ(NM,N,LOW,IGH,H,WR,WI,IERR).
+C NM       IS AN INTEGER INPUT VARIABLE SET EQUAL TO THE ROW DIMENSION
+C          OF THE ARRAY H AS SPECIFIED IN THE CALLING PROGRAM.
+C N        IS AN INTEGER INPUT VARIABLE SET EQUAL TO THE ORDER OF THE
+C          MATRIX H.  N  .LE.  NM
+C LOW,IGH  ARE INTEGER INPUT VARIABLES INDICATING THE BOUNDARY INDICES
+C          FOR THE BALANCED MATRIX.  IF THE MATRIX IS NOT BALANCED SET
+C          LOW TO 1 AND IGH TO N.
+C H        IS A REAL TWO-DIMENSIONAL ARRAY WITH ROW DIMENSION NM AND
+C          COLUMN DIMENSION AT LEAST N.  ON INPUT IT CONTAINS THE
+C          UPPER HESSENBERG MATRIX OF ORDER N.  ON OUTPUT IT CONTAINS
+C          THE STANDARDIZED QUASI-TRIANGULAR MATRIX.
+C WR,WI    ARE REAL OUTPUT ONE-DIMENSIONAL VARIABLES OF DIMENSION AT
+C          LEAST N CONTAINING THE REAL AND IMAGINARY PARTS,
+C          RESPECTIVELY, OF THE EIGENVALUES OF THE HESSENBERG MATRIX.
+C          THE EIGENVALUES ARE UNORDERED EXCEPT THAT COMPLEX CONJUGATE
+C          PAIRS OF EIGENVALUES APPEAR CONSECUTIVELY WITH THE
+C          EIGENVALUE HAVING THE POSITIVE IMAGINARY PART FIRST.
+C IERR     IS AN INTEGER OUTPUT VARIABLE SET EQUAL TO AN ERROR
+C          COMPLETION CODE.  IF MORE THAN 30 ITERATIONS ARE REQUIRED
+C          TO DETERMINE AN EIGENVALUE, THIS SUBROUTINE TERMINATES WITH
+C          IERR SET EQUAL TO THE INDEX OF THE EIGENVALUE FOR WHICH
+C          FAILURE OCCURS.  THE EIGENVALUES IN THE WR AND WI ARRAYS
+C          SHOULD BE CORRECT FOR INDICES  IERR+1,IERR+2,...,N.  IF ALL
+C          THE EIGENVALUES ARE DETERMINED WITHIN 30 ITERATIONS, IERR
+C          IS SET TO ZERO.
+      DIMENSION H(NM,N), WR(N), WI(N)
+      REAL MACHEP
+      INTEGER EN, ENM2
+      LOGICAL NOTLAS
+C MACHEP IS A MACHINE DEPENDENT PARAMETER SPECIFYING THE RELATIVE
+C PRECISION OF FLOATING POINT ARITHMETIC.  THE VALUE BELOW IS
+C EQUAL TO 2.**(-46), WHICH IS APPROPRIATE FOR CDC 6000-SERIES
+C MACHINES.
+      DATA MACHEP /16424000000000000000B/
+      IERR = 0
+C STORE ROOTS ISOLATED BY BALANC
+      DO 10 I=1,N
+        IF (I.GE.LOW .AND. I.LE.IGH) GO TO 10
+        WR(I) = H(I,I)
+        WI(I) = 0.0
+   10 CONTINUE
+      EN = IGH
+      T = 0.0
+C SEARCH FOR NEXT EIGENVALUES
+   20 IF (EN.LT.LOW) RETURN
+      ITS = 0
+      NA = EN - 1
+      ENM2 = NA - 1
+C LOOK FOR SINGLE SMALL SUB-DIAGONAL ELEMENT
+C    FOR L=EN STEP -1 UNTIL LOW DO
+   30 IF (EN.EQ.LOW) GO TO 50
+      DO 40 LL=LOW,NA
+        L = EN + LOW - LL
+        IF (ABS(H(L,L-1)).LE.MACHEP*(ABS(H(L-1,L-1))+ABS(H(L,L))))
+     *   GO TO 60
+   40 CONTINUE
+   50 L = LOW
+C FORM SHIFT
+   60 X = H(EN,EN)
+      IF (L.EQ.EN) GO TO 200
+      Y = H(NA,NA)
+      W = H(EN,NA)*H(NA,EN)
+      IF (L.EQ.NA) GO TO 210
+      IF (ITS.EQ.30) GO TO 270
+      IF (ITS.NE.10 .AND. ITS.NE.20) GO TO 80
+C FORM EXCEPTIONAL SHIFT
+      T = T + X
+      DO 70 I=LOW,EN
+        H(I,I) = H(I,I) - X
+   70 CONTINUE
+      S = ABS(H(EN,NA)) + ABS(H(NA,ENM2))
+      X = 0.75*S
+      Y = X
+      W = -0.4275*S*S
+   80 ITS = ITS + 1
+C LOOK FOR TWO CONSECUTIVE SMALL SUB-DIAGONAL
+C  ELEMENTS.  FOR M=EN-2 STEP -1 UNTIL L DO
+      DO 90 MM=L,ENM2
+        M = ENM2 + L - MM
+        ZZ = H(M,M)
+        R = X - ZZ
+        S = Y - ZZ
+        P = (R*S-W)/H(M+1,M) + H(M,M+1)
+        Q = H(M+1,M+1) - ZZ - R - S
+        R = H(M+2,M+1)
+        S = ABS(P) + ABS(Q) + ABS(R)
+        P = P/S
+        Q = Q/S
+        R = R/S
+        IF (M.EQ.L) GO TO 100
+        IF (ABS(H(M,M-1))*(ABS(Q)+ABS(R)).LE.MACHEP*ABS(P)*
+     *   (ABS(H(M-1,M-1))+ABS(ZZ)+ABS(H(M+1,M+1)))) GO TO 100
+   90 CONTINUE
+  100 MP2 = M + 2
+      DO 110 I=MP2,EN
+        H(I,I-2) = 0.0
+        IF (I.EQ.MP2) GO TO 110
+        H(I,I-3) = 0.0
+  110 CONTINUE
+C DOUBLE QR STEP INVOLVING ROWS L TO EN
+C   AND COLUMNS M TO EN.
+      DO 190 K=M,NA
+        NOTLAS = K.NE.NA
+        IF (K.EQ.M) GO TO 120
+        P = H(K,K-1)
+        Q = H(K+1,K-1)
+        R = 0.0
+        IF (NOTLAS) R = H(K+2,K-1)
+        X = ABS(P) + ABS(Q) + ABS(R)
+        IF (X.EQ.0.0) GO TO 190
+        P = P/X
+        Q = Q/X
+        R = R/X
+  120   S = SIGN(SQRT(P*P+Q*Q+R*R),P)
+        IF (K.EQ.M) GO TO 130
+        H(K,K-1) = -S*X
+        GO TO 140
+  130   IF (L.NE.M) H(K,K-1) = -H(K,K-1)
+  140   P = P + S
+        X = P/S
+        Y = Q/S
+        ZZ = R/S
+        Q = Q/P
+        R = R/P
+C ROW MODIFICATION
+        DO 160 J=K,N
+          P = H(K,J) + Q*H(K+1,J)
+          IF (.NOT.NOTLAS) GO TO 150
+          P = P + R*H(K+2,J)
+          H(K+2,J) = H(K+2,J) - P*ZZ
+  150     H(K+1,J) = H(K+1,J) - P*Y
+          H(K,J) = H(K,J) - P*X
+  160   CONTINUE
+        J = MIN0(EN,K+3)
+C COLUMN MODIFICATION
+        DO 180 I=1,J
+          P = X*H(I,K) + Y*H(I,K+1)
+          IF (.NOT.NOTLAS) GO TO 170
+          P = P + ZZ*H(I,K+2)
+          H(I,K+2) = H(I,K+2) - P*R
+  170     H(I,K+1) = H(I,K+1) - P*Q
+          H(I,K) = H(I,K) - P
+  180   CONTINUE
+  190 CONTINUE
+      GO TO 30
+C ONE ROOT FOUND
+  200 H(EN,EN) = X + T
+      WR(EN) = H(EN,EN)
+      WI(EN) = 0.0
+      EN = NA
+      GO TO 20
+C TWO ROOTS FOUND
+  210 P = (Y-X)/2.0
+      Q = P*P + W
+      ZZ = SQRT(ABS(Q))
+      H(EN,EN) = X + T
+      X = H(EN,EN)
+      H(NA,NA) = Y + T
+      IF (Q.LT.0.0) GO TO 220
+      ZZ = P + SIGN(ZZ,P)
+C REAL PAIR
+      WR(NA) = X + ZZ
+      WR(EN) = WR(NA)
+      IF (ZZ.NE.0.0) WR(EN) = X - W/ZZ
+      WI(NA) = 0.0
+      WI(EN) = 0.0
+      X = H(EN,NA)
+      R = SQRT(X*X+ZZ*ZZ)
+      P = X/R
+      Q = ZZ/R
+      GO TO 230
+C COMPLEX PAIR
+  220 WR(NA) = X + P
+      WR(EN) = X + P
+      WI(NA) = ZZ
+      WI(EN) = -ZZ
+C MAKE DIAGONAL ELEMENTS EQUAL
+      IF (P.EQ.0.0) GO TO 260
+      BPC = H(EN,NA) + H(NA,EN)
+      TX = SQRT(BPC*BPC+4.0*P*P)
+      Q = SQRT(.5*(1.0+ABS(BPC)/TX))
+      P = SIGN(P/(Q*TX),-BPC*P)
+C ROW MODIFICATION
+  230 DO 240 J=NA,N
+        ZZ = H(NA,J)
+        H(NA,J) = Q*ZZ + P*H(EN,J)
+        H(EN,J) = Q*H(EN,J) - P*ZZ
+  240 CONTINUE
+C COLUMN MODIFICATION
+      DO 250 I=1,N
+        ZZ = H(I,NA)
+        H(I,NA) = Q*ZZ + P*H(I,EN)
+        H(I,EN) = Q*H(I,EN) - P*ZZ
+  250 CONTINUE
+  260 EN = ENM2
+      GO TO 20
+  270 IERR = EN
+      RETURN
+      END
+      SUBROUTINE CONDIT(NM, N, A, V1, V2, WI, COND)                     CON   10
+C  CONDIT COMPUTES THE CONDITION NUMBERS OF THE EIGENVALUES OF A
+C      STANDARDIZED QUASI-TRIANGULAR MATRIX.
+C  THE SUBROUTINE STATEMENT IS
+C                SUBROUTINE CONDIT(NM,N,A,V1,V2,WI,COND).
+C  ON INPUT
+C    NM     MUST BE SET TO THE ROW DIMENSION OF THE TWO DIMENSIONAL
+C           ARRAY AS DECLARED IN THE CALLING PROGRAM.
+C    N      IS THE ORDER OF THE MATRIX.  N.LE.NM
+C    A      CONTAINS THE STANDARDIZED QUASI-TRIANGULAR MATRIX PRODUCED
+C           BY QR2NOZ.
+C    WI     CONTAINS THE IMAGINARY PARTS OF THE EIGENVALUES.  THE
+C           EIGENVALUES ARE UNORDERED EXCEPT THAT COMPLEX CONJUGATE
+C           PAIRS APPEAR CONSECUTIVELY.
+C    V1,V2  ARE FOR TEMPORARY STORAGE.
+C  ON OUTPUT
+C    A      IS UNALTERED.
+C    COND   CONTAINS THE CONDITION NUMBERS CORRESPONDING TO THE
+C           EIGENVALUES IN (V2,WI).  COND = 1./TOL IF THE USUAL
+C           FORMULA WOULD CAUSE OVERFLOW OR YIELD A VALUE EXCEEDING
+C           1/TOL.  TOL NEED NOT DEPEND ON THE COMPUTER.
+C    V2     CONTAINS THE REAL PARTS OF THE EIGENVALUES.
+C                     TYPICAL USAGE
+C      DIMENSION A(50,50),WR(50),WI(50),COND(50),ORT(50)
+C *******************ENTER MATRIX A AND DIMENSIONS N,NM*****************
+C      LOW=1
+C      IGH=N
+C      CALL ORTHES(NM,N,LOW,IGH,A,ORT)
+C      CALL QR2NOZ(NM,N,LOW,IGH,A,WR,WI,IERR)
+C      CALL CONDIT(NM,N,A,ORT,WR,WI,COND)
+C **********************************************************************
+C  NOTE THE USE OF ORT AND WR IN CONDIT
+      DIMENSION A(NM,NM), V1(NM), V2(NM), WI(NM), COND(NM)
+      DIMENSION R1(2), R2(2)
+      DATA TOL /1.E-30/
+C ----------------------------------------------------------------------
+      I = 1
+   10 IF (I.GT.N) GO TO 190
+      VALR = A(I,I)
+      VALI = WI(I)
+      VALI2 = VALI*VALI
+C NJ GIVES EIGENVECTOR TYPE, 0 FOR COLUMN, 1 FOR ROW
+      NJ = 0
+C INITIALIZE NONZERO ELEMENTS OF EIGENVECTOR (V1,V2)
+      V1(I) = 1.0
+      V2(I) = 0.0
+   20 J = I - 1 + 2*NJ
+      IF (VALI.EQ.0.0) GO TO 30
+      V2(I+1) = VALI/A(I,I+1)
+      V1(I+1) = 0.0
+      IF (NJ.EQ.1) V2(I+1) = 1.0/V2(I+1)
+      J = I - 1 + 3*NJ
+C FIND THE INDICES OF ELEMENTS COMPUTED SO FAR
+   30 KS = J + 1 + NJ*(I-J-1)
+      KF = I + 1 + NJ*(J-I-2)
+      IF (VALI.EQ.0.0 .AND. NJ.EQ.0) KF = KF - 1
+C TEST FOR COMPLETION OF EIGENVECTOR
+      IF ((J+NJ.LT.1) .OR. (J+NJ.GT.N+1)) GO TO 130
+C **********************************************************************
+C *SOLVE -D*V + V*E = R FOR V = (V1,V2).  D IS A DIAGONAL BLOCK IN ROWS
+C * J1,J2, AND E IS THE REAL CANONICAL FORM OF THE ITH EIGENVALUE.
+C * EITHER D OR E OR BOTH CAN BE  1 BY 1
+C **********************************************************************
+C  FIND J1 AND J2 (J1.LE.J2) FOR ALL CASES
+      JJ = J
+      IF (WI(J).NE.0.0) JJ = J - 1 + 2*NJ
+      J0 = NJ*(J-JJ)
+      J1 = JJ + J0
+      J2 = J - J0
+      D1 = VALR - A(J,J)
+C CALCULATE RIGHT HAND SIDE R
+      DO 70 L=J1,J2
+        LJ = L - J1 + 1
+        R1(LJ) = 0.0
+        R2(LJ) = 0.0
+        IF (VALI.NE.0.0) GO TO 50
+        DO 40 K=KS,KF
+          LK = NJ*(K-L)
+          AA = A(L+LK,K-LK)
+          R1(LJ) = R1(LJ) + AA*V1(K)
+   40   CONTINUE
+        GO TO 70
+   50   DO 60 K=KS,KF
+          LK = NJ*(K-L)
+          AA = A(L+LK,K-LK)
+          R1(LJ) = R1(LJ) + AA*V1(K)
+          R2(LJ) = R2(LJ) + AA*V2(K)
+   60   CONTINUE
+   70 CONTINUE
+      IF (JJ.NE.J) GO TO 100
+C *****************************D IS 1 BY 1 *****************************
+      IF (VALI.NE.0.0) GO TO 80
+C E IS 1 BY 1 (D IS 1 BY 1)
+      IF (ABS(D1).LT.TOL*ABS(R1(1))) GO TO 180
+      V1(J) = 0.0
+      V2(J) = 0.0
+      IF (D1.NE.0.0) V1(J) = R1(1)/D1
+      GO TO 90
+C E IS 2 BY 2 ( D IS 1 BY 1 )
+   80 DEN = D1*D1 + VALI2
+      VAL = VALI*(-1.0)**NJ
+      V1(J) = R1(1)*D1 + R2(1)*VAL
+      V2(J) = R2(1)*D1 - R1(1)*VAL
+      VMAX = AMAX1(ABS(V1(J)),ABS(V2(J)))
+      IF (DEN.LT.TOL*VMAX) GO TO 180
+      V1(J) = V1(J)/DEN
+      V2(J) = V2(J)/DEN
+C NEXT J
+   90 J = J - 1 + 2*NJ
+      GO TO 30
+C ********************************D IS 2 BY 2***************************
+  100 IF (VALI.NE.0.0) GO TO 110
+C E IS 1 BY 1 (D IS 2 BY 2)
+      DEN = D1*D1 + WI(J)**2
+      V2(J1) = 0.0
+      V2(J2) = 0.0
+      V1(J1) = R1(1)*D1 + R1(2)*A(JJ,J)
+      V1(J2) = R1(1)*A(J,JJ) + R1(2)*D1
+      VMAX = AMAX1(ABS(V1(J1)),ABS(V1(J2)))
+      IF (DEN.LT.TOL*VMAX) GO TO 180
+      V1(J1) = V1(J1)/DEN
+      V1(J2) = V1(J2)/DEN
+      GO TO 120
+C E IS 2 BY 2 (D IS 2 BY 2).  CLOSED FORM SOLUTION
+  110 B = A(JJ,J)
+      C = A(J,JJ)
+      VAL = VALI*(-1.0)**NJ
+      BXC = B*C
+      H = D1*D1 + VALI2 - BXC
+      E = D1*H
+      F = VAL*(H+2.0*BXC)
+      G = H - 2.0*VALI2
+      H = 2.0*D1*VAL
+      V1(J1) = R1(1)*E + R2(1)*F + R1(2)*B*G + R2(2)*B*H
+      V2(J1) = -R1(1)*F + R2(1)*E - R1(2)*B*H + R2(2)*B*G
+      V1(J2) = R1(1)*C*G + R2(1)*C*H + R1(2)*E + R2(2)*F
+      V2(J2) = -R1(1)*C*H + R2(1)*C*G - R1(2)*F + R2(2)*E
+      VMAX = AMAX1(ABS(V1(J1)),ABS(V2(J1)),ABS(V1(J2)),ABS(V2(J2)))
+      DEN = G*G + H*H
+      IF (DEN.LT.TOL*VMAX) GO TO 180
+      IF (DEN.EQ.0.0) GO TO 120
+      V1(J1) = V1(J1)/DEN
+      V2(J1) = V2(J1)/DEN
+      V1(J2) = V1(J2)/DEN
+      V2(J2) = V2(J2)/DEN
+C NEXT J
+  120 J = J - 2 + 4*NJ
+      GO TO 30
+C COMPUTE EIGENVECTOR NORM
+  130 VMAX = 0.0
+      DO 140 K=KS,KF
+        VMAX = VMAX + V1(K)**2 + V2(K)**2
+  140 CONTINUE
+      IF (NJ.EQ.1) GO TO 150
+C PREPARE TO COMPUTE ROW EIGENVECTOR
+      NJ = 1
+      CNORM2 = VMAX
+      GO TO 20
+C COMPUTE CONDITION NUMBER
+  150 COND(I) = SQRT(CNORM2*VMAX)
+  160 IF (VALI.EQ.0.0) GO TO 170
+      COND(I) = COND(I)/2.0
+      COND(I+1) = COND(I)
+      I = I + 1
+C NEXT I
+  170 I = I + 1
+      GO TO 10
+C DEFECTIVE CASE
+  180 COND(I) = 1.0/TOL
+      GO TO 160
+C PLACE REAL PART OF EIGENVALUE IN V2
+  190 DO 200 I=1,N
+        V2(I) = A(I,I)
+  200 CONTINUE
+      RETURN
+      END

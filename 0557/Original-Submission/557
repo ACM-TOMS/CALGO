@@ -1,0 +1,787 @@
+C     PROGRAM MAIN (INPUT,OUTPUT,TAPE5=INPUT,TAPE6=OUTPUT)                A   10
+C **********************************************************************
+C ****
+C ****
+C **** PAGP (THE PARTITIONING ALGORITHM FOR GOAL PROGRAMMING) IS
+C **** DESIGNED TO SOLVE THE LINEAR GOAL PROGRAMMING PROBLEM.  THE
+C **** ALGORITHM PARTITIONS THE GOAL CONSTRAINTS OF THE PROBLEM
+C **** ACCORDING TO THE HIGHEST PRIORITY ASSIGNED TO EITHER DEVIATIONAL
+C **** VARIABLE (D- OR D+) IN EACH GOAL.  THE ALGORITHM IS THUS ABLE TO
+C **** SOLVE A SEQUENCE OF SMALLER PROBLEMS IN ORDER TO FIND A SOLUTION
+C **** TO THE ORIGINAL PROBLEM.
+C ****
+C ****
+C **********************************************************************
+C ****
+C ****
+C **** MUCH OF THE NOTATION AND STRUCTURE OF THE PAGP CODE IS TAKEN
+C **** (WITH THE AUTHOR'S PERMISSION) FROM THE LINEAR GOAL PROGRAMMING
+C **** CODE GIVEN IN
+C ****
+C ****           IGNIZIO,J.P., GOAL PROGRAMMING AND EXTENSIONS,
+C ****                         -------------------------------
+C ****           D.C.HEATH AND CO., LEXINGTON,MA(1976)
+C ****
+C ****
+C **********************************************************************
+C ****
+C ****
+C **** THE CODE FOR PAGP USES THE FOLLOWING ARRAYS-
+C ****
+C ****         TE(NROW,NCOL) = THE COEFFICIENT OF THE VARIABLE IN
+C ****                         COLUMN NCOL IN THE CONSTRAINT IN ROW NROW
+C ****
+C ****         TT(NP,NCOL)   = THE WEIGHT OF THE VARIABLE IN COLUMN NCOL
+C ****                         AT PRIORITY NP
+C ****
+C ****         TB(NROW)      = THE RIGHT HAND SIDE CONSTANT OF THE
+C ****                         CONSTRAINT IN ROW NROW
+C ****
+C ****         TL(NROW,NP)   = THE WEIGHT ASSIGNED TO THE BASIC VARIABLE
+C ****                         IN ROW NROW AT PRIORITY NP
+C ****
+C ****         TI(NP,NCOL)   = THE RELATIVE WEIGHT OF THE VARIABLE IN
+C ****                         COLUMN NCOL AT PRIORITY NP
+C ****
+C ****         TA(NP)        = THE TOTAL DEVIATION FROM THE GOALS AT
+C ****                         PRIORITY NP
+C ****
+C ****         NC(NP)        = THE NUMBER OF GOAL CONSTRAINTS ASSIGNED
+C ****                         TO PRIORITY NP BY THE PARTITION
+C ****
+C ****         NCON(I,NP)    = THE SUBSCRIPT OF THE I-TH CONSTRAINT
+C ****                         ASSIGNED TO PRIORITY NP (I=1,...,NC(NP))
+C ****
+C ****         NTOF(NP)      = THE NUMBER OF TERMS IN THE OBJECTIVE
+C ****                         FUNCTION AT PRIORITY NP
+C ****
+C ****         IND(NCOL)     = 1, IF THE VARIABLE IN COLUMN NCOL IS
+C ****                         ELIGIBLE TO ENTER THE BASIS
+C ****                       = 0, OTHERWISE
+C ****
+C ****         JROW(NROW,1)  = THE TYPE OF BASIC VARIABLE IN ROW NROW,
+C ****                         WHERE TYPE IS GIVEN BELOW
+C ****
+C ****                                 TYPE      JROW( . ,1)
+C ****                                 ****      ***********
+C ****                                  X             2
+C ****                                  D+            3
+C ****                                  D-            4
+C ****
+C ****         JROW(NROW,2)  = THE SUBSCRIPT OF THE BASIC VARIABLE IN
+C ****                         ROW NROW
+C ****
+C ****         JCOL(NCOL,1)  = THE TYPE OF VARIABLE IN COLUMN NCOL
+C ****                         (TYPE IS DEFINED AS ABOVE)
+C ****
+C ****         JCOL(NCOL,2)  = THE SUBSCRIPT OF THE VARIABLE IN
+C ****                         COLUMN NCOL
+C ****
+C ****
+C **********************************************************************
+C ****
+C ****
+C **** AS PRESENTLY DIMENSIONED, THE PAGP CODE CAN SOLVE PROBLEMS WITH
+C **** UP TO 60 CONSTRAINTS (BOTH REAL + GOAL CONSTRAINTS), 125
+C **** VARIABLES (DECISION + DEVIATIONAL VARIABLES), AND 10 PRIORITIES.
+C ****
+C ****
+C **********************************************************************
+C ****
+C ****
+      COMMON TT(10,125),TB(60),TE(60,125),TL(60,10),TA(10),TI(10,125),JC  A   20
+     1OL(125,2),NCOLI,NROWI,NPRIC,NC(10),JROW(60,2),NVAR,NPRIT,IND(125)   A   30
+      COMMON /PHASE1/ W,NRCON,NDVR                                        A   40
+      COMMON /CHNG/ NCON(60,10),NTOF(10)                                  A   50
+      INTEGER ALTST                                                       A   60
+C                                                                         A   80
+C **** READ IN PROBLEM DATA                                               A   90
+C ****
+C **** NPRIT=THE TOTAL NUMBER OF PRIORITIES
+C ****
+C **** NVAR=THE TOTAL NUMBER OF DECISION VARIABLES(INCLUDING SLACK AND
+C ****      SURPLUS VARIABLES BUT EXCLUDING ARTIFICIAL VARIABLES FOR THE
+C ****      REAL CONSTRAINTS)
+C ****
+C **** NRCON=THE NUMBER OF REAL CONSTRAINTS
+C                                                                         A  100
+      READ (5,120) NPRIT,NVAR,NRCON                                       A  110
+      READ (5,121) (NC(NP),NP=1,NPRIT)                                    A  120
+      DO 101 NP=1,NPRIT                                                   A  130
+         IF (NC(NP).EQ.0) GO TO 101                                       A  140
+         NCTMP=NC(NP)
+         READ (5,122) (NCON(N,NP),N=1,NCTMP)
+  101 CONTINUE                                                            A  160
+      READ (5,121) (NTOF(NP),NP=1,NPRIT)                                  A  170
+C                                                                         A  180
+C **** INITIALIZE SUBPROBLEM DIMENSIONS AND COLUMN INDICATORS.            A  190
+C ****
+C **** NCOLI=THE NUMBER OF COLUMNS IN THE CURRENT WORKING TABLEAU
+C ****
+C **** NROWI=THE NUMBER OF ROWS IN THE CURRENT WORKING TABLEAU
+C ****
+C **** NPRIC=THE PRIORITY CURRENTLY BEING OPTIMIZED
+C ****
+C **** ZERO THE TE, TL, TT, AND TI ARRAYS.                                A  200
+C                                                                         A  210
+      NCOLI=0                                                             A  220
+      NROWI=0                                                             A  230
+      NPRIC=0                                                             A  240
+      DO 104 NCR=1,125                                                    A  250
+         IND(NCR)=1                                                       A  260
+         DO 102 NR=1,60                                                   A  270
+  102    TE(NR,NCR)=0.                                                    A  280
+         DO 103 NP=1,10                                                   A  290
+            TI(NP,NCR)=0.                                                 A  300
+  103    TT(NP,NCR)=0.                                                    A  310
+  104 CONTINUE                                                            A  320
+      DO 105 NR=1,60                                                      A  330
+      DO 105 NP=1,10                                                      A  340
+  105 TL(NR,NP)=0.                                                        A  350
+C                                                                         A  360
+C **** CHECK FOR REAL CONSTRAINTS.                                        A  370
+C                                                                         A  380
+      IF (NRCON.EQ.0) GO TO 106                                           A  390
+      CALL PHSE1                                                          A  400
+      IF (NDVR.LE.0) GO TO 116                                            A  410
+      IF (W.GT.0.) GO TO 117                                              A  420
+C                                                                         A  430
+C **** THE PARTITIONING ALGORITHM BEGINS.                                 A  440
+C                                                                         A  450
+  106 NPRIC=NPRIC+1                                                       A  460
+      IF (NPRIC.EQ.1.AND.NRCON.EQ.0) GO TO 107                            A  470
+      GO TO 108                                                           A  480
+  107 CALL READ1                                                          A  490
+      GO TO 109                                                           A  500
+  108 CALL READ2                                                          A  510
+  109 CALL CINDX                                                          A  520
+      CALL TEST (NEVC,NDVR)                                               A  530
+C                                                                         A  540
+C **** IF NEVC IS LESS THAN ZERO, THE SUBPROBLEM IS OPTIMIZED.            A  550
+C                                                                         A  560
+      IF (NEVC.LE.0) GO TO 110                                            A  570
+C                                                                         A  580
+C **** IF NDVR IS LESS THAN ZERO, NO MINIMUM POSITIVE RATIO WAS FOUND.    A  590
+C                                                                         A  600
+      IF (NDVR.LE.0) GO TO 116                                            A  610
+      CALL PERM (NEVC,NDVR)                                               A  620
+      GO TO 109                                                           A  630
+C                                                                         A  640
+C **** IF THERE ARE NO MORE PRIORITIES, TOTAL PROBLEM IS OPTIMIZED.       A  650
+C **** PRINT THE OPTIMAL SOLUTION.                                        A  660
+C                                                                         A  670
+  110 IF (NPRIC.EQ.NPRIT) GO TO 115                                       A  680
+C                                                                         A  690
+C **** SINCE THERE ARE MORE PRIORITIES, MOVE ON TO THE NEXT SUBPROBLEM    A  700
+C **** IF THERE ARE ALTERNATE SOLUTIONS.  FIRST, ELIMINATE THOSE          A  710
+C **** COLUMNS WHICH CAN NOT ENTER THE BASIS.  IF THERE ARE NO            A  720
+C **** ALTERNATE SOLUTIONS, PRINT THE UNIQUE OPTIMAL SOLUTION.            A  730
+C                                                                         A  740
+      ALTST=0                                                             A  750
+      DO 112 NCR=1,NCOLI                                                  A  760
+         IF (IND(NCR).EQ.0) GO TO 112                                     A  770
+         IF (TI(NPRIC,NCR).GT.0.) GO TO 112                               A  780
+         DO 111 NR=1,NROWI                                                A  790
+            IF (JROW(NR,1).EQ.JCOL(NCR,1).AND.JROW(NR,2).EQ.JCOL(NCR,2))  A  800
+     1       GO TO 112                                                    A  810
+  111    CONTINUE                                                         A  820
+         ALTST=1                                                          A  830
+  112 CONTINUE                                                            A  840
+C                                                                         A  850
+C **** IF ALTST=1, THERE ARE ALTERNATE SOLUTIONS.                         A  860
+C                                                                         A  870
+      IF (ALTST.EQ.1) GO TO 113                                           A  880
+      GO TO 115                                                           A  890
+C                                                                         A  900
+C **** ELIMINATE THOSE COLUMNS WITH A POSITIVE RELATIVE COST AT           A  910
+C **** PRIORITY NPRIC.                                                    A  920
+C                                                                         A  930
+  113 DO 114 NCR=1,NCOLI                                                  A  940
+  114 IF (TI(NPRIC,NCR).GT.0.) IND(NCR)=0                                 A  950
+      GO TO 106                                                           A  960
+C
+C **** THE OPTIMIZATION IS OVER. PRINT OUT THE FINAL SOLUTION.
+C
+  115 CALL POUT                                                           A  970
+      GO TO 119                                                           A  980
+  116 WRITE (6,123) NPRIC                                                 A  990
+      GO TO 119                                                           A 1000
+  117 WRITE (6,124) W                                                     A 1010
+      WRITE (6,125)                                                       A 1020
+      DO 118 NR=1,NROWI                                                   A 1030
+         WRITE (6,126) JROW(NR,1),JROW(NR,2),TB(NR)                       A 1040
+  118 CONTINUE                                                            A 1050
+  119 STOP
+C                                                                         A 1120
+  120 FORMAT (3I5)                                                        A 1130
+  121 FORMAT (10I5)                                                       A 1140
+  122 FORMAT (16I5)                                                       A 1150
+  123 FORMAT (/  40H   THE PROGRAM TERMINATED ON SUBPROBLEM ,I4, 42H  NO
+     1 MINIMUM POSITIVE RATIO COULD BE FOUND)                             A 1170
+  124 FORMAT (/  65H  THE PROGRAM TERMINATED IN PHASE 1 WITH OBJECTIVE F
+     1UNCTION VALUE,F15.4)                                                A 1190
+  125 FORMAT (/  55H  THE OPTIMAL SOLUTION TO THE PHASE 1 PROBLEM IS
+     1    //   6H  TYPE,2X,  3HSUB,8X,  5HVALUE)
+  126 FORMAT (2I5,F15.4)                                                  A 1220
+C                                                                         A 1260
+      END                                                                 A 1270
+      SUBROUTINE PHSE1                                                    B   10
+C
+C **** SUBROUTINE PHSE1 READS IN ANY REAL CONSTRAINTS AND PERFORMS A
+C **** PHASE 1 SIMPLEX PROCEDURE IN ORDER TO FIND AN INITIAL BASIC
+C **** FEASIBLE SOLUTION.
+C
+      COMMON TT(10,125),TB(60),TE(60,125),TL(60,10),TA(10),TI(10,125),JC
+     1OL(125,2),NCOLI,NROWI,NPRIC,NC(10),JROW(60,2),NVAR,NPRIT,IND(125)
+      COMMON /PHASE1/ W,NRCON,NDVR
+      DIMENSION C(125), CR(125), CB(60)
+C
+C **** SET COLUMN AND ROW HEADINGS
+C
+      DO 101 NV=1,NVAR
+         JCOL(NV,1)=2
+  101 JCOL(NV,2)=NV
+      DO 102 NR=1,NRCON
+         JROW(NR,1)=1
+         JROW(NR,2)=NR
+         NAR=NVAR+NR
+         JCOL(NAR,1)=1
+  102 JCOL(NAR,2)=NR
+C
+C **** READ IN COEFFICIENTS AND RHS OF REAL CONSTRAINTS
+C
+      DO 103 NR=1,NRCON
+         READ (5,118) TB(NR),(TE(NR,NV),NV=1,NVAR)
+  103 CONTINUE
+C
+C **** PUT IDENTITY MATRIX IN FOR ARTIFICIAL VARIABLES
+C
+      DO 104 NR=1,NRCON
+         NAR=NVAR+NR
+  104 TE(NR,NAR)=1.
+C
+C **** SET C(J)=0 FOR ALL DECISION VARIABLES AND C(J)=1 FOR ALL
+C **** ARTIFICIAL VARIABLES
+C
+      DO 105 NV=1,NVAR
+  105 C(NV)=0.
+      DO 106 NR=1,NRCON
+         CB(NR)=1.
+         NAR=NVAR+NR
+  106 C(NAR)=1.
+C
+C **** CALCULATE RELATIVE COST COEFFICIENTS CR(.)
+C
+      NCOL=NVAR+NRCON
+  107 DO 108 NV=1,NCOL
+         CR(NV)=C(NV)
+      DO 108 NR=1,NRCON
+  108 CR(NV)=CR(NV)-CB(NR)*TE(NR,NV)
+C
+C **** CHECK FOR OPTIMALITY
+C
+      VEVC=0.
+      NEVC=0
+      DO 109 NCO=1,NCOL
+         NV=NCO
+         IF (CR(NV).GE.0.) GO TO 109
+         IF (CR(NV).GE.VEVC) GO TO 109
+         VEVC=CR(NV)
+         NEVC=NV
+  109 CONTINUE
+C
+C **** IF NEVC=0, PHASE 1 IS OPTIMIZED.  CALCULATE OBJECTIVE FUNCTION.
+C
+      IF (NEVC.EQ.0) GO TO 115
+C
+C **** DETERMINE DEPARTING VARIABLES ROW.
+C
+      NDVR=0
+      VDVR=10.0E+20
+      DO 111 NRI=1,NRCON
+         NR=NRI
+         IF (TE(NR,NEVC).LE.0.) GO TO 111
+         V=TB(NR)/TE(NR,NEVC)
+         IF (NDVR.EQ.0) GO TO 110
+         IF (V-VDVR) 110,110,111
+  110    VDVR=V
+         NDVR=NR
+  111 CONTINUE
+C
+C **** IF NDVR=0, MINIMUM RATIO RULE FAILED.  RETURN.
+C
+      IF (NDVR.EQ.0) RETURN
+C
+C **** PERFORM THE PIVOT.  REPLACE HEADINGS AND COST COEFFICIENT.
+C
+      JROW(NDVR,1)=JCOL(NEVC,1)
+      JROW(NDVR,2)=JCOL(NEVC,2)
+      CB(NDVR)=C(NEVC)
+C
+C **** COMPUTE NEW TE ARRAY
+C
+      PIV=TE(NDVR,NEVC)
+      PIB=TB(NDVR)
+      DO 113 NR=1,NRCON
+         IF (NR.EQ.NDVR) GO TO 113
+         IF (ABS(TE(NR,NEVC)).LE.0.0005) GO TO 113
+         PIX=TE(NR,NEVC)/PIV
+         TB(NR)=FIX(TB(NR)-PIX*PIB)
+         DO 112 NV=1,NCOL
+  112    TE(NR,NV)=FIX(TE(NR,NV)-TE(NDVR,NV)*PIX)
+  113 CONTINUE
+      TB(NDVR)=FIX(PIB/PIV)
+      DO 114 NV=1,NCOL
+  114 TE(NDVR,NV)=FIX(TE(NDVR,NV)/PIV)
+C
+C **** END OF PIVOT OPERATIONS.  PROCEED TO NEXT ITERATION.
+C
+      GO TO 107
+C
+C **** CALCULATE W, THE PHASE-1 OBJECTIVE FUNCTION.
+C
+  115 W=0.
+      DO 116 NR=1,NRCON
+  116 W=W+TB(NR)*CB(NR)
+C
+C **** INITIALIZE THOSE PORTIONS OF THE TABLEAU ASSIGNED TO THE
+C **** ARTIFICIAL VARIABLES.
+C
+      DO 117 NR=1,NRCON
+      DO 117 NV=1,NCOL
+         IF (NV.LE.NVAR) GO TO 117
+         TE(NR,NV)=0.
+  117 CONTINUE
+C
+C **** UPDATE NCOLI AND NROWI PARAMETERS.
+C
+      NROWI=NRCON
+      NCOLI=NVAR
+      RETURN
+C
+  118 FORMAT (8F10.0)
+C
+      END
+      SUBROUTINE READ1                                                    C   10
+C
+C **** SUBROUTINE READ1 READS IN THE GOAL CONSTRAINTS AND OBJECTIVE
+C **** FUNCTION TERMS ASSIGNED TO PRIORITY ONE.
+C **** SUBROUTINE READ1 IS NOT USED IF REAL CONSTRAINTS ARE PRESENT.
+C
+      COMMON TT(10,125),TB(60),TE(60,125),TL(60,10),TA(10),TI(10,125),JC
+     1OL(125,2),NCOLI,NROWI,NPRIC,NC(10),JROW(60,2),NVAR,NPRIT,IND(125)
+      COMMON /CHNG/ NCON(60,10),NTOF(10)
+C
+C **** SET COLUMN AND ROW HEADINGS.
+C
+      DO 101 NV=1,NVAR
+         JCOL(NV,1)=2
+  101 JCOL(NV,2)=NV
+      NC11=NC(1)
+      DO 102 NCR=1,NC11
+         NC1=NVAR+2*NCR-1
+         NC2=NVAR+2*NCR
+         JCOL(NC1,1)=4
+         JCOL(NC1,2)=NCON(NCR,1)
+         JCOL(NC2,1)=3
+         JCOL(NC2,2)=NCON(NCR,1)
+         JROW(NCR,1)=4
+  102 JROW(NCR,2)=NCON(NCR,1)
+C
+C **** READ IN THE GOAL CONSTRAINTS ASSIGNED TO PRIORITY 1.
+C
+      NC1=NC(1)
+      DO 103 NCR=1,NC1
+         NV1=NVAR+2*NCR-1
+         NV2=NVAR+2*NCR
+         READ (5,105) TB(NCR),(TE(NCR,NV),NV=1,NVAR)
+C
+C **** PUT +1 IN FOR D- AND -1 IN FOR D+.
+C
+         TE(NCR,NV1)=1.
+         TE(NCR,NV2)=-1.
+  103 CONTINUE
+      NCOLI=NV2
+      NROWI=NC(1)
+C
+C **** READ IN THE OBJECTIVE FUNCTION TERMS FOR PRIORITY 1.
+C
+      NT1=NTOF(1)
+      DO 104 NT=1,NT1
+         READ (5,106) ISUB,ITYPE,WGHT
+         CALL PLACE (ISUB,ITYPE,WGHT)
+  104 CONTINUE
+      RETURN
+C
+  105 FORMAT (8F10.0)
+  106 FORMAT (2I5,F10.0)
+C
+      END
+      SUBROUTINE READ2                                                    D   10
+C
+C **** SUBROUTINE READ2 READS IN THE GOAL CONSTRAINTS AND OBJECTIVE
+C **** FUNCTION TERMS ASSIGNED TO PRIORITY NPRIC.
+C **** SUBROUTINE READ2 IS ALSO USED TO READ IN THE FIRST PRIORITY GOAL
+C **** CONSTRAINTS AND OBJECTIVE FUNCTION TERMS IF REAL CONSTRAINTS ARE
+C **** PRESENT.
+C
+      COMMON TT(10,125),TB(60),TE(60,125),TL(60,10),TA(10),TI(10,125),JC
+     1OL(125,2),NCOLI,NROWI,NPRIC,NC(10),JROW(60,2),NVAR,NPRIT,IND(125)
+      COMMON /CHNG/ NCON(60,10),NTOF(10)
+      IF (NC(NPRIC).EQ.0) GO TO 107
+C
+C **** READ IN THE COEFFICIENTS OF THE X'S.
+C
+      NCTMP=NC(NPRIC)
+      DO 106 NRI=1,NCTMP
+         NR=NRI+NROWI
+         NC1=NCOLI+2*NRI-1
+         NC2=NCOLI+2*NRI
+         JCOL(NC1,1)=4
+         JCOL(NC1,2)=NCON(NRI,NPRIC)
+         JCOL(NC2,1)=3
+         JCOL(NC2,2)=NCON(NRI,NPRIC)
+         READ (5,109) TB(NR),(TE(NR,NV),NV=1,NVAR)
+         TE(NR,NC1)=1.
+         TE(NR,NC2)=-1.
+C
+C **** PERFORM THE ROW REDUCTION.
+C
+         DO 102 NRC=1,NROWI
+            IF (JROW(NRC,1).NE.2) GO TO 102
+            J=JROW(NRC,2)
+            TB(NR)=TB(NR)-TE(NR,J)*TB(NRC)
+            DO 101 NCR=1,NC2
+               IF (NCR.EQ.J) GO TO 101
+               TE(NR,NCR)=TE(NR,NCR)-TE(NR,J)*TE(NRC,NCR)
+  101       CONTINUE
+            TE(NR,J)=0.
+  102    CONTINUE
+C
+C **** DETERMINE THE DEVIATIONAL VARIABLE TO ENTER THE BASIS.
+C
+         IF (TB(NR)) 103,105,105
+C
+C **** SINCE TB IS LESS THAN ZERO, MULTIPLY THE ROW BY -1 AND ENTER D+
+C **** IN THE BASIS.
+C
+  103    DO 104 NCR=1,NC2
+  104    TE(NR,NCR)=-TE(NR,NCR)
+         TB(NR)=-TB(NR)
+         JROW(NR,1)=3
+         JROW(NR,2)=NCON(NRI,NPRIC)
+         GO TO 106
+C
+C **** SINCE TB IS GREATER THAN OR EQUAL TO ZERO ENTER D- IN THE BASIS.
+C
+  105    JROW(NR,1)=4
+         JROW(NR,2)=NCON(NRI,NPRIC)
+  106 CONTINUE
+C
+C **** INCREASE THE PARAMETERS NCOLI AND NROWI.
+C
+      NCOLI=NC2
+      NROWI=NR
+C
+C **** READ IN THE OBJECTIVE FUNCTION TERMS FOR PRIORITY NPRIC.
+C
+  107 NTTMP=NTOF(NPRIC)
+      DO 108 NT=1,NTTMP
+         READ (5,110) ISUB,ITYPE,WGHT
+         CALL PLACE (ISUB,ITYPE,WGHT)
+  108 CONTINUE
+      RETURN
+C
+  109 FORMAT (8F10.0)
+  110 FORMAT (2I5,F10.0)
+C
+      END
+      SUBROUTINE PLACE (ISUB,ITYPE,WGHT)                                  E   10
+C
+C **** SUBROUTINE PLACE PUTS THE OBJECTIVE FUNCTION WEIGHTS FOR THE
+C **** DEVIATION VARIABLES AT THE CURRENT PRIORITY LEVEL (NPRIC) IN THE
+C **** CORRECT POSITIONS IN THE AUGMENTED TABLEAU.
+C ****
+C **** ISUB=THE SUBSCRIPT OF THE DEVIATIONAL VARIABLE
+C ****
+C **** ITYPE=3, IF POSITIVE DEVIATIONAL VARIABLE (D+)
+C ****       4, IF NEGATIVE DEVIATIONAL VARIABLE (D-)
+C ****
+C **** WGHT=THE CARDINAL WEIGHT OF THIS DEVIATIONAL VARIABLE AT THE
+C ****      CURRENT PRIORITY LEVEL
+C
+      COMMON TT(10,125),TB(60),TE(60,125),TL(60,10),TA(10),TI(10,125),JC
+     1OL(125,2),NCOLI,NROWI,NPRIC,NC(10),JROW(60,2),NVAR,NPRIT,IND(125)
+      COMMON /CHNG/ NCON(60,10),NTOF(10)
+C
+C **** PLACE THE WEIGHT IN THE PROPER COLUMN IN THE TOP STUB.
+C
+      NC1=NVAR+1
+      DO 101 NCR=NC1,NCOLI
+         IF (JCOL(NCR,1).EQ.ITYPE.AND.JCOL(NCR,2).EQ.ISUB) GO TO 102
+  101 CONTINUE
+  102 TT(NPRIC,NCR)=WGHT
+C
+C **** PLACE THE WEIGHT IN THE PROPER ROW IN THE LEFT STUB.
+C
+      DO 103 NR=1,NROWI
+         IF (JROW(NR,1).EQ.ITYPE.AND.JROW(NR,2).EQ.ISUB) GO TO 104
+  103 CONTINUE
+      GO TO 105
+  104 TL(NR,NPRIC)=WGHT
+  105 CONTINUE
+      RETURN
+C
+      END
+      SUBROUTINE CINDX                                                    F   10
+C
+C **** SUBROUTINE CINDX COMPUTES THE RELATIVE COST COEFFICIENTS FOR EACH
+C **** VARIABLE IN THE CURRENT TABLEAU(THE TI( . , . ) ARRAY) AND THE
+C **** OBJECTIVE FUNCTION VALUE(THE TA(.) ARRAY) AT THE CURRENT
+C **** PRIORITY(NPRIC)
+C
+      COMMON TT(10,125),TB(60),TE(60,125),TL(60,10),TA(10),TI(10,125),JC
+     1OL(125,2),NCOLI,NROWI,NPRIC,NC(10),JROW(60,2),NVAR,NPRIT,IND(125)
+C
+C **** COMPUTE TA(NPRIC) AND TI(NPRIC,NC)   NC=1,....,NCOLI
+C
+      TA(NPRIC)=0.
+      DO 101 NR=1,NROWI
+  101 TA(NPRIC)=TA(NPRIC)+TB(NR)*TL(NR,NPRIC)
+      DO 102 NCR=1,NCOLI
+         TI(NPRIC,NCR)=TT(NPRIC,NCR)
+      DO 102 NR=1,NROWI
+  102 TI(NPRIC,NCR)=TI(NPRIC,NCR)-TE(NR,NCR)*TL(NR,NPRIC)
+      RETURN
+C
+      END
+      SUBROUTINE TEST (NEVC,NDVR)                                         G   10
+C
+C **** SUBROUTINE TEST DETERMINES THE NEXT ENTERING VARIABLE'S COLUMN
+C **** (NEVC) AND THE NEXT DEPARTING VARIABLE'S ROW(NDVR).  IF NO
+C **** FURTHER OPTIMIZATION IS POSSIBLE, THE VALUE NEVC=0 IS RETURNED.
+C **** IF NDVR=0 IS RETURNED, NO MINIMUM POSITIVE RATIO COULD BE FOUND
+C **** IN THE CURRENT PIVOT OPERATION,I.E., ALL OF THE COEFFICIENTS
+C **** TE( . ,NEVC) ARE NONPOSITIVE.
+C
+      COMMON TT(10,125),TB(60),TE(60,125),TL(60,10),TA(10),TI(10,125),JC
+     1OL(125,2),NCOLI,NROWI,NPRIC,NC(10),JROW(60,2),NVAR,NPRIT,IND(125)
+      NDVR=0
+      NEVC=0
+      VEVC=0.
+      VDVR=10.0E+20
+C
+C **** DETERMINE ENTERING VARIABLE'S COLUMN.
+C
+      DO 101 NCR=1,NCOLI
+         IF (TI(NPRIC,NCR).GE.0.) GO TO 101
+         IF (IND(NCR).EQ.0) GO TO 101
+         IF (TI(NPRIC,NCR).GE.VEVC) GO TO 101
+         NEVC=NCR
+         VEVC=TI(NPRIC,NCR)
+  101 CONTINUE
+C
+C **** IF NEVC=0, SUBPROBLEM NPRIC IS OPTIMIZED. RETURN.
+C
+      IF (NEVC.EQ.0) RETURN
+C
+C **** DETERMINE DEPARTING VARIABLE'S ROW.
+C
+      DO 105 NR=1,NROWI
+         IF (TE(NR,NEVC).LE.0.) GO TO 105
+         V=TB(NR)/TE(NR,NEVC)
+         IF (NDVR.EQ.0) GO TO 104
+         IF (V-VDVR) 104,102,105
+  102    DO 103 NP=1,NPRIC
+            IF (TL(NR,NP)-TL(NDVR,NP)) 105,103,104
+  103    CONTINUE
+  104    VDVR=V
+         NDVR=NR
+  105 CONTINUE
+      RETURN
+C
+      END
+      SUBROUTINE PERM (NEVC,NDVR)                                         H   10
+C
+C **** SUBROUTINE PERM PERFORMS THE PIVOT OPERATION USING THE PIVOT
+C **** ELEMENT IN COLUMN NEVC AND ROW NDVR AND COMPUTES THE NEW TABLEAU.
+C
+      COMMON TT(10,125),TB(60),TE(60,125),TL(60,10),TA(10),TI(10,125),JC
+     1OL(125,2),NCOLI,NROWI,NPRIC,NC(10),JROW(60,2),NVAR,NPRIT,IND(125)
+C
+C **** REPLACE HEADING FOR ROW NDVR.
+C
+      JROW(NDVR,1)=JCOL(NEVC,1)
+      JROW(NDVR,2)=JCOL(NEVC,2)
+C
+C **** REPLACE TL VECTOR FOR ROW NDVR
+C
+      DO 101 NP=1,NPRIC
+  101 TL(NDVR,NP)=TT(NP,NEVC)
+C
+C **** COMPUTE NEW TE ARRAY.
+C
+      PIV=TE(NDVR,NEVC)
+      PIB=TB(NDVR)
+      DO 103 NR=1,NROWI
+         IF (NR.EQ.NDVR) GO TO 103
+         IF (ABS(TE(NR,NEVC)).LE.0.0005) GO TO 103
+         PIX=TE(NR,NEVC)/PIV
+         TB(NR)=FIX(TB(NR)-PIX*PIB)
+         DO 102 NCR=1,NCOLI
+  102    TE(NR,NCR)=FIX(TE(NR,NCR)-TE(NDVR,NCR)*PIX)
+  103 CONTINUE
+      TB(NDVR)=FIX(PIB/PIV)
+      DO 104 NCR=1,NCOLI
+  104 TE(NDVR,NCR)=FIX(TE(NDVR,NCR)/PIV)
+      RETURN
+C
+      END
+      FUNCTION FIX(Z)                                                     I   10
+C
+C **** FUNCTION FIX BRINGS FLOATING POINT VALUES THAT ARE WITHIN 1.E-3
+C **** OF AN INTEGER TO THAT INTEGER.
+C
+      FIX=AINT(Z+SIGN(.5,Z))
+      IF (ABS(FIX-Z).GT. 1.E-3) FIX=Z
+      RETURN
+C
+      END
+      SUBROUTINE POUT                                                     J   10
+C
+C **** SUBROUTINE POUT PREPARES AND PRINTS THE SOLUTION INFORMATION.
+C
+      COMMON TT(10,125),TB(60),TE(60,125),TL(60,10),TA(10),TI(10,125),JC
+     1OL(125,2),NCOLI,NROWI,NPRIC,NC(10),JROW(60,2),NVAR,NPRIT,IND(125)
+      COMMON /CHNG/ NCON(60,10),NTOF(10)
+      DIMENSION WOUT(125,4), RLHS(60,10), WM(60), WP(60)
+      DIMENSION DIFF(60)
+      WRITE (6,122)
+      WRITE (6,123) NPRIC,NROWI
+C
+C **** OUTPUT ARRAY IS ZEROED.
+C
+      DO 101 I=1,125
+      DO 101 J=1,4
+  101 WOUT(I,J)=0.
+C
+C **** OUTPUT ARRAY IS FILLED.
+C
+      DO 102 NP=1,NPRIC
+  102 WOUT(NP,1)=FIX(TA(NP))
+      DO 103 NR=1,NROWI
+         I1=JROW(NR,1)
+         I2=JROW(NR,2)
+  103 WOUT(I2,I1)=FIX(TB(NR))
+C
+C **** IF ALL PRIORITIES HAVE BEEN INCLUDED, PRINT OPTIMAL SOLUTION.
+C **** IF NOT, WE MUST CALCULATE VALUES FOR REMAINING TA'S AND D- AND D+
+C
+      IF (NPRIC.GE.NPRIT) GO TO 114
+      NP1=NPRIC+1
+      DO 113 NP=NP1,NPRIT
+         TA(NP)=0.
+         IF (NC(NP).EQ.0) GO TO 106
+C
+C **** READ IN THE GOAL CONSTRAINTS ASSIGNED TO PRIORITY NP.
+C
+         NCTMP=NC(NP)
+         DO 105 NCI=1,NCTMP
+            NR=NROWI+NCI
+            READ (5,124) TB(NR),(TE(NR,NV),NV=1,NVAR)
+            RLHS(NCI,NP)=0.
+            DO 104 NV=1,NVAR
+  104       RLHS(NCI,NP)=RLHS(NCI,NP)+TE(NR,NV)*WOUT(NV,2)
+            DIFF(NCI)=TB(NR)-RLHS(NCI,NP)
+  105    CONTINUE
+C
+C **** READ THE OBJECTIVE FUNCTION TERMS FOR PRIORITY NP.
+C
+  106    NTTMP=NTOF(NP)
+         DO 112 NT=1,NTTMP
+            READ (5,125) ISUB,ITYPE,WGHT
+            IF (NC(NP).EQ.0) GO TO 111
+            NCTMP=NC(NP)
+            DO 110 NCI=1,NCTMP
+               IF (ISUB.NE.NCON(NCI,NP)) GO TO 110
+               IF (DIFF(NCI)) 107,108,109
+  107          IF (ITYPE.NE.3) GO TO 110
+               WOUT(ISUB,3)=-DIFF(NCI)
+  108          GO TO 110
+  109          IF (ITYPE.NE.4) GO TO 110
+               WOUT(ISUB,4)=DIFF(NCI)
+  110       CONTINUE
+  111       TA(NP)=TA(NP)+WGHT*WOUT(ISUB,ITYPE)
+  112    CONTINUE
+         NROWI=NROWI+NC(NP)
+C
+C **** FILL IN THE OUTPUT VALUE FOR ATTAINMENT OF PRIORITY NP.
+C
+         WOUT(NP,1)=FIX(TA(NP))
+  113 CONTINUE
+C
+C **** PRINT OPTIMAL SOLUTION
+C
+  114 WRITE (6,126)
+      WRITE (6,127)
+      DO 115 NV=1,NVAR
+         WRITE (6,128) NV,WOUT(NV,2)
+  115 CONTINUE
+      WRITE (6,126)
+      WRITE (6,129)
+      DO 116 NP=1,NPRIT
+         IF (NC(NP).EQ.0) GO TO 116
+         NCTMP=NC(NP)
+      DO 139 NCO=1,NCTMP
+         N=NCON(NCO,NP)
+         WRITE (6,130) NP,N,WOUT(N,3),WOUT(N,4)
+  139 CONTINUE
+  116 CONTINUE
+      WRITE (6,126)
+      WRITE (6,131)
+      DO 117 NP=1,NPRIT
+         WRITE (6,132) NP,WOUT(NP,1)
+  117 CONTINUE
+      WRITE (6,126)
+      WRITE (6,133)
+      WRITE (6,134)
+      I=MAX0(NPRIT,NVAR,NROWI)
+      DO 121 K=1,I
+         IF (K.GT.NPRIT) GO TO 119
+         IF (K.GT.NVAR) GO TO 118
+         WRITE (6,135) K,(WOUT(K,J),J=1,4)
+         GO TO 121
+  118    WRITE (6,136) K,WOUT(K,1),(WOUT(K,J),J=3,4)
+         GO TO 121
+  119    IF (K.GT.NVAR) GO TO 120
+         WRITE (6,137) K,(WOUT(K,J),J=2,4)
+         GO TO 121
+  120    WRITE (6,138) K,(WOUT(K,J),J=3,4)
+  121 CONTINUE
+      WRITE (6,126)
+      RETURN
+C
+  122 FORMAT (1H1)
+  123 FORMAT (/  39H  THE OPTIMIZATION ENDED ON SUBPROBLEM ,I5 /  13H  T
+     1HERE WERE ,I5, 42H CONSTRAINTS IN THE FINAL OPTIMAL TABLEAU.)
+  124 FORMAT (8F10.0)
+  125 FORMAT (2I5,F10.0)
+  126 FORMAT (//120(1H*))
+  127 FORMAT (1H0, 52HTHE OPTIMAL SOLUTION FOR THE DECISION VARIABLES X(
+     1J))
+  128 FORMAT (1H0,  2HX(,I3,  2H)=,F15.4)
+  129 FORMAT (1H0, 25HTHE GOAL ACHIEVEMENTS ARE //   9H PRIORITY,2X, 11H
+     1GOAL NUMBER,2X, 16HOVER-ACHIEVEMENT,2X, 17HUNDER-ACHIEVEMENT)
+  130 FORMAT (4X,I2,10X,I2,10X,F10.4,10X,F10.4)
+  131 FORMAT (1H0, 29HTHE PRIORITY ACHIEVEMENTS ARE //   9H PRIORITY,8X,
+     1 11HACHIEVEMENT)
+  132 FORMAT (4X,I2,10X,F10.4)
+  133 FORMAT (1H0, 15H OUTPUT SUMMARY)
+  134 FORMAT (1H0,  9HSUBSCRIPT,11X,  8H   A OPT,7X,  8H   X OPT,7X,  9H
+     1  POS DEV,6X,  9H  NEG DEV /)
+  135 FORMAT (I8,7X,4F15.4)
+  136 FORMAT (I8,7X,F15.4,15X,2F15.4)
+  137 FORMAT (I8,22X,3F15.4)
+  138 FORMAT (I8,37X,2F15.4)
+C
+      END

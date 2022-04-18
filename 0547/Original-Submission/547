@@ -1,0 +1,612 @@
+      SUBROUTINE DCSSMO(H, N, TNODE, G, WGS, RHO, GSMO, B, C, D)        DCS   10
+C
+C  THIS SUBROUTINE COMPUTES THE DISCRETE NATURAL CUBIC
+C  SPLINE DEFINED ON THE INTERVAL (TNODE(1),TNODE(N)) WHICH
+C  SMOOTHS THROUGH THE DATA (TNODE(I),G(I)),I=1,2,...,N.
+C  N MUST BE 2 OR GREATER. THE NODES MUST SATISFY TNODE(I)
+C  .LT.TNODE(I+1). THE SOLUTION S(T) FOR T IN THE INTERVAL
+C  (TNODE(I),TNODE(I+1)) IS GIVEN BY
+C
+C     S(T)=GSMO(I)+B(I)*(T-TNODE(I))+
+C             C(I)*(T-TNODE(I))**2+D(I)*(T-TNODE(I))**3
+C
+      DIMENSION TNODE(N), G(N), WGS(N), GSMO(N), B(N), C(N), D(N)
+C
+C  INPUT  PARAMETERS(NONE OF THE INPUT PARAMETERS ARE CHANGED
+C         BY THIS SUBROUTINE)
+C
+C  H     - THE STEP SIZE USED FOR THE DISCRETE CUBIC SPLINE
+C  N     - NUMBER OF NODES (TNODE) AND DATA VALUES(G)
+C  TNODE - REAL ARRAY CONTAINING THE NODES (TNODE(I).LT.
+C          TNODE(I+1)).
+C  G     - REAL ARRAY CONTAINING THE DATA VALUES.
+C  WGS   - REAL ARRAY CONTAINING THE WEIGHTS WGS(I)
+C          CORRESPONDING TO THE DATA (TNODE(I),G(I)).
+C  RHO   - SIMPLE REAL VARIABLE CONTAINING THE POSITIVE
+C          PARAMETER FOR VARYING THE SMOOTHNESS OF THE FIT.
+C          IF RHO IS SMALL SMOOTHNESS IS EMPHASIZED.
+C          IF RHO IS LARGE DATA FITTING IS EMPHASIZED.
+C
+C  OUTPUT PARAMETERS
+C
+C  GSMO  - REAL ARRAY CONTAINING THE SMOOTHED VALUES OF
+C          THE DATA G(I),I=1,2,....,N.
+C  B     - REAL ARRAY CONTAINING THE COEFFICIENTS B(I) FOR
+C          THE TERMS (T-TNODE(I)).
+C  C     - REAL ARRAY CONTAINING THE COEFFICIENTS C(I) FOR
+C          THE TERMS (T-TNODE(I))**2.
+C  D     - REAL ARRAY CONTAINING THE COEFFICIENTS D(I) FOR
+C          THE TERMS (T-TNODE(I))**3.
+C
+      IF (N.EQ.2) GO TO 180
+      N1 = N - 1
+      N2 = N1 - 1
+      N3 = N2 - 1
+C  THE RIGHT HAND SIDE OF THE LINEAR SYSTEM FOR THE
+C  C(I)'S WILL NOW BE CONSTRUCTED.
+      DO 10 I=1,N
+        C(I) = G(I)
+   10 CONTINUE
+      DO 20 I=1,N1
+        C(I) = (C(I+1)-C(I))/(TNODE(I+1)-TNODE(I))
+   20 CONTINUE
+      DO 30 I=1,N2
+        C(I) = 3.0*(C(I+1)-C(I))
+   30 CONTINUE
+C  THE RIGHT HAND SIDE IS NOW IN ARRAY C.
+C
+C  THE P.D. 5 BANDED SYMMETRIC MATRIX WILL NOW BE CONSTRUCTED.
+C  THE THREE NEEDED DIAGONALS WILL BE STORED IN ARRAYS
+C  GSMO,B,D.
+      H2 = H*H
+      H3 = H2*H
+      R6 = 6.0*H3/RHO
+      HI3 = TNODE(2) - TNODE(1)
+      HI4 = TNODE(3) - TNODE(2)
+      ETA3 = HI3 + HI3 + H2/HI3
+      BETA3 = R6/(WGS(1)*HI3)
+      BETA4 = R6/(WGS(2)*HI3*HI4)
+      EPS3 = (BETA3+BETA4*HI4)/HI3
+      H2DHI = H2/HI4
+      ETA4 = HI4 + HI4 + H2DHI
+      IF (N.EQ.3) GO TO 60
+      HI5 = TNODE(4) - TNODE(3)
+      BETA5 = R6/(WGS(3)*HI4*HI5)
+      EPS4 = (BETA4*HI3+BETA5*HI5)/HI4
+      GSMO(1) = ETA3 + ETA4 + BETA4 + BETA4 + EPS3 + EPS4
+      P = H2DHI + BETA4 + BETA5 + EPS4
+      B(1) = HI4 - P
+      IF (N.EQ.4) GO TO 50
+      DO 40 I=2,N3
+        HI3 = HI4
+        HI4 = HI5
+        HI5 = TNODE(I+3) - TNODE(I+2)
+        ETA3 = ETA4
+        H2DHI = H2/HI4
+        ETA4 = HI4 + HI4 + H2DHI
+        BETA3 = BETA4
+        BETA4 = BETA5
+        BETA5 = R6/(WGS(I+2)*HI4*HI5)
+        EPS3 = EPS4
+        EPS4 = (BETA4*HI3+BETA5*HI5)/HI4
+        D(I-1) = BETA4
+        P = H2DHI + BETA4 + BETA5 + EPS4
+        B(I) = HI4 - P
+        GSMO(I) = ETA3 + ETA4 + BETA4 + BETA4 + EPS3 + EPS4
+   40 CONTINUE
+   50 HI3 = HI4
+      HI4 = HI5
+      ETA3 = ETA4
+      ETA4 = HI4 + HI4 + H2/HI4
+      BETA4 = BETA5
+      EPS3 = EPS4
+   60 BETA5 = R6/(WGS(N)*HI4)
+      EPS4 = (BETA4*HI3+BETA5)/HI4
+      GSMO(N2) = ETA3 + ETA4 + BETA4 + BETA4 + EPS3 + EPS4
+C  THE P.D. 5 BANDED SYMMETRIC MATRIX IS COMPLETE.
+C  THE SYSTEM OF LINEAR EQUATION WILL NOW BE SOLVED FOR THE
+C  C(I)'S.
+      IF (N.GT.3) GO TO 70
+      C(1) = C(1)/GSMO(1)
+      GO TO 150
+   70 IF (N.GT.4) GO TO 80
+      C(1) = (C(1)*GSMO(2)-C(2)*B(1))/(GSMO(1)*GSMO(2)-B(1)**2)
+      C(2) = (C(2)-C(1)*B(1))/GSMO(2)
+      GO TO 150
+C  THIS SOLVE THE 5 BANDED SYSTEM WHEN K=N-2.GT.3.
+   80 K = N2
+      K1 = K - 1
+      K2 = K1 - 1
+      K3 = K2 - 1
+C  THE 5 BANDED MATRIX WILL NOW BE FACTORED.
+      B(1) = B(1)/GSMO(1)
+      D(1) = D(1)/GSMO(1)
+      P = GSMO(1)*B(1)
+      GSMO(2) = GSMO(2) - P*B(1)
+      B(2) = (B(2)-P*D(1))/GSMO(2)
+      IF (K.EQ.3) GO TO 110
+      D(2) = D(2)/GSMO(2)
+      IF (K.EQ.4) GO TO 100
+      DO 90 I=3,K2
+        I1 = I - 1
+        I2 = I1 - 1
+        P = GSMO(I1)*B(I1)
+        GSMO(I) = GSMO(I) - GSMO(I2)*(D(I2)**2) - P*B(I1)
+        B(I) = (B(I)-P*D(I1))/GSMO(I)
+        D(I) = D(I)/GSMO(I)
+   90 CONTINUE
+  100 P = GSMO(K2)*B(K2)
+      GSMO(K1) = GSMO(K1) - GSMO(K3)*(D(K3)**2) - P*B(K2)
+      B(K1) = (B(K1)-P*D(K2))/GSMO(K1)
+  110 GSMO(K) = GSMO(K) - GSMO(K2)*(D(K2)**2) - GSMO(K1)*(B(K1)**2)
+C  FACTORIZATION COMPLETE.
+C  CARRY OUT FORWARD  AND BACKWARD SUBSTITUTION.
+      C(2) = C(2) - B(1)*C(1)
+      DO 120 I=3,K
+        I1 = I - 1
+        I2 = I - 2
+        C(I) = C(I) - B(I1)*C(I1) - D(I2)*C(I2)
+  120 CONTINUE
+      DO 130 I=1,K
+        C(I) = C(I)/GSMO(I)
+  130 CONTINUE
+      C(K1) = C(K1) - B(K1)*C(K)
+      DO 140 I=2,K1
+        J = K - I
+        C(J) = C(J) - B(J)*C(J+1) - D(J)*C(J+2)
+  140 CONTINUE
+C  THE 5 BANDED SYSTEM HAS BEEN SOLVED.THE SOLUTION IS IN
+C  ARRAY C. THE COEFFICIENTS GSMO, B, C, AND D WILL NOW BE
+C  SET UP.
+  150 C(N) = 0.0
+      D(N) = 0.0
+      C(N1) = C(N2)
+      HK1 = TNODE(N) - TNODE(N1)
+      D(N1) = -C(N1)/(3.0*HK1)
+      GSMO(N) = G(N) + R6*D(N1)/WGS(N)
+      IF (N.EQ.3) GO TO 170
+      DO 160 I=2,N2
+        K = N - I
+        K1 = K + 1
+        HK2 = HK1
+        HK1 = TNODE(K1) - TNODE(K)
+        C(K) = C(K-1)
+        D(K) = (C(K1)-C(K))/(3.0*HK1)
+        GSMO(K1) = G(K1) - R6*(D(K1)-D(K))/WGS(K1)
+        B(K1) = (GSMO(K1+1)-GSMO(K1))/HK2 - HK2*(C(K1)+C(K1)+C(K1+1))/
+     *    3.0
+  160 CONTINUE
+  170 C(1) = 0.0
+      HK2 = HK1
+      HK1 = TNODE(2) - TNODE(1)
+      D(1) = (C(2)-C(1))/(3.0*HK1)
+      GSMO(2) = G(2) - R6*(D(2)-D(1))/WGS(2)
+      GSMO(1) = G(1) - R6*D(1)/WGS(1)
+      B(2) = (GSMO(3)-GSMO(2))/HK2 - HK2*(C(2)+C(2)+C(3))/3.0
+      B(1) = (GSMO(2)-GSMO(1))/HK1 - HK1*(C(1)+C(1)+C(2))/3.0
+C  THE DISCRETE CUBIC SMOOTHING SPLINE IS NOW COMPLETE.
+      RETURN
+C  THE TRIVIAL CASE WHEN N=2 IS HANDLED HERE.
+  180 GSMO(1) = G(1)
+      GSMO(2) = G(2)
+      B(1) = (G(2)-G(1))/(TNODE(2)-TNODE(1))
+      C(1) = 0.0
+      D(1) = 0.0
+      RETURN
+      END
+      SUBROUTINE DCSINT(IENT, H, N, TNODE, G, END1, ENDN, B, C, D)      DCS   10
+C
+C  THIS SUBROUTINE COMPUTES THE DISCRETE CUBIC SPLINE
+C  DEFINED ON THE INTERVAL (TNODE(1),TNODE(N)),WHICH INTER-
+C  POLATES THE DATA (TNODE(I),G(I)),I=1,2,...,N. WE REQUIRE
+C  THAT TNODE(I).LT.TNODE(I+1). END1 AND ENDN CONTAIN THE
+C  VALUES OF THE END CONDITIONS BEING USED.
+C
+C  IF IENT=1,THE FIRST CENTRAL DIVIDED DIFFERENCE END
+C  CONDITIONS ARE BEING USED.
+C
+C  IF IENT=2,THE SECOND CENTRAL DIVIDED DIFFERENCE END
+C  CONDITIONS ARE BEING USED.
+C
+C  IF IENT=3,THE PERODIC END CONDITIONS ARE BEING USED.
+C  FOR THIS CASE THE CONTENTS OF G(N), END1,AND ENDN ARE
+C  IGNORED.
+C
+C  FOR ALL THREE END CONDITIONS N MUST BE GREATER THAN OR
+C  EQUAL TO 2.
+C
+C  THE DISCRETE CUBIC SPLINE IS REPRESENTED BY PIECEWISE
+C  CUBIC POLYNOMIALS. FOR T IN THE INTERNAL (TNODE(I),TNODE
+C  (I+1)) THE CUBIC SPLINE IS
+C
+C     S(T)=G(I)+B(I)*(T-TNODE(I))
+C                          +C(I)*(T-TNODE(I))**2
+C                                   +D(I)*(T-TNODE(I))**3
+C
+      DIMENSION TNODE(N), G(N), B(N), C(N), D(N)
+C
+C  INPUT PARAMETERS (NONE OF THESE PARAMETERS
+C                          ARE CHANGED BY THIS SUBROUTINE.)
+C
+C  IENT  - SPECIFIES END CONDITIONS WHICH ARE IN EFFECT.
+C  H     - THE STEP SIZE USED FOR THE DISCRETE CUBIC SPLINE.
+C  N     - NUMBER OF NODES (TNODE) AND DATA VALUES (G).
+C          (N.GE.2)
+C  TNODE - REAL ARRAY CONTAINING THE NODES (TNODE(I).LT.
+C          TNODE(I+1)).
+C  G     - REAL ARRAY CONTAINING THE INTERPOLATING DATA.
+C  END1  - END CONDITION VALUE AT TNODE(1).
+C  ENDN  - END CONDITION VALUE AT TNODE(N).
+C
+C  OUTPUT PARAMETERS
+C
+C  B     - REAL ARRAY CONTAINING COEFFICIENTS OF
+C          (T-TNODE(I)),I=1,2,....,N-1.
+C  C     - REAL ARRAY CONTAINING COEFFICIENTS OF
+C          (T-TNODE(I))**2,I=1,2,...,N-1.
+C  D     - REAL ARRAY CONTAINING COEFFICIENTS OF
+C          (T-TNODE(I))**3,I=1,2,...,N-1.
+C
+C  SPECIAL CASES ARE ACCOUNTED FOR HERE.
+      IF (N.EQ.2 .AND. IENT.EQ.3) GO TO 220
+      H2 = H*H
+      N1 = N - 1
+      IF (N.EQ.2 .AND. IENT.EQ.2) GO TO 180
+      N2 = N1 - 1
+C  THE SYMMETRIC TRIDIAGONAL(OR NEAR TRIDIAGONAL) LINEAR
+C  SYSTEM WILL NOW BE SET UP FOR THE APPROPRIATE END
+C  CONDITIONS
+      HI = TNODE(2) - TNODE(1)
+      H2DHI = H2/HI
+      ETA2 = HI + HI + H2DHI
+      GO TO (10, 40, 60), IENT
+C  IENT=1 - FIRST CENTRAL DIVIDED DIFFERENCE END CONDITONS
+C  SET UP.
+   10 B(1) = ETA2
+      D(1) = HI - H2DHI
+      G2 = (G(2)-G(1))/HI
+      C(1) = 3.0*(G2-END1)
+      IF (N.EQ.2) GO TO 30
+      DO 20 I=2,N1
+        ETA1 = ETA2
+        G1 = G2
+        HI = TNODE(I+1) - TNODE(I)
+        H2DHI = H2/HI
+        ETA2 = HI + HI + H2DHI
+        B(I) = ETA1 + ETA2
+        D(I) = HI - H2DHI
+        G2 = (G(I+1)-G(I))/HI
+        C(I) = 3.0*(G2-G1)
+   20 CONTINUE
+   30 B(N) = ETA2
+      C(N) = 3.0*(ENDN-G2)
+      L = N
+C  SET UP FOR (1) FIRST CENTRAL DIVIDED DIFFERENCE END
+C  CONDITING COMPLETE.THE LINEAR EQUATIONS WILL BE NOW
+C  SOLVED.
+      GO TO 110
+C  IENT=2 - SECOND CENTRAL DIVIDED DIFFERENCE END CONDITIONS
+C  SET UP.
+   40 GAMMA = HI - H2DHI
+      G2 = (G(2)-G(1))/HI
+      DO 50 I=1,N2
+        ETA1 = ETA2
+        G1 = G2
+        HI = TNODE(I+2) - TNODE(I+1)
+        H2DHI = H2/HI
+        ETA2 = HI + HI + H2DHI
+        B(I) = ETA1 + ETA2
+        D(I) = HI - H2DHI
+        G2 = (G(I+2)-G(I+1))/HI
+        C(I) = 3.0*(G2-G1)
+   50 CONTINUE
+      C(1) = C(1) - GAMMA*END1/2.0
+      HI = TNODE(N) - TNODE(N1)
+      GAMMA = HI - H2/HI
+      C(N2) = C(N2) - GAMMA*ENDN/2.0
+C  STEP UP FOR (2) SECOND CENTRAL DIVIDED DIFFERENCE
+C  END CONDITIONS COMPLETE. THE LINEAR EQUATIONS WILL NOW
+C  BE SOLVED.
+      IF (N2.EQ.1) GO TO 100
+      L = N2
+      GO TO 110
+C  IENT=3 - PERIODIC END CONDITIONS SET UP.
+   60 B(1) = ETA2
+      D(1) = HI - H2DHI
+      DO 70 I=2,N1
+        ETA1 = ETA2
+        HI = TNODE(I+1) - TNODE(I)
+        H2DHI = H2/HI
+        ETA2 = HI + HI + H2DHI
+        B(I) = ETA1 + ETA2
+        D(I) = HI - H2DHI
+        C(I) = 0.0
+   70 CONTINUE
+      CT = D(N1)
+      C(1) = CT
+      C(N1) = CT
+      B(1) = B(1) + ETA2 - CT
+      B(N1) = B(N1) - CT
+      L = N1
+      ITRANS = 1
+      GO TO 120
+   80 G1 = (G(N1)-G(N2))/(TNODE(N1)-TNODE(N2))
+      G2 = (G(1)-G(N1))/(TNODE(N)-TNODE(N1))
+      DEN = (1.0+C(1)+C(N1))
+      CT = 3.0*(G2-G1)
+      BS1 = CT*C(N1)
+      C(N1) = CT
+      DO 90 I=1,N2
+        HI = TNODE(I+1) - TNODE(I)
+        G1 = G2
+        G2 = (G(I+1)-G(I))/HI
+        CT = 3.0*(G2-G1)
+        BS1 = BS1 + CT*C(I)
+        C(I) = CT
+   90 CONTINUE
+      BS1 = BS1/DEN
+      C(1) = C(1) - BS1
+      C(N1) = C(N1) - BS1
+      ITRANS = 0
+      GO TO 140
+C  THE SET UP AND MOST OF THE DETAILS FOR SOLVING THE
+C  LINEAR EQUQTION FOR (3)  THE PERIODIC END CONDITIONS
+C  ARE COMPLETED.
+C
+C  THE LINEAR EQUATION ARE SOLVED HERE.
+  100 C(2) = C(1)/B(1)
+      GO TO 180
+  110 ITRANS = 0
+  120 L1 = L - 1
+      DO 130 I=1,L1
+        T = D(I)/B(I)
+        B(I+1) = B(I+1) - T*D(I)
+        D(I) = T
+  130 CONTINUE
+C  THE LINEAR EQUATION SOLVER IS ENTERED AT THIS POINT
+C  IF THE LU FACTORIZATION HAS ALREADY BEEN DONE.
+  140 DO 150 I=1,L1
+        C(I+1) = C(I+1) - D(I)*C(I)
+  150 CONTINUE
+      C(L) = C(L)/B(L)
+      DO 160 I=1,L1
+        LI = L - I
+        C(LI) = C(LI)/B(LI) - D(LI)*C(LI+1)
+  160 CONTINUE
+      IF (ITRANS.GE.1) GO TO 80
+C  THE LINEAR SYSTEM HAS BEEN SOLVE FOR THE C-VECTOR
+      IF (IENT.EQ.3) C(N) = C(1)
+      IF (IENT.NE.2) GO TO 190
+      DO 170 I=1,N2
+        LI = N - I
+        C(LI) = C(LI-1)
+  170 CONTINUE
+  180 C(1) = END1/2.0
+      C(N) = ENDN/2.0
+  190 C1 = C(1)
+      C2 = C(2)
+      HI = TNODE(2) - TNODE(1)
+      IF (N.EQ.2) GO TO 210
+      DO 200 I=1,N2
+        B(I) = (G(I+1)-G(I))/HI - HI*(C1+C1+C2)/3.0
+        D(I) = (C2-C1)/(3.0*HI)
+        HI = TNODE(I+2) - TNODE(I+1)
+        C1 = C2
+        C2 = C(I+2)
+  200 CONTINUE
+  210 GN = G(1)
+      IF (IENT.NE.3) GN = G(N)
+      B(N1) = (GN-G(N1))/HI - HI*(C1+C1+C2)/3.0
+      D(N1) = (C2-C1)/(3.0*HI)
+C  THE INTERPOLATING DISCRETE CUBIC SPLINE HAS BEEN
+C  CONSTRUCTED.
+      RETURN
+C  THE FOLLOWING HANDLES THE TRIVIAL PERIODIC CASE
+C  (IENT.EQ.3) WHEN N.EQ.2.
+  220 B(1) = 0.0
+      C(1) = 0.0
+      D(1) = 0.0
+      RETURN
+      END
+C TEST FOR DURIS ALGORITHM, JAN 1979                                    DU 00010
+C  DRIVER FOR DCSSMO                                                    DU 00020
+C  THIS DRIVER USES SUBROUTINE DCSSMO TO COMPUTE THE                    DU 00030
+C  DISCRETE NATURAL CUBIC SPLINE WHICH SMOOTHS THROUGH                  DU 00040
+C  THE DATA (TNODE(I),G(I)),I=1,2,...,N AS SPECIFIED                    DU 00050
+C  BY THE SMOOTHING PARAMETER RHO AND THE WEIGHTS WGS(I),               DU 00060
+C  I=1,2,...,N.                                                         DU 00070
+      DIMENSION TNODE(20), G(20), B(20), C(20), D(20), GSMO(20),        DU 00080
+     *  WGS(20)                                                         DU 00090
+C  THE NEXT READ STATEMENT BRINGS IN THE TOTAL NUMBER                   DU 00100
+C  OF DATA POINTS N, THE STEP SIZE H , AND THE PARAMETER RHO            DU 00110
+C  SPECIFYING THE AMOUNT OF SMOOTHING DESIRED.                          DU 00120
+      READ (5,99999) N, H, RHO                                          DU 00130
+C  THE FOLLOW WRITE STATMENTS OUTPUT N,H,AND RHO AND                    DU 00140
+C  PREPARES TO OUTPUT DATA AND SOLUTION.                                DU 00150
+      WRITE (6,99998)                                                   DU 00160
+      WRITE (6,99997) N, H, RHO                                         DU 00170
+C  THE NEXT DO LOOP READS IN THE DATA VALUES                            DU 00180
+C  (TNODE(I),G(I)), AND THE WEIGHTS WGS(I) FOR                          DU 00190
+C  I=1,2,...,N AND AT THE SAME TIME WRITES THIS DATA                    DU 00200
+C  AS OUTPUT TO THE USER.                                               DU 00210
+      DO 10 I=1,N                                                       DU 00220
+        READ (5,99995) TNODE(I), G(I), WGS(I)                           DU 00230
+        WRITE (6,99996) I, TNODE(I), G(I), WGS(I)                       DU 00240
+   10 CONTINUE                                                          DU 00250
+C  SUBROUTINE DCSMO PARAMETERS H, TNODE,G,WGS,                          DU 00260
+C   ARE AS SPECIFIED ABOVE.                                             DU 00270
+      DRHO=RHO                                                          DU 00280
+      NN=N                                                              DU 00290
+      DO 50 N=2,NN                                                      DU 00300
+      DO 40 IRHO=1,3                                                    DU 00310
+      RHO=DRHO*100.**(IRHO-2)                                           DU 00320
+      WRITE (6,99998)                                                   DU 00330
+      WRITE (6,99997) N, H, RHO                                         DU 00340
+      DO 15 I=1,N                                                       DU 00350
+        WRITE (6,99996) I, TNODE(I), G(I), WGS(I)                       DU 00360
+   15 CONTINUE                                                          DU 00370
+      CALL DCSSMO(H, N, TNODE, G, WGS, RHO, GSMO, B, C, D)              DU 00380
+C  OUTPUT FROM DCSSMO IS GSMO(I),B(I),C(I),AND D(I) FOR                 DU 00390
+C  I=1,2,...,N-1. IN PARTICULAR THE DISCRETE CUBIC SPLINE               DU 00400
+C  ON THE INTERVAL (TNODE(1),TNODE(I+1)0 IS DESCRIBED BY                DU 00410
+C  THE CUBIC POLYNOMIAL                                                 DU 00420
+C                                                                       DU 00430
+C      S(T)=GSMO(I)+B(I)*(T-TNODE(I))+                                  DU 00440
+C          C(I)*(T-TNODE(I))**2+D(I)*(T-TNODE(I))**3                    DU 00450
+C                                                                       DU 00460
+      N1 = N - 1                                                        DU 00470
+C  THE SOLUTION IS NOW PRINTED OUT BY THE FOLLOWING STATEMENTS          DU 00480
+      WRITE (6,99994)                                                   DU 00490
+      DO 20 I=1,N1                                                      DU 00500
+        WRITE (6,99993) I, GSMO(I), B(I), C(I), D(I)                    DU 00510
+   20 CONTINUE                                                          DU 00520
+      WRITE(6,99992)                                                    DU 00530
+      DO 30 I=1,N1                                                      DU 00540
+      T=TNODE(I+1)-TNODE(I)                                             DU 00550
+      SL=GSMO(I)                                                        DU 00560
+      SR=GSMO(I)+(B(I)+(C(I)+D(I)*T)*T)*T                               DU 00570
+      FL=B(I)+D(I)*H*H                                                  DU 00580
+      FR=FL+(2.*C(I)+3.*D(I)*T)*T                                       DU 00590
+      DL=2.*C(I)                                                        DU 00600
+      DR=DL+6.*D(I)*T                                                   DU 00610
+      WRITE(6,99993)I,SL,SR,FL,FR,DL,DR                                 DU 00620
+30    CONTINUE                                                          DU 00630
+40    CONTINUE                                                          DU 00640
+50    CONTINUE                                                          DU 00650
+      CALL TEST2                                                        DU 00660
+      STOP                                                              DU 00670
+99999 FORMAT (I10, 2E10.2)                                              DU 00680
+99998 FORMAT (///5H DATA)                                               DU 00690
+99997 FORMAT (3H N=, I3, 2X, 2HH=, F10.4, 3X, 4HRHO=, F10.4  //5H   I , DU 00700
+     *  3X, 8HTNODE(I), 9X, 4HG(I), 7X, 6HWGS(I))                       DU 00710
+99996 FORMAT (I3, 3E16.7)                                               DU 00720
+99995 FORMAT (3E10.2)                                                   DU 00730
+99994 FORMAT (//40H DISCRETE NATURAL CUBIC SMOOTHING SPLINE//4H  I ,    DU 00740
+     *  2X, 7HGSMO(I), 12X, 4HB(I), 16X, 4HC(I), 16X, 4HD(I))           DU 00750
+99993 FORMAT (I3, 6E17.7)                                               DU 00760
+99992 FORMAT(3H0 I,14X,6HVALUES,18X,25HFIRST DIVIDED DIFFERENCES,       DU 00770
+     1 9X,26HSECOND DIVIDED DIFFERENCES)                                DU 00780
+      END                                                               DU 00790
+      SUBROUTINE TEST2                                                  DU 00800
+C  DRIVER FOR DCSINT
+C  THIS DRIVER USES SUBROUTINE DCSINT TO COMPUTE THE
+C  DISCRETE CUBIC SPLINE WHICH INTERPOLATES THE DATA
+C  (TNODE(I),G(I)),I=1,2,...,N SUBJECT TO THE END CONDITIONS
+C  SPECIFIED BY IENT,END1,AND ENDN.
+C
+      DIMENSION TNODE(20), G(20), B(20), C(20), D(20)
+C
+C  THE NEXT READ STATEMENT BRINGS IN THE NUMBER OF DATA
+C  POINTS N AND THE DISCRETE CUBIC SPLINE STEP SIZE H.
+C
+      READ (5,99999) N, H
+      WRITE (6,99998) N, H
+      WRITE (6,99997)
+C  THE NEXT DO LOOP READS IN AND WRITES OUT THE DATA
+C  VALUES (TNODE(I),G(I)),I=1,2...,N.
+      DO 10 I=1,N
+        READ (5,99996) TNODE(I), G(I)
+        WRITE (6,99995) I, TNODE(I), G(I)
+   10 CONTINUE
+C  THE END CONDITIONS ARE NOW READ IN. IENT SPECIFIES
+C  THE TYPE OF END CONDITION(SEE SUBROUTINE COMMENTS)
+C  AND END1 AND ENDN SPECIFY THE VALUES OF THE END CONDITIONS.
+      READ (5,99994) IENT, END1, ENDN
+C  SUBROUTINE DCSINT IS NOW CALLED. THE PARAMETERS
+C  H,TNODE,G,END1,AND ENDN ARE AS SPECIFIED ABOVE
+      NN=N
+      DO 50 N=2,NN
+      WRITE (6,99998) N, H
+      WRITE (6,99997)
+      DO 15 I=1,N
+        WRITE (6,99995) I, TNODE(I), G(I)
+   15 CONTINUE
+      DO 40 IENT=1,3
+C
+      CALL DCSINT(IENT, H, N, TNODE, G, END1, ENDN, B, C, D)
+C  THE END CONDITIONS IENT,END1,ENDN AND THE DISCRETE
+C  CUBIC SPLINE SOLUTION TO THE INTERPOLATIONPROBLEM
+C  ARE NOW OUTPUTED BELOW. IN PARTICULAR THE DISCRETE
+C  CUBIC SPLINE ON THE INTERVAL (TNODE(I),TNODE(I+1))
+C  IS DESCRIBES BY THE CUBIC POLYNOMIAL
+C
+C       S(T)=G(I)+B(I)*ARG+C(I)*ARG**2
+C                 +D(I)*ARG**3
+C
+C  WHERE ARG=(T-TNODE(I)).
+C
+      WRITE (6,99993) IENT, END1, ENDN
+      WRITE (6,99992)
+      N1 = N - 1
+      DO 20 I=1,N1
+        WRITE (6,99991) I, G(I), B(I), C(I), D(I)
+   20 CONTINUE
+      WRITE(6,99990)
+      DO 30 I=1,N1
+      T=TNODE(I+1)-TNODE(I)
+      SL=G(I)
+      SR=G(I)+(B(I)+(C(I)+D(I)*T)*T)*T
+      FL=B(I)+D(I)*H*H
+      FR=FL+(2.*C(I)+3.*D(I)*T)*T
+      DL=2.*C(I)
+      DR=DL+6.*D(I)*T
+      WRITE(6,99991)I,SL,SR,FL,FR,DL,DR
+30    CONTINUE
+40    CONTINUE
+50    CONTINUE
+      RETURN
+99999 FORMAT (I10, E10.2)
+99998 FORMAT (///5H DATA//3H N=, I3, 2X, 2HH=, F10.5)
+99997 FORMAT (2H I, 3X, 8HTNODE(I), 10X, 4HG(I))
+99996 FORMAT (2E10.2)
+99995 FORMAT (I3, 3E16.7)
+99994 FORMAT (I10, 2E10.2)
+99993 FORMAT (///6H IENT=, I2, 2X, 5HEND1=, E16.7, 2X, 5HEND2=, E16.7)
+99992 FORMAT (/2H I, 3X, 4HG(I), 13X, 4HB(I), 13X, 4HC(I), 13X, 4HD(I))
+99991 FORMAT (I3, 6E17.7)
+99990 FORMAT(3H0 I,14X,6HVALUES,18X,25HFIRST DIVIDED DIFFERENCES,
+     1 9X,26HSECOND DIVIDED DIFFERENCES)
+      END
+         7  0.1       100.0                                             DU 01610
+  0.5        1.0      2.0                                               DU 01620
+   0.7       0.5     2.5                                                DU 01630
+   1.0      2.0      1.0                                                DU 01640
+   1.5       2.5      1.5                                               DU 01650
+   2.1      2.0        2.0                                              DU 01660
+   2.5       1.0      2.0                                               DU 01670
+   3.0       0.1      2.0                                               DU 01680
+         6  0.1                                                         DU 01690
+  0.5        1.0                                                        DU 01700
+   0.7       0.5                                                        DU 01710
+   1.0      2.0                                                         DU 01720
+   1.5       2.5                                                        DU 01730
+   2.1      2.0                                                         DU 01740
+   2.5       1.0                                                        DU 01750
+         2  0.001    0.002                                              DU 01760
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 

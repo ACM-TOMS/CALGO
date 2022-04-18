@@ -1,0 +1,157 @@
+      SUBROUTINE BBPOWL ( H, V, HV, N, NUPS, I, M, IDENTY, SCDIAG,
+     -                                       INNER, IW, RW, DW   )
+
+C## A R G U M E N T S:
+                      INTEGER          N, NUPS, I, M, IW(*)
+                      LOGICAL          IDENTY, SCDIAG
+
+                      REAL             H(*), V(N), HV(N)
+C!!!!                 DOUBLE PRECISION H(*), V(N), HV(N)
+
+                      EXTERNAL                INNER
+                      DOUBLE PRECISION DW(*), INNER
+                      REAL             RW(*)
+C## S T A T U S:
+C               SINGLE/DOUBLE CONVERSION: NEEDED (SEE CONVRT).
+C
+C               IGNORE LINES BEGINNING WITH  "C!!!!" .
+C
+C               THIS VERSION IS IN   S I N G L E   PRECISION.
+C!!!!           THIS VERSION IS IN   D O U B L E   PRECISION.
+C
+C               SYSTEM  DEPENDENCE:                      NONE.
+
+C>RCS $HEADER: POWL.F,V 1.12 91/12/31 14:53:07 BUCKLEY EXP $
+C>RCS $LOG:     POWL.F,V $
+C>RCS REVISION 1.12  91/12/31  14:53:07  BUCKLEY
+C>RCS FINAL SUBMISSION TO TOMS
+C>RCS
+C>RCS REVISION 1.11  91/11/22  11:33:11  BUCKLEY
+C>RCS FINAL SUBMISSION TO TOMS
+C>RCS
+C>RCS REVISION 1.10  90/07/31  10:50:11  BUCKLEY
+C>RCS ADDED REVISED BLAS.
+C>RCS
+C>RCS REVISION 1.9  89/06/30  13:12:51  BUCKLEY
+C>RCS PREPARING SUBMITTED VERSION OF MT
+C>RCS
+C>RCS REVISION 1.3  89/05/18  12:39:26  BUCKLEY
+C>RCS FINAL TEST OF MT BEFORE SUBMITTING
+C>RCS
+C>RCS REVISION 1.2  89/05/15  14:55:37  BUCKLEY
+C>RCS INITIAL INSTALLATION OF MT INTO RCS FORM.
+C>RCS
+C>RCS REVISION 1.1  89/01/17  16:54:30  BUCKLEY
+C>RCS INITIAL REVISION
+C>RCS
+
+C## D E S C R I P T I O N:
+
+C     GIVEN THE QUASI NEWTON UPDATE MATRIX  H (IN ZZ' FORM) AND
+C     GIVEN THE VECTOR V, THIS ROUTINE COMPUTES
+C
+C               HV = H * V  .
+C
+C     IT ALSO RETURNS THE INTERMEDIATE VALUE U = Z' * V. IT IS
+C     STORED AS PART OF H, SPECIFICALLY, WHERE IT WILL EVENTUALLY
+C     BECOME THE ROTATION VECTOR Y.
+C
+C     IT ASSUMES HERE THAT Z REPRESENTS THE MATRIX Z[I] AT THE
+C     POINT X[I].
+C
+C-----THE ACTUAL WORK OF DOING THE UPDATE IS DONE IN BBMJDP. THIS
+C     ROUTINE SERVES TO SHORTEN THE CALL TO BBMJDP. IN PARTICULAR,
+C     THE MATRIX H IS BROKEN UP INTO THE CONSTITUENT PARTS REQUIRED
+C     FOR THE COMPUTATION, NAMELY DIAGONAL, U, W, Z, PHI, V,
+C     DELTA, GAMMA AND Y.  IT MAKES FOR MUCH MORE CONVENIENT
+C     NAMES IN BBMJDP.
+C
+C     NUPS IS THE CURRENT NUMBER OF UPDATES
+C     M    IS THE MAXIMAL NUMBER OF UPDATES
+C
+C------EACH UPDATE TERM OF H REQUIRES 3N ENTRIES OF H, NAMELY
+C
+C                   Y(I), DELT(I) AND GAM(I).
+C
+C      EACH SET OF 3N ENTRIES DEFINES A "TERM" OF THE UPDATE.
+C
+C      HERE    N    = THE DIMENSION OF THE PROBLEM
+C              STEP = X[I] - X[I-1] = ALPHA * D
+C              DGRAD= G[I] - G[I-1]
+C              R    = SQRT (STEP' * DGRAD)
+C
+C       AND THIS DEFINES THE VALUES
+C
+C              DELT = STEP / R
+C              GAM  = DGRAD/ R
+C
+C       THE VECTOR Y DEFINES THE ORTHOGONAL ROTATIONS.
+C
+C       CALCULATION OF HV ALSO REQUIRES USE OF SEVERAL TEMPORARY
+C       AREAS, NAMELY
+C               VV      AN M BY N MATRIX
+C               W       AN N VECTOR
+C               Z       AN N VECTOR
+C               PHI     AN M VECTOR
+C
+C      SEE BBMULT REGARDING THE USE OF INNER AND FOR OTHER COMMENTS.
+C      SUPPLEMENTARY COMMENTS FOLLOW.
+C
+C--BETA   IS THE PARAMETER DEFINING THE BROYDEN FAMILY
+C         OF UPDATES. ONLY BETA = 1 (FROM BBMULT) IS IMPLEMENTED.
+C
+C--SCGAMM THIS IS NOT IMPLEMENTED. CF. BBMULT
+C
+C--IDENTY  SEE BBMSUM.
+C  SCDIAG
+C
+C## E N T R Y   P O I N T S: THE NATURAL ENTRY BBPOWL.
+C## S U B R O U T I N E S:   BBMJDP   IMPLEMENTS THE UPDATES.
+C## P A R A M E T E R S:     NONE ARE DEFINED.
+
+C## L O C A L   D E C L:
+                             INTEGER  DIAG, U, W, Z, PHI, VV
+                             INTEGER  DELT,  GAM, Y
+                             LOGICAL  FIRST
+C## S A V E:
+             SAVE    W, U, DIAG, Z, PHI, VV, DELT, GAM, Y, FIRST
+
+C## E Q U I V A L E N C E S: NONE ARE DEFINED.
+C## C O M M O N:             NONE IS DEFINED.
+C## D A T A:
+                             DATA FIRST/.TRUE./
+C##                                            E X E C U T I O N
+C##                                            E X E C U T I O N
+
+      IF ( FIRST ) THEN
+         FIRST = .FALSE.
+         DIAG  = 1
+         IF ( SCDIAG ) THEN
+             Y = DIAG + N
+         ELSE
+             Y = DIAG
+         ENDIF
+         DELT = Y    + M*N
+         GAM  = DELT + M*N
+         VV   = GAM  + M*N
+         PHI  = VV   + M*N
+         W    = PHI  + M
+         Z    = W    + N
+      ENDIF
+      U    = Y    + N*NUPS
+      WRITE (6,*) ' INDICES'
+      WRITE (6,*) ' DIAG,Y,U,DELT,GAM,VV,PHI,W,Z',
+     -              DIAG,Y,U,DELT,GAM,VV,PHI,W,Z
+
+
+      CALL BBMJDP ( H(DIAG), H(U), H(W), H(Z), H(PHI), H(VV),
+     -              H(DELT), H(GAM),  H(Y),
+     -  V, HV, N, NUPS, I, M, SCDIAG, IDENTY,  INNER, IW, RW, DW )
+      GOTO 90000
+
+C## E X I T
+90000      RETURN
+
+C## F O R M A T S:  NONE ARE DEFINED.
+C##                 E N D         OF BBPOWL.
+                    END

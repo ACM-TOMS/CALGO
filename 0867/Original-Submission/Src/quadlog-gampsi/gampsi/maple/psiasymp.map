@@ -1,0 +1,166 @@
+#=======================================================================
+# Experiment with asymptotic series for Psi(x), Abramowitz and Stegun,
+# NBS Handbook #55 (1964), p. 259, 6.3.18 , to see how many terms are
+# needed at various x values.
+#
+# Sample results for the number of terms needed for IEEE 754 quadruple
+# precision (p == 113 bits) and IBM/SGI paired double (p == 106 bits)
+# for increasing cutoff values: each row represents a change in the
+# value of either column 2 or column 3.
+# 
+# 
+# 	    ----    ------------   -------------
+#              x    full IEEE qp   paired double
+# 	    ----    ------------   -------------
+#             11            >201            >201
+#             12            >201              27
+#             13              27              23
+#             14              24              21
+#             15              22              19
+#             16              20              18
+#             17              19              17
+#             18              18              16
+#             19              17              16
+#             20              17              15
+#             21              16              15
+#             22              16              14
+#             23              15              14
+#             24              15              13
+#             26              14              13
+#             28              14              12
+#             29              13              12
+#             34              12              11
+#             42              11              10
+#             54              10              10
+#             57              10               9
+#             74               9               9
+#             82               9               8
+#            200               7               7
+#            271               7               6
+#            403               6               6
+#            736               6               5
+#           1500               5               5
+#           3465               5               4
+#           6298               4               4
+# 	    ----    ------------   -------------
+# 
+# [30-Jun-2000]
+#=======================================================================
+
+with(numtheory):			# for B() function
+
+Digits := 75:
+
+b := proc(m)
+         RETURN(B(2*m)/(2*m))
+     end:
+
+aprint := proc(n,sum,relerr)
+         printf("%d\t%+.49e\t%+.2e\n", n, evalf(sum), evalf(relerr))
+     end:
+
+bprint := proc(m,sepstr)
+         printf("     X      %+.50e%s\n", b(m),sepstr)
+     end:
+
+# for k from 16 to 1 by -1 do bprint(k) od:
+# bprint(17):
+
+# Asymptotic series, with printing of each term
+as := proc(x,n,show,ulp)
+	local exact, m, relerr, sum, term:
+	exact := evalf(Psi(x)):
+	if (show)
+	then
+		printf("Convergence of asymptotic series for psi(%f)\n", x):
+		printf("%5s\t   %-56s\t   %-8s\n", "m", "sum", "relerr")
+	fi:
+	sum := evalf(ln(x) - 1.0/(2.0*x)):
+	if (show)
+	then
+		aprint(0,sum,0)
+	fi:
+	for m from 1 to n
+	do
+		term := b(m)/x^(2*m):
+		sum := sum - term:
+		relerr := term / exact:
+		if (show)
+		then
+			aprint(m,sum,relerr):
+		fi:
+		if (evalf(abs(relerr)) < ulp) then break fi:
+	od:
+	if (show)
+	then
+		relerr := (exact - sum)/exact:
+		printf("\nComparision with exact result\n"):
+		printf("%5s\t   %-56s\t   %-8s\n", "ulps", "exact", "relerr"):
+		aprint(ceil(relerr/ulp), exact, relerr):
+		printf("\n")
+	fi:
+	m
+      end:
+
+ULP_IEEEQP := evalf(2^(-112)):
+
+ULP_IBMSGI := evalf(2^(-105)):
+
+ULP_IEEEDP := evalf(2^(-53)):
+
+ULP_IEEESP := evalf(2^(-23)):
+
+as_table_row := proc(x)
+			global n1_last, n2_last, n3_last, n4_last:
+			local n1, n2, n3, n4:
+			n1 := as(x,200,false,ULP_IEEEQP):
+			n2 := as(x,200,false,ULP_IBMSGI):
+			n3 := as(x,200,false,ULP_IEEEDP):
+			n4 := as(x,200,false,ULP_IEEESP):
+			if (evalb((n1 <> n1_last) or 
+				(n2 <> n2_last) or 
+				(n3 <> n3_last) or 
+				(n4 <> n4_last)))
+			then
+				printf("%15d\t%15d\t%15d\t%15d\t%15d\n", 
+					x, n1, n2, n3, n4)
+			fi:
+			n1_last := n1:
+			n2_last := n2:
+			n3_last := n3:
+			n4_last := n4:
+		end:
+
+interface(quiet = true):
+n1_last := 0:
+n2_last := 0:
+n3_last := 0:
+n4_last := 0:
+
+printf("#%14s\t%15s\t%15s\t%15s\t%15s\n", "x", "full IEEE qp", "paired double", 
+	"IEEE dp", "IEEE sp"):
+
+for x from 2 to 100 
+do 
+	as_table_row(x)
+od:
+
+for x from 200 to 1000 by 1
+do 
+	as_table_row(x)
+od:
+
+for x from 1500 to 10000 by 1
+do 
+	as_table_row(x)
+od:
+
+printf("done\n"):
+
+printf("      DATA (c(i), i = 1,19) /\n"):
+for k from 1 to 18 do bprint(k,",") od:
+bprint(19," /"):
+
+printf("      DATA (c(i), i = 20,27) /\n"):
+for k from 20 to 26 do bprint(k,",") od:
+bprint(27," /"):

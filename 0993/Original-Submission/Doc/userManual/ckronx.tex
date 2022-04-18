@@ -1,0 +1,69 @@
+
+\documentclass[12pt,fleqn]{article}
+
+\usepackage[T1]{fontenc}
+
+\usepackage[sc,osf]{mathpazo}   % With old-style figures and real smallcaps.
+\usepackage{srcltx}
+\usepackage{verbatim}
+\usepackage{amssymb}
+\usepackage{times}
+\usepackage{tocloft}
+\usepackage{lmodern}
+\setlength{\oddsidemargin}{0in} \setlength{\textwidth}{6.5in}
+\setlength{\topmargin}{0in} \setlength{\textheight}{8.5in}
+\def\matlab{\textsc{Matlab}}   % Matlab logo
+
+
+\begin{document}
+\thispagestyle{empty} \pagestyle{empty}
+
+
+{{\noindent \large {\bf ckronx: Efficient Computation with Kronecker Products}}\\
+~\\
+\renewcommand{\thefootnote}{\fnsymbol{footnote}}
+{Paul L. Fackler\footnote{Professor, Department of Agricultural and Resource Economics, North Carolina State
+University (NCSU), Raleigh, NC 27695. paul\_fackler@ncsu.edu}}}\\
+
+
+\renewcommand{\thefootnote}{\arabic{footnote}}
+\setcounter{footnote}{0}
+
+
+\renewcommand{\baselinestretch}{1}\small\normalsize
+
+The \matlab~  procedure {\tt ckronx} is designed to efficiently compute the product of a series of Kronecker products with a matrix:
+\[C=\left(A_1\otimes A_2\otimes \ldots \otimes A_d\right)B\]
+where $A_i$ is an $m_i\times n_i$ matrix, $B$ is a $\prod_{i=1}^d n_i \times p$ matrix and $C$ is  $\prod_{i=1}^d m_i \times p$ matrix. The $A_i$ matrices and the $B$ matrix can be either full (dense) or sparse. The algorithm can also perform the operation with any of the matrices in transposed form (without actually performing the transposition). The operation is performed by conducting a sequence of $d$ matrix-matrix multiplications, with each step in the sequence incorporating one of the $d$ $A_i$ matrices. It differs from previous implementations of this procedure by (largely) avoiding the rearrangement or shuffling of the elements of the arrays in memory.
+
+The sequence in which the $A_i$ are incorporated can be in a forward direction ($1,\dots,d$), a backward direction ($d,\ldots,1$) or any arbitrary direction (the latter requires a rearrangement of matrix elements before the first and after the last step in the sequence). The order of operations is (essentially) irrelevant if all of the matrices are the same size and density or if all are square. Otherwise the order can have a significant impact on computational efficiency both in terms of computational time and memory usage.
+
+By default the algorithm determines whether the forward or backward approaches is more efficient and uses that ordering (this can be overridden). Optionally the optimal ordering (in terms of fewest arithmetic operations) can  be determined and used. If the optimal ordering is not the forward or backward approaches then the rows of $B$ must be permuted before the first step and the rows of the output must be permuted before it is returned. These operations can be time consuming and hence the optimal ordering may use more memory and may be slower than with the forward or backward approaches.
+
+The simplest syntax to call the function is\\
+\hspace*{1in}{\tt C=ckronx(A,B)}\\
+where {\tt A} is a $d$ element cell array containing the $d$ $A_i$ matrices and {\tt B} is an ordinary matrix. A cell array is a that structure in \matlab~that allows packaging of variables into an array for which individuation elements can be access by index. In the current context a cell array with 3 elements can be formed using {\tt A=\{A1,A2,A3\};} An optional structure variable can be passed that alters the default operations of the procedure. The calling syntax is\\
+\hspace*{1in}{\tt C=ckronx(A,B,options)}\\
+Valid fields for the options structure include setting {\tt options.transpose} to a $d$-vector of 0s and 1s (or logicals) with a 1 indicating that the associated matrix should be transposed; a single 1 indicates that all of the matrices should be transposed and is equivalent to a $d$-vector of 1s. Setting {\tt options.optorder} to 1 instructs the procedure to determine and use the optimal order of processing.
+
+Other options are mainly available for exploration. If {\tt options.forward} is set it overrides {\tt options.optorder}. Setting {\tt options.forward} to 1 forces the forward ordering to be used whereas setting it to 0 forces the backward ordering to be used. Setting {\tt options.print} to 1 displays information about the operation to the screen. The {\tt options.ind} field is designed for backward computability with software in \matlab~based toolboxes developed by the author. It allows the $A$ cell array to be permuted; setting {\tt options.ind} is equivalent to calling the procedure as {\tt C=ckronx(A(ind),B)}.
+
+The {\tt ckronx} procedure can also produce an optional second output argument if the {\tt options.optorder} is set to 1:\\
+\hspace*{1in}{\tt[C,order]=ckronx(A,B,options)}\\
+where {\tt order} is a $d$-element vector specifying the optimal processing order. This can be useful in repeated calls if the $A_i$ matrices are reordered and the rows of $B$ are appropriately permuted.
+
+The {\tt ckronx} procedure will fail if $B$ is not compatible with the $A_i$, meaning that it has an invalid number of rows. This can be checked in \matlab~using the following line of code:\\
+\hspace*{0.5in}{\tt size(B,1) == prod( cellfun( @(x) size(x,2), A ) )}\\
+which returns 1 (true) if $A$ and $B$ are compatible.
+
+The following code sample gives a 3-matrix example.
+\begin{verbatim}
+m = [40 50 60];
+n = [30 20 10];
+A = arrayfun(@(m,n) randn(m,n), m, n, 'UniformOutput', false);
+B = randn(prod(n),1);
+C = ckronx(A,B);
+\end{verbatim}
+\noindent This example is contrasted with the use of the full Kronecker product matrix in the script file {\tt ckronxExample}.
+
+\end{document} 

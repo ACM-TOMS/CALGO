@@ -1,0 +1,470 @@
+C     ALGORITHM 485 COLLECTED ALGORITHMS FROM ACM.
+C     ALGORITHM APPEARED IN COMM. ACM, VOL. 17, NO. 09,
+C     P. 526.
+      SUBROUTINE GSF(N, M, X, Y, Z, IM, C, IDET)                        GSF   10
+C INPUT   N,M,X,Z,IM,Y--
+C N IS A POSITIVE INTEGER GIVING THE NUMBER OF KNOTS
+C M IS A POSITIVE INTEGER DETERMINING THE DEGREE
+C 2*M-1 OF THE SPLINE
+
+C X IS AN ARRAY OF REAL NUMBERS WITH
+C     X(1).LT.X(2).LT.....LT.X(N)
+C Z IS AN ARRAY OF INTEGERS SUCH THAT
+C     0.LT.Z(I).LE.M, I=1,2,...,N
+C IM IS AN INTEGER ARRAY WITH
+C     1.LE.M(1,J).LT.....LT.IM(Z(J),J).LE.M,
+C J=1,2,...,N. Y IS AN ARRAY OF REAL NUMBERS
+C OUTPUT  C,IDET--
+C THE COLUMN VECTOR C(1,J),...,C(2*M,J) CONTAINS THE
+C COEFFICIENTS OF THE SPLINE IN THE INTERVAL X(J-1)
+C TO X(J). IDET IS SET TO ZERO IF A SINGULAR SYSTEM
+C IS ENCOUNTERED OTHERWISE, IDET IS 1.
+C THE SUBROUTINE  GSF(N,M,X,Y,Z,IM,C,IDET)  COMPUTES
+C THE COEFFICIENTS OF THE INTERPOLATING G-SPLINE. THE
+C PARAMETERS N,M,X,Y,Z, AND  IM  ARE INPUT. N  AND  M
+C ARE THE POSITIVE INTEGERS OF SECTION 1  WHICH GIVE
+C THE NUMBER OF X S AND DETERMINE THE DEGREE OF THE
+C SPLINE, RESPECTIVELY. X  MUST BE AN ARRAY OF REAL
+C NUMBERS WITH X(1).LT.X(2).LT.....LT.X(N)  AND Z  IS
+C AN ARRAY OF POSITIVE INTEGERS NONE OF WHICH SHOULD
+C EXCEED M. X CONTAINS THE POINTS WHERE HB-DATA IS
+C PRESCRIBED AND  Z DESCRIBES THE NUMBER OF PIECES OF
+C DATA AT EACH SUCH POINT. IM  IS AN INTEGER ARRAY
+C WITH
+C  1.LE.IM(1,J).LT.IM(2,J).LT.....LT.IM(Z(J),L).LE.M,
+
+C              J=1,2,...,N.
+C THE J TH COLUMN OF  IM  IS A LIST OF WHICH
+C DERIVATIVES (SHIFTED UP BY 1) ARE SPECIFIED AT
+C X(J).  THE DATA FOR THE HB-INTERPOLATION PROBLEM IS
+C ENTERED IN THE ARRAY  Y. Y(I,J) SHOULD CONTAIN THE
+C VALUE ASSIGNED TO THE IM(I,J)-1 ST DERIVATIVE OF
+C THE SPLINE EVALUATED AT  X(J). THE PARAMETERS  C
+C AND  IDET  ARE OUTPUT OF GSF. AFTER EXECUTION, THE
+C ARRAY C WILL CONTAIN THE COEFFICIENTS OF THE
+C SPLINE. IN PARTICULAR, THE COLUMN VECTOR
+C C(1,J),...,C(2*M,J) CONTAINS THE COEFFICIENTS OF
+
+C THE POLYNOMIALS P(J)  DESCRIBED BY EQUATIONS (6),
+C J=1,2,...,N+1. SUBROUTINE GSF CALLS ON SUBROUTINE
+C INTCON,SMOCON, AND TRISYS WHICH MUST BE LOADED WITH
+C THE MAIN PROGRAM.
+      INTEGER Z, ZK
+      DIMENSION X(100), Y(4,100), Z(100), IM(4,100),
+     * C(8,100)
+      DIMENSION D(12,17), UV(8,17,100)
+      DOUBLE PRECISION SUM
+C INITIALIZE CONSTANTS
+      IDET = 1
+      M2 = 2*M
+      M2P1 = M2 + 1
+      M2M1 = M2 - 1
+      M4 = 4*M
+      M4P1 = M4 + 1
+      NM1 = N - 1
+C GENERATE FACTORIALS FOR TAYLOR MATRIX
+      C(1,1) = 1.0
+      DO 10 J=2,M
+        JM1 = J - 1
+        C(1,J) = FLOAT(JM1)*C(1,JM1)
+   10 CONTINUE
+C BEGIN FORWARD MARCH
+      ZK = Z(1)
+      MMZ = M - ZK
+      M2MZ = M2 - ZK
+C SET UP INTERPOLATION MATRIX AT X(1)
+      CALL INTCON(1, ZK, M2, IM, D)
+C SET END CONDITIONS AT X(1)
+      IF (MMZ.NE.0) CALL SMOCON(-1, ZK, M, M2, M4P1,
+     * IM, D)
+C BEGIN K LOOP
+      DO 250 K=2,N
+        KM1 = K - 1
+        LZK = ZK
+        ZK = Z(K)
+        LMMZ = MMZ
+        MMZ = M - ZK
+        M2MZ = M2 - ZK
+        M3MZ = M2MZ + M
+        H = X(KM1) - X(K)
+C TAYLOR MATRIX RIGHT MULTIPLICATION
+        IROW = M2MZ
+        IF (K.EQ.N) IROW = M
+        DO 20 I=1,M
+          MU = IROW + I
+          D(MU,1) = D(I,1)
+   20   CONTINUE
+        D(1,M2P1) = 1.0
+        DO 90 I=2,M2
+          IM1 = I - 1
+          DO 40 J=1,IM1
+            DO 30 II=1,M
+              D(II,J) = D(II,J)*H
+   30       CONTINUE
+   40     CONTINUE
+          D(I,M2P1) = 1.0
+          IF (2.GT.IM1) GO TO 60
+          T = D(1,M2P1)
+          DO 50 II=2,IM1
+            V = D(II,M2P1) + T
+            T = D(II,M2P1)
+            D(II,M2P1) = V
+   50     CONTINUE
+   60     DO 80 J=1,M
+            SUM = 0.0
+            DO 70 II=1,I
+              SUM = SUM + D(J,II)*D(II,M2P1)
+   70       CONTINUE
+            MU = IROW + J
+            D(MU,I) = SUM
+   80     CONTINUE
+   90   CONTINUE
+C ON LAST STEP JUMP TO SET INTERPOLATION CONDITIONS
+        IF (K.EQ.N) GO TO 240
+C SET UP SMOOTHING MATRIX AT X(K)
+        CALL SMOCON(K, ZK, M, M2, M4P1, IM, D)
+        DO 110 I=1,M
+          DO 100 J=M2P1,M4
+            MU = M2MZ + I
+            D(MU,J) = 0.0
+  100     CONTINUE
+  110   CONTINUE
+C ADJUST RHS OF SYSTEM TO CORRESPOND WITH DIFFERENT
+C Z(K)
+        IF (LMMZ.EQ.0) GO TO 160
+        IF (LZK-ZK) 130, 130, 120
+  120   II = M2 + LMMZ + 1
+        JJ = -1
+        III = M3MZ + 1
+        GO TO 140
+  130   II = M2
+        JJ = +1
+        III = M2MZ + LZK
+  140   DO 150 I=1,LMMZ
+          MU = III + I*JJ
+          NU = II + I*JJ
+          D(MU,M4P1) = D(NU,M4P1)
+  150   CONTINUE
+C FILL IN INTERPOLATION DATA
+  160   DO 170 I=1,LZK
+          J = IM(I,KM1)
+          MU = M2MZ + I
+          D(MU,M4P1) = Y(I,KM1)/C(1,J)
+  170   CONTINUE
+C TRIANGULARIZE SYSTEM AT Z(K)
+        CALL TRISYS(D, M4P1, M3MZ, M2, IDET)
+        IF (IDET) 190, 180, 190
+  180   RETURN
+C FILL UV MATRIX
+  190   DO 210 I=1,M2
+          DO 200 J=1,M4P1
+            UV(I,J,K) = D(I,J)
+  200     CONTINUE
+  210   CONTINUE
+C COUPLE M-Z(K) ROWS WITH INTERP CONDITIONS AT NEXT
+C STEP
+        IF (MMZ.EQ.0) GO TO 240
+        DO 230 I=1,MMZ
+          DO 220 J=1,M2
+            LAMDA = ZK + I
+            MU = M2 + I
+            NU = M2 + J
+            D(LAMDA,J) = D(MU,NU)
+  220     CONTINUE
+  230   CONTINUE
+C SET UP INTERPOLATION MATRIX AT X(K)
+  240   CALL INTCON(K, ZK, M2, IM, D)
+  250 CONTINUE
+C END OF K LOOP
+C SET END CONDITIONS AT X(N)
+      IF (MMZ.NE.0) CALL SMOCON(-N, ZK, M, M2, M2P1,
+     * IM, D)
+C FILL IN INTERPOLATION DATA AT X(N-1)
+      DO 260 I=1,LZK
+        J = IM(I,NM1)
+        MU = M + I
+        D(MU,M2P1) = Y(I,NM1)/C(1,J)
+  260 CONTINUE
+C ADJUST RHS TO CORRESPOND WITH Z(N) DATA
+      IF (LMMZ.EQ.0) GO TO 280
+      DO 270 I=1,LMMZ
+        MU = M + LZK + I
+        NU = M2 + I
+        D(MU,M2P1) = D(NU,M4P1)
+  270 CONTINUE
+C FILL INTERPOLATION DATA AT X(N)
+  280 DO 290 I=1,ZK
+        J = IM(I,N)
+        D(I,M2P1) = Y(I,N)/C(1,J)
+  290 CONTINUE
+C TRIANGULARIZE MATRIX SYSTEM AT X(N)
+      CALL TRISYS(D, M2P1, M2, M2, IDET)
+      IF (IDET.EQ.0) RETURN
+C BACK SOLVE FOR C(N)
+      I = M2P1
+      DO 320 II=1,M2
+        IP1 = I
+        I = I - 1
+        SUM = 0.0
+        IF (IP1.GT.M2) GO TO 310
+        DO 300 J=IP1,M2
+          SUM = SUM + D(I,J)*C(J,N)
+  300   CONTINUE
+  310   V = -SUM + D(I,M2P1)
+        C(I,N) = V/D(I,I)
+  320 CONTINUE
+C END FORWARD MARCH
+C BEGIN BACKWARD MARCH
+      K = N
+C BEGIN KB LOOP
+      DO 430 KB=2,N
+        KP1 = K
+        K = K - 1
+        ZK = Z(K)
+        H = X(K) - X(KP1)
+C TAYLOR MATRIX LEFT MULTIPLICATION
+        DO 330 I=1,M2
+          D(1,I) = 1.0
+  330   CONTINUE
+        D(M2,M4P1) = C(M2,KP1)
+        DO 370 I=1,M2M1
+          IP1 = I + 1
+          T = C(M2,KP1)*D(1,M2)
+          M2MI = M2 - I
+          DO 340 II=1,M2MI
+            J = M2 - II
+            T = T*H + C(J,KP1)*D(1,J)
+  340     CONTINUE
+          D(I,M4P1) = T
+          T = 1.0
+          IF (IP1.GT.M2M1) GO TO 360
+          DO 350 II=IP1,M2M1
+            D(1,1) = D(1,II)
+            D(1,II) = T
+            T = D(1,1) + D(1,II)
+  350     CONTINUE
+  360     D(1,M2) = T
+  370   CONTINUE
+C IF K = 1 JUMP OUT TO DETERMINE C(1)
+        IF (KB.EQ.N) GO TO 440
+        DO 390 I=1,M2
+C SET UP RHS OF SYSTEM FOR C(K)
+          SUM = 0.
+          DO 380 J=1,M2
+            MU = M2 + J
+            SUM = SUM + UV(I,MU,K)*D(J,M4P1)
+  380     CONTINUE
+          UV(I,M4P1,K) = -SUM + UV(I,M4P1,K)
+  390   CONTINUE
+C BACK SOLVE FOR COEFFS C(K) USING TRIANGULAR PART OF
+C UV(K)
+        I = M2P1
+        DO 420 II=1,M2
+          IP1 = I
+          I = I - 1
+          SUM = 0.0
+          IF (IP1.GT.M2) GO TO 410
+          DO 400 J=IP1,M2
+            SUM = SUM + UV(I,J,K)*C(J,K)
+  400     CONTINUE
+  410     V = -SUM + UV(I,M4P1,K)
+          C(I,K) = V/UV(I,I,K)
+  420   CONTINUE
+  430 CONTINUE
+C END KB LOOP
+C SET COEFFICIENTS C(1)
+  440 DO 450 I=1,M
+        MU = M + I
+        C(MU,K) = 0.0
+        C(I,K) = D(I,M4P1)
+  450 CONTINUE
+C END BACKWARD MARCH
+      RETURN
+      END
+      SUBROUTINE INTCON(K, ZK, M2, IM, D)                               INT   10
+C FILLS INTERPOLATION MATRIX AT X(K) USING
+C INFORMATION OBTAINED FROM ARRAYS  Z(K) AND  IM(I,K)
+      INTEGER ZK
+      DIMENSION D(12,17), IM(4,100)
+      DO 20 I=1,ZK
+        DO 10 J=1,M2
+          D(I,J) = 0.0
+   10   CONTINUE
+        II = IM(I,K)
+        D(I,II) = 1.0
+   20 CONTINUE
+      RETURN
+      END
+      SUBROUTINE SMOCON(KK, ZK, M, M2, ICOL, IM, D)                     SMO   10
+C FILLS SMOOTHING MATRIX AT KNOTS 2 THROUGH N-1
+C AND THE END CONDITIONS AT K = 1,N
+      INTEGER ZK
+      DIMENSION D(12,17), IM(4,100)
+C IF KK IS NEGATIVE THEN SET END CONDITIONS
+      K = IABS(KK)
+      IF (KK.LT.0) GO TO 140
+C SMOOTHING FIRST M DERIVATIVES
+      DO 20 I=1,M
+        DO 10 J=1,M2
+          DUM = 0.0
+          IF (I.EQ.J) DUM = 1.0
+          D(I,J) = DUM
+   10   CONTINUE
+   20 CONTINUE
+      IROW = M
+      IDUP = 1
+C SMOOTHING HIGHER DERIVATIVES
+   30 IF (ZK.GE.M) GO TO 80
+      J = M
+      I = ZK
+   40 IF (IM(I,K)-J) 60, 50, 60
+   50 J = J - 1
+      I = I - 1
+      IF (I.LT.1) I = 1
+      IF (J) 80, 80, 40
+   60 IROW = IROW + 1
+      DO 70 II=1,M2
+        D(IROW,II) = 0.0
+   70 CONTINUE
+      J = J - 1
+      MU = M2 - J
+      D(IROW,MU) = 1.0
+      IF (J) 80, 80, 40
+   80 GO TO (90, 120), IDUP
+   90 M2MZ = M2 - ZK
+      DO 110 I=1,M2MZ
+        D(I,ICOL) = 0.0
+        DO 100 J=1,M2
+          MU = M2 + J
+          D(I,MU) = -D(I,J)
+  100   CONTINUE
+  110 CONTINUE
+      RETURN
+  120 MMZ = M - ZK
+      DO 130 I=1,MMZ
+        MU = MM + I
+        D(MU,ICOL) = 0.0
+  130 CONTINUE
+      RETURN
+C SET END CONDITIONS
+  140 IROW = ZK
+      IDUP = 2
+      MM = ZK
+      IF (K.EQ.1) MM = M2
+      GO TO 30
+      END
+      SUBROUTINE TRISYS(D, N, L, M2, IDET)                              TRI   10
+C TRIANGULARIZATION OF NON-SQUARE MATRIX USING LU
+C DECOMPOSITION WITH PIVOTING
+      DIMENSION D(12,17)
+      DOUBLE PRECISION SUM
+      IDET = 1
+      DO 150 K=1,M2
+        KP1 = K + 1
+        KM1 = K - 1
+        PIVOT = 0.0
+        DO 40 I=K,L
+          IF (KM1.EQ.0) GO TO 20
+          SUM = 0.0
+          DO 10 J=1,KM1
+            SUM = SUM + D(I,J)*D(J,K)
+   10     CONTINUE
+          D(I,K) = -SUM + D(I,K)
+   20     T = ABS(D(I,K))
+          IF (T-PIVOT) 40, 40, 30
+   30     PIVOT = T
+          IPIV = I
+   40   CONTINUE
+        IF (PIVOT) 60, 50, 60
+   50   IDET = 0
+        RETURN
+   60   IF (IPIV-K) 70, 90, 70
+   70   DO 80 J=1,N
+          T = D(K,J)
+          D(K,J) = D(IPIV,J)
+          D(IPIV,J) = T
+   80   CONTINUE
+   90   T = D(K,K)
+        IF (KP1-L) 100, 100, 120
+  100   DO 110 I=KP1,L
+          D(I,K) = D(I,K)/T
+  110   CONTINUE
+  120   IF (KM1.EQ.0 .OR. KP1.GT.N) GO TO 150
+        DO 140 J=KP1,N
+          SUM = 0.0
+          DO 130 I=1,KM1
+            SUM = SUM + D(K,I)*D(I,J)
+  130     CONTINUE
+          D(K,J) = -SUM + D(K,J)
+  140   CONTINUE
+  150 CONTINUE
+      LAST = L - M2
+      IF (LAST.EQ.0) GO TO 190
+      K = M2
+      M2P1 = M2 + 1
+      DO 180 I=1,LAST
+        K = K + 1
+        DO 170 J=M2P1,N
+          SUM = 0.0
+          DO 160 II=1,M2
+            SUM = SUM + D(K,II)*D(II,J)
+  160     CONTINUE
+          D(K,J) = -SUM + D(K,J)
+  170   CONTINUE
+  180 CONTINUE
+  190 RETURN
+      END
+      FUNCTION GVAL(T, ID, N, M, X, C)                                  GVA   10
+C INPUT T,ID,N,M,X,C
+C THE PARAMETERS N,M,X,C ARE AS IN GSF  AND
+C COMPLETELY DESCRIBE THE G-SPLINE.
+C T IS A REAL NUMBER AND ID A POSITIVE INTEGER.
+C GVAL PRODUCES THE ID-1 ST DERIVATIVE OF THE SPLINE
+C AT T. GVAL AUTOMATICALLY PRODUCES 0 IF ID.GT.M*2
+      DIMENSION X(100), C(8,100), S(8)
+      IORD = 2*M
+      IF (ID.GT.IORD) GO TO 130
+C BINARY SEARCH FOR KNOT SUCH THAT
+C X(KNOT-1).LT.T@X(KNOT)
+      KNOT = 1
+      IF (T-X(KNOT)) 70, 70, 10
+   10 KNOT = N
+      IF (T-X(KNOT)) 20, 60, 60
+   20 KUP = N
+      KLO = 1
+   30 IF ((KUP-KLO).EQ.1) GO TO 70
+      KNOT = (KUP+KLO)/2
+      IF (T-X(KNOT)) 50, 70, 40
+   40 KLO = KNOT
+      KNOT = KUP
+      GO TO 30
+   50 KUP = KNOT
+      GO TO 30
+C EVALUATION OF THE SPLINE
+   60 IORD = M
+      IF (ID.GT.IORD) GO TO 130
+   70 Y = T - X(KNOT)
+      IORD1 = IORD + 1
+C SET UP SPLINE COEFFICIENTS
+      DO 80 I=1,IORD
+        MU = IORD1 - I
+        S(I) = C(MU,KNOT)
+   80 CONTINUE
+C HORNERS SCHEME
+      DO 100 K=1,ID
+        IORD = IORD1 - K
+        DO 90 I=2,IORD
+          S(I) = S(I-1)*Y + S(I)
+   90   CONTINUE
+  100 CONTINUE
+      FACT = 1.0
+      IF (ID.EQ.1) GO TO 120
+      IDM1 = ID - 1
+      DO 110 I=1,IDM1
+        FACT = FACT*FLOAT(I)
+  110 CONTINUE
+  120 GVAL = S(IORD)*FACT
+      RETURN
+  130 GVAL = 0.0
+      RETURN
+      END

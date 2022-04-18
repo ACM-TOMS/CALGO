@@ -1,0 +1,145 @@
+      SUBROUTINE ZZDSRT ( DICT, DKINF, DICTLN, KEYLEN, MAP, INVMAP,
+     -                    FORW, MAPFL,   STR1, STR2        )
+
+C## A R G U M E N T S:
+                      INTEGER        DICTLN,     FORW,   KEYLEN
+                      LOGICAL        MAPFL
+                      INTEGER        DKINF(DICTLN,2), MAP(DICTLN)
+                      INTEGER                      INVMAP(DICTLN)
+                      CHARACTER*(*)  DICT,  STR1,  STR2
+
+C## S T A T U S:
+C               SINGLE/DOUBLE CONVERSION:        NOT REQUIRED.
+C               SYSTEM  DEPENDENCE:                      NONE.
+C
+C>RCS $HEADER: DSRT.F,V 1.10 91/11/20 10:52:44 BUCKLEY EXP $
+C>RCS $LOG:     DSRT.F,V $
+C>RCS REVISION 1.10  91/11/20  10:52:44  BUCKLEY
+C>RCS FINAL SUBMISSION TO TOMS
+C>RCS
+C>RCS REVISION 1.9  89/06/30  13:38:15  BUCKLEY
+C>RCS PREPARING SUBMITTED VERSION OF MT
+C>RCS
+C>RCS REVISION 1.3.1.1  89/05/20  16:42:36  BUCKLEY
+C>RCS TEMP. TEST OF MT BEFORE SUBMITTING
+C>RCS
+C>RCS REVISION 1.3  89/05/18  12:20:23  BUCKLEY
+C>RCS FINAL TEST OF MT BEFORE SUBMITTING
+C>RCS
+C>RCS REVISION 1.2  89/05/15  14:47:20  BUCKLEY
+C>RCS INITIAL INSTALLATION OF MT INTO RCS FORM.
+C>RCS
+C>RCS REVISION 1.1  89/01/17  16:50:08  BUCKLEY
+C>RCS INITIAL REVISION
+C>RCS
+C
+C## D E S C R I P T I O N:
+C
+C     THIS ROUTINE SORTS A DICTIONARY ( OF LENGTH DICTLN ENTRIES )
+C     INTO INCREASING ALPHABETICAL ORDER. THE DICTIONARY ENTRIES ARE
+C     PACKED  INTO A SINGLE LONG STRING. THE CORRESPONDING ENTRIES
+C     OF DKINF ARE SORTED ALSO.
+C
+C     SORTING STARTS FROM THE ELEMENT INDICATED BY  FORW.  IF FORW
+C     IS POSITIVE, SORTING IS DONE FROM THERE TO THE END OF THE ARRAY
+C     IN FORWARD ORDER, BUT IF IT IS NEGATIVE, SORTING IS FROM ELEMENT
+C     ABS(FORW) IN REVERSE ORDER TO THE START OF THE ARRAY.  THIS IS
+C     NICE FOR SINGLE REPLACEMENTS SINCE A BUBBLE SORT IS USED.
+C
+C     IF MAPFL IS TRUE, THEN THE CORRESPONDENCE BETWEEN THE ORIGINAL
+C     AND FINAL ORDER IS KEPT IN THE INDEX ARRAYS MAP AND INVMAP.
+C     OTHERWISE, MAP AND INVMAP ARE NOT ACCESSED IN THIS ROUTINE.
+C
+C     STR1, STR2  TEMPORARY STRINGS OF THE SAME LENGTH AS THE INDIVI-
+C                 DUAL ENTRIES IN THE DICTIONARY, I.E. THE SAME LENGTH
+C                 AS EACH KEYWORD IN THE DICTIONARY.
+C
+C## E N T R Y   P O I N T S: THE NATURAL ENTRY ZZDSRT
+C## S U B R O U T I N E S:   ABS, LGT     ...INTRINSIC
+C## P A R A M E T E R S:     NONE ARE DEFINED.
+C## L O C A L   D E C L:
+                       INTEGER         PT1, PT2, TP1,INCR, LAST, FIRST,I
+                       INTEGER         KEYLN1, PTK1, PTK2,  QUIT, ENDPS1
+                       LOGICAL         ADV
+
+C## S A V E:                 NONE SELECTED.
+C## E Q U I V A L E N C E S: NONE ARE DEFINED.
+C## C O M M O N:             NONE IS DEFINED.
+C## D A T A:                 NONE ARE SET.
+C##                                                E X E C U T I O N
+C##                                                E X E C U T I O N
+
+      ADV = FORW .GE. 0
+
+      IF ( ADV ) THEN
+         INCR   = 1
+         FIRST  = DICTLN
+         LAST   = FORW + 1
+      ELSE
+         INCR   = -1
+         FIRST  = 1
+         LAST   = ABS(FORW) - 1
+      ENDIF
+
+      ENDPS1 = FIRST
+      KEYLN1 = KEYLEN - 1
+
+  800 IF ( (  FORW .GT. 0 .AND. ENDPS1 .GE. LAST )  .OR.
+     -     (  FORW .LT. 0 .AND. ENDPS1 .LE. LAST )      )  THEN
+
+         PT1   = LAST - INCR
+         PTK1  = PT1 * KEYLEN
+         STR1  = DICT(PTK1-KEYLN1:PTK1)
+         QUIT  = PT1
+
+         DO 1000 PT2 = LAST, ENDPS1, INCR
+
+            PTK2  = PT2 * KEYLEN
+            STR2 = DICT(PTK2-KEYLN1:PTK2)
+            IF ( ADV .EQV. LGT (STR1 , STR2) ) THEN
+C                                              DO EXCHANGES.
+               DICT(PTK2-KEYLN1:PTK2) = STR1
+               DICT(PTK1-KEYLN1:PTK1) = STR2
+
+               TP1          = DKINF(PT1,1)
+               DKINF(PT1,1) = DKINF(PT2,1)
+               DKINF(PT2,1) = TP1
+
+               TP1          = DKINF(PT1,2)
+               DKINF(PT1,2) = DKINF(PT2,2)
+               DKINF(PT2,2) = TP1
+
+               IF ( MAPFL ) THEN
+                  TP1         = INVMAP(PT1)
+                  INVMAP(PT1) = INVMAP(PT2)
+                  INVMAP(PT2) = TP1
+               ENDIF
+
+               QUIT = PT1
+               PT1  = PT2
+               PTK1 = PT1*KEYLEN
+            ELSE
+               PT1  = PT2
+               PTK1 = PT1*KEYLEN
+               STR1 = STR2
+            ENDIF
+ 1000    CONTINUE
+
+         ENDPS1 = QUIT
+         GOTO 800
+      ENDIF
+C           FOR THE "IF LAST PASS..."
+
+      IF ( MAPFL ) THEN
+         DO 3000 I = 1, DICTLN
+            MAP ( INVMAP(I) ) = I
+ 3000    CONTINUE
+      ENDIF
+      GOTO 90000
+
+C## E X I T
+90000       RETURN
+
+C## F O R M A T S:  NONE ARE DEFINED.
+C##                 E N D         OF ZZDSRT.
+                    END

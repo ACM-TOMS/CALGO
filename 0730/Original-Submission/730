@@ -1,0 +1,4445 @@
+C      ALGORITHM 730, COLLECTED ALGORITHMS FROM ACM.
+C      THIS WORK PUBLISHED IN TRANSACTIONS ON MATHEMATICAL SOFTWARE,
+C      VOL. 20, NO. 1, MARCH, 1994, P. 161.
+
+This disk contains FORTRAN source files for the algorithms described in
+"An implementation of a divide and conquer algorithm for the unitary
+eigenproblem," by G. S. Ammar, L. Reichel, and D. C. Sorensen, which
+has been submitted to TOMS for publication.
+
+There should be 8 FORTRAN source files on this disk.
+
+   udc.f:   contains the single-precision subroutine udc and all
+            subroutines called by udc for the calculation of the
+            eigenvalues and eigenvectors of a unitary Hessenberg
+            matrix with nonnegative subdiagonal elements given in
+            Schur parametric form.
+
+  drudc.f:  driver program for sample run of udc
+
+  udcp.f:   contains the single-precision subroutine udcp and all
+            subroutines called by udcp for the calculation of the
+            partial spectral resolution (i.e., eigenvalues and
+            first and last components of normalized eigenvectors)
+            of a unitary Hessenberg matrix with nonnegative
+            subdiagonal elements given in Schur parametric form.
+
+  drudcp.f:  driver program for sample run of udcp
+
+
+  dudc.f, drdudc.f, dudcp.f, drdudcp.f:  double-precision versions
+            of the first four files.  The double-precision
+            version of each subroutine has the same name as
+            the corresponding single-precision subroutine.
+
+Also included is a makefile for creating the four executable files
+udc, udcp, dudc, and dudcp.
+
+C*** makefile ----------------------------------------------------------
+
+udc:    drudc.o udc.o
+	f77 drudc.o udc.o -o udc
+dudc:	dudc.o drdudc.o
+	f77 drdudc.o dudc.o -o dudc
+udcp:	udcp.o drudcp.o
+	f77 drudcp.o udcp.o -o udcp
+dudcp:	dudcp.o drdudcp.o
+	f77 drdudcp.o dudcp.o -o dudcp
+
+C*** udc.f -------------------------------------------------------------
+
+c----------------------------------------------------------------------------
+c Subroutine for computing the spectral resolution of a unitary upper
+c Hessenberg matrix by a divide-and-conquer algorithm. This code is
+c written in single precision FORTRAN77. For comments contact
+c
+c G.S. Ammar
+c University of Northern Illinois
+c Department of Mathematical Sciences
+c DeKalb, IL 60115
+c
+c e-mail: na.ammar@na-net.stanford.edu
+c
+c
+c L. Reichel
+c University of Kentucky
+c Department of Mathematics
+c Lexington, KY 40506
+c
+c e-mail: lothar@ms.uky.edu
+c
+c
+c or
+c
+c D.C. Sorensen
+c Rice University
+c Department of Mathematical Sciences
+c Houston, TX 77251
+c
+c e-mail: sorensen@rice.edu
+c
+c June 11, 1990
+c----------------------------------------------------------------------------
+      subroutine udc(n,cgamma,sigma,eps,ld,cw,theta,info,wrkmat,iwrk)
+      integer n,ld,info,iwrk(3*n)
+      complex cgamma(n),cw(ld,n)
+      real sigma(n-1),theta(n),eps,wrkmat(ld,2*n+6)
+c
+c Subroutine for computing the spectral resolution of a unitary upper
+c Hessenberg matrix H of order n with nonnegative subdiagonal elements
+c by a divide-and-conquer method. The matrix H is represented in Schur
+c parametric form
+c
+c  H=G_1(cgamma(1)) G_2(cgamma(2)) ... G_{n-1}(cgamma(n-1)) G^_n(cgamma(n)),
+c
+c where G_j(cgamma(j)), 1<=j<n, are Givens reflectors for reflection in the
+c planes j and j+1, i.e
+c
+c                      | j  j+1 |     | -cgamma(j)     sigma(j)      |
+c        G_j(cgamma(j))|        |  =  |                              | .
+c                      | j  j+1 |     |  sigma(j)   conj(cgamma(j))  |
+c
+c conj stands for complex conjugation. The Schur parameters cgamma(j),
+c 1<=j<n, are complex valued and of magnitude less than or equal to
+c one. The complementary parameters sigma(j) are nonnegative and such
+c that cgamma(j)*conj(cgamma(j)) + sigma(j)*sigma(j) = 1. The sigma(j)
+c are subdiagonal elements of H. The last Schur parameter cgamma(n) is
+c of unit magnitude, and G^_n(cgamma(n)) is the diagonal matrix
+c
+c        G^_n(cgamma(n)) = diag[1,1,...,1,-cgamma(n)].
+c
+c The subroutine udc calls udc2, which has a longer list of parameters than
+c udc. Actual computations are carried out in udc2 and in subroutines called
+c by udc2.
+c
+c On entry:
+c
+c     n          integer
+c                n is the order of the unitary upper Hessenberg matrix H
+c                with nonnegative subdiagonal elements. H is defined by
+c                the Schur parameters cgamma(j), 1<=j<=n.
+c
+c     cgamma     complex(n)
+c                cgamma contains the Schur parameters that define H. The
+c                parameters cgamma(j) are of magnitude less than or equal
+c                to one for 1<=j<n, and cgamma(n) is of unit magnitude.
+c
+c     sigma      real(n-1)
+c                sigma contains complementary nonnegative parameters such
+c                that cgamma(j)*conj(cgamma(j)) + sigma(j)*sigma(j) = 1
+c                for 1<=j<n. The sigma(j) are subdiagonal elements of H.
+c
+c     eps        real
+c                eps is the deflation tolerance, which should be a
+c                few multiples of machine epsilon.
+c
+c     ld         integer
+c                ld is the leading dimension of the arrays cw and wrkmat.
+c                ld must be at least n.
+c
+c On return:
+c
+c     cw         complex(ld,n)
+c                cw contains eigenvectors of H. An eigenvector associated
+c                with eigenvalue exp(i*theta(j)) is stored in column j for
+c                1<=j<=n.
+c
+c     theta      real(n)
+c                theta contains the arguments of the eigenvalues
+c                exp(i*theta(j)), i=sqrt(-1). The theta(j) lie in the
+c                interval (-pi,pi].
+c
+c     info       integer
+c                = 0  for normal return.
+c                > 0  signals an error condition.
+c                     info = 1 if FORTRAN function csqrt( ) does not compute
+c                       principal branch.
+c                     info = 2 if complex logarithm does not compute
+c                       principal branch.
+c                     info = 3 if |cgamma(j)|^2 + sigma(j)^2 <> 1 for some
+c                       1<=j<n, or if |cgamma(n)| <> 1.
+c                     info = 4 if n > ld.
+c                     info = 5 if the rootfinder failed to determine zeros of
+c                       the spectral function. Use a larger value of eps.
+c
+c Other arguments (work arrays):
+c
+c     wrkmat     real(ld,2*n+6)
+c                wrkmat is a work array used by udc.
+c
+c     iwrk       integer(3*n)
+c                iwrk is a work array used by udc.
+c
+c Subroutines and functions:
+c arccot, argum, dflval, defref, firoot, getvc1, getvc2, idxord, initev,
+c phivl, phivl2, restrc, udc2, upaste, the blas ccopy, snrm2 and sscal,
+c as well as FORTRAN functions.
+c
+c Internal scalars:
+      integer k
+c
+c Check complex square root function. Exit if argument not in (-pi/2,pi/2].
+      if(aimag(csqrt(cmplx(0.,-1.))).ge.0.)then
+        info=1
+        return
+      endif
+c Check complex logarithm function. Exit if argument not in (-pi/2,pi/2].
+      if(aimag(clog(cmplx(0.,-1.))).ge.0.)then
+        info=2
+        return
+      endif
+c Check Schur parameters cgamma(k) and complementary parameters sigma(j).
+      if(abs(cabs(cgamma(n))-1.).ge.eps)then
+        info=3
+        return
+      endif
+      do 5 k=n-1,1,-1
+        if(abs(sqrt(cabs(cgamma(k))**2+sigma(k)**2)-1.).ge.eps)then
+          info=3
+          return
+        endif
+5     continue
+c Check ld and n. Exit if n>ld.
+      if(ld.lt.n)then
+        info=4
+        return
+      endif
+c
+      info=0
+      call udc2(n,cgamma,sigma,theta,ld,cw,wrkmat,iwrk,iwrk(n+1),
+     %  wrkmat(1,2*n+1),eps,wrkmat(1,2*n+2),wrkmat(1,2*n+4),
+     %  iwrk(2*n+1),info)
+      return
+      end
+c----------------------------------------------------------------------------
+c Main subroutines
+c----------------------------------------------------------------------------
+      subroutine udc2(n,cgamma,sigma,theta,ld,cw,cwnew,idxbeg,isizsb,
+     %  absgam,eps,cwork,rwork,iwork,iflag)
+      integer n,ld,idxbeg(n),iflag,isizsb(n),iwork(n)
+      complex cgamma(n),cw(ld,n),cwnew(ld,n),cwork(n)
+      real eps,sigma(n),theta(n),absgam(n),rwork(n,3)
+c
+c Subroutine for computing the spectral resolution of a unitary upper
+c Hessenberg matrix H with nonnegative subdiagonal elements by a divide-
+c and-conquer method. The matrix H is represented in Schur parametric form.
+c Only the parameters of udc2 that differ from those of udc are listed below.
+c
+c Arguments of udc2 that have not been explained in udc:
+c
+c     cwork      complex(n)
+c                cwork is a work array used by udc2.
+c
+c     iwork      integer(n)
+c                iwork is a work array used by udc2.
+c
+c     rwork      real(n,3)
+c                rwork is a work array used by udc2.
+c
+c     idxbeg     integer(n)
+c                idxbeg(j) contains first column index for subproblem j
+c                during execution of udc2.
+c
+c     isizsb     integer(n)
+c                isizsb(j) contains size of subproblem j during
+c                execution of udc2.
+c
+c     absgam     real(n)
+c                absgam contains Schur parameter associated with jth Givens
+c                reflector torn out from the Schur parametric form of H.
+c
+c     iflag      integer
+c                iflag is normally 0. iflag is set to 5 if the subroutine
+c                firoot of subroutine upaste cannot determine zeros of the
+c                spectral function. If iflag=5 then use a larger value of
+c                eps.
+c
+c Subroutines and functions:
+c arccot, argum, dflval, defref, firoot, getvc1, getvc2, idxord, initev,
+c phivl, phivl2, restrc, upaste, the blas ccopy, snrm2 and sscal, as
+c well as FORTRAN functions.
+c
+c Internal scalars:
+      integer isbprb,i1,j,k
+      complex cgamhf,cgampr,cggam,clmbda
+      real argum,imggam,pi,reggam,twopi
+c
+c Divide phase.
+c Subdivide the eigenproblem into problems of order 2 (and one problem of
+c order 1 if n is odd) by tearing real symmetric Givens reflectors out of
+c the Schur parametric form of H.
+      twopi=8.*atan(1.)
+      pi=twopi/2.
+      isbprb=0
+      do 10 k=n-2,0,-2
+        if(k.gt.0)then
+c Tear out G_k(absgam(k)) from Schur parametric form of H
+          absgam(k)=cabs(cgamma(k))
+          if(absgam(k).ne.0.)then
+            cgampr=cgamma(k)/absgam(k)
+          else
+            cgampr=cmplx(1.,0.)
+          endif
+          cgamma(k+1)=cgamma(k+1)*conjg(cgampr)
+          cgamma(k+2)=cgamma(k+2)*conjg(cgampr)
+          cgamma(k)=-cgampr
+        endif
+c Compute eigenvalues of matrix G_{k+1} G^_{k+2}
+        cgamhf=csqrt(cgamma(k+2))
+        cggam=cgamma(k+1)*conjg(cgamhf)
+        reggam=real(cggam)
+        imggam=aimag(cggam)
+        clmbda=cgamhf*cmplx(-reggam,sqrt(imggam**2+sigma(k+1)**2))
+        theta(k+1)=argum(clmbda)
+        clmbda=cgamhf*cmplx(-reggam,-sqrt(imggam**2+sigma(k+1)**2))
+        theta(k+2)=argum(clmbda)
+c Compute eigenvectors of matrix G_{k+1} G^_{k+2}. Determine
+c eigenvector for exp(i*theta(k+1)), i=sqrt(-1).
+        call initev(cw(1,k+1),cw(1,k+2),cgamhf,imggam,sigma(k+1))
+c Initialize index vectors for subproblem
+        isbprb=isbprb+1
+        idxbeg(isbprb)=k+1
+        isizsb(isbprb)=2
+        if(k.eq.1)then
+c Initialize one-by-one eigenproblem
+          theta(1)=argum(cgampr)
+          cw(1,1)=cmplx(1.,0.)
+          isbprb=isbprb+1
+          idxbeg(isbprb)=1
+          isizsb(isbprb)=1
+        endif
+10    continue
+c
+c Conquer phase.
+c Adjacent subproblems are merged to larger ones by rank-one updates.
+c Paste subproblems from top down
+15    do 20 k=isbprb-1,1,-2
+        if(idxbeg(k).gt.idxbeg(k+1))then
+          i1=idxbeg(k)
+          idxbeg(k)=idxbeg(k+1)
+          idxbeg(k+1)=i1
+          i1=isizsb(k)
+          isizsb(k)=isizsb(k+1)
+          isizsb(k+1)=i1
+        endif
+c Merge subproblems k and k+1
+        call upaste(theta(idxbeg(k)),cw(1,idxbeg(k)),cwnew(1,idxbeg(k)),
+     %    absgam(idxbeg(k+1)-1),sigma(idxbeg(k+1)-1),isizsb(k),
+     %    isizsb(k+1),ld,iwork,cwork,rwork(1,1),rwork(1,2),rwork(1,3),
+     %    eps,pi,twopi,iflag)
+        if(iflag.ne.0)return
+c Update index arrays for subproblem control
+        isizsb(k)=isizsb(k+1)+isizsb(k)
+        isizsb(k+1)=0
+        idxbeg(k)=min(idxbeg(k),idxbeg(k+1))
+20    continue
+      j=1
+      do 25 k=1,isbprb
+        if(isizsb(k).ne.0)then
+          isizsb(j)=isizsb(k)
+          idxbeg(j)=idxbeg(k)
+          j=j+1
+        endif
+25    continue
+      isbprb=isbprb-int(isbprb/2)
+c Exit
+      if(isbprb.eq.1)return
+c
+c Paste subproblems from bottom up
+      do 30 k=1,isbprb-1,2
+        if(idxbeg(k).gt.idxbeg(k+1))then
+          i1=idxbeg(k)
+          idxbeg(k)=idxbeg(k+1)
+          idxbeg(k+1)=i1
+          i1=isizsb(k)
+          isizsb(k)=isizsb(k+1)
+          isizsb(k+1)=i1
+        endif
+c Merge subproblems k and k+1
+        call upaste(theta(idxbeg(k)),cw(1,idxbeg(k)),cwnew(1,idxbeg(k)),
+     %    absgam(idxbeg(k+1)-1),sigma(idxbeg(k+1)-1),isizsb(k),
+     %    isizsb(k+1),ld,iwork,cwork,rwork,rwork(1,2),rwork(1,3),eps,
+     %    pi,twopi,iflag)
+        isizsb(k)=isizsb(k+1)+isizsb(k)
+        isizsb(k+1)=0
+30    continue
+      j=1
+      do 35 k=1,isbprb
+        if(isizsb(k).ne.0)then
+          isizsb(j)=isizsb(k)
+          idxbeg(j)=idxbeg(k)
+          j=j+1
+        endif
+35    continue
+      isbprb=isbprb-int(isbprb/2)
+c Exit
+      if(isbprb.eq.1)return
+c
+      goto 15
+      end
+c----------------------------------------------------------------------------
+       subroutine upaste(t,w,wnew,gamma,sigma,k,m,nr,idx,z,tnew,
+     %   absz2,tdif,eps,pi,twopi,iflag)
+       complex w(nr,*),wnew(nr,*),z(*)
+       real absz2(*),eps,gamma,pi,sigma,t(*),tdif(*),tnew(*),twopi
+       integer idx(*),iflag,k,m,nr
+c The conquer phase of the unitary divide-and-conquer algorithm. The
+c subroutine pastes spectral resolutions of orders k and m together,
+c using the real Schur parameter pair (gamma,sigma), to determine the
+c spectral resolution of a problem of order k+m.
+c
+c
+c On entry:
+c
+c     k,m      integer
+c              Orders of subproblems to be pasted together.
+c
+c     t        real(k+m)
+c              Contains arguments of eigenvalues of the first subproblem
+c              in components 1:k and of the second subproblem in components
+c              k+1:k+m.
+c
+c     w        complex(nr,k+m)
+c              Eigenvectors of first subproblem are contained in
+c              w(i,j) i=1:k,j=1:k, and those of the second subproblem
+c              are contained in w(i,j) i=1:m, j=k+1:k+m.
+c
+c     nr       integer
+c              Declared row dimension of eigenvector arrays
+c              w and wnew in calling program.
+c
+c gamma,sigma  real
+c              Schur parameter gamma and corresponding complementary
+c              parameter sigma for pasting of subproblems.
+c
+c     eps      real
+c              Tolerance for deflation of type 1 and of type 2.
+c
+c  pi,twopi    real
+c              Constants assumed set in calling program.
+c
+c
+c On return:
+c
+c     t        Contains arguments of new eigenvalues of eigenproblem
+c              of order k+m in components 1:k+m.
+c
+c     w        New eigenvectors of subproblem of order k+m are contained
+c              in w(i,j), i=1:k+m, j=1:k+m.
+c
+c     iflag    integer
+c              iflag=0 signals normal exit, iflag=5 signals that the
+c              subroutine firoot failed to determine zeros of the
+c              spectral function. Use a larger value of eps.
+c
+c
+c Other arguments and some local variables:
+c
+c     tnew     real(k+m)
+c              Temporary storage space for new eigenvalues.
+c
+c     wnew     complex(nr,k+m)
+c              Temporary storage space for new eigenvectors.
+c
+c     z        complex(k+m)
+c              Storage space for complex weights.
+c
+c     absz2    real(k+m)
+c              Storage space for moduli of components of z, which
+c              are used in the calculation of the function phi.
+c
+c     tdif     real(k+m)
+c              Storage space used by firoot.
+c
+c     idx      integer(k+m)
+c              Index array used to order arguments of undeflated
+c              eigenvalues.
+c
+c     m0       integer
+c              Number of undeflated roots, i.e. the number of roots of the
+c              spectral function that have to be determined by subroutine
+c              firoot.
+c
+c     m2       integer
+c              number of type 2 deflations.
+c
+c
+c Subroutines and functions:
+c arccot, argum, dflval, defref, firoot, getvc1, getvc2, idxord, phivl,
+c phivl2, restrc, the blas ccopy, sscal and snrm2, as well as FORTRAN
+c functions.
+c
+c Internal variables:
+      complex cgam,czero,d1,d2
+      real argum,dflval,eps1,eps2,omega1,omega2,phires,rho,sig
+      integer i,i0,i1,i2,j,km,k1,m0,m2
+c
+      eps1=eps
+      eps2=eps
+      czero=cmplx(0.,0.)
+      km=k+m
+      k1=k+1
+c Make sure that all arguments are in (-pi,pi]
+      call restrc(t,km,pi,twopi)
+c Define block diagonal matrix W containing eigenvectors of subproblems. The
+c (1,1) block is of order k and the (2,2) block of order m.
+      do 20 i=1,k
+        do 10 j=k1,km
+          w(j,i)=czero
+10      continue
+20    continue
+      do 50 i=k1,km
+        do 40 j=m,1,-1
+          w(j+k,i)=w(j,i)
+40      continue
+50    continue
+      do 70 i=k1,km
+        do 60 j=1,k
+          w(j,i)=czero
+60      continue
+70    continue
+c Calculation of vector z
+      omega1=sqrt((1.+gamma)/2.)
+      omega2=-sigma/(2.*omega1)
+      do 80 i=1,k
+        z(i)=omega1*conjg(w(k,i))
+80    continue
+      do 90 i=k1,km
+        z(i)=omega2*conjg(w(k1,i))*cmplx(cos(t(i)),-sin(t(i)))
+90    continue
+c Check for deflation type of 1 (small abs(z(i))) and create index
+c array idx containing indices of undeflated t(i).
+      m0=0
+      do 250 i=1,km
+        if(2.*cabs(z(i)).lt.eps1)then
+c Type 1 deflation criterion is satisfied. Store new eigenvalue
+c in tnew(i) and new eigenvector in wnew(j,i), j=1,2,...,k+m.
+          tnew(i)=t(i)
+          z(i)=cmplx(-2.,0.)
+          call ccopy(km,w(1,i),1,wnew(1,i),1)
+        else
+c Eigenvalue did not deflate; append corresponding index on idx()
+          m0=m0+1
+          idx(m0)=i
+        endif
+250    continue
+c Sort index vector idx() so that t(idx(1))<=t(idx(2))<=...<=t(idx(m0))
+      call idxord(t,idx,m0)
+c Check for deflation of type 2 (close eigenvalues) until none occurs.
+c iflag=1 if deflation occurs during loop 350.
+c m2 is the total number of type 2 deflations.
+300   m2=0
+350   iflag=0
+      i=0
+380   if(m0.eq.1)goto 430
+      i=i+1
+      i1=idx(i)
+      i0=mod(i,m0)+1
+      i2=idx(i0)
+c Calculate reflection ({cgam,sig} Schur parameter pair, cgam complex)
+c  for type 2 deflation criterion.
+      if(dflval(z(i1),z(i2),t(i1),t(i2),cgam,sig,rho,d1,d2)
+     %  .le.eps2)then
+c Type 2 deflation criterion is satisfied. Store new arguments in t() and
+c z(). z(i2)=-4 is deflation type 2 flag.
+        t(i1)=argum(d1*cabs(cgam)**2+d2*sig**2)
+        t(i2)=argum(d1*sig**2+d2*cabs(cgam)**2)
+        z(i1)=rho*(z(i2)/cabs(z(i2)))
+        z(i2)=cmplx(-4.,0.)
+c Determine new deflated eigenvector
+        call defref(w(1,i1),w(1,i2),wnew(1,i2),cgam,sig,km)
+c Store new deflated eigenvalue
+        tnew(i2)=t(i2)
+        iflag=1
+        m0=m0-1
+        m2=m2+1
+c Update index array
+        do 420 j=i0,m0
+          idx(j)=idx(j+1)
+420     continue
+        i=i-1
+      endif
+      if(m0.ge.2.and.i.lt.m0)goto 380
+c If type 2 deflation occured, check again
+      if(iflag.ne.0)goto 350
+c End of deflation
+c
+c Compute new eigenvalues and eigenvectors corresponding to zeros of phi
+430   if(m0.eq.1)then
+        i1=idx(1)
+        tnew(i1)=t(i1)+pi
+        call ccopy(km,w(1,i1),1,wnew(1,i1),1)
+        goto 850
+      endif
+c Store squared magnitudes of components of z for use in rootfinders
+      do 450 i=1,km
+        absz2(i)=cabs(z(i))**2
+450   continue
+c Deflation of type 2 may have caused eigenvalue arguments to become
+c unsorted. Deflation of type 2 took place if m2>0. Sort index array
+c to obtain nondecreasing arguments t(idx(i)), i=1,2,...,m0, if m2>0.
+      if(m2.gt.0)call idxord(t,idx,m0)
+c Compute m0 roots of phi. Store roots in vector tnew.
+      i=1
+c Loop 600 starts here
+600   i1=idx(i)
+      i0=mod(i,m0)+1
+      i2=idx(i0)
+      if(t(i2).lt.t(i1))t(i2)=t(i2)+twopi
+c Compute new eigenvalue argument tnew(i1) between t(i1) and t(i2)
+c and store new eigenvector in wnew(*,i1)
+      call firoot(tnew(i1),phires,t(i1),t(i2),t,absz2,z,w,wnew(1,i1),
+     %  tdif,nr,km,iflag)
+      if(iflag.ne.0)then
+        iflag=5
+        return
+      endif
+      i=i+1
+690   if(i.le.m0)goto 600
+c Firoot loop 600 ends here
+      if(t(idx(1)).gt.pi)t(idx(1))=t(idx(1))-twopi
+c All eigenvectors have been computed. Store new eigenvectors in first k+m
+c rows of w, and new eigenvalues in t().
+850   do 900 i=1,km
+        t(i)=tnew(i)
+        call ccopy(km,wnew(1,i),1,w(1,i),1)
+900   continue
+      return
+      end
+c----------------------------------------------------------------------------
+c Auxiliary functions and subroutines
+c----------------------------------------------------------------------------
+      real function arccot(t)
+      real t
+c -pi/2<=arccot(t)<=pi/2 defined for t<>0
+      arccot=sign(1.,t)*atan2(1.,abs(t))
+      return
+      end
+c---------------------------------------------------------------------------
+      real function argum(z)
+      complex z
+c Function computes argument in (-pi,pi] of complex number z
+      if(aimag(z).eq.0.)then
+        if(real(z).ge.0.)then
+          argum=0.
+        else
+          argum=4.*atan(1.)
+        endif
+      else
+        argum=aimag(clog(z))
+      endif
+c
+      return
+      end
+c----------------------------------------------------------------------------
+      subroutine defref(w1,w2,wnew,cgam,sig,km)
+      complex cgam,wnew(*),w1(*),w2(*)
+      real sig
+      integer j,km
+c Performs reflection determined by cgam,sig on old eigenvectors w1(*),w2(*)
+c to determine new deflated eigenvector wnew(*) and modified old eigenvector
+c w1(*) corresponding to undeflated eigenvalue.
+      do 10 j=1,km
+        wnew(j)=sig*w1(j)+cgam*w2(j)
+10    continue
+      do 20 j=1,km
+        w1(j)=-conjg(cgam)*w1(j)+sig*w2(j)
+20    continue
+      return
+      end
+c----------------------------------------------------------------------------
+      real function dflval(z1,z2,t1,t2,cgam,sig,rho,d1,d2)
+      complex z1,z2,cgam,d1,d2
+      real t1,t2,sig,rho
+c Calculate reflection ({cgam,sig} Schur parameter pair, cgam complex)
+c and return value for checking for deflation of type two.
+      rho=sqrt(cabs(z1)**2+cabs(z2)**2)
+      cgam=-conjg(z1)*z2/(cabs(z2)*rho)
+      sig=cabs(z2)/rho
+      d1=cmplx(cos(t1),sin(t1))
+      d2=cmplx(cos(t2),sin(t2))
+      dflval=sig*cabs(cgam*(d1-d2))
+c
+      return
+      end
+c----------------------------------------------------------------------------
+      subroutine firoot(root,phires,tleft,tright,t,absz2,z,
+     %  w,wnew,tdif,nr,n,iflag)
+      real arccot,absz2(*),dphi,dtnew,dtold,phinew,phiold,phires,
+     %  rho,root,sig,t(*),tendpt,tleft,tnew,tright,tdif(*)
+      complex z(*),w(nr,*),wnew(*)
+      integer icount,iflag,j,n,nr
+      logical right
+c Compute zero of phi in interval (tleft,tright). On entry the vector t
+c contains the arguments of eigenvalues of the subproblems to be merged.
+c The vector absz2 contains the squared magnitude of the first and last
+c component of the normalized eigenvectors of the subproblems to be solved
+c modified by rotation and deflation. On exit parameter root contains an
+c approximation of the zero of phi in (tleft,tright) if flag iflag=0 and
+c then phires is the value (residual) of phi at root. If iflag<>0 then
+c firoot has failed to determine all zeros of the spectral function. This
+c results in an error exit from udc with info=5. The subroutines phivl
+c and phivl2 are used for the evaluation of phi and its derivative. firoot
+c works with differences between poles and the end point tendpt of the
+c interval (tleft,tright) closest to the root: tdif(j)=t(j)-tendpt. The
+c current approximation tnew of the desired root is given by tnew=
+c tendpt+dtnew. On return, the eigenvector associated with the computed
+c root is stored in wnew(*). The eigenvectors are computed by the
+c subroutines getvc1 and getvc2.
+      iflag=0
+      icount=0
+      tnew=(tleft+tright)/2.
+      if(tright-tnew.le.0.)then
+        iflag=1
+        return
+      endif
+      if(tnew-tleft.le.0.)then
+        iflag=-1
+        return
+      endif
+      call phivl(phinew,dphi,t,absz2,n,tnew)
+c Check if tnew=root
+      if(phinew.eq.0.)then
+        root=tnew
+        phires=phinew
+        call getvc1(root,t,z,absz2,n,nr,w,wnew)
+        return
+      endif
+      if(phinew.lt.0.)then
+        tendpt=tright
+        right=.true.
+      else
+        tendpt=tleft
+        right=.false.
+      endif
+c Compute difference vector tdif(j)=t(j)-tendpt and dtnew=tnew-tendpt
+      do 5 j=1,n
+        tdif(j)=t(j)-tendpt
+5     continue
+      dtnew=tnew-tendpt
+c Loop for computing root
+10    icount=icount+1
+      rho=phinew-dphi*sin(-dtnew)
+      sig=2.*dphi*sin(dtnew/2.)**2
+      dtold=dtnew
+      phiold=phinew
+      dtnew=2.*arccot(rho/sig)
+c If tnew is past an end point, set error flag
+      if(dtnew*dtold.lt.0.)then
+        dtnew=0.
+        root=tendpt
+        iflag=-1
+        if(right)iflag=1
+        return
+      endif
+c If tnew is at pole, set error flag
+      if(abs(dtnew).le.0.)then
+        root=tendpt+dtnew
+        phires=phinew
+        iflag=-1
+        if(right)iflag=1
+        return
+      endif
+c Check if tnew is a new point; if not, then terminate (equal iterates)
+      if(dtnew.eq.dtold)then
+        root=tendpt+dtold
+        phires=phiold
+        call getvc2(dtold,tdif,z,absz2,n,nr,w,wnew)
+        return
+      endif
+c
+      call phivl2(phinew,dphi,tdif,absz2,n,dtnew)
+20    if(phinew.eq.0.)then
+        root=tendpt+dtnew
+        phires=phinew
+        call getvc2(dtnew,tdif,z,absz2,n,nr,w,wnew)
+        return
+      endif
+c Terminate if root was overshot
+      if(phinew*phiold.lt.0.)then
+        if(abs(phinew).gt.abs(phiold))then
+          root=tendpt+dtold
+          phires=phiold
+          call getvc2(dtold,tdif,z,absz2,n,nr,w,wnew)
+        else
+          root=tendpt+dtnew
+          phires=phinew
+          call getvc2(dtnew,tdif,z,absz2,n,nr,w,wnew)
+        endif
+        return
+      endif
+      if((right.and.dtnew.lt.dtold).or.(.not.right.and.dtnew.gt.dtold))
+     %  then
+        root=tendpt+dtold
+        phires=phiold
+        call getvc2(dtold,tdif,z,absz2,n,nr,w,wnew)
+        return
+      endif
+      if(abs(phinew).gt.abs(phiold))then
+        root=tendpt+dtold
+        phires=phiold
+        call getvc2(dtold,tdif,z,absz2,n,nr,w,wnew)
+        return
+      endif
+      if(icount.lt.25)goto 10
+c
+      root=tendpt+dtnew
+      phires=phinew
+      call getvc2(dtnew,tdif,z,absz2,n,nr,w,wnew)
+      return
+      end
+c----------------------------------------------------------------------------
+      subroutine getvc1(theta,t,z,absz2,km,nr,w,wnew)
+      real absz2(*),delta,snrm2,t(*),theta
+      complex cfact,czero,d1,w(nr,*),wnew(*),z(*)
+      integer j,km,l,nr
+c Compute eigenvector associated with eigenvalue exp(i*theta) by using
+c eigenvectors for subproblems stored in w.
+c Store determined eigenvector in wnew.
+      czero=cmplx(0.,0.)
+      d1=cmplx(cos(theta),sin(theta))
+      do 5 j=1,km
+        wnew(j)=czero
+5     continue
+      do 10 j=1,km
+        if(absz2(j).le.1.)then
+          cfact=z(j)/(1.-d1*cmplx(cos(t(j)),-sin(t(j))))
+          do 20 l=1,km
+            wnew(l)=wnew(l)+w(l,j)*cfact
+20        continue
+        endif
+10    continue
+c Normalize wnew
+      delta=snrm2(2*km,wnew,1)
+      call sscal(2*km,1./delta,wnew,1)
+      return
+      end
+c----------------------------------------------------------------------------
+      subroutine getvc2(dt,tdif,z,absz2,km,nr,w,wnew)
+      real absz2(*),delta,dt,snrm2,tdif(*)
+      complex cfact,czero,w(nr,*),wnew(*),z(*)
+      integer j,km,l,nr
+c Compute eigenvector associated with eigenvalue exp(i*theta) by using
+c eigenvectors for subproblems stored in w.  theta is implicitly determined
+c by dt and tdif. Store determined eigenvector in wnew.
+      czero=cmplx(0.,0.)
+      do 5 j=1,km
+        wnew(j)=czero
+5     continue
+      do 10 j=1,km
+        if(absz2(j).le.1.)then
+          cfact=z(j)/(1.-cmplx(cos(dt-tdif(j)),sin(dt-tdif(j))))
+          do 20 l=1,km
+            wnew(l)=wnew(l)+w(l,j)*cfact
+20        continue
+        endif
+10    continue
+c Normalize wnew
+      delta=snrm2(2*km,wnew,1)
+      call sscal(2*km,1./delta,wnew,1)
+      return
+      end
+c----------------------------------------------------------------------------
+      subroutine idxord(t,idx,m0)
+      real t(*)
+      integer i,idx(*),itemp,j,m0
+      logical nochg
+c  Reorders index array idx corresponding to increasing values of t
+      do 20 i=1,m0-1
+        nochg=.true.
+        do 10 j=1,m0-i
+          if(t(idx(j)).gt.t(idx(j+1)))then
+            itemp=idx(j)
+            idx(j)=idx(j+1)
+            idx(j+1)=itemp
+            nochg=.false.
+          endif
+10      continue
+        if(nochg)return
+20    continue
+      return
+      end
+c---------------------------------------------------------------------------
+      subroutine initev(x,y,a,b,sig)
+      complex x(2),y(2),a,ctemp
+      real b,sig,length
+      integer i
+c Calculation of eigenvectors of two-by-two subproblems
+      if(b.eq.0..and.sig.eq.0.)then
+        x(1)=cmplx(0.,0.)
+        x(2)=cmplx(1.,0.)
+      else
+        if(b.ge.0.)then
+c Eigenvector for second eigenvalue
+          x(1)=cmplx(1.,0.)
+          x(2)=cmplx(0.,1.)*conjg(a)*sig/(b+sqrt(b**2+sig**2))
+        else
+c Eigenvector for first eigenvalue
+          x(1)=cmplx(1.,0.)
+          x(2)=cmplx(0.,-1.)*conjg(a)*sig/(-b+sqrt(b**2+sig**2))
+        endif
+      endif
+c Normalize eigenvector
+      length=sqrt(cabs(x(1))**2+cabs(x(2))**2)
+      x(1)=x(1)/length
+      x(2)=x(2)/length
+c Eigenvector for exp(i*theta(2)), i=sqrt(-1). Eigenvector orthogonal
+c to vector cw(*,1).
+      y(1)=-conjg(x(2))
+      y(2)=conjg(x(1))
+      if(b.ge.0.)then
+c Swap eigenvectors
+        do 10 i=1,2
+          ctemp=x(i)
+          x(i)=y(i)
+          y(i)=ctemp
+10      continue
+      endif
+c
+      return
+      end
+c---------------------------------------------------------------------------
+      subroutine phivl(phi,dphi,t,absz2,n,arg)
+      real absz2(*),arg,c,dphi,phi,s,t(*),tmp,zsq
+      integer j,n
+c Evaluate phi and phi' at arg.
+      phi=0.
+      dphi=0.
+      do 10 j=1,n
+        zsq=absz2(j)
+        if(zsq.le.1.)then
+          tmp=(t(j)-arg)/2.
+          c=cos(tmp)
+          s=sin(tmp)
+          phi=phi+zsq*c/s
+          dphi=dphi+0.5*zsq/(s*s)
+        endif
+10    continue
+      return
+      end
+c---------------------------------------------------------------------------
+      subroutine phivl2(phi,dphi,tdif,absz2,n,dt)
+      real absz2(*),c,dphi,dt,phi,s,tdif(*),tmp,zsq
+      integer j,n
+c Evaluate phi and phi' at arg.
+      phi=0.
+      dphi=0.
+      do 10 j=1,n
+        zsq=absz2(j)
+        if(zsq.le.1.)then
+          tmp=(tdif(j)-dt)/2.
+          c=cos(tmp)
+          s=sin(tmp)
+          phi=phi+zsq*c/s
+          dphi=dphi+0.5*zsq/(s*s)
+        endif
+10    continue
+      return
+      end
+c---------------------------------------------------------------------------
+      subroutine restrc(t,n,pi,twopi)
+      real t(*),pi,twopi
+      integer j,n
+c Adds multiple of twopi if necessary to ensure that components of
+c t(*) are in (-pi,pi].
+      do 5 j=1,n
+3       if(t(j).le.-pi)then
+          t(j)=t(j)+twopi
+          goto 3
+        else
+4         if(t(j).gt.pi)then
+            t(j)=t(j)-twopi
+            goto 4
+          endif
+        endif
+5     continue
+      return
+      end
+c---------------------------------------------------------------------------
+c blas from netlib
+c---------------------------------------------------------------------------
+      subroutine  ccopy(n,cx,incx,cy,incy)
+c
+c     copies a vector, x, to a vector, y.
+c     jack dongarra, linpack, 3/11/78.
+c
+      complex cx(*),cy(*)
+      integer i,incx,incy,ix,iy,n
+c
+      if(n.le.0)return
+      if(incx.eq.1.and.incy.eq.1)go to 20
+c
+c        code for unequal increments or equal increments
+c          not equal to 1
+c
+      ix = 1
+      iy = 1
+      if(incx.lt.0)ix = (-n+1)*incx + 1
+      if(incy.lt.0)iy = (-n+1)*incy + 1
+      do 10 i = 1,n
+        cy(iy) = cx(ix)
+        ix = ix + incx
+        iy = iy + incy
+   10 continue
+      return
+c
+c        code for both increments equal to 1
+c
+   20 do 30 i = 1,n
+        cy(i) = cx(i)
+   30 continue
+      return
+      end
+c----------------------------------------------------------------------------
+      subroutine sscal(n,sa,sx,incx)
+c
+c     scales a vector by a constant.
+c     uses unrolled loops for increment equal to 1.
+c     jack dongarra, linpack, 3/11/78.
+c
+      real sa,sx(*)
+      integer i,incx,m,mp1,n,nincx
+c
+      if(n.le.0)return
+      if(incx.eq.1)go to 20
+c
+c        code for increment not equal to 1
+c
+      nincx = n*incx
+      do 10 i = 1,nincx,incx
+        sx(i) = sa*sx(i)
+   10 continue
+      return
+c
+c        code for increment equal to 1
+c
+c
+c        clean-up loop
+c
+   20 m = mod(n,5)
+      if( m .eq. 0 ) go to 40
+      do 30 i = 1,m
+        sx(i) = sa*sx(i)
+   30 continue
+      if( n .lt. 5 ) return
+   40 mp1 = m + 1
+      do 50 i = mp1,n,5
+        sx(i) = sa*sx(i)
+        sx(i + 1) = sa*sx(i + 1)
+        sx(i + 2) = sa*sx(i + 2)
+        sx(i + 3) = sa*sx(i + 3)
+        sx(i + 4) = sa*sx(i + 4)
+   50 continue
+      return
+      end
+c----------------------------------------------------------------------------
+      real function snrm2 ( n, sx, incx)
+      integer i,incx,j,n,next,nn
+      real   sx(*),  cutlo, cuthi, hitest, sum, xmax, zero, one
+      data   zero, one /0.0e0, 1.0e0/
+c
+c     euclidean norm of the n-vector stored in sx() with storage
+c     increment incx .
+c     if    n .le. 0 return with result = 0.
+c     if n .ge. 1 then incx must be .ge. 1
+c
+c           c.l.lawson, 1978 jan 08
+c
+c     four phase method     using two built-in constants that are
+c     hopefully applicable to all machines.
+c         cutlo = maximum of  sqrt(u/eps)  over all known machines.
+c         cuthi = minimum of  sqrt(v)      over all known machines.
+c     where
+c         eps = smallest no. such that eps + 1. .gt. 1.
+c         u   = smallest positive no.   (underflow limit)
+c         v   = largest  no.            (overflow  limit)
+c
+c     brief outline of algorithm..
+c
+c     phase 1    scans zero components.
+c     move to phase 2 when a component is nonzero and .le. cutlo
+c     move to phase 3 when a component is .gt. cutlo
+c     move to phase 4 when a component is .ge. cuthi/m
+c     where m = n for x() real and m = 2*n for complex.
+c
+c     values for cutlo and cuthi..
+c     from the environmental parameters listed in the imsl converter
+c     document the limiting values are as follows..
+c     cutlo, s.p.   u/eps = 2**(-102) for  honeywell.  close seconds are
+c                   univac and dec at 2**(-103)
+c                   thus cutlo = 2**(-51) = 4.44089e-16
+c     cuthi, s.p.   v = 2**127 for univac, honeywell, and dec.
+c                   thus cuthi = 2**(63.5) = 1.30438e19
+c     cutlo, d.p.   u/eps = 2**(-67) for honeywell and dec.
+c                   thus cutlo = 2**(-33.5) = 8.23181d-11
+c     cuthi, d.p.   same as s.p.  cuthi = 1.30438d19
+c     data cutlo, cuthi / 8.232d-11,  1.304d19 /
+c     data cutlo, cuthi / 4.441e-16,  1.304e19 /
+      data cutlo, cuthi / 4.441e-16,  1.304e19 /
+c
+      if(n .gt. 0) go to 10
+         snrm2  = zero
+         go to 300
+c
+   10 assign 30 to next
+      sum = zero
+      nn = n * incx
+c                                                 begin main loop
+      i = 1
+   20    go to next,(30, 50, 70, 110)
+   30 if( abs(sx(i)) .gt. cutlo) go to 85
+      assign 50 to next
+      xmax = zero
+c
+c                        phase 1.  sum is zero
+c
+   50 if( sx(i) .eq. zero) go to 200
+      if( abs(sx(i)) .gt. cutlo) go to 85
+c
+c                                prepare for phase 2.
+      assign 70 to next
+      go to 105
+c
+c                                prepare for phase 4.
+c
+  100 i = j
+      assign 110 to next
+      sum = (sum / sx(i)) / sx(i)
+  105 xmax = abs(sx(i))
+      go to 115
+c
+c                   phase 2.  sum is small.
+c                             scale to avoid destructive underflow.
+c
+   70 if( abs(sx(i)) .gt. cutlo ) go to 75
+c
+c                     common code for phases 2 and 4.
+c                     in phase 4 sum is large.  scale to avoid overflow.
+c
+  110 if( abs(sx(i)) .le. xmax ) go to 115
+         sum = one + sum * (xmax / sx(i))**2
+         xmax = abs(sx(i))
+         go to 200
+c
+  115 sum = sum + (sx(i)/xmax)**2
+      go to 200
+c
+c
+c                  prepare for phase 3.
+c
+   75 sum = (sum * xmax) * xmax
+c
+c
+c     for real or d.p. set hitest = cuthi/n
+c     for complex      set hitest = cuthi/(2*n)
+c
+   85 hitest = cuthi/float( n )
+c
+c                   phase 3.  sum is mid-range.  no scaling.
+c
+      do 95 j =i,nn,incx
+      if(abs(sx(j)) .ge. hitest) go to 100
+   95    sum = sum + sx(j)**2
+      snrm2 = sqrt( sum )
+      go to 300
+c
+  200 continue
+      i = i + incx
+      if ( i .le. nn ) go to 20
+c
+c              end of main loop.
+c
+c              compute square root and adjust for scaling.
+c
+      snrm2 = xmax * sqrt(sum)
+  300 continue
+      return
+      end
+
+C*** drudc.f -----------------------------------------------------------
+
+c Driver for udc
+      parameter(nn=10)
+      complex cgamma(nn),cw(nn,nn)
+      real a,arg,b,c,d,eps,pi,rand,rho,sigma(nn),theta(nn),twopi,
+     %  wrk(nn,2*nn+6)
+      integer info,iseed,iwrk(3*nn),j,n
+c Initialization
+      pi=4.*atan(1.)
+      twopi=2.*pi
+      iseed=20
+      n=nn
+c eps is deflation tolerance for udc
+      eps=1e-6
+      a=0e0
+      b=36e1
+      c=0e0
+      d=1e0
+      do 20 j=1,n-1
+        arg=(a+(b-a)*rand(iseed))*pi/180.
+        rho=c+(d-c)*rand(iseed)
+        cgamma(j)=rho*cmplx(cos(arg),sin(arg))
+        sigma(j)=sqrt((1.-rho)*(1.+rho))
+20    continue
+      arg=(a+(b-a)*rand(iseed))*pi/180.
+      cgamma(n)=cmplx(cos(arg),sin(arg))
+      sigma(n)=0.
+c
+      call udc(n,cgamma,sigma,eps,n,cw,theta,info,wrk,iwrk)
+      if(info.ne.0)write(6,*)'WARNING: info from udc = ',info
+      write(6,*) ' eigenvalue arguments:',(theta(j),j=1,n)
+c
+      stop
+      end
+c-------------------------------------------------------------------
+      real function rand(iseed)
+      integer iseed
+c
+c
+c     function rand
+c
+c     Rand is the portable random number generator of L. Schrage.
+c
+c     The generator is full cycle, that is, every integer from
+c     1 to 2**31 - 2 is generated exactly once in the cycle.
+c     It is completely described in TOMS 5(1979),132-138.
+c
+c     The function statement is
+c
+c       real function rand(iseed)
+c
+c     where
+c
+c       iseed is a positive integer variable which specifies
+c         the seed to the random number generator. Given the
+c         input seed, rand returns a random number in the
+c         open interval (0,1). On output the seed is updated.
+c
+c     modified by d.c. sorensen october 1981
+c     Argonne National Laboratory. MINPACK Project. March 1981.
+c
+c
+      integer a,b15,b16,fhi,k,leftlo,p,xhi,xalo
+      real c,pt5,two
+c
+c     Set a = 7**5, b15 = 2**15, b16 = 2**16, p = 2**31-1, c = 1/p.
+c
+      data a/16807/, b15/32768/, b16/65536/, p/2147483647/
+      data c/4.656612875e-10/
+      data pt5/0.5/, two/2.0/
+c
+c     There are 8 steps in rand.
+c
+c     1. Get 15 hi order bits of iseed.
+c     2. Get 16 lo bits of iseed and form lo product.
+c     3. Get 15 hi order bits of lo product.
+c     4. Form the 31 highest bits of full product.
+c     5. Get overflo past 31st bit of full product.
+c     6. Assemble all the parts and pre-substract p.
+c        The parentheses are essential.
+c     7. Add p back if necessary.
+c     8. Multiply by 1/(2**31-1).
+c
+      xhi = iseed/b16
+      xalo = (iseed - xhi*b16)*a
+      leftlo = xalo/b16
+      fhi = xhi*a + leftlo
+      k = fhi/b15
+      iseed = (((xalo-leftlo*b16)-p) + (fhi-k*b15)*b16) + k
+      if (iseed .lt. 0) iseed = iseed + p
+      rand = c*float(iseed)
+c
+c     Last card of function rand.
+c
+      return
+      end
+
+C*** udcp.f ------------------------------------------------------------
+
+c----------------------------------------------------------------------------
+c Subroutine for computing the partial spectral resolution of a unitary
+c upper Hessenberg matrix by a divide-and-conquer algorithm. This code is
+c written in single precision FORTRAN77. For comments contact
+c
+c G.S. Ammar
+c University of Northern Illinois
+c Department of Mathematical Sciences
+c DeKalb, IL 60115
+c
+c e-mail: na.ammar@na-net.stanford.edu
+c
+c
+c L. Reichel
+c University of Kentucky
+c Department of Mathematics
+c Lexington, KY 40506
+c
+c e-mail: lothar@ms.uky.edu
+c
+c
+c or
+c
+c D.C. Sorensen
+c Rice University
+c Department of Mathematical Sciences
+c Houston, TX 77251
+c
+c e-mail: sorensen@rice.edu
+c
+c June 11, 1990
+c----------------------------------------------------------------------------
+      subroutine udcp(n,cgamma,sigma,eps,cw,theta,info,wrk,iwrk)
+      integer n,info,iwrk(3*n)
+      complex cgamma(n),cw(2,n)
+      real eps,sigma(n-1),theta(n),wrk(10*n)
+c
+c Subroutine for computing the partial spectral resolution of a unitary
+c upper Hessenberg matrix H of order n with nonnegative subdiagonal elements
+c by a divide-and-conquer method. The matrix H is represented in Schur
+c parametric form
+c
+c  H=G_1(cgamma(1)) G_2(cgamma(2)) ... G_{n-1}(cgamma(n-1)) G^_n(cgamma(n)),
+c
+c where G_j(cgamma(j)), 1<=j<n, are Givens reflectors for reflection in the
+c planes j and j+1, i.e
+c
+c                      | j  j+1 |     | -cgamma(j)     sigma(j)      |
+c       G_j(cgamma(j)) |        |  =  |                              | .
+c                      | j  j+1 |     |  sigma(j)   conj(cgamma(j))  |
+c
+c conj stands for complex conjugation. The Schur parameters cgamma(j),
+c 1<=j<n, are complex valued and of magnitude at most one. The
+c complementary parameters sigma(j) are nonnegative and such that
+c cgamma(j)*conj(cgamma(j)) + sigma(j)*sigma(j) = 1. The sigma(j) are
+c subdiagonal elements of H. The last Schur parameter cgamma(n) is of
+c unit magnitude, and the last Givens reflection is the diagonal matrix
+c
+c       G^_n(cgamma(n)) = diag[1,1,...,1,-cgamma(n)].
+c
+c The subroutine udcp calls udcp2, which has a longer list of parameters
+c than udcp. Actual computations are carried out in udcp2 and in
+c subroutines called by udcp2.
+c
+c On entry:
+c
+c     n          integer
+c                n is the order of the unitary upper Hessenberg matrix H
+c                with nonnegative subdiagonal elements determined by the
+c                Schur parameters cgamma(j), 1<=j<=n.
+c
+c     cgamma     complex(n)
+c                cgamma contains the Schur parameters that define H. The
+c                parameters cgamma(j) are of magnitude at most one
+c                for 1<=j<n, and cgamma(n) is of unit magnitude.
+c
+c     sigma      real(n-1)
+c                sigma contains complementary nonnegative parameters such that
+c                cgamma(j)*conj(cgamma(j)) + sigma(j)*sigma(j) = 1 for
+c                1<=j<n. The sigma(j) are subdiagonal elements of H.
+c
+c     eps        real
+c                eps is the deflation tolerance used in the conquer phase;
+c                eps should be a few multiples of machine epsilon.
+c
+c
+c On return:
+c
+c     cw         complex(2,n)
+c                cw contains the first and last components of normalized
+c                eigenvectors of H. The the first component of an eigenvector
+c                of unit length associated with the eigenvalue exp(i*theta(j))
+c                is stored in element cw(1,j), and the last component of this
+c                eigenvector is stored in c(2,j).
+c
+c     theta      real(n)
+c                theta contains the arguments of the eigenvalues
+c                exp(i*theta(j)), i=sqrt(-1). The theta(j) lie in the
+c                interval (-pi,pi].
+c
+c     info       integer
+c                = 0  for normal return.
+c                > 0  signals an error condition.
+c                     info = 1 if FORTRAN function csqrt( ) does not compute
+c                       principal branch.
+c                     info = 2 if complex logarithm does not compute
+c                       principal branch.
+c                     info = 3 if |cgamma(j)|^2 + sigma(j)^2 <> 1 for some
+c                       1<=j<n, or if |cgamma(n)| <> 1.
+c                     info = 4 if the rootfinder failed to determine zeros
+c                       of the spectral function. Use a larger value of eps.
+c
+c Other arguments (work arrays):
+c
+c     wrk        real(10*n)
+c                wrk is a work array used by udcp.
+c
+c     iwrk       integer(3*n)
+c                iwrk is a work array used by udcp.
+c
+c Subroutines and functions:
+c arrcot, argum, dflval,defrf2, firot2, getv1p, getv2p, idxord, initev,
+c phivl, phivl2, restrc, udcp2, upastp as well as FORTRAN functions.
+c
+c Internal scalars:
+      integer k
+c
+c Check complex square root function. Exit if argument not in (-pi/2,pi/2].
+      if(aimag(csqrt(cmplx(0.,-1.))).ge.0.)then
+        info=1
+        return
+      endif
+c Check complex logarithm function. Exit if argument not in (-pi/2,pi/2].
+      if(aimag(clog(cmplx(0.,-1.))).ge.0.)then
+        info=2
+        return
+      endif
+c Check Schur parameters cgamma(k) and complementary parameters sigma(j).
+      if(abs(cabs(cgamma(n))-1.).ge.eps)then
+        info=3
+        return
+      endif
+      do 5 k=n-1,1,-1
+       if(abs(sqrt(cabs(cgamma(k))**2+sigma(k)**2)-1.).ge.eps)then
+          info=3
+          return
+        endif
+5     continue
+c
+      info=0
+      call udcp2(n,cgamma,sigma,theta,cw,wrk,iwrk,iwrk(n+1),wrk(4*n+1),
+     %  eps,wrk(5*n+1),wrk(7*n+1),iwrk(2*n+1),info)
+      return
+      end
+c----------------------------------------------------------------------------
+c Main subroutines
+c----------------------------------------------------------------------------
+      subroutine udcp2(n,cgamma,sigma,theta,cw,cwnew,idxbeg,
+     %  isizsb,absgam,eps,cwork,rwork,iwork,iflag)
+      integer idxbeg(n),iflag,isizsb(n),iwork(n),n
+      complex cgamma(n),cw(2,n),cwnew(2,n),cwork(n)
+      real absgam(n),eps,rwork(n,3),sigma(n-1),theta(n)
+c
+c Subroutine for computing the partial spectral resolution of a unitary
+c upper Hessenberg matrix H with nonnegative subdiagonal elements by a
+c divide-and-conquer method. The matrix H is represented in Schur parametric
+c form. Only the parameters of udcp2 that differ from those of udcp are
+c listed below.
+c
+c Arguments of udcp2 that have not been explained in udcp:
+c
+c     cwork      complex(n)
+c                cwork is a work array used by udcp2.
+c
+c     iwork      integer(n)
+c                iwork is a work array used by udcp2.
+c
+c     rwork      real(n,3)
+c                rwork is a work array used by udcp2.
+c
+c     idxbeg     integer(n)
+c                idxbeg(j) contains first column index for subproblem j
+c                during execution of udcp2.
+c
+c     isizsb     integer(n)
+c                isizsb(j) contains size of subproblem j during
+c                execution of udcp2.
+c
+c     absgam     real(n)
+c                absgam contains Schur parameter associated with jth Givens
+c                reflector torn out from the Schur parametric form of H.
+c
+c     iflag      integer
+c                iflag is normally 0. iflag is set to 4 if the subroutine
+c                firot2 of subroutine upastp cannot determine zeros of the
+c                spectral function. If iflag=4 then use a larger value of
+c                eps.
+c
+c Subroutines and functions:
+c arrcot, argum, dflval,defrf2, firot2, getv1p, getv2p, idxord, initev,
+c phivl, phivl2, restrc, udcp2, upastp as well as FORTRAN functions.
+c
+c Internal scalars:
+      integer isbprb,i1,j,k
+      complex cgamhf,cgampr,cggam,clmbda
+      real argum,imggam,pi,reggam,twopi
+c
+c Divide phase.
+c Subdivide the eigenproblem into problems of order 2 (and one problem of order
+c one if n is odd) by tearing real symmetric Givens reflectors out of the
+c Schur parametric form of H.
+      twopi=8.*atan(1.)
+      pi=twopi/2.
+      isbprb=0
+      do 10 k=n-2,0,-2
+        if (k.gt.0) then
+c Tear out G_k(absgam(k)) from Schur parametric form of H.
+          absgam(k)=cabs(cgamma(k))
+          if(absgam(k).ne.0.)then
+            cgampr=cgamma(k)/absgam(k)
+          else
+            cgampr=cmplx(1.,0.)
+          endif
+          cgamma(k+1)=cgamma(k+1)*conjg(cgampr)
+          cgamma(k+2)=cgamma(k+2)*conjg(cgampr)
+          cgamma(k)=-cgampr
+        endif
+c Compute eigenvalues of matrix G_{k+1} G^_{k+2}
+        cgamhf=csqrt(cgamma(k+2))
+        cggam=cgamma(k+1)*conjg(cgamhf)
+        reggam=real(cggam)
+        imggam=aimag(cggam)
+        clmbda=cgamhf*cmplx(-reggam,sqrt(imggam**2+sigma(k+1)**2))
+        theta(k+1)=argum(clmbda)
+        clmbda=cgamhf*cmplx(-reggam,-sqrt(imggam**2+sigma(k+1)**2))
+        theta(k+2)=argum(clmbda)
+c Compute eigenvectors of matrix G_{k+1} G^_{k+2}. Determine
+c eigenvector for exp(i*theta(k+1)), i=sqrt(-1).
+        call initev(cw(1,k+1),cw(1,k+2),cgamhf,imggam,sigma(k+1))
+c Initialize index vectors
+        isbprb=isbprb+1
+        idxbeg(isbprb)=k+1
+        isizsb(isbprb)=2
+        if(k.eq.1)then
+c Initialize one-by-one eigenproblem
+          theta(1)=argum(cgampr)
+          cw(1,1)=cmplx(1.,0.)
+          cw(2,1)=cmplx(1.,0.)
+          isbprb=isbprb+1
+          idxbeg(isbprb)=1
+          isizsb(isbprb)=1
+        endif
+10    continue
+c
+c Conquer phase.
+c Adjacent subproblems are merged to larger ones by rank-one updates.
+c Paste subproblems from top down
+15    do 20 k=isbprb-1,1,-2
+        if(idxbeg(k).gt.idxbeg(k+1))then
+          i1=idxbeg(k)
+          idxbeg(k)=idxbeg(k+1)
+          idxbeg(k+1)=i1
+          i1=isizsb(k)
+          isizsb(k)=isizsb(k+1)
+          isizsb(k+1)=i1
+        endif
+c Merge subproblems k and k+1
+        call upastp(theta(idxbeg(k)),cw(1,idxbeg(k)),
+     %    cwnew(1,idxbeg(k)),absgam(idxbeg(k+1)-1),sigma(idxbeg(k+1)-1),
+     %    isizsb(k),isizsb(k+1),iwork,cwork,rwork,rwork(1,2),rwork(1,3),
+     %    eps,pi,twopi,iflag)
+        isizsb(k)=isizsb(k+1)+isizsb(k)
+        isizsb(k+1)=0
+        idxbeg(k)=min(idxbeg(k),idxbeg(k+1))
+20    continue
+      j=1
+      do 25 k=1,isbprb
+        if(isizsb(k).ne.0)then
+          isizsb(j)=isizsb(k)
+          idxbeg(j)=idxbeg(k)
+          j=j+1
+        endif
+25    continue
+      isbprb=isbprb-int(isbprb/2)
+c Exit
+      if(isbprb.eq.1)return
+c
+c Paste subproblems from bottom up
+      do 30 k = 1,isbprb-1,2
+        if(idxbeg(k).gt.idxbeg(k+1))then
+          i1=idxbeg(k)
+          idxbeg(k)=idxbeg(k+1)
+          idxbeg(k+1)=i1
+          i1=isizsb(k)
+          isizsb(k)=isizsb(k+1)
+          isizsb(k+1)=i1
+        endif
+c Merge subproblems k and k+1
+        call upastp(theta(idxbeg(k)),cw(1,idxbeg(k)),
+     %    cwnew(1,idxbeg(k)),absgam(idxbeg(k+1)-1),sigma(idxbeg(k+1)-1),
+     %    isizsb(k),isizsb(k+1),iwork,cwork,rwork,rwork(1,2),rwork(1,3),
+     %    eps,pi,twopi,iflag)
+        isizsb(k)=isizsb(k+1)+isizsb(k)
+        isizsb(k+1)=0
+30    continue
+      j=1
+      do 35 k=1,isbprb
+        if(isizsb(k).ne.0)then
+          isizsb(j)=isizsb(k)
+          idxbeg(j)=idxbeg(k)
+          j=j+1
+        endif
+35    continue
+      isbprb=isbprb-int(isbprb/2)
+c Exit
+      if(isbprb.eq.1)return
+c
+      goto 15
+      end
+c----------------------------------------------------------------------------
+      subroutine upastp(t,w,wnew,gamma,sigma,k,m,idx,z,tnew,absz2,tdif,
+     %  eps,pi,twopi,iflag)
+      complex w(2,*),wnew(2,*),z(*)
+      real absz2(*),eps,gamma,pi,sigma,t(*),tdif(*),tnew(*),twopi
+      integer idx(*),iflag,k,m
+c The conquer phase of the unitary divide-and-conquer algorithm. The
+c subroutine pastes partial spectral decompositions c of orders k and m
+c together, using the real Schur parameter pair (gamma, sigma), to determine
+c the partial spectral decomposition of order k+m.
+c
+c On entry:
+c
+c     k,m      integer
+c              Orders of subproblems to be pasted together.
+c
+c     t        real(k+m)
+c              Contains argumants of eigenvalues of the first subproblem
+c              in components 1:k and of the second subproblem in components
+c              k+1:k+m.
+c
+c     w        complex(2,k+m)
+c              w(1,j) contain the first and components of a normalized
+c              eigenvector corresponding to the eigenvalue exp(i*theta(j)),
+c              j=1,...,k+m. w(2,j) contains the last component of such an
+c              eigenvector.
+c
+c gamma,sigma  real
+c              Schur parameter gamma and corresponding complementary
+c              parameter sigma for pasting of subproblems.
+c
+c     eps      real
+c              Tolerance for deflation of type 1 and of type 2.
+c
+c  pi,twopi    real
+c              Constants assumed set in calling program.
+c
+c
+c On return:
+c
+c     t        Contains arguments of new eigenvalues of eigenproblem
+c              of order k+m in components 1:k+m.
+c
+c     w        First components of normalized eigenvectors of subproblem
+c              of order k+m are contained in w(1,j), j=1:k+m. Last
+c              components of these eigenvectors are contained in
+c              w(2,j), j=1:k+m.
+c
+c     iflag    integer
+c              iflag=0 signals normal exit. iflag=4 signals that the
+c              subroutine firot2 failed to determine zeros of the
+c              spectral function. Use a larger value of eps.
+c
+c
+c Other arguments and some local variables:
+c
+c     tnew     real(k+m)
+c              Temporary storage space for new eigenvalues.
+c
+c     wnew     complex(2,k+m)
+c              Temporary storage space for components of new eigenvectors.
+c
+c     z        complex(k+m)
+c              Storage space for complex weights.
+c
+c     absz2    real(k+m)
+c              Storage space for moduli of components of z, which
+c              are used in the calculation of the function phi.
+c
+c     tdif     real(k+m)
+c              Storage space used by firot2.
+c
+c     idx      integer(k+m)
+c              Index array used to order arguments of undeflated
+c              eigenvalues.
+c
+c     m0       integer
+c              Number of undeflated roots, i.e. the number of roots of
+c              the spectral function that have to be determined by
+c              subroutine firot2.
+c
+c     m2       integer
+c              Number of type 2 deflations.
+c
+c Subroutines and functions:
+c arccot, argum, dflval, defrf2, firot2 , getv1p, getv2p, idxord, restrc
+c
+c Internal variables:
+      complex cgam,czero,d1,d2
+      real argum,dflval,eps1,eps2,omega1,omega2,phires,rho,sig
+      integer i,i0,i1,i2,j,k1,km,m0,m2
+c
+      eps1=eps
+      eps2=eps
+      czero=cmplx(0.,0.)
+      km=k+m
+      k1=k+1
+c Make sure that all arguments are in (-pi,pi]
+      call restrc(t,km,pi,twopi)
+c Calculation of vector z
+      omega1=sqrt((1.+gamma)/2.)
+      omega2=-sigma/(2.*omega1)
+      do 80 i=1,k
+        z(i)=omega1*conjg(w(2,i))
+        w(2,i)=czero
+80    continue
+      do 90 i=k1,km
+        z(i)=omega2*conjg(w(1,i))*cmplx(cos(t(i)),-sin(t(i)))
+        w(1,i)=czero
+90    continue
+c Check for deflation type of 1 (small abs(z(i))) and create index
+c array idx containing indices of undeflated t(i).
+      m0=0
+      do 250 i=1,km
+        if(2.*cabs(z(i)).lt.eps1)then
+c Store new eigenvalue in tnew(i). Store components of new eigenvector in
+c wnew(1,i) and wnew(2,i), i=1,2,...,k+m.
+          tnew(i)=t(i)
+          z(i)=cmplx(-2.,0.)
+          wnew(1,i)=w(1,i)
+          wnew(2,i)=w(2,i)
+        else
+          m0=m0+1
+          idx(m0)=i
+        endif
+250   continue
+c Sort index vector idx() so that t(idx(1))<=t(idx(2))<=...<=t(idx(m0))
+      call idxord(t,idx,m0)
+c Check for deflation of type 2 (close eigenvalues) until none occurs.
+c iflag=1 if deflation occurs during loop 350.
+c m2 is the total number of type 2 deflations.
+300   m2=0
+350   iflag=0
+      i=0
+380   if(m0.eq.1)goto 430
+      i=i+1
+      i1=idx(i)
+      i0=mod(i,m0)+1
+      i2=idx(i0)
+c Calculate reflection ({cgam,sig} Schur parameter pair, cgam complex)
+      if(dflval(z(i1),z(i2),t(i1),t(i2),cgam,sig,rho,d1,d2)
+     %  .le.eps2)then
+c Type 2 deflation criterion satisfied. Store new arguments in t() and z().
+c z(i2)=-4 is deflation type 2 flag.
+        t(i1)=argum(d1*cabs(cgam)**2+d2*sig**2)
+        t(i2)=argum(d1*sig**2+d2*cabs(cgam)**2)
+        z(i1)=rho*(z(i2)/cabs(z(i2)))
+        z(i2)=cmplx(-4.,0.)
+c Determine new deflated eigenvector
+        call defrf2(w(1,i1),w(1,i2),wnew(1,i2),cgam,sig)
+c Store new deflated eigenvalue
+        tnew(i2)=t(i2)
+        iflag=1
+        m0=m0-1
+        m2=m2+1
+c Update index array
+        do 420 j=i0,m0
+          idx(j)=idx(j+1)
+420     continue
+        i=i-1
+      endif
+      if(m0.ge.2.and.i.lt.m0)goto 380
+      if(iflag.ne.0)goto 350
+c End of deflation
+c Compute new eigenvalues and eigenvectors
+430   if(m0.eq.1)then
+        i1=idx(1)
+        tnew(i1)=t(i1)+pi
+        wnew(1,i1)=w(1,i1)
+        wnew(2,i1)=w(2,i1)
+        goto 850
+      endif
+c Store squared magnitudes of components of z for use in rootfinders
+      do 450 i=1,km
+        absz2(i)=cabs(z(i))**2
+450   continue
+c Deflation of type 2 may have caused eigenvalue arguments to become
+c unsorted. Deflation of type 2 took place if m2>0. Sort index array
+c to obtain nondecreasing arguments t(idx(i)), i=1,2,...,m0, if m2>0.
+      if(m2.gt.0)call idxord(t,idx,m0)
+c Compute m0 roots of phi. Store in vector troot.
+      i=1
+c Loop 600 starts here
+600   i1=idx(i)
+      i0=mod(i,m0)+1
+      i2=idx(i0)
+      if(t(i2).lt.t(i1))t(i2)=t(i2)+twopi
+c Compute new eigenvalue argument tnew(i1) between t(i1) and t(i2)
+c and store first and last components of normalized eigenvectors
+c in wnew(1,i1) and wnew(2,i1), respectively.
+      call firot2(tnew(i1),phires,t(i1),t(i2),t,absz2,tdif,z,w,
+     %  wnew(1,i1),km,iflag)
+      if(iflag.ne.0)then
+        iflag=4
+        return
+      endif
+      i=i+1
+690   if(i.le.m0)goto 600
+c Firoot loop 600 ends here
+      if(t(idx(1)).gt.pi)t(idx(1))=t(idx(1))-twopi
+c First and last components of all eigenvectors have been computed. Store
+c them in w and store new eigenvalues in t().
+850   do 900 i=1,km
+        t(i)=tnew(i)
+        w(1,i)=wnew(1,i)
+        w(2,i)=wnew(2,i)
+900   continue
+c
+      return
+      end
+c----------------------------------------------------------------------------
+c Auxiliary subroutines
+c----------------------------------------------------------------------------
+      real function arccot(t)
+      real t
+c -pi/2<=arccot(t)<=pi/2 defined for t<>0
+      arccot=sign(1.,t)*atan2(1.,abs(t))
+      return
+      end
+c----------------------------------------------------------------------------
+      real function argum(z)
+      complex z
+c Function computes argument in (-pi,pi] of complex number z
+      if(aimag(z).eq.0.)then
+        if(real(z).ge.0.)then
+          argum=0.
+        else
+          argum=4.*atan(1.)
+        endif
+      else
+        argum=aimag(clog(z))
+      endif
+c
+      return
+      end
+c----------------------------------------------------------------------------
+      subroutine defrf2(w1,w2,wnew,cgam,sig)
+      complex cgam,wnew(*),w1(*),w2(*)
+      real sig
+c Performs reflection determined by cgam,sig on first and last components of
+c old eigenvectors (stored in w1(*),w2(*)) to determine the corresponding
+c components of new deflated eigenvector (stored in wnew(*)) and of modified
+c old eigenvector (stored in w1(*)) corresponding to undeflated eigenvalue.
+      wnew(1)=sig*w1(1)+cgam*w2(1)
+      wnew(2)=sig*w1(2)+cgam*w2(2)
+c
+      w1(1)=-conjg(cgam)*w1(1)+sig*w2(1)
+      w1(2)=-conjg(cgam)*w1(2)+sig*w2(2)
+      return
+      end
+c----------------------------------------------------------------------------
+      real function dflval(z1,z2,t1,t2,cgam,sig,rho,d1,d2)
+      complex z1,z2,cgam,d1,d2
+      real t1,t2,sig,rho
+c Calculate reflection ({cgam,sig} Schur parameter pair, cgam complex)
+c and return value for checking for deflation of type two.
+      rho=sqrt(cabs(z1)**2+cabs(z2)**2)
+      cgam=-conjg(z1)*z2/(cabs(z2)*rho)
+      sig=cabs(z2)/rho
+      d1=cmplx(cos(t1),sin(t1))
+      d2=cmplx(cos(t2),sin(t2))
+      dflval=sig*cabs(cgam*(d1-d2))
+c
+      return
+      end
+c---------------------------------------------------------------------------
+      subroutine firot2(root,phires,tleft,tright,t,absz2,tdif,z,w,wnew,
+     %  n,iflag)
+      real absz2(*),arccot,dphi,dtnew,dtold,phinew,phiold,phires,
+     %  rho,root,sig,t(*),tendpt,tleft,tnew,tright,tdif(*)
+      complex w(2,*),wnew(*),z(*)
+      integer icount,iflag,j,n
+      logical right
+c Compute zero of phi in interval (tleft,tright). On entry the vector t
+c contains the arguments of eigenvalues of the subproblems to be merged.
+c The vector absz2 contains the squared magnitude of the first and last
+c component of the normalized eigenvectors of the subproblems to be solved
+c modified by rotation and deflation. On exit parameter root contains an
+c approximation of the zero of phi in (tleft,tright) if flag iflag=0 and
+c then phires is the value (residual) of phi at root. If iflag<>0 then
+c firot2 has failed to determine all zeros of the spectral function. This
+c results in an error exit from udcp with info=4. The subroutines phivl
+c and phivl2 are used for the evaluation of phi and its derivative. firot2
+c works with differences between poles and the end point tendpt of the
+c interval (tleft,tright) closest to the root: tdif(j)=t(j)-tendpt. The
+c current approximation tnew of the desired root is given by tnew=
+c tendpt+dtnew. On return, the first and last components of a normalized
+c eigenvector associated with the computed root is stored in wnew. These
+c components are computed by the subroutines getv1p and getv2p.
+      iflag=0
+      icount=0
+      tnew=(tleft+tright)/2.
+      if(tright-tnew.le.0.)then
+        iflag=1
+        return
+      endif
+      if(tnew-tleft.le.0.)then
+        iflag=-1
+        return
+      endif
+      call phivl(phinew,dphi,t,absz2,n,tnew)
+c Check if tnew=root
+      if(phinew.eq.0.)then
+        root=tnew
+        phires=phinew
+        call getv1p(root,t,z,absz2,n,w,wnew)
+        return
+      endif
+      if(phinew.lt.0.)then
+        tendpt=tright
+        right=.true.
+      else
+        tendpt=tleft
+        right=.false.
+      endif
+c    Compute difference vector tdif(j)=t(j)-tendpt and dtnew=tnew-tendpt
+      do 5 j=1,n
+         tdif(j)=t(j)-tendpt
+5     continue
+      dtnew=tnew-tendpt
+c Loop for computing root
+10    icount=icount+1
+      rho=phinew-dphi*sin(-dtnew)
+      sig=2.*dphi*sin(dtnew/2.)**2
+      dtold=dtnew
+      phiold=phinew
+      dtnew=2.*arccot(rho/sig)
+c If tnew is past an end point, set error flag
+      if(dtnew*dtold.lt.0.)then
+        dtnew=0.
+        root=tendpt
+        iflag=-1
+        if(right)iflag=1
+        return
+      endif
+c If tnew is at pole, set error flag
+      if(abs(dtnew).le.0.)then
+        root=tendpt+dtnew
+        phires=phinew
+        iflag=-1
+        if(right)iflag=1
+        return
+      endif
+c Check if tnew is a new point; if not, then terminate (equal iterates)
+      if(dtnew.eq.dtold)then
+        root=tendpt+dtold
+        phires=phiold
+        call getv2p(dtold,tdif,z,absz2,n,w,wnew)
+        return
+      endif
+c
+      call phivl2(phinew,dphi,tdif,absz2,n,dtnew)
+20    if(phinew.eq.0.)then
+        root=tendpt+dtnew
+        phires=phinew
+        call getv2p(dtnew,tdif,z,absz2,n,w,wnew)
+        return
+      endif
+c Terminate if root was overshot
+      if(phinew*phiold.lt.0.)then
+        if(abs(phinew).gt.abs(phiold))then
+          root=tendpt+dtold
+          phires=phiold
+          call getv2p(dtold,tdif,z,absz2,n,w,wnew)
+        else
+          root=tendpt+dtnew
+          phires=phinew
+          call getv2p(dtnew,tdif,z,absz2,n,w,wnew)
+        endif
+        return
+      endif
+      if((right.and.dtnew.lt.dtold).or.(.not.right.and.dtnew.gt.dtold))
+     %  then
+        root=tendpt+dtold
+        phires=phiold
+        call getv2p(dtold,tdif,z,absz2,n,w,wnew)
+        return
+      endif
+      if(abs(phinew).gt.abs(phiold))then
+        root=tendpt+dtold
+        phires=phiold
+        call getv2p(dtold,tdif,z,absz2,n,w,wnew)
+        return
+      endif
+      if(icount.lt.25)goto 10
+c
+      root=tendpt+dtnew
+      phires=phinew
+      call getv2p(dtnew,tdif,z,absz2,n,w,wnew)
+      return
+      end
+c----------------------------------------------------------------------------
+      subroutine getv1p(theta,t,z,absz2,km,w,wnew)
+c Compute first and last components of normalized eigenvector associated
+c with eigenvalue exp(i*theta) by using corresponding components of
+c eigenvectors for subproblems stored in w. Store new components in
+c wnew(j,i1) for j=1,2.
+      real absz2(*),delta,phi,t(*),theta
+      complex cfact,czero,d1,w(2,*),wnew(2),z(*)
+      integer j,km
+c
+      czero=cmplx(0.,0.)
+      d1=cmplx(cos(theta),sin(theta))
+      wnew(1)=czero
+      wnew(2)=czero
+      do 10 j=1,km
+        if(absz2(j).le.1.)then
+          cfact=z(j)/(1.-d1*cmplx(cos(t(j)),-sin(t(j))))
+          wnew(1)=wnew(1)+w(1,j)*cfact
+          wnew(2)=wnew(2)+w(2,j)*cfact
+        endif
+10    continue
+c Normalize wnew
+      call phivl(phi,delta,t,absz2,km,theta)
+      delta=sqrt(delta/2.)
+      wnew(1)=wnew(1)/delta
+      wnew(2)=wnew(2)/delta
+c
+      return
+      end
+c-------------------------------------------------------------------------------
+      subroutine getv2p(dt,tdif,z,absz2,km,w,wnew)
+c Compute first and last components of normalized eigenvector associated
+c with eigenvalue exp(i*theta) by using corresponding components of
+c eigenvectors for subproblems stored in w. Store new components in
+c wnew(j,i1) for j=1,2.
+      real absz2(*),delta,dphi,dt,phi,tdif(*)
+      complex cfact,czero,w(2,*),wnew(2),z(*)
+      integer j,km
+c
+      czero=cmplx(0.,0.)
+      wnew(1)=czero
+      wnew(2)=czero
+      do 10 j=1,km
+        if(absz2(j).le.1.)then
+          cfact=z(j)/(1.-cmplx(cos(dt-tdif(j)),sin(dt-tdif(j))))
+          wnew(1)=wnew(1)+w(1,j)*cfact
+          wnew(2)=wnew(2)+w(2,j)*cfact
+        endif
+10    continue
+c Normalize wnew
+      call phivl2(phi,dphi,tdif,absz2,km,dt)
+      delta=sqrt(dphi/2.)
+      wnew(1)=wnew(1)/delta
+      wnew(2)=wnew(2)/delta
+c
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine idxord(t,idx,m0)
+      real t(*)
+      integer i,idx(*),itemp,j,m0
+      logical nochg
+c Reorders index array idx corresponding to increasing values of t
+      do 20 i=1,m0-1
+        nochg=.true.
+        do 10 j=1,m0-i
+          if(t(idx(j)).gt.t(idx(j+1)))then
+            itemp=idx(j)
+            idx(j)=idx(j+1)
+            idx(j+1)=itemp
+            nochg=.false.
+          endif
+10      continue
+        if(nochg)return
+20    continue
+      return
+      end
+c---------------------------------------------------------------------------
+      subroutine initev(x,y,a,b,sig)
+      complex x(2),y(2),a,ctemp
+      real b,sig,length
+      integer i
+c Calculation of eigenvectors of two-by-two subproblems
+      if(b.eq.0..and.sig.eq.0.)then
+        x(1)=cmplx(0.,0.)
+        x(2)=cmplx(1.,0.)
+      else
+        if(b.ge.0.)then
+c Eigenvector for second eigenvalue
+          x(1)=cmplx(1.,0.)
+          x(2)=cmplx(0.,1.)*conjg(a)*sig/(b+sqrt(b**2+sig**2))
+        else
+c Eigenvector for first eigenvalue
+          x(1)=cmplx(1.,0.)
+          x(2)=cmplx(0.,-1.)*conjg(a)*sig/(-b+sqrt(b**2+sig**2))
+        endif
+      endif
+c Normalize eigenvector
+      length=sqrt(cabs(x(1))**2+cabs(x(2))**2)
+      x(1)=x(1)/length
+      x(2)=x(2)/length
+c Eigenvector for exp(i*theta(2)), i=sqrt(-1). Eigenvector orthogonal
+c to vector cw(*,1).
+      y(1)=-conjg(x(2))
+      y(2)=conjg(x(1))
+      if(b.ge.0.)then
+c Swap eigenvectors
+        do 10 i=1,2
+          ctemp=x(i)
+          x(i)=y(i)
+          y(i)=ctemp
+10      continue
+      endif
+c
+      return
+      end
+c---------------------------------------------------------------------------
+      subroutine phivl(phi,dphi,t,absz2,n,arg)
+      real absz2(*),arg,c,dphi,phi,s,t(*),tmp,zsq
+      integer j,n
+c Evaluate phi and phi' at arg.
+      phi=0.
+      dphi=0.
+      do 10 j=1,n
+        zsq=absz2(j)
+        if(zsq.le.1.)then
+          tmp=(t(j)-arg)/2.
+          c=cos(tmp)
+          s=sin(tmp)
+          phi=phi+zsq*c/s
+          dphi=dphi+0.5*zsq/(s*s)
+        endif
+10    continue
+      return
+      end
+c---------------------------------------------------------------------------
+      subroutine phivl2(phi,dphi,tdif,absz2,n,dt)
+      real absz2(*),c,dphi,dt,phi,s,tdif(*),tmp,zsq
+      integer j,n
+c Evaluate phi and phi' at arg.
+      phi=0.
+      dphi=0.
+      do 10 j=1,n
+        zsq=absz2(j)
+        if(zsq.le.1.)then
+          tmp=(tdif(j)-dt)/2.
+          c=cos(tmp)
+          s=sin(tmp)
+          phi=phi+zsq*c/s
+          dphi=dphi+0.5*zsq/(s*s)
+        endif
+10    continue
+      return
+      end
+c---------------------------------------------------------------------------
+      subroutine restrc(t,n,pi,twopi)
+      real t(*),pi,twopi
+      integer j,n
+c Adds multiple of twopi if necessary to ensure that components of
+c t(*) are in (-pi,pi].
+      do 5 j=1,n
+3       if(t(j).le.-pi)then
+          t(j)=t(j)+twopi
+          goto 3
+        else
+4         if(t(j).gt.pi)then
+            t(j)=t(j)-twopi
+            goto 4
+          endif
+        endif
+5     continue
+      return
+      end
+
+C*** drudcp.f ----------------------------------------------------------
+
+c SINGLE PRECISION VERSION
+c Driver for of udcp
+      parameter(nn=10)
+      complex cgamma(nn),cw(2,nn)
+      real a,arg,b,c,d,eps,pi,rand,rho,sigma(nn),theta(nn),twopi,
+     %  wrk(10*nn)
+      integer info,iseed,iwrk(3*nn),j,n
+c Initialization
+      pi=4.*atan(1.)
+      twopi=2.*pi
+      iseed=20
+      n=nn
+c eps is deflation tolerance for udcp
+      eps=1e-6
+      a=0.
+      b=360.
+      c=0.
+      d=1.
+      do 20 j=1,n-1
+        arg=(a+(b-a)*rand(iseed))*pi/180.
+        rho=c+(d-c)*rand(iseed)
+        cgamma(j)=rho*cmplx(cos(arg),sin(arg))
+        sigma(j)=sqrt((1.-rho)*(1.+rho))
+20    continue
+      arg=(a+(b-a)*rand(iseed))*pi/180.
+      cgamma(n)=cmplx(cos(arg),sin(arg))
+      sigma(n)=0.
+c
+      call udcp(n,cgamma,sigma,eps,cw,theta,info,wrk,iwrk)
+      if(info.ne.0)write(6,*)'WARNING: info from udcp = ',info
+      write(6,*)'eigenvalue arguments:',(theta(j),j=1,n)
+c
+      stop
+      end
+c--------------------------------------------------------------- rand
+      real function rand(iseed)
+      integer iseed
+c
+c
+c     function rand
+c
+c     Rand is the portable random number generator of L. Schrage.
+c
+c     The generator is full cycle, that is, every integer from
+c     1 to 2**31 - 2 is generated exactly once in the cycle.
+c     It is completely described in TOMS 5(1979),132-138.
+c
+c     The function statement is
+c
+c       real function rand(iseed)
+c
+c     where
+c
+c       iseed is a positive integer variable which specifies
+c         the seed to the random number generator. Given the
+c         input seed, rand returns a random number in the
+c         open interval (0,1). On output the seed is updated.
+c
+c     modified by d.c. sorensen october 1981
+c     Argonne National Laboratory. MINPACK Project. March 1981.
+c
+c
+      integer a,b15,b16,fhi,k,leftlo,p,xhi,xalo
+      real c,pt5,two
+c
+c     Set a = 7**5, b15 = 2**15, b16 = 2**16, p = 2**31-1, c = 1/p.
+c
+      data a/16807/, b15/32768/, b16/65536/, p/2147483647/
+      data c/4.656612875e-10/
+      data pt5/0.5/, two/2.0/
+c
+c     There are 8 steps in rand.
+c
+c     1. Get 15 hi order bits of iseed.
+c     2. Get 16 lo bits of iseed and form lo product.
+c     3. Get 15 hi order bits of lo product.
+c     4. Form the 31 highest bits of full product.
+c     5. Get overflo past 31st bit of full product.
+c     6. Assemble all the parts and pre-substract p.
+c        The parentheses are essential.
+c     7. Add p back if necessary.
+c     8. Multiply by 1/(2**31-1).
+c
+      xhi = iseed/b16
+      xalo = (iseed - xhi*b16)*a
+      leftlo = xalo/b16
+      fhi = xhi*a + leftlo
+      k = fhi/b15
+      iseed = (((xalo-leftlo*b16)-p) + (fhi-k*b15)*b16) + k
+      if (iseed .lt. 0) iseed = iseed + p
+      rand = c*float(iseed)
+c
+c     Last card of function rand.
+c
+      return
+      end
+
+C*** dudc.f ------------------------------------------------------------
+
+c----------------------------------------------------------------------------
+c Subroutine for computing the spectral resolution of a unitary upper
+c Hessenberg matrix by a divide-and-conquer algorithm. This code follows
+c the FORTRAN77 standard as much as possible. The code uses complex*16
+c variables and requires complex*16 standard functions such as cdsqrt, cdlog
+c and cdabs. The naming of these subroutines follows the conventions of
+c VS FORTRAN for the IBM 3090 computer. For comments contact
+c
+c
+c G.S. Ammar
+c University of Northern Illinois
+c Department of Mathematical Sciences
+c DeKalb, IL 60115
+c
+c e-mail: ammar@math.niu.edu
+c
+c
+c L. Reichel
+c University of Kentucky
+c Department of Mathematics
+c Lexington, KY 40506
+c
+c e-mail: lothar@ms.uky.edu
+c
+c
+c or
+c
+c D.C. Sorensen
+c Rice University
+c Department of Mathematical Sciences
+c Houston, TX 77251
+c
+c e-mail: sorensen@rice.edu
+c
+c June 11, 1990
+c----------------------------------------------------------------------------
+      subroutine udc(n,cgamma,sigma,eps,ld,cw,theta,info,wrkmat,iwrk)
+      integer n,ld,info,iwrk(3*n)
+      complex*16 cgamma(n),cw(ld,n)
+      double precision sigma(n-1),theta(n),eps,wrkmat(ld,2*n+6)
+c
+c Subroutine for computing the spectral resolution of a unitary upper
+c Hessenberg matrix H of order n with nonnegative subdiagonal elements
+c by adivide-and-conquer method. The matrix H is represented in Schur
+c parametric form
+c
+c  H=G_1(cgamma(1)) G_2(cgamma(2)) ... G_{n-1}(cgamma(n-1)) G^_n(cgamma(n)),
+c
+c where G_j(cgamma(j)), 1<=j<n, are Givens reflectors for reflection in the
+c planes j and j+1, i.e
+c
+c                      | j  j+1 |     | -cgamma(j)     sigma(j)      |
+c        G_j(cgamma(j))|        |  =  |                              | .
+c                      | j  j+1 |     |  sigma(j)   conj(cgamma(j))  |
+c
+c conj stands for complex conjugation. The Schur parameters cgamma(j),
+c 1<=j<n, are complex valued and of magnitude less than or equal to
+c one. The complementary parameters sigma(j) are nonnegative and such
+c that cgamma(j)*conj(cgamma(j)) + sigma(j)*sigma(j) = 1. The sigma(j)
+c are subdiagonal elements of H. The last Schur parameter cgamma(n) is
+c of unit magnitude, and G^_n(cgamma(n)) is the diagonal matrix
+c
+c        G^_n(cgamma(n)) = diag[1,1,...,1,-cgamma(n)].
+c
+c The subroutine udc calls udc2, which has a longer list of parameters than
+c udc. Actual computations are carried out in udc2 and in subroutines called
+c by udc2.
+c
+c On entry:
+c
+c     n          integer
+c                n is the order of the unitary upper Hessenberg matrix H
+c                with nonnegative subdiagonal elements. H is defined by
+c                the Schur parameters cgamma(j), 1<=j<=n.
+c
+c     cgamma     complex*16(n)
+c                cgamma contains the Schur parameters that define H. The
+c                parameters cgamma(j) are of magnitude less than or equal
+c                to one for 1<=j<n, and cgamma(n) is of unit magnitude.
+c
+c     sigma      double precision(n-1)
+c                sigma contains complementary nonnegative parameters such
+c                that cgamma(j)*conj(cgamma(j)) + sigma(j)*sigma(j) = 1
+c                for 1<=j<n. The sigma(j) are subdiagonal elements of H.
+c
+c     eps        double precision
+c                eps is the deflation tolerance, which should be a
+c                few multiples of machine epsilon.
+c
+c     ld         integer
+c                ld is the leading dimension of the arrays cw and wrkmat.
+c                ld must be at least n.
+c
+c On return:
+c
+c     cw         complex*16(ld,n)
+c                cw contains eigenvectors of H. An eigenvector associated
+c                with eigenvalue exp(i*theta(j)) is stored in column j for
+c                1<=j<=n.
+c
+c     theta      double precision(n)
+c                theta contains the arguments of the eigenvalues
+c                exp(i*theta(j)), i=sqrt(-1). The theta(j) lie in the
+c                interval (-pi,pi].
+c
+c     info       integer
+c                = 0  for normal return.
+c                > 0  signals an error condition.
+c                     info = 1 if FORTRAN function csqrt( ) does not compute
+c                       principal branch.
+c                     info = 2 if complex logarithm does not compute
+c                       principal branch.
+c                     info = 3 if |cgamma(j)|^2 + sigma(j)^2 <> 1 for some
+c                       1<=j<n, or if |cgamma(n)| <> 1.
+c                     info = 4 if n > ld.
+c                     info = 5 if the rootfinder failed to determine zeros of
+c                       the spectral function. Use a larger value of eps.
+c
+c Other arguments (work arrays):
+c
+c     wrkmat     double precision(ld,2*n+6)
+c                wrkmat is a work array used by udc.
+c
+c     iwrk       integer(3*n)
+c                iwrk is a work array used by udc.
+c
+c Subroutines and functions:
+c arccot, argum, dflval, defref, firoot, getvc1, getvc2, idxord, initev,
+c phivl, phivl2, restrc, udc2, upaste, the blas zcopy, dnrm2 and dscal,
+c as well as FORTRAN functions.
+c
+c Internal scalars:
+      integer k
+c
+c Check complex square root function. Exit if argument not in (-pi/2,pi/2].
+      if(dimag(cdsqrt(dcmplx(0d0,-1d0))).ge.0d0)then
+        info=1
+        return
+      endif
+c Check complex logarithm function. Exit if argument not in (-pi/2,pi/2].
+      if(dimag(cdlog(dcmplx(0d0,-1d0))).ge.0d0)then
+        info=2
+        return
+      endif
+c Check Schur parameters cgamma(k) and complementary parameters sigma(j).
+      if(dabs(cdabs(cgamma(n))-1d0).ge.eps)then
+        info=3
+        return
+      endif
+      do 5 k=n-1,1,-1
+        if(dabs(dsqrt(cdabs(cgamma(k))**2+sigma(k)**2)-1d0).ge.eps)then
+          info=3
+          return
+        endif
+5     continue
+c Check ld and n. Exit if n>ld.
+      if(ld.lt.n)then
+        info=4
+        return
+      endif
+c
+      info=0
+      call udc2(n,cgamma,sigma,theta,ld,cw,wrkmat,iwrk,iwrk(n+1),
+     %  wrkmat(1,2*n+1),eps,wrkmat(1,2*n+2),wrkmat(1,2*n+4),
+     %  iwrk(2*n+1),info)
+      return
+      end
+c----------------------------------------------------------------------------
+c Main subroutines
+c----------------------------------------------------------------------------
+      subroutine udc2(n,cgamma,sigma,theta,ld,cw,cwnew,idxbeg,isizsb,
+     %  absgam,eps,cwork,rwork,iwork,iflag)
+      integer n,ld,idxbeg(n),iflag,isizsb(n),iwork(n)
+      complex*16 cgamma(n),cw(ld,n),cwnew(ld,n),cwork(n)
+      double precision eps,sigma(n),theta(n),absgam(n),rwork(n,3)
+c
+c Subroutine for computing the spectral resolution of a unitary upper
+c Hessenberg matrix H with nonnegative subdiagonal elements by a divide-
+c and-conquer method. The matrix H is represented in Schur parametric form.
+c Only the parameters of udc2 that differ from those of udc are listed below.
+c
+c Arguments of udc2 that have not been explained in udc:
+c
+c     cwork      complex*16(n)
+c                cwork is a work array used by udc2.
+c
+c     iwork      integer(n)
+c                iwork is a work array used by udc2.
+c
+c     rwork      double precision(n,3)
+c                rwork is a work array used by udc2.
+c
+c     idxbeg     integer(n)
+c                idxbeg(j) contains first column index for subproblem j
+c                during execution of udc2.
+c
+c     isizsb     integer(n)
+c                isizsb(j) contains size of subproblem j during
+c                execution of udc2.
+c
+c     absgam     double precision(n)
+c                absgam contains Schur parameter associated with jth Givens
+c                reflector torn out from the Schur parametric form of H.
+c
+c     iflag      integer
+c                iflag is normally 0. iflag is set to 5 if the subroutine
+c                firoot of subroutine upaste cannot determine zeros of the
+c                spectral function. If iflag=5 then use a larger value of
+c                eps.
+c
+c Subroutines and functions:
+c arccot, argum, dflval, defref, firoot, getvc1, getvc2, idxord, initev,
+c phivl, phivl2, restrc, upaste, the blas zcopy, dnrm2 and dscal, as
+c well as FORTRAN functions.
+c
+c Internal scalars:
+      integer isbprb,i1,j,k
+      complex*16 cgamhf,cgampr,cggam,clmbda
+      double precision argum,imggam,pi,reggam,twopi
+c
+c Divide phase.
+c Subdivide the eigenproblem into problems of order 2 (and one problem of
+c order 1 if n is odd) by tearing real symmetric Givens reflectors out of
+c the Schur parametric form of H.
+      twopi=8d0*datan(1d0)
+      pi=twopi/2d0
+      isbprb=0
+      do 10 k=n-2,0,-2
+        if(k.gt.0)then
+c Tear out G_k(absgam(k)) from Schur parametric form of H
+          absgam(k)=cdabs(cgamma(k))
+          if(absgam(k).ne.0.)then
+            cgampr=cgamma(k)/absgam(k)
+          else
+            cgampr=dcmplx(1d0,0d0)
+          endif
+          cgamma(k+1)=cgamma(k+1)*dconjg(cgampr)
+          cgamma(k+2)=cgamma(k+2)*dconjg(cgampr)
+          cgamma(k)=-cgampr
+        endif
+c Compute eigenvalues of matrix G_{k+1} G^_{k+2}
+        cgamhf=cdsqrt(cgamma(k+2))
+        cggam=cgamma(k+1)*dconjg(cgamhf)
+        reggam=dble(cggam)
+        imggam=dimag(cggam)
+        clmbda=cgamhf*dcmplx(-reggam,dsqrt(imggam**2+sigma(k+1)**2))
+        theta(k+1)=argum(clmbda)
+        clmbda=cgamhf*dcmplx(-reggam,-dsqrt(imggam**2+sigma(k+1)**2))
+        theta(k+2)=argum(clmbda)
+c Compute eigenvectors of matrix G_{k+1} G^_{k+2}. Determine
+c eigenvector for exp(i*theta(k+1)), i=sqrt(-1).
+        call initev(cw(1,k+1),cw(1,k+2),cgamhf,imggam,sigma(k+1))
+c Initialize index vectors for subproblem
+        isbprb=isbprb+1
+        idxbeg(isbprb)=k+1
+        isizsb(isbprb)=2
+        if(k.eq.1)then
+c Initialize one-by-one eigenproblem
+          theta(1)=argum(cgampr)
+          cw(1,1)=dcmplx(1d0,0d0)
+          isbprb=isbprb+1
+          idxbeg(isbprb)=1
+          isizsb(isbprb)=1
+        endif
+10    continue
+c
+c Conquer phase.
+c Adjacent subproblems are merged to larger ones by rank-one updates.
+c Paste subproblems from top down
+15    do 20 k=isbprb-1,1,-2
+        if(idxbeg(k).gt.idxbeg(k+1))then
+          i1=idxbeg(k)
+          idxbeg(k)=idxbeg(k+1)
+          idxbeg(k+1)=i1
+          i1=isizsb(k)
+          isizsb(k)=isizsb(k+1)
+          isizsb(k+1)=i1
+        endif
+c Merge subproblems k and k+1
+        call upaste(theta(idxbeg(k)),cw(1,idxbeg(k)),cwnew(1,idxbeg(k)),
+     %    absgam(idxbeg(k+1)-1),sigma(idxbeg(k+1)-1),isizsb(k),
+     %    isizsb(k+1),ld,iwork,cwork,rwork(1,1),rwork(1,2),rwork(1,3),
+     %    eps,pi,twopi,iflag)
+        if(iflag.ne.0)return
+c Update index arrays for subproblem control
+        isizsb(k)=isizsb(k+1)+isizsb(k)
+        isizsb(k+1)=0
+        idxbeg(k)=min(idxbeg(k),idxbeg(k+1))
+20    continue
+      j=1
+      do 25 k=1,isbprb
+        if(isizsb(k).ne.0)then
+          isizsb(j)=isizsb(k)
+          idxbeg(j)=idxbeg(k)
+          j=j+1
+        endif
+25    continue
+      isbprb=isbprb-int(isbprb/2)
+c Exit
+      if(isbprb.eq.1)return
+c
+c Paste subproblems from bottom up
+      do 30 k=1,isbprb-1,2
+        if(idxbeg(k).gt.idxbeg(k+1))then
+          i1=idxbeg(k)
+          idxbeg(k)=idxbeg(k+1)
+          idxbeg(k+1)=i1
+          i1=isizsb(k)
+          isizsb(k)=isizsb(k+1)
+          isizsb(k+1)=i1
+        endif
+c Merge subproblems k and k+1
+        call upaste(theta(idxbeg(k)),cw(1,idxbeg(k)),
+     %    cwnew(1,idxbeg(k)),absgam(idxbeg(k+1)-1),
+     %    sigma(idxbeg(k+1)-1),isizsb(k),isizsb(k+1),ld,iwork,cwork,
+     %    rwork,rwork(1,2),rwork(1,3),eps,pi,twopi,iflag)
+        isizsb(k)=isizsb(k+1)+isizsb(k)
+        isizsb(k+1)=0
+30    continue
+      j=1
+      do 35 k=1,isbprb
+        if(isizsb(k).ne.0)then
+          isizsb(j)=isizsb(k)
+          idxbeg(j)=idxbeg(k)
+          j=j+1
+        endif
+35    continue
+      isbprb=isbprb-int(isbprb/2)
+c Exit
+      if(isbprb.eq.1)return
+c
+      goto 15
+      end
+c----------------------------------------------------------------------------
+       subroutine upaste(t,w,wnew,gamma,sigma,k,m,nr,idx,z,tnew,
+     %   absz2,tdif,eps,pi,twopi,iflag)
+       complex*16 w(nr,*),wnew(nr,*),z(*)
+       double precision absz2(*),eps,gamma,pi,sigma,t(*),tdif(*),
+     %   tnew(*),twopi
+       integer idx(*),iflag,k,m,nr
+c The conquer phase of the unitary divide-and-conquer algorithm. The
+c subroutine pastes spectral resolutions of orders k and m together,
+c using the real Schur parameter pair (gamma,sigma), to determine the
+c spectral resolution of a problem of order k+m.
+c
+c
+c On entry:
+c
+c     k,m      integer
+c              Orders of subproblems to be pasted together.
+c
+c     t        double precision(k+m)
+c              Contains arguments of eigenvalues of the first subproblem
+c              in components 1:k and of the second subproblem in components
+c              k+1:k+m.
+c
+c     w        complex*16(nr,k+m)
+c              Eigenvectors of first subproblem are contained in
+c              w(i,j) i=1:k,j=1:k, and those of the second subproblem
+c              are contained in w(i,j) i=1:m, j=k+1:k+m.
+c
+c     nr       integer
+c              Declared row dimension of eigenvector arrays
+c              w and wnew in calling program.
+c
+c gamma,sigma  double precision
+c              Schur parameter gamma and corresponding complementary
+c              parameter sigma for pasting of subproblems.
+c
+c     eps      double precision
+c              Tolerance for deflation of type 1 and of type 2.
+c
+c  pi,twopi    double precision
+c              Constants assumed set in calling program.
+c
+c
+c On return:
+c
+c     t        Contains arguments of new eigenvalues of eigenproblem
+c              of order k+m in components 1:k+m.
+c
+c     w        New eigenvectors of subproblem of order k+m are contained
+c              in w(i,j), i=1:k+m, j=1:k+m.
+c
+c     iflag    integer
+c              iflag=0 signals normal exit, iflag=5 signals that the
+c              subroutine firoot failed to determine zeros of the
+c              spectral function. Use a larger value of eps.
+c
+c
+c Other arguments and some local variables:
+c
+c     tnew     double precision(k+m)
+c              Temporary storage space for new eigenvalues.
+c
+c     wnew     complex*16(nr,k+m)
+c              Temporary storage space for new eigenvectors.
+c
+c     z        complex*16(k+m)
+c              Storage space for complex weights.
+c
+c     absz2    double precision(k+m)
+c              Storage space for moduli of components of z, which
+c              are used in the calculation of the function phi.
+c
+c     tdif     double precision(k+m)
+c              Storage space used by firoot.
+c
+c     idx      integer(k+m)
+c              Index array used to order arguments of undeflated
+c              eigenvalues.
+c
+c     m0       integer
+c              Number of undeflated roots, i.e. the number of roots of the
+c              spectral function that have to be determined by subroutine
+c              firoot.
+c
+c     m2       integer
+c              number of type 2 deflations.
+c
+c
+c Subroutines and functions:
+c arccot, argum, dflval, defref, firoot, getvc1, getvc2, idxord, phivl,
+c phivl2, restrc, the blas zcopy, dscal and dnrm2, as well as FORTRAN
+c functions.
+c
+c Internal variables:
+      complex*16 cgam,czero,d1,d2
+      double precision argum,dflval,eps1,eps2,omega1,omega2,
+     %    phires,rho,sig
+      integer i,i0,i1,i2,j,km,k1,m0,m2
+c
+      eps1=eps
+      eps2=eps
+      czero=cmplx(0d0,0d0)
+      km=k+m
+      k1=k+1
+c Make sure that all arguments are in (-pi,pi]
+      call restrc(t,km,pi,twopi)
+c Define block diagonal matrix W containing eigenvectors of subproblems. The
+c (1,1) block is of order k and the (2,2) block of order m.
+      do 20 i=1,k
+        do 10 j=k1,km
+          w(j,i)=czero
+10      continue
+20    continue
+      do 50 i=k1,km
+        do 40 j=m,1,-1
+          w(j+k,i)=w(j,i)
+40      continue
+50    continue
+      do 70 i=k1,km
+        do 60 j=1,k
+          w(j,i)=czero
+60      continue
+70    continue
+c Calculation of vector z
+      omega1=dsqrt((1d0+gamma)/2d0)
+      omega2=-sigma/(2d0*omega1)
+      do 80 i=1,k
+        z(i)=omega1*dconjg(w(k,i))
+80    continue
+      do 90 i=k1,km
+        z(i)=omega2*dconjg(w(k1,i))*dcmplx(dcos(t(i)),-dsin(t(i)))
+90    continue
+c Check for deflation type of 1 (small abs(z(i))) and create index
+c array idx containing indices of undeflated t(i).
+      m0=0
+      do 250 i=1,km
+        if(2d0*cdabs(z(i)).lt.eps1)then
+c Type 1 deflation criterion is satisfied. Store new eigenvalue
+c in tnew(i) and new eigenvector in wnew(j,i), j=1,2,...,k+m.
+          tnew(i)=t(i)
+          z(i)=dcmplx(-2d0,0d0)
+          call zcopy(km,w(1,i),1,wnew(1,i),1)
+        else
+c Eigenvalue did not deflate; append corresponding index on idx()
+          m0=m0+1
+          idx(m0)=i
+        endif
+250    continue
+c Sort index vector idx() so that t(idx(1))<=t(idx(2))<=...<=t(idx(m0))
+      call idxord(t,idx,m0)
+c Check for deflation of type 2 (close eigenvalues) until none occurs.
+c iflag=1 if deflation occurs during loop 350.
+c m2 is the total number of type 2 deflations.
+300   m2=0
+350   iflag=0
+      i=0
+380   if(m0.eq.1)goto 430
+      i=i+1
+      i1=idx(i)
+      i0=mod(i,m0)+1
+      i2=idx(i0)
+c Calculate reflection ({cgam,sig} Schur parameter pair, cgam complex)
+c  for type 2 deflation criterion.
+      if(dflval(z(i1),z(i2),t(i1),t(i2),cgam,sig,rho,d1,d2)
+     %  .le.eps2)then
+c Type 2 deflation criterion is satisfied. Store new arguments in t() and
+c z(). z(i2)=-4 is deflation type 2 flag.
+        t(i1)=argum(d1*cdabs(cgam)**2+d2*sig**2)
+        t(i2)=argum(d1*sig**2+d2*cdabs(cgam)**2)
+        z(i1)=rho*(z(i2)/cdabs(z(i2)))
+        z(i2)=dcmplx(-4d0,0d0)
+c Determine new deflated eigenvector
+        call defref(w(1,i1),w(1,i2),wnew(1,i2),cgam,sig,km)
+c Store new deflated eigenvalue
+        tnew(i2)=t(i2)
+        iflag=1
+        m0=m0-1
+        m2=m2+1
+c Update index array
+        do 420 j=i0,m0
+          idx(j)=idx(j+1)
+420     continue
+        i=i-1
+      endif
+      if(m0.ge.2.and.i.lt.m0)goto 380
+c If type 2 deflation occured, check again
+      if(iflag.ne.0)goto 350
+c End of deflation
+c
+c Compute new eigenvalues and eigenvectors corresponding to zeros of phi
+430   if(m0.eq.1)then
+        i1=idx(1)
+        tnew(i1)=t(i1)+pi
+        call zcopy(km,w(1,i1),1,wnew(1,i1),1)
+        goto 850
+      endif
+c Store squared magnitudes of components of z for use in rootfinders
+      do 450 i=1,km
+        absz2(i)=cdabs(z(i))**2
+450   continue
+c Deflation of type 2 may have caused eigenvalue arguments to become
+c unsorted. Deflation of type 2 took place if m2>0. Sort index array
+c to obtain nondecreasing arguments t(idx(i)), i=1,2,...,m0, if m2>0.
+      if(m2.gt.0)call idxord(t,idx,m0)
+c Compute m0 roots of phi. Store roots in vector tnew.
+      i=1
+c Loop 600 starts here
+600   i1=idx(i)
+      i0=mod(i,m0)+1
+      i2=idx(i0)
+      if(t(i2).lt.t(i1))t(i2)=t(i2)+twopi
+c Compute new eigenvalue argument tnew(i1) between t(i1) and t(i2)
+c and store new eigenvector in wnew(*,i1)
+      call firoot(tnew(i1),phires,t(i1),t(i2),t,absz2,z,w,wnew(1,i1),
+     %  tdif,nr,km,iflag)
+      if(iflag.ne.0)then
+        iflag=5
+        return
+      endif
+      i=i+1
+690   if(i.le.m0)goto 600
+c Firoot loop (600) ends here
+      if(t(idx(1)).gt.pi)t(idx(1))=t(idx(1))-twopi
+c All eigenvectors have been computed. Store new eigenvectors in first k+m
+c rows of w, and new eigenvalues in t().
+850   do 900 i=1,km
+        t(i)=tnew(i)
+        call zcopy(km,wnew(1,i),1,w(1,i),1)
+900   continue
+      return
+      end
+c----------------------------------------------------------------------------
+c Auxiliary functions and subroutines
+c----------------------------------------------------------------------------
+      double precision function arccot(t)
+      double precision t
+c -pi/2<=arccot(t)<=pi/2 defined for t<>0
+      arccot=dsign(1d0,t)*datan2(1d0,dabs(t))
+      return
+      end
+c---------------------------------------------------------------------------
+      double precision function argum(z)
+      complex*16 z
+c Function computes argument in (-pi,pi] of complex number z
+      if(dimag(z).eq.0d0)then
+        if(dble(z).ge.0d0)then
+          argum=0d0
+        else
+          argum=4d0*datan(1d0)
+        endif
+      else
+        argum=dimag(cdlog(z))
+      endif
+c
+      return
+      end
+c----------------------------------------------------------------------------
+      subroutine defref(w1,w2,wnew,cgam,sig,km)
+      complex*16 cgam,wnew(*),w1(*),w2(*)
+      double precision sig
+      integer j,km
+c Performs reflection determined by cgam,sig on old eigenvectors w1(*),w2(*)
+c to determine new deflated eigenvector wnew(*) and modified old eigenvector
+c w1(*) corresponding to undeflated eigenvalue.
+      do 10 j=1,km
+        wnew(j)=sig*w1(j)+cgam*w2(j)
+10    continue
+      do 20 j=1,km
+        w1(j)=-dconjg(cgam)*w1(j)+sig*w2(j)
+20    continue
+      return
+      end
+c----------------------------------------------------------------------------
+      double precision function dflval(z1,z2,t1,t2,cgam,sig,rho,d1,d2)
+      complex*16 z1,z2,cgam,d1,d2
+      double precision t1,t2,sig,rho
+c Calculate reflection ({cgam,sig} Schur parameter pair, cgam complex)
+c and return value for checking for deflation of type two.
+      rho=dsqrt(cdabs(z1)**2+cdabs(z2)**2)
+      cgam=-dconjg(z1)*z2/(cdabs(z2)*rho)
+      sig=cdabs(z2)/rho
+      d1=dcmplx(dcos(t1),dsin(t1))
+      d2=dcmplx(dcos(t2),dsin(t2))
+      dflval=sig*cdabs(cgam*(d1-d2))
+c
+      return
+      end
+c----------------------------------------------------------------------------
+      subroutine firoot(root,phires,tleft,tright,t,absz2,z,
+     %  w,wnew,tdif,nr,n,iflag)
+      double precision arccot,absz2(*),dphi,dtnew,dtold,phinew,
+     %  phiold,phires,rho,root,sig,t(*),tendpt,tleft,tnew,
+     %  tright,tdif(*)
+      complex*16 z(*),w(nr,*),wnew(*)
+      integer icount,iflag,j,n,nr
+      logical right
+c Compute zero of phi in interval (tleft,tright). On entry the vector t
+c contains the arguments of eigenvalues of the subproblems to be merged.
+c The vector absz2 contains the squared magnitude of the first and last
+c component of the normalized eigenvectors of the subproblems to be solved
+c modified by rotation and deflation. On exit parameter root contains an
+c approximation of the zero of phi in (tleft,tright) if flag iflag=0 and
+c then phires is the value (residual) of phi at root. If iflag<>0 then
+c firoot has failed to determine all zeros of the spectral function. This
+c results in an error exit from udc with info=5. The subroutines phivl
+c and phivl2 are used for the evaluation of phi and its derivative. firoot
+c works with differences between poles and the end point tendpt of the
+c interval (tleft,tright) closest to the root: tdif(j)=t(j)-tendpt. The
+c current approximation tnew of the desired root is given by tnew=
+c tendpt+dtnew. On return, the eigenvector associated with the computed
+c root is stored in wnew(*). The eigenvectors are computed by the
+c subroutines getvc1 and getvc2.
+      iflag=0
+      icount=0
+      tnew=(tleft+tright)/2d0
+      if(tright-tnew.le.0d0)then
+        iflag=1
+        return
+      endif
+      if(tnew-tleft.le.0d0)then
+        iflag=-1
+        return
+      endif
+      call phivl(phinew,dphi,t,absz2,n,tnew)
+c Check if tnew=root
+      if(phinew.eq.0d0)then
+        root=tnew
+        phires=phinew
+        call getvc1(root,t,z,absz2,n,nr,w,wnew)
+        return
+      endif
+      if(phinew.lt.0d0)then
+        tendpt=tright
+        right=.true.
+      else
+        tendpt=tleft
+        right=.false.
+      endif
+c Compute difference vector tdif(j)=t(j)-tendpt and dtnew=tnew-tendpt
+      do 5 j=1,n
+        tdif(j)=t(j)-tendpt
+5     continue
+      dtnew=tnew-tendpt
+c Loop for computing root
+10    icount=icount+1
+      rho=phinew-dphi*sin(-dtnew)
+      sig=2d0*dphi*dsin(dtnew/2d0)**2
+      dtold=dtnew
+      phiold=phinew
+      dtnew=2d0*arccot(rho/sig)
+c If tnew is past an end point, set error flag
+      if(dtnew*dtold.lt.0d0)then
+        dtnew=0d0
+        root=tendpt
+        iflag=-1
+        if(right)iflag=1
+        return
+      endif
+c If tnew is at pole, set error flag
+      if(dabs(dtnew).le.0d0)then
+        root=tendpt+dtnew
+        phires=phinew
+        iflag=-1
+        if(right)iflag=1
+        return
+      endif
+c Check if tnew is a new point; if not, then terminate (equal iterates)
+      if(dtnew.eq.dtold)then
+        root=tendpt+dtold
+        phires=phiold
+        call getvc2(dtold,tdif,z,absz2,n,nr,w,wnew)
+        return
+      endif
+c
+      call phivl2(phinew,dphi,tdif,absz2,n,dtnew)
+20    if(phinew.eq.0d0)then
+        root=tendpt+dtnew
+        phires=phinew
+        call getvc2(dtnew,tdif,z,absz2,n,nr,w,wnew)
+        return
+      endif
+c Terminate if root was overshot
+      if(phinew*phiold.lt.0d0)then
+        if(abs(phinew).gt.abs(phiold))then
+          root=tendpt+dtold
+          phires=phiold
+          call getvc2(dtold,tdif,z,absz2,n,nr,w,wnew)
+        else
+          root=tendpt+dtnew
+          phires=phinew
+          call getvc2(dtnew,tdif,z,absz2,n,nr,w,wnew)
+        endif
+        return
+      endif
+      if((right.and.dtnew.lt.dtold).or.
+     %  (.not.right.and.dtnew.gt.dtold)) then
+        root=tendpt+dtold
+        phires=phiold
+        call getvc2(dtold,tdif,z,absz2,n,nr,w,wnew)
+        return
+      endif
+      if(abs(phinew).gt.abs(phiold))then
+        root=tendpt+dtold
+        phires=phiold
+        call getvc2(dtold,tdif,z,absz2,n,nr,w,wnew)
+        return
+      endif
+      if(icount.lt.25)goto 10
+c
+      root=tendpt+dtnew
+      phires=phinew
+      call getvc2(dtnew,tdif,z,absz2,n,nr,w,wnew)
+      return
+      end
+c----------------------------------------------------------------------------
+      subroutine getvc1(theta,t,z,absz2,km,nr,w,wnew)
+      double precision absz2(*),delta,dnrm2,t(*),theta
+      complex*16 cfact,czero,d1,w(nr,*),wnew(*),z(*)
+      integer j,km,l,nr
+c Compute eigenvector associated with eigenvalue exp(i*theta) by using
+c eigenvectors for subproblems stored in w.
+c Store determined eigenvector in wnew.
+      czero=dcmplx(0d0,0d0)
+      d1=dcmplx(dcos(theta),dsin(theta))
+      do 5 j=1,km
+        wnew(j)=czero
+5     continue
+      do 10 j=1,km
+        if(absz2(j).le.1d0)then
+          cfact=z(j)/(1d0-d1*dcmplx(dcos(t(j)),-dsin(t(j))))
+          do 20 l=1,km
+            wnew(l)=wnew(l)+w(l,j)*cfact
+20        continue
+        endif
+10    continue
+c Normalize wnew
+      delta=dnrm2(2*km,wnew,1)
+      call dscal(2*km,1d0/delta,wnew,1)
+      return
+      end
+c----------------------------------------------------------------------------
+      subroutine getvc2(dt,tdif,z,absz2,km,nr,w,wnew)
+      double precision absz2(*),delta,dt,dnrm2,tdif(*)
+      complex*16 cfact,czero,w(nr,*),wnew(*),z(*)
+      integer j,km,l,nr
+c Compute eigenvector associated with eigenvalue exp(i*theta) by using
+c eigenvectors for subproblems stored in w.  theta is implicitly determined
+c by dt and tdif. Store determined eigenvector in wnew.
+      czero=dcmplx(0d0,0d0)
+      do 5 j=1,km
+        wnew(j)=czero
+5     continue
+      do 10 j=1,km
+        if(absz2(j).le.1d0)then
+          cfact=z(j)/(1d0-dcmplx(dcos(dt-tdif(j)),dsin(dt-tdif(j))))
+          do 20 l=1,km
+            wnew(l)=wnew(l)+w(l,j)*cfact
+20        continue
+        endif
+10    continue
+c Normalize wnew
+      delta=dnrm2(2*km,wnew,1)
+      call dscal(2*km,1d0/delta,wnew,1)
+      return
+      end
+c----------------------------------------------------------------------------
+      subroutine idxord(t,idx,m0)
+      double precision t(*)
+      integer i,idx(*),itemp,j,m0
+      logical nochg
+c  Reorders index array idx corresponding to increasing values of t
+      do 20 i=1,m0-1
+        nochg=.true.
+        do 10 j=1,m0-i
+          if(t(idx(j)).gt.t(idx(j+1)))then
+            itemp=idx(j)
+            idx(j)=idx(j+1)
+            idx(j+1)=itemp
+            nochg=.false.
+          endif
+10      continue
+        if(nochg)return
+20    continue
+      return
+      end
+c---------------------------------------------------------------------------
+      subroutine initev(x,y,a,b,sig)
+      complex*16 x(2),y(2),a,ctemp
+      double precision b,sig,length
+      integer i
+c Calculation of eigenvectors of two-by-two subproblems
+      if(b.eq.0d0.and.sig.eq.0d0)then
+        x(1)=dcmplx(0d0,0d0)
+        x(2)=dcmplx(1d0,0d0)
+      else
+        if(b.ge.0d0)then
+c Eigenvector for second eigenvalue
+          x(1)=dcmplx(1d0,0d0)
+          x(2)=dcmplx(0d0,1d0)*dconjg(a)*sig/(b+dsqrt(b**2+sig**2))
+        else
+c Eigenvector for first eigenvalue
+          x(1)=dcmplx(1d0,0d0)
+          x(2)=dcmplx(0d0,-1d0)*dconjg(a)*sig/(-b+dsqrt(b**2+sig**2))
+        endif
+      endif
+c Normalize eigenvector
+      length=dsqrt(cdabs(x(1))**2+cdabs(x(2))**2)
+      x(1)=x(1)/length
+      x(2)=x(2)/length
+c Eigenvector for exp(i*theta(2)), i=sqrt(-1). Eigenvector orthogonal
+c to vector cw(*,1).
+      y(1)=-dconjg(x(2))
+      y(2)=dconjg(x(1))
+      if(b.ge.0d0)then
+c Swap eigenvectors
+        do 10 i=1,2
+          ctemp=x(i)
+          x(i)=y(i)
+          y(i)=ctemp
+10      continue
+      endif
+c
+      return
+      end
+c---------------------------------------------------------------------------
+      subroutine phivl(phi,dphi,t,absz2,n,arg)
+      double precision absz2(*),arg,c,dphi,phi,s,t(*),tmp,zsq
+      integer j,n
+c Evaluate phi and phi' at arg.
+      phi=0d0
+      dphi=0d0
+      do 10 j=1,n
+        zsq=absz2(j)
+        if(zsq.le.1.)then
+          tmp=(t(j)-arg)/2d0
+          c=dcos(tmp)
+          s=dsin(tmp)
+          phi=phi+zsq*c/s
+          dphi=dphi+0.5d0*zsq/(s*s)
+        endif
+10    continue
+      return
+      end
+c---------------------------------------------------------------------------
+      subroutine phivl2(phi,dphi,tdif,absz2,n,dt)
+      double precision absz2(*),c,dphi,dt,phi,s,tdif(*),tmp,zsq
+      integer j,n
+c Evaluate phi and phi' at arg.
+      phi=0d0
+      dphi=0d0
+      do 10 j=1,n
+        zsq=absz2(j)
+        if(zsq.le.1d0)then
+          tmp=(tdif(j)-dt)/2d0
+          c=dcos(tmp)
+          s=dsin(tmp)
+          phi=phi+zsq*c/s
+          dphi=dphi+0.5d0*zsq/(s*s)
+        endif
+10    continue
+      return
+      end
+c---------------------------------------------------------------------------
+      subroutine restrc(t,n,pi,twopi)
+      double precision t(*),pi,twopi
+      integer j,n
+c Adds multiple of twopi if necessary to ensure that components of
+c t(*) are in (-pi,pi].
+      do 5 j=1,n
+3       if(t(j).le.-pi)then
+          t(j)=t(j)+twopi
+          goto 3
+        else
+4         if(t(j).gt.pi)then
+            t(j)=t(j)-twopi
+            goto 4
+          endif
+        endif
+5     continue
+      return
+      end
+c---------------------------------------------------------------------------
+c blas from netlib, slightly modified to run on an IBM 3090 computer
+c---------------------------------------------------------------------------
+      double precision function dnrm2 ( n, dx, incx)
+      integer i,j,incx,n,next,nn
+      double precision   dx(*), cutlo, cuthi, hitest, sum, xmax,
+     %   zero,one
+      data   zero, one /0.0d0, 1.0d0/
+c
+c     euclidean norm of the n-vector stored in dx() with storage
+c     increment incx .
+c     if    n .le. 0 return with result = 0.
+c     if n .ge. 1 then incx must be .ge. 1
+c
+c           c.l.lawson, 1978 jan 08
+c
+c     four phase method     using two built-in constants that are
+c     hopefully applicable to all machines.
+c         cutlo = maximum of  dsqrt(u/eps)  over all known machines.
+c         cuthi = minimum of  dsqrt(v)      over all known machines.
+c     where
+c         eps = smallest no. such that eps + 1. .gt. 1.
+c         u   = smallest positive no.   (underflow limit)
+c         v   = largest  no.            (overflow  limit)
+c
+c     brief outline of algorithm..
+c
+c     phase 1    scans zero components.
+c     move to phase 2 when a component is nonzero and .le. cutlo
+c     move to phase 3 when a component is .gt. cutlo
+c     move to phase 4 when a component is .ge. cuthi/m
+c     where m = n for x() real and m = 2*n for complex.
+c
+c     values for cutlo and cuthi..
+c     from the environmental parameters listed in the imsl converter
+c     document the limiting values are as follows..
+c     cutlo, s.p.   u/eps = 2**(-102) for  honeywell.  close seconds are
+c                   univac and dec at 2**(-103)
+c                   thus cutlo = 2**(-51) = 4.44089e-16
+c     cuthi, s.p.   v = 2**127 for univac, honeywell, and dec.
+c                   thus cuthi = 2**(63.5) = 1.30438e19
+c     cutlo, d.p.   u/eps = 2**(-67) for honeywell and dec.
+c                   thus cutlo = 2**(-33.5) = 8.23181d-11
+c     cuthi, d.p.   same as s.p.  cuthi = 1.30438d19
+c     data cutlo, cuthi / 8.232d-11,  1.304d19 /
+c     data cutlo, cuthi / 4.441e-16,  1.304e19 /
+      data cutlo, cuthi / 8.232d-11,  1.304d19 /
+c
+      if(n .gt. 0) go to 10
+         dnrm2  = zero
+         go to 300
+c
+   10 assign 30 to next
+      sum = zero
+      nn = n * incx
+c                                                 begin main loop
+      i = 1
+   20    go to next,(30, 50, 70, 110)
+   30 if( dabs(dx(i)) .gt. cutlo) go to 85
+      assign 50 to next
+      xmax = zero
+c
+c                        phase 1.  sum is zero
+c
+   50 if( dx(i) .eq. zero) go to 200
+      if( dabs(dx(i)) .gt. cutlo) go to 85
+c
+c                                prepare for phase 2.
+      assign 70 to next
+      go to 105
+c
+c                                prepare for phase 4.
+c
+  100 i = j
+      assign 110 to next
+      sum = (sum / dx(i)) / dx(i)
+  105 xmax = dabs(dx(i))
+      go to 115
+c
+c                   phase 2.  sum is small.
+c                             scale to avoid destructive underflow.
+c
+   70 if( dabs(dx(i)) .gt. cutlo ) go to 75
+c
+c                   common code for phases 2 and 4.
+c                   in phase 4 sum is large.  scale to avoid overflow.
+c
+  110 if( dabs(dx(i)) .le. xmax ) go to 115
+         sum = one + sum * (xmax / dx(i))**2
+         xmax = dabs(dx(i))
+         go to 200
+c
+  115 sum = sum + (dx(i)/xmax)**2
+      go to 200
+c
+c
+c                  prepare for phase 3.
+c
+   75 sum = (sum * xmax) * xmax
+c
+c
+c     for real or d.p. set hitest = cuthi/n
+c     for complex      set hitest = cuthi/(2*n)
+c
+   85 hitest = cuthi/float( n )
+c
+c                   phase 3.  sum is mid-range.  no scaling.
+c
+      do 95 j =i,nn,incx
+      if(dabs(dx(j)) .ge. hitest) go to 100
+   95    sum = sum + dx(j)**2
+      dnrm2 = dsqrt( sum )
+      go to 300
+c
+  200 continue
+      i = i + incx
+      if ( i .le. nn ) go to 20
+c
+c              end of main loop.
+c
+c              compute square root and adjust for scaling.
+c
+      dnrm2 = xmax * dsqrt(sum)
+  300 continue
+      return
+      end
+c----------------------------------------------------------------
+      subroutine  dscal(n,da,dx,incx)
+c
+c     scales a vector by a constant.
+c     uses unrolled loops for increment equal to one.
+c     jack dongarra, linpack, 3/11/78.
+c
+      double precision da,dx(*)
+      integer i,incx,m,mp1,n,nincx
+c
+      if(n.le.0)return
+      if(incx.eq.1)go to 20
+c
+c        code for increment not equal to 1
+c
+      nincx = n*incx
+      do 10 i = 1,nincx,incx
+        dx(i) = da*dx(i)
+   10 continue
+      return
+c
+c        code for increment equal to 1
+c
+c
+c        clean-up loop
+c
+   20 m = mod(n,5)
+      if( m .eq. 0 ) go to 40
+      do 30 i = 1,m
+        dx(i) = da*dx(i)
+   30 continue
+      if( n .lt. 5 ) return
+   40 mp1 = m + 1
+      do 50 i = mp1,n,5
+        dx(i) = da*dx(i)
+        dx(i + 1) = da*dx(i + 1)
+        dx(i + 2) = da*dx(i + 2)
+        dx(i + 3) = da*dx(i + 3)
+        dx(i + 4) = da*dx(i + 4)
+   50 continue
+      return
+      end
+c-------------------------------------------------------------
+      subroutine  zcopy(n,zx,incx,zy,incy)
+c
+c     copies a vector, x, to a vector, y.
+c     jack dongarra, linpack, 4/11/78.
+c
+      complex*16 zx(*),zy(*)
+      integer i,incx,incy,ix,iy,n
+c
+      if(n.le.0)return
+      if(incx.eq.1.and.incy.eq.1)go to 20
+c
+c        code for unequal increments or equal increments
+c          not equal to 1
+c
+      ix = 1
+      iy = 1
+      if(incx.lt.0)ix = (-n+1)*incx + 1
+      if(incy.lt.0)iy = (-n+1)*incy + 1
+      do 10 i = 1,n
+        zy(iy) = zx(ix)
+        ix = ix + incx
+        iy = iy + incy
+   10 continue
+      return
+c
+c        code for both increments equal to 1
+c
+   20 do 30 i = 1,n
+        zy(i) = zx(i)
+   30 continue
+      return
+      end
+
+C*** drdudc.f ----------------------------------------------------------
+
+c Driver for udc
+      parameter(nn=10)
+      complex*16 cgamma(nn),cw(nn,nn)
+      double precision a,arg,b,c,d,eps,pi,rand,rho,sigma(nn),
+     %  theta(nn),twopi,wrk(nn,2*nn+6)
+      integer info,iseed,iwrk(3*nn),j,n
+c Initialization
+      pi=4d0*atan(1d0)
+      twopi=2d0*pi
+      iseed=20
+      n=nn
+c eps is deflation tolerance for udc
+      eps=1d-14
+      a=0d0
+      b=36d1
+      c=0d0
+      d=1d0
+      do 20 j=1,n-1
+        arg=(a+(b-a)*rand(iseed))*pi/18d1
+        rho=c+(d-c)*rand(iseed)
+        cgamma(j)=rho*dcmplx(dcos(arg),dsin(arg))
+        sigma(j)=dsqrt((1d0-rho)*(1d0+rho))
+20    continue
+      arg=(a+(b-a)*rand(iseed))*pi/18d1
+      cgamma(n)=dcmplx(dcos(arg),dsin(arg))
+      sigma(n)=0d0
+c
+      call udc(n,cgamma,sigma,eps,n,cw,theta,info,wrk,iwrk)
+      if(info.ne.0)write(6,*)'WARNING: info from udc = ',info
+      write(6,*) ' eigenvalue arguments:',(theta(j),j=1,n)
+c
+      stop
+      end
+c-------------------------------------------------------------------
+      double precision function rand(iseed)
+      integer iseed
+c
+c
+c     function rand
+c
+c     Rand is the portable random number generator of L. Schrage.
+c
+c     The generator is full cycle, that is, every integer from
+c     1 to 2**31 - 2 is generated exactly once in the cycle.
+c     It is completely described in TOMS 5(1979),132-138.
+c
+c     The function statement is
+c
+c       real function rand(iseed)
+c
+c     where
+c
+c       iseed is a positive integer variable which specifies
+c         the seed to the random number generator. Given the
+c         input seed, rand returns a random number in the
+c         open interval (0,1). On output the seed is updated.
+c
+c     modified by d.c. sorensen october 1981
+c     Argonne National Laboratory. MINPACK Project. March 1981.
+c
+c
+      integer a,b15,b16,fhi,k,leftlo,p,xhi,xalo
+      real c,pt5,two
+c
+c     Set a = 7**5, b15 = 2**15, b16 = 2**16, p = 2**31-1, c = 1/p.
+c
+      data a/16807/, b15/32768/, b16/65536/, p/2147483647/
+      data c/4.656612875e-10/
+      data pt5/0.5/, two/2.0/
+c
+c     There are 8 steps in rand.
+c
+c     1. Get 15 hi order bits of iseed.
+c     2. Get 16 lo bits of iseed and form lo product.
+c     3. Get 15 hi order bits of lo product.
+c     4. Form the 31 highest bits of full product.
+c     5. Get overflo past 31st bit of full product.
+c     6. Assemble all the parts and pre-substract p.
+c        The parentheses are essential.
+c     7. Add p back if necessary.
+c     8. Multiply by 1/(2**31-1).
+c
+      xhi = iseed/b16
+      xalo = (iseed - xhi*b16)*a
+      leftlo = xalo/b16
+      fhi = xhi*a + leftlo
+      k = fhi/b15
+      iseed = (((xalo-leftlo*b16)-p) + (fhi-k*b15)*b16) + k
+      if (iseed .lt. 0) iseed = iseed + p
+      rand = dble(c*float(iseed))
+c
+c     Last card of function rand.
+c
+      return
+      end
+
+C*** dudcp.f -----------------------------------------------------------
+
+c----------------------------------------------------------------------------
+c Subroutine for computing the partial spectral resolution of a unitary
+c upper Hessenberg matrix by a divide-and-conquer algorithm. This code
+c follows the FORTRAN77 standard as much as possible. The code uses
+c complex*16 variables and requires complex*16 standard functions such as
+c cdsqrt, cdlog and cdabs. The naming of these subroutines follows the
+c conventions of VS FORTRAN for the IBM 3090 computer. For comments contact
+c
+c
+c G.S. Ammar
+c University of Northern Illinois
+c Department of Mathematical Sciences
+c DeKalb, IL 60115
+c
+c e-mail: na.ammar@na-net.stanford.edu
+c
+c
+c L. Reichel
+c University of Kentucky
+c Department of Mathematics
+c Lexington, KY 40506
+c
+c e-mail: lothar@ms.uky.edu
+c
+c
+c or
+c
+c D.C. Sorensen
+c Rice University
+c Department of Mathematical Sciences
+c Houston, TX 77251
+c
+c e-mail: sorensen@rice.edu
+c
+c June 11, 1990
+c----------------------------------------------------------------------------
+      subroutine udcp(n,cgamma,sigma,eps,cw,theta,info,wrk,iwrk)
+      integer n,info,iwrk(3*n)
+      complex*16 cgamma(n),cw(2,n)
+      double precision eps,sigma(n-1),theta(n),wrk(10*n)
+c
+c Subroutine for computing the partial spectral resolution of a unitary
+c upper Hessenberg matrix H of order n with nonnegative subdiagonal elements
+c by a divide-and-conquer method. The matrix H is represented in Schur
+c parametric form
+c
+c  H=G_1(cgamma(1)) G_2(cgamma(2)) ... G_{n-1}(cgamma(n-1)) G^_n(cgamma(n)),
+c
+c where G_j(cgamma(j)), 1<=j<n, are Givens reflectors for reflection in the
+c planes j and j+1, i.e
+c
+c                      | j  j+1 |     | -cgamma(j)     sigma(j)      |
+c       G_j(cgamma(j)) |        |  =  |                              | .
+c                      | j  j+1 |     |  sigma(j)   conj(cgamma(j))  |
+c
+c conj stands for complex conjugation. The Schur parameters cgamma(j),
+c 1<=j<n, are complex valued and of magnitude at most one. The
+c complementary parameters sigma(j) are nonnegative and such that
+c cgamma(j)*conj(cgamma(j)) + sigma(j)*sigma(j) = 1. The sigma(j) are
+c subdiagonal elements of H. The last Schur parameter cgamma(n) is of
+c unit magnitude, and the last Givens reflection is the diagonal matrix
+c
+c       G^_n(cgamma(n)) = diag[1,1,...,1,-cgamma(n)].
+c
+c The subroutine udcp calls udcp2, which has a longer list of parameters
+c than udcp. Actual computations are carried out in udcp2 and in
+c subroutines called by udcp2.
+c
+c On entry:
+c
+c     n          integer
+c                n is the order of the unitary upper Hessenberg matrix H
+c                with nonnegative subdiagonal elements determined by the
+c                Schur parameters cgamma(j), 1<=j<=n.
+c
+c     cgamma     complex*16(n)
+c                cgamma contains the Schur parameters that define H. The
+c                parameters cgamma(j) are of magnitude at most one
+c                for 1<=j<n, and cgamma(n) is of unit magnitude.
+c
+c     sigma      double precision(n-1)
+c                sigma contains complementary nonnegative parameters such that
+c                cgamma(j)*conj(cgamma(j)) + sigma(j)*sigma(j) = 1 for
+c                1<=j<n. The sigma(j) are subdiagonal elements of H.
+c
+c     eps        double precision
+c                eps is the deflation tolerance used in the conquer phase;
+c                eps should be a few multiples of machine epsilon.
+c
+c
+c On return:
+c
+c     cw         complex*16(2,n)
+c                cw contains the first and last components of normalized
+c                eigenvectors of H. The the first component of an eigenvector
+c                of unit length associated with the eigenvalue exp(i*theta(j))
+c                is stored in element cw(1,j), and the last component of this
+c                eigenvector is stored in c(2,j).
+c
+c     theta      double precision(n)
+c                theta contains the arguments of the eigenvalues
+c                exp(i*theta(j)), i=sqrt(-1). The theta(j) lie in the
+c                interval (-pi,pi].
+c
+c     info       integer
+c                = 0  for normal return.
+c                > 0  signals an error condition.
+c                     info = 1 if FORTRAN function csqrt( ) does not compute
+c                       principal branch.
+c                     info = 2 if complex logarithm does not compute
+c                       principal branch.
+c                     info = 3 if |cgamma(j)|^2 + sigma(j)^2 <> 1 for some
+c                       1<=j<n, or if |cgamma(n)| <> 1.
+c                     info = 4 if the rootfinder failed to determine zeros
+c                       of the spectral function. Use a larger value of eps.
+c
+c Other arguments (work arrays):
+c
+c     wrk        double precision(10*n)
+c                wrk is a work array used by udcp.
+c
+c     iwrk       integer(3*n)
+c                iwrk is a work array used by udcp.
+c
+c Subroutines and functions:
+c arrcot, argum, dflval,defrf2, firot2, getv1p, getv2p, idxord, initev,
+c phivl, phivl2, restrc, udcp2, upastp as well as FORTRAN functions.
+c
+c Internal scalars:
+      integer k
+c
+c Check complex square root function. Exit if argument not in (-pi/2,pi/2].
+      if(dimag(cdsqrt(dcmplx(0d0,-1d0))).ge.0d0)then
+        info=1
+        return
+      endif
+c Check complex logarithm function. Exit if argument not in (-pi/2,pi/2].
+      if(dimag(cdlog(dcmplx(0d0,-1d0))).ge.0d0)then
+        info=2
+        return
+      endif
+c Check Schur parameters cgamma(k) and complementary parameters sigma(j).
+      if(dabs(cdabs(cgamma(n))-1d0).ge.eps)then
+        info=3
+        return
+      endif
+      do 5 k=n-1,1,-1
+       if(dabs(dsqrt(cdabs(cgamma(k))**2+sigma(k)**2)-1d0).ge.eps)then
+          info=3
+          return
+        endif
+5     continue
+c
+      info=0
+      call udcp2(n,cgamma,sigma,theta,cw,wrk,iwrk,iwrk(n+1),wrk(4*n+1),
+     %  eps,wrk(5*n+1),wrk(7*n+1),iwrk(2*n+1),info)
+      return
+      end
+c----------------------------------------------------------------------------
+c Main subroutines
+c----------------------------------------------------------------------------
+      subroutine udcp2(n,cgamma,sigma,theta,cw,cwnew,idxbeg,
+     %  isizsb,absgam,eps,cwork,rwork,iwork,iflag)
+      integer idxbeg(n),iflag,isizsb(n),iwork(n),n
+      complex*16 cgamma(n),cw(2,n),cwnew(2,n),cwork(n)
+      double precision absgam(n),eps,rwork(n,3),sigma(n-1),theta(n)
+c
+c Subroutine for computing the partial spectral resolution of a unitary
+c upper Hessenberg matrix H with nonnegative subdiagonal elements by a
+c divide-and-conquer method. The matrix H is represented in Schur parametric
+c form. Only the parameters of udcp2 that differ from those of udcp are
+c listed below.
+c
+c Arguments of udcp2 that have not been explained in udcp:
+c
+c     cwork      complex*16(n)
+c                cwork is a work array used by udcp2.
+c
+c     iwork      integer(n)
+c                iwork is a work array used by udcp2.
+c
+c     rwork      double precision(n,3)
+c                rwork is a work array used by udcp2.
+c
+c     idxbeg     integer(n)
+c                idxbeg(j) contains first column index for subproblem j
+c                during execution of udcp2.
+c
+c     isizsb     integer(n)
+c                isizsb(j) contains size of subproblem j during
+c                execution of udcp2.
+c
+c     absgam     double precision(n)
+c                absgam contains Schur parameter associated with jth Givens
+c                reflector torn out from the Schur parametric form of H.
+c
+c     iflag      integer
+c                iflag is normally 0. iflag is set to 4 if the subroutine
+c                firot2 of subroutine upastp cannot determine zeros of the
+c                spectral function. If iflag=4 then use a larger value of
+c                eps.
+c
+c Subroutines and functions:
+c arrcot, argum, dflval,defrf2, firot2, getv1p, getv2p, idxord, initev,
+c phivl, phivl2, restrc, udcp2, upastp as well as FORTRAN functions.
+c
+c Internal scalars:
+      integer isbprb,i1,j,k
+      complex*16 cgamhf,cgampr,cggam,clmbda
+      double precision argum,imggam,pi,reggam,twopi
+c
+c Divide phase
+c Subdivide the eigenproblem into problems of order 2 (and one problem of order
+c one if n is odd) by tearing real symmetric Givens reflectors out of the
+c Schur parametric form of H.
+      twopi=8d0*datan(1d0)
+      pi=twopi/2d0
+      isbprb=0
+      do 10 k=n-2,0,-2
+        if (k.gt.0) then
+c Tear out G_k(absgam(k)) from Schur parametric form of H.
+          absgam(k)=cdabs(cgamma(k))
+          if(absgam(k).ne.0.)then
+            cgampr=cgamma(k)/absgam(k)
+          else
+            cgampr=dcmplx(1d0,0d0)
+          endif
+          cgamma(k+1)=cgamma(k+1)*dconjg(cgampr)
+          cgamma(k+2)=cgamma(k+2)*dconjg(cgampr)
+          cgamma(k)=-cgampr
+        endif
+c Compute eigenvalues of matrix G_{k+1} G^_{k+2}
+        cgamhf=cdsqrt(cgamma(k+2))
+        cggam=cgamma(k+1)*dconjg(cgamhf)
+        reggam=dble(cggam)
+        imggam=dimag(cggam)
+        clmbda=cgamhf*dcmplx(-reggam,dsqrt(imggam**2+sigma(k+1)**2))
+        theta(k+1)=argum(clmbda)
+        clmbda=cgamhf*dcmplx(-reggam,-dsqrt(imggam**2+sigma(k+1)**2))
+        theta(k+2)=argum(clmbda)
+c Compute eigenvectors of matrix G_{k+1} G^_{k+2}. Determine
+c eigenvector for exp(i*theta(k+1)), i=sqrt(-1).
+        call initev(cw(1,k+1),cw(1,k+2),cgamhf,imggam,sigma(k+1))
+c Initialize index vectors
+        isbprb=isbprb+1
+        idxbeg(isbprb)=k+1
+        isizsb(isbprb)=2
+        if(k.eq.1)then
+c Initialize one-by-one eigenproblem
+          theta(1)=argum(cgampr)
+          cw(1,1)=dcmplx(1d0,0d0)
+          cw(2,1)=dcmplx(1d0,0d0)
+          isbprb=isbprb+1
+          idxbeg(isbprb)=1
+          isizsb(isbprb)=1
+        endif
+10    continue
+c
+c Conquer phase
+c Adjacent subproblems are merged to larger ones by rank-one updates.
+c Paste subproblems from top down
+15    do 20 k=isbprb-1,1,-2
+        if(idxbeg(k).gt.idxbeg(k+1))then
+          i1=idxbeg(k)
+          idxbeg(k)=idxbeg(k+1)
+          idxbeg(k+1)=i1
+          i1=isizsb(k)
+          isizsb(k)=isizsb(k+1)
+          isizsb(k+1)=i1
+        endif
+c Merge subproblems k and k+1
+        call upastp(theta(idxbeg(k)),cw(1,idxbeg(k)),
+     %    cwnew(1,idxbeg(k)),absgam(idxbeg(k+1)-1),sigma(idxbeg(k+1)-1),
+     %    isizsb(k),isizsb(k+1),iwork,cwork,rwork,rwork(1,2),rwork(1,3),
+     %    eps,pi,twopi,iflag)
+        isizsb(k)=isizsb(k+1)+isizsb(k)
+        isizsb(k+1)=0
+        idxbeg(k)=min(idxbeg(k),idxbeg(k+1))
+20    continue
+      j=1
+      do 25 k=1,isbprb
+        if(isizsb(k).ne.0)then
+          isizsb(j)=isizsb(k)
+          idxbeg(j)=idxbeg(k)
+          j=j+1
+        endif
+25    continue
+      isbprb=isbprb-int(isbprb/2)
+c Exit
+      if(isbprb.eq.1)return
+c
+c Paste subproblems from bottom up
+      do 30 k = 1,isbprb-1,2
+        if(idxbeg(k).gt.idxbeg(k+1))then
+          i1=idxbeg(k)
+          idxbeg(k)=idxbeg(k+1)
+          idxbeg(k+1)=i1
+          i1=isizsb(k)
+          isizsb(k)=isizsb(k+1)
+          isizsb(k+1)=i1
+        endif
+c Merge subproblems k and k+1
+        call upastp(theta(idxbeg(k)),cw(1,idxbeg(k)),
+     %    cwnew(1,idxbeg(k)),absgam(idxbeg(k+1)-1),sigma(idxbeg(k+1)-1),
+     %    isizsb(k),isizsb(k+1),iwork,cwork,rwork,rwork(1,2),rwork(1,3),
+     %    eps,pi,twopi,iflag)
+        isizsb(k)=isizsb(k+1)+isizsb(k)
+        isizsb(k+1)=0
+30    continue
+      j=1
+      do 35 k=1,isbprb
+        if(isizsb(k).ne.0)then
+          isizsb(j)=isizsb(k)
+          idxbeg(j)=idxbeg(k)
+          j=j+1
+        endif
+35    continue
+      isbprb=isbprb-int(isbprb/2)
+c Exit
+      if(isbprb.eq.1)return
+c
+      goto 15
+      end
+c----------------------------------------------------------------------------
+      subroutine upastp(t,w,wnew,gamma,sigma,k,m,idx,z,tnew,absz2,tdif,
+     %  eps,pi,twopi,iflag)
+      complex*16 w(2,*),wnew(2,*),z(*)
+      double precision absz2(*),eps,gamma,pi,sigma,t(*),tdif(*),
+     %  tnew(*),twopi
+      integer idx(*),iflag,k,m
+c The conquer phase of the unitary divide-and-conquer algorithm. The
+c subroutine pastes partial spectral decompositions c of orders k and m
+c together, using the real Schur parameter pair (gamma, sigma), to determine
+c the partial spectral decomposition of order k+m.
+c
+c On entry:
+c
+c     k,m      integer
+c              Orders of subproblems to be pasted together.
+c
+c     t        double precision(k+m)
+c              Contains argumants of eigenvalues of the first subproblem
+c              in components 1:k and of the second subproblem in components
+c              k+1:k+m.
+c
+c     w        complex*16(2,k+m)
+c              w(1,j) contain the first and components of a normalized
+c              eigenvector corresponding to the eigenvalue exp(i*theta(j)),
+c              j=1,...,k+m. w(2,j) contains the last component of such an
+c              eigenvector.
+c
+c gamma,sigma  double precision
+c              Schur parameter gamma and corresponding complementary
+c              parameter sigma for pasting of subproblems.
+c
+c     eps      double precision
+c              Tolerance for deflation of type 1 and of type 2.
+c
+c  pi,twopi    double precision
+c              Constants assumed set in calling program.
+c
+c
+c On return:
+c
+c     t        Contains arguments of new eigenvalues of eigenproblem
+c              of order k+m in components 1:k+m.
+c
+c     w        First components of normalized eigenvectors of subproblem
+c              of order k+m are contained in w(1,j), j=1:k+m. Last
+c              components of these eigenvectors are contained in
+c              w(2,j), j=1:k+m.
+c
+c     iflag    integer
+c              iflag=0 signals normal exit. iflag=4 signals that the
+c              subroutine firot2 failed to determine zeros of the
+c              spectral function. Use a larger value of eps.
+c
+c
+c Other arguments and some local variables:
+c
+c     tnew     double precision(k+m)
+c              Temporary storage space for new eigenvalues.
+c
+c     wnew     complex*16(2,k+m)
+c              Temporary storage space for components of new eigenvectors.
+c
+c     z        complex*16(k+m)
+c              Storage space for complex weights.
+c
+c     absz2    double precision(k+m)
+c              Storage space for moduli of components of z, which
+c              are used in the calculation of the function phi.
+c
+c     tdif     double precision(k+m)
+c              Storage space used by firot2.
+c
+c     idx      integer(k+m)
+c              Index array used to order arguments of undeflated
+c              eigenvalues.
+c
+c     m0       integer
+c              Number of undeflated roots, i.e. the number of roots of
+c              the spectral function that have to be determined by
+c              subroutine firot2.
+c
+c     m2       integer
+c              Number of type 2 deflations.
+c
+c Subroutines and functions:
+c arccot, argum, dflval, defrf2, firot2 , getv1p, getv2p, idxord, restrc
+c
+c Internal variables:
+      complex*16 cgam,czero,d1,d2
+      double precision argum,dflval,eps1,eps2,omega1,omega2,phires,
+     %  rho,sig
+      integer i,i0,i1,i2,j,k1,km,m0,m2
+c
+      eps1=eps
+      eps2=eps
+      czero=dcmplx(0d0,0d0)
+      km=k+m
+      k1=k+1
+c Make sure that all arguments are in (-pi,pi]
+      call restrc(t,km,pi,twopi)
+c Calculation of vector z
+      omega1=dsqrt((1d0+gamma)/2d0)
+      omega2=-sigma/(2d0*omega1)
+      do 80 i=1,k
+        z(i)=omega1*dconjg(w(2,i))
+        w(2,i)=czero
+80    continue
+      do 90 i=k1,km
+        z(i)=omega2*dconjg(w(1,i))*dcmplx(cos(t(i)),-sin(t(i)))
+        w(1,i)=czero
+90    continue
+c Check for deflation type of 1 (small abs(z(i))) and create index
+c array idx containing indices of undeflated t(i).
+      m0=0
+      do 250 i=1,km
+        if(2d0*cdabs(z(i)).lt.eps1)then
+c Store new eigenvalue in tnew(i). Store components of new eigenvector in
+c wnew(1,i) and wnew(2,i), i=1,2,...,k+m.
+          tnew(i)=t(i)
+          z(i)=dcmplx(-2d0,0d0)
+          wnew(1,i)=w(1,i)
+          wnew(2,i)=w(2,i)
+        else
+          m0=m0+1
+          idx(m0)=i
+        endif
+250   continue
+c Sort index vector idx() so that t(idx(1))<=t(idx(2))<=...<=t(idx(m0))
+      call idxord(t,idx,m0)
+c Check for deflation of type 2 (close eigenvalues) until none occurs.
+c iflag=1 if deflation occurs during loop 350.
+c m2 is the total number of type 2 deflations.
+300   m2=0
+350   iflag=0
+      i=0
+380   if(m0.eq.1)goto 430
+      i=i+1
+      i1=idx(i)
+      i0=mod(i,m0)+1
+      i2=idx(i0)
+c Calculate reflection ({cgam,sig} Schur parameter pair, cgam complex)
+      if(dflval(z(i1),z(i2),t(i1),t(i2),cgam,sig,rho,d1,d2)
+     %  .le.eps2)then
+c Type 2 deflation criterion satisfied. Store new arguments in t() and z().
+c z(i2)=-4 is deflation type 2 flag.
+        t(i1)=argum(d1*cdabs(cgam)**2+d2*sig**2)
+        t(i2)=argum(d1*sig**2+d2*cdabs(cgam)**2)
+        z(i1)=rho*(z(i2)/cdabs(z(i2)))
+        z(i2)=dcmplx(-4d0,0d0)
+c Determine new deflated eigenvector
+        call defrf2(w(1,i1),w(1,i2),wnew(1,i2),cgam,sig)
+c Store new deflated eigenvalue
+        tnew(i2)=t(i2)
+        iflag=1
+        m0=m0-1
+        m2=m2+1
+c Update index array
+        do 420 j=i0,m0
+          idx(j)=idx(j+1)
+420     continue
+        i=i-1
+      endif
+      if(m0.ge.2.and.i.lt.m0)goto 380
+      if(iflag.ne.0)goto 350
+c End of deflation
+c Compute new eigenvalues and eigenvectors
+430   if(m0.eq.1)then
+        i1=idx(1)
+        tnew(i1)=t(i1)+pi
+        wnew(1,i1)=w(1,i1)
+        wnew(2,i1)=w(2,i1)
+        goto 850
+      endif
+c Store squared magnitudes of components of z for use in rootfinders
+      do 450 i=1,km
+        absz2(i)=cdabs(z(i))**2
+450   continue
+c Deflation of type 2 may have caused eigenvalue arguments to become
+c unsorted. Deflation of type 2 took place if m2>0. Sort index array
+c to obtain nondecreasing arguments t(idx(i)), i=1,2,...,m0, if m2>0.
+      if(m2.gt.0)call idxord(t,idx,m0)
+c Compute m0 roots of phi. Store in vector troot.
+      i=1
+c Loop 600 starts here
+600   i1=idx(i)
+      i0=mod(i,m0)+1
+      i2=idx(i0)
+      if(t(i2).lt.t(i1))t(i2)=t(i2)+twopi
+c Compute new eigenvalue argument tnew(i1) between t(i1) and t(i2)
+c and store first and last components of normalized eigenvectors
+c in wnew(1,i1) and wnew(2,i1), respectively.
+      call firot2(tnew(i1),phires,t(i1),t(i2),t,absz2,tdif,z,w,
+     %  wnew(1,i1),km,iflag)
+      if(iflag.ne.0)then
+        iflag=4
+        return
+      endif
+      i=i+1
+690   if(i.le.m0)goto 600
+c Firoot loop 600 ends here
+      if(t(idx(1)).gt.pi)t(idx(1))=t(idx(1))-twopi
+c First and last components of all eigenvectors have been computed. Store
+c them in w and store new eigenvalues in t().
+850   do 900 i=1,km
+        t(i)=tnew(i)
+        w(1,i)=wnew(1,i)
+        w(2,i)=wnew(2,i)
+900   continue
+c
+      return
+      end
+c----------------------------------------------------------------------------
+c Auxiliary subroutines
+c----------------------------------------------------------------------------
+      double precision function arccot(t)
+      double precision t
+c -pi/2<=arccot(t)<=pi/2 defined for t<>0
+      arccot=dsign(1d0,t)*datan2(1d0,dabs(t))
+      return
+      end
+c----------------------------------------------------------------------------
+      double precision function argum(z)
+      complex*16 z
+c Function computes argument in (-pi,pi] of complex number z
+      if(dimag(z).eq.0d0)then
+        if(dble(z).ge.0d0)then
+          argum=0d0
+        else
+          argum=4d0*datan(1d0)
+        endif
+      else
+        argum=dimag(cdlog(z))
+      endif
+c
+      return
+      end
+c----------------------------------------------------------------------------
+      subroutine defrf2(w1,w2,wnew,cgam,sig)
+      complex*16 cgam,wnew(*),w1(*),w2(*)
+      double precision sig
+c Performs reflection determined by cgam,sig on first and last components of
+c old eigenvectors (stored in w1(*),w2(*)) to determine the corresponding
+c components of new deflated eigenvector (stored in wnew(*)) and of modified
+c old eigenvector (stored in w1(*)) corresponding to undeflated eigenvalue.
+      wnew(1)=sig*w1(1)+cgam*w2(1)
+      wnew(2)=sig*w1(2)+cgam*w2(2)
+c
+      w1(1)=-dconjg(cgam)*w1(1)+sig*w2(1)
+      w1(2)=-dconjg(cgam)*w1(2)+sig*w2(2)
+      return
+      end
+c----------------------------------------------------------------------------
+      double precision function dflval(z1,z2,t1,t2,cgam,sig,rho,d1,d2)
+      complex*16 z1,z2,cgam,d1,d2
+      double precision t1,t2,sig,rho
+c Calculate reflection ({cgam,sig} Schur parameter pair, cgam complex)
+c and return value for checking for deflation of type two.
+      rho=dsqrt(cdabs(z1)**2+cdabs(z2)**2)
+      cgam=-dconjg(z1)*z2/(cdabs(z2)*rho)
+      sig=cdabs(z2)/rho
+      d1=dcmplx(dcos(t1),dsin(t1))
+      d2=dcmplx(dcos(t2),dsin(t2))
+      dflval=sig*cdabs(cgam*(d1-d2))
+c
+      return
+      end
+c---------------------------------------------------------------------------
+      subroutine firot2(root,phires,tleft,tright,t,absz2,tdif,z,w,wnew,
+     %  n,iflag)
+      double precision absz2(*),arccot,dphi,dtnew,dtold,phinew,phiold,
+     %  phires,rho,root,sig,t(*),tendpt,tleft,tnew,tright,tdif(*)
+      complex*16 w(2,*),wnew(*),z(*)
+      integer icount,iflag,j,n
+      logical right
+c Compute zero of phi in interval (tleft,tright). On entry the vector t
+c contains the arguments of eigenvalues of the subproblems to be merged.
+c The vector absz2 contains the squared magnitude of the first and last
+c component of the normalized eigenvectors of the subproblems to be solved
+c modified by rotation and deflation. On exit parameter root contains an
+c approximation of the zero of phi in (tleft,tright) if flag iflag=0 and
+c then phires is the value (residual) of phi at root. If iflag<>0 then
+c firot2 has failed to determine all zeros of the spectral function. This
+c results in an error exit from udcp with info=4. The subroutines phivl
+c and phivl2 are used for the evaluation of phi and its derivative. firot2
+c works with differences between poles and the end point tendpt of the
+c interval (tleft,tright) closest to the root: tdif(j)=t(j)-tendpt. The
+c current approximation tnew of the desired root is given by tnew=
+c tendpt+dtnew. On return, the first and last components of a normalized
+c eigenvector associated with the computed root is stored in wnew. These
+c components are computed by the subroutines getv1p and getv2p.
+      iflag=0
+      icount=0
+      tnew=(tleft+tright)/2d0
+      if(tright-tnew.le.0d0)then
+        iflag=1
+        return
+      endif
+      if(tnew-tleft.le.0d0)then
+        iflag=-1
+        return
+      endif
+      call phivl(phinew,dphi,t,absz2,n,tnew)
+c Check if tnew=root
+      if(phinew.eq.0d0)then
+        root=tnew
+        phires=phinew
+        call getv1p(root,t,z,absz2,n,w,wnew)
+        return
+      endif
+      if(phinew.lt.0d0)then
+        tendpt=tright
+        right=.true.
+      else
+        tendpt=tleft
+        right=.false.
+      endif
+c    Compute difference vector tdif(j)=t(j)-tendpt and dtnew=tnew-tendpt
+      do 5 j=1,n
+         tdif(j)=t(j)-tendpt
+5     continue
+      dtnew=tnew-tendpt
+c Loop for computing root
+10    icount=icount+1
+      rho=phinew-dphi*sin(-dtnew)
+      sig=2d0*dphi*sin(dtnew/2d0)**2
+      dtold=dtnew
+      phiold=phinew
+      dtnew=2d0*arccot(rho/sig)
+c If tnew is past an end point, set error flag
+      if(dtnew*dtold.lt.0d0)then
+        dtnew=0d0
+        root=tendpt
+        iflag=-1
+        if(right)iflag=1
+        return
+      endif
+c If tnew is at pole, set error flag
+      if(abs(dtnew).le.0d0)then
+        root=tendpt+dtnew
+        phires=phinew
+        iflag=-1
+        if(right)iflag=1
+        return
+      endif
+c Check if tnew is a new point; if not, then terminate (equal iterates)
+      if(dtnew.eq.dtold)then
+        root=tendpt+dtold
+        phires=phiold
+        call getv2p(dtold,tdif,z,absz2,n,w,wnew)
+        return
+      endif
+c
+      call phivl2(phinew,dphi,tdif,absz2,n,dtnew)
+20    if(phinew.eq.0d0)then
+        root=tendpt+dtnew
+        phires=phinew
+        call getv2p(dtnew,tdif,z,absz2,n,w,wnew)
+        return
+      endif
+c Terminate if root was overshot
+      if(phinew*phiold.lt.0d0)then
+        if(abs(phinew).gt.abs(phiold))then
+          root=tendpt+dtold
+          phires=phiold
+          call getv2p(dtold,tdif,z,absz2,n,w,wnew)
+        else
+          root=tendpt+dtnew
+          phires=phinew
+          call getv2p(dtnew,tdif,z,absz2,n,w,wnew)
+        endif
+        return
+      endif
+      if((right.and.dtnew.lt.dtold).or.(.not.right.and.dtnew.gt.dtold))
+     %  then
+        root=tendpt+dtold
+        phires=phiold
+        call getv2p(dtold,tdif,z,absz2,n,w,wnew)
+        return
+      endif
+      if(abs(phinew).gt.abs(phiold))then
+        root=tendpt+dtold
+        phires=phiold
+        call getv2p(dtold,tdif,z,absz2,n,w,wnew)
+        return
+      endif
+      if(icount.lt.25)goto 10
+c
+      root=tendpt+dtnew
+      phires=phinew
+      call getv2p(dtnew,tdif,z,absz2,n,w,wnew)
+      return
+      end
+c----------------------------------------------------------------------------
+      subroutine getv1p(theta,t,z,absz2,km,w,wnew)
+      double precision absz2(*),delta,phi,t(*),theta
+      complex*16 cfact,czero,d1,w(2,*),wnew(2),z(*)
+      integer j,km
+c Compute first and last components of normalized eigenvector associated
+c with eigenvalue exp(i*theta) by using corresponding components of
+c eigenvectors for subproblems stored in w. Store new components in
+c wnew(j,i1) for j=1,2.
+      czero=dcmplx(0d0,0d0)
+      d1=dcmplx(dcos(theta),dsin(theta))
+      wnew(1)=czero
+      wnew(2)=czero
+      do 10 j=1,km
+        if(absz2(j).le.1d0)then
+          cfact=z(j)/(1d0-d1*dcmplx(dcos(t(j)),-dsin(t(j))))
+          wnew(1)=wnew(1)+w(1,j)*cfact
+          wnew(2)=wnew(2)+w(2,j)*cfact
+        endif
+10    continue
+c Normalize wnew
+      call phivl(phi,delta,t,absz2,km,theta)
+      delta=dsqrt(delta/2d0)
+      wnew(1)=wnew(1)/delta
+      wnew(2)=wnew(2)/delta
+c
+      return
+      end
+c-------------------------------------------------------------------------------
+      subroutine getv2p(dt,tdif,z,absz2,km,w,wnew)
+      double precision absz2(*),delta,dphi,dt,phi,tdif(*)
+      complex*16 cfact,czero,w(2,*),wnew(2),z(*)
+      integer j,km
+c Compute first and last components of normalized eigenvector associated
+c with eigenvalue exp(i*theta) by using corresponding components of
+c eigenvectors for subproblems stored in w. Store new components in
+c wnew(j,i1) for j=1,2.
+      czero=dcmplx(0d0,0d0)
+      wnew(1)=czero
+      wnew(2)=czero
+      do 10 j=1,km
+        if(absz2(j).le.1d0)then
+          cfact=z(j)/(1d0-dcmplx(dcos(dt-tdif(j)),dsin(dt-tdif(j))))
+          wnew(1)=wnew(1)+w(1,j)*cfact
+          wnew(2)=wnew(2)+w(2,j)*cfact
+        endif
+10    continue
+c Normalize wnew
+      call phivl2(phi,dphi,tdif,absz2,km,dt)
+      delta=dsqrt(dphi/2d0)
+      wnew(1)=wnew(1)/delta
+      wnew(2)=wnew(2)/delta
+c
+      return
+      end
+c-----------------------------------------------------------------------
+      subroutine idxord(t,idx,m0)
+      double precision t(*)
+      integer i,idx(*),itemp,j,m0
+      logical nochg
+c Reorders index array idx corresponding to increasing values of t
+      do 20 i=1,m0-1
+        nochg=.true.
+        do 10 j=1,m0-i
+          if(t(idx(j)).gt.t(idx(j+1)))then
+            itemp=idx(j)
+            idx(j)=idx(j+1)
+            idx(j+1)=itemp
+            nochg=.false.
+          endif
+10      continue
+        if(nochg)return
+20    continue
+      return
+      end
+c---------------------------------------------------------------------------
+      subroutine initev(x,y,a,b,sig)
+      complex*16 x(2),y(2),a,ctemp
+      double precision b,sig,length
+      integer i
+c Calculation of eigenvectors of two-by-two subproblems
+      if(b.eq.0d0.and.sig.eq.0d0)then
+        x(1)=dcmplx(0d0,0d0)
+        x(2)=dcmplx(1d0,0d0)
+      else
+        if(b.ge.0d0)then
+c Eigenvector for second eigenvalue
+          x(1)=dcmplx(1d0,0d0)
+          x(2)=dcmplx(0d0,1d0)*dconjg(a)*sig/(b+dsqrt(b**2+sig**2))
+        else
+c Eigenvector for first eigenvalue
+          x(1)=dcmplx(1d0,0d0)
+          x(2)=dcmplx(0d0,-1d0)*dconjg(a)*sig/(-b+dsqrt(b**2+sig**2))
+        endif
+      endif
+c Normalize eigenvector
+      length=dsqrt(cdabs(x(1))**2+cdabs(x(2))**2)
+      x(1)=x(1)/length
+      x(2)=x(2)/length
+c Eigenvector for exp(i*theta(2)), i=sqrt(-1). Eigenvector orthogonal
+c to vector cw(*,1).
+      y(1)=-dconjg(x(2))
+      y(2)=dconjg(x(1))
+      if(b.ge.0d0)then
+c Swap eigenvectors
+        do 10 i=1,2
+          ctemp=x(i)
+          x(i)=y(i)
+          y(i)=ctemp
+10      continue
+      endif
+c
+      return
+      end
+c---------------------------------------------------------------------------
+      subroutine phivl(phi,dphi,t,absz2,n,arg)
+      double precision absz2(*),arg,c,dphi,phi,s,t(*),tmp,zsq
+      integer j,n
+c Evaluate phi and phi' at arg.
+      phi=0d0
+      dphi=0d0
+      do 10 j=1,n
+        zsq=absz2(j)
+        if(zsq.le.1d0)then
+          tmp=(t(j)-arg)/2d0
+          c=dcos(tmp)
+          s=dsin(tmp)
+          phi=phi+zsq*c/s
+          dphi=dphi+0.5d0*zsq/(s*s)
+        endif
+10    continue
+      return
+      end
+c---------------------------------------------------------------------------
+      subroutine phivl2(phi,dphi,tdif,absz2,n,dt)
+      double precision absz2(*),c,dphi,dt,phi,s,tdif(*),tmp,zsq
+      integer j,n
+c Evaluate phi and phi' at arg.
+      phi=0d0
+      dphi=0d0
+      do 10 j=1,n
+        zsq=absz2(j)
+        if(zsq.le.1d0)then
+          tmp=(tdif(j)-dt)/2d0
+          c=dcos(tmp)
+          s=dsin(tmp)
+          phi=phi+zsq*c/s
+          dphi=dphi+0.5d0*zsq/(s*s)
+        endif
+10    continue
+      return
+      end
+c---------------------------------------------------------------------------
+      subroutine restrc(t,n,pi,twopi)
+      double precision t(*),pi,twopi
+      integer j,n
+c Adds multiple of twopi if necessary to ensure that components of
+c t(*) are in (-pi,pi].
+      do 5 j=1,n
+3       if(t(j).le.-pi)then
+          t(j)=t(j)+twopi
+          goto 3
+        else
+4         if(t(j).gt.pi)then
+            t(j)=t(j)-twopi
+            goto 4
+          endif
+        endif
+5     continue
+      return
+      end
+
+C*** drdudcp.f ---------------------------------------------------------
+
+c DOUBLE PRECISION VERSION
+c Driver for of udcp
+      parameter(nn=10)
+      complex*16 cgamma(nn),cw(2,nn)
+      double precision a,arg,b,c,d,eps,pi,rand,rho,sigma(nn),
+     %  theta(nn),twopi,wrk(10*nn)
+      integer info,iseed,iwrk(3*nn),j,n
+c Initialization
+      pi=4d0*datan(1d0)
+      twopi=2d0*pi
+      iseed=20
+      n=nn
+c eps is deflation tolerance for udcp
+      eps=1d-14
+      a=0d0
+      b=360d0
+      c=0d0
+      d=1d0
+      do 20 j=1,n-1
+        arg=(a+(b-a)*rand(iseed))*pi/18d1
+        rho=c+(d-c)*rand(iseed)
+        cgamma(j)=rho*dcmplx(dcos(arg),dsin(arg))
+        sigma(j)=dsqrt((1d0-rho)*(1d0+rho))
+20    continue
+      arg=(a+(b-a)*rand(iseed))*pi/18d1
+      cgamma(n)=dcmplx(dcos(arg),dsin(arg))
+      sigma(n)=0d0
+c
+      call udcp(n,cgamma,sigma,eps,cw,theta,info,wrk,iwrk)
+      if(info.ne.0)write(6,*)'WARNING: info from udcp = ',info
+      write(6,*)'eigenvalue arguments:',(theta(j),j=1,n)
+c
+      stop
+      end
+c--------------------------------------------------------------- rand
+      double precision function rand(iseed)
+      integer iseed
+c
+c
+c     function rand
+c
+c     Rand is the portable random number generator of L. Schrage.
+c
+c     The generator is full cycle, that is, every integer from
+c     1 to 2**31 - 2 is generated exactly once in the cycle.
+c     It is completely described in TOMS 5(1979),132-138.
+c
+c     The function statement is
+c
+c       real function rand(iseed)
+c
+c     where
+c
+c       iseed is a positive integer variable which specifies
+c         the seed to the random number generator. Given the
+c         input seed, rand returns a random number in the
+c         open interval (0,1). On output the seed is updated.
+c
+c     modified by d.c. sorensen october 1981
+c     Argonne National Laboratory. MINPACK Project. March 1981.
+c
+c
+      integer a,b15,b16,fhi,k,leftlo,p,xhi,xalo
+      real c,pt5,two
+c
+c     Set a = 7**5, b15 = 2**15, b16 = 2**16, p = 2**31-1, c = 1/p.
+c
+      data a/16807/, b15/32768/, b16/65536/, p/2147483647/
+      data c/4.656612875e-10/
+      data pt5/0.5/, two/2.0/
+c
+c     There are 8 steps in rand.
+c
+c     1. Get 15 hi order bits of iseed.
+c     2. Get 16 lo bits of iseed and form lo product.
+c     3. Get 15 hi order bits of lo product.
+c     4. Form the 31 highest bits of full product.
+c     5. Get overflo past 31st bit of full product.
+c     6. Assemble all the parts and pre-substract p.
+c        The parentheses are essential.
+c     7. Add p back if necessary.
+c     8. Multiply by 1/(2**31-1).
+c
+      xhi = iseed/b16
+      xalo = (iseed - xhi*b16)*a
+      leftlo = xalo/b16
+      fhi = xhi*a + leftlo
+      k = fhi/b15
+      iseed = (((xalo-leftlo*b16)-p) + (fhi-k*b15)*b16) + k
+      if (iseed .lt. 0) iseed = iseed + p
+      rand = dble(c*float(iseed))
+c
+c     Last card of function rand.
+c
+      return
+      end

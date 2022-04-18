@@ -1,0 +1,324 @@
+       User's Guide for TOMS Algorithm XXX: Airy Functions
+
+                         Bruce Fabijonas
+                  Southern Methodist University
+                          bfabi@smu.edu
+
+                          Introduction
+
+This guide is a companion to
+
+   B.R. Fabijonas.  Algorithm XXX: Airy Functions.  ACM Transactions 
+   on Mathematical Software Vol(No) xx-xx, 2004,
+
+based on the methods explained in 
+
+   B.R. Fabijonas, D.W. Lozier and F.W.J. Olver.  Computation of 
+   Complex Airy functions and zeros using asymptotics and the 
+   differential equation.  ACM Transactions on Mathematical Software
+   Vol(No) xx-xx, 2004.
+
+Installation and usage instructions for the software described in
+this paper are given here.
+
+The functions computed are the Airy functions Ai(z), Ai(x), Bi(x) 
+where z is complex and x is real, the derivatives of these func-
+tions, and the auxiliary modulus and phase functions when x is
+negative.  Also, the zeros of Ai(x), Ai'(x), Bi(x), Bi'(x), 
+Bi(z) and Bi'(z), are computed.
+
+The programs, written in Fortran-90, are designed to accommodate
+precisions up to 64 decimals.  Single and double precision are
+obtained automatically by compiling the package as distributed.
+Quadruple precision is available for compilers that support it by
+"uncommenting" certain well-marked sections of code.  
+
+This package has been tested with the following compilers:
+  Compaq Fortran Compiler V5.5-1877-48BBF
+  GNU Fortran 95(GCC 3.5-tree-ssa 20021226 (G95))
+  NAG Fortran 95 Release 5.0(298)
+
+                              Files
+
+The distributed files are
+
+   airy_README         this document
+   airy_functions.f90  TOMS Algorithm XXX
+   airy_head           INCLUDE file
+   airy_parameters     INCLUDE file
+   airy_real           INCLUDE file
+   airy_complex        INCLUDE file
+   test_install.f90    program to test installation
+   parameter_info.f90  program to return parameters specific
+                       to the compiler and computer being used
+   sample_airy.f90     program to demonstrate versatility
+
+When the TOMS algorithm is compiled, for example by the command
+
+   f90 -c airy_functions.f90
+
+the resulting files are
+
+   airy_functions.o
+   airy_functions_real_single.mod
+   airy_functions_real_double.mod
+   airy_functions_complex_single.mod
+   airy_functions_complex_double.mod
+
+These may be gathered together into a library, for example by the
+command
+
+   ar crv airy_lib.a *.o *.mod
+
+                      Main Program Example
+
+A program foo.f90 using any or all of these modules must include
+the corresponding USE statements, e.g.
+
+   program foo
+   use airy_functions_real_single
+
+and may be compiled with the appropriate object files or li-
+brary, for example by
+
+   f90 -o foo foo.f90 airy_functions.o
+
+or
+
+   f90 -o foo foo.f90 airy_lib.a
+
+Fortran-90's INTERFACE capability has been used in the coding of
+airy_functions.f90.  This allows the same subroutine call to be
+used with different Fortran-90 KINDs and TYPEs.  For example,
+
+   program foo
+   use airy_functions_real_single
+   use airy_functions_complex_double
+   real(kind(0.0e0)) xr, air, dair
+   complex(kind(0.0d0)) xc, aic, daic
+   integer ierr, ierc
+   call airy_ai( xr, air, dair, ierr )
+   call airy_ai( xc, aic, daic, ierc )
+   end program foo
+
+returns the real-valued single precision Airy function Ai(xr) in
+the variable air, its derivative Ai'(xr) in the variable dair,
+the complex-valued double precision Airy function Ai(xc) in the
+variable aic, and its derivative Ai'(xc) in the variable daic.
+
+                  Usage of the Real Subroutines
+
+The single and double precision real subroutines are contained in
+the modules airy_functions_real_single.mod and airy_functions_re-
+al_double.mod, respectively.  The calling Fortran 90 program must
+contain an appropriate USE statement; see Main Program Example
+above.
+
+The subroutines are
+
+   airy_ai( x, ai, dai, ierr, modify_switch= )
+   airy_bi( x, bi, dbi, ierr, modify_switch= )
+   airy_aux( x, m_mod, theta, ierr, n_mod =, phi= )
+   airy_ai_zero( n, ai_zero, ierr, ai_assoc=, dai_zero=, dai_assoc= )
+   airy_bi_zero( n, bi_zero, ierr, bi_assoc=, dbi_zero=, dbi_assoc= )
+   airy_info( radius, max_step_size=, n_terms_taylor=,
+              n_terms_asymp=, n_partitions= )
+   airy_aux_info( radius, max_step_size=, n_terms_taylor=, n_terms_asympc,
+                  n_terms_asymp_phase=, n_terms_asymp_mod=, n_partitions= )
+
+where
+
+   x        argument
+            TYPE(REAL), INTENT(IN),  KIND an allowable real kind
+   ai, dai, bi, dbi
+            s(x)*Ai(x), s(x)*Ai'(x), s(x)*Bi(x), s(x)*Bi'(x) where
+            s(x) is determined by MODIFY_SWITCH (described below)
+            TYPE(REAL), INTENT(OUT), KIND same as x
+   ierr     error flag (described below)
+            TYPE(INTEGER), INTENT(OUT)
+   modify_switch
+            default value: .FALSE.
+            if .FALSE., s(x) = 1
+            if .TRUE. and x>0, s(x) = exp((2/3)*x^(3/2)) for airy_ai
+            and s(x) = exp((-2/3)*x^(3/2)) for airy_bi
+            if .TRUE. and x<=0, ierr is set to -1
+            TYPE(LOGICAL), INTENT(IN), OPTIONAL
+   m_mod    if x<=0, modulus function M(x) = sqrt(Ai^2(x)+Bi^2(x))
+            if x>0, ierr is set to -2
+            TYPE(REAL), INTENT(OUT)
+   theta    if x<=0, phase function theta(x) = arctan(Ai(x)/Bi(x))
+            if x>0, ierr is set to -2
+            TYPE(REAL), INTENT(OUT)
+   n_mod    if x<=0, modulus function N(x) = sqrt((Ai'(x))^2+(Bi'(x))^2)
+            if x>0, ierr is set to -2
+            TYPE(REAL), INTENT(OUT), OPTIONAL
+   phi      if x<=0, phase function phi(x) = arctan(Ai'(x)/Bi'(x))
+            if x>0, ierr is set to -2
+            TYPE(REAL), INTENT(OUT), OPTIONAL
+   n        if n>=1, the index of the desired zero
+            if n<=0, ierr is set to -3
+            TYPE(INTEGER), INTENT(IN)
+   ai_zero  if a scalar, the nth zero of Ai(x)
+            TYPE(REAL), INTENT(OUT)
+            if a vector, the nth through the (n+k-1)st zeros of Ai(x)
+            TYPE(REAL), DIMENSION(k), INTENT(OUT)
+   dai_zero
+            if a scalar, the nth zero of Ai'(x)
+            TYPE(REAL), INTENT(OUT)
+            if a vector, the nth through the (n+k-1)st zeros of Ai'(x)
+            TYPE(REAL), DIMENSION(k), INTENT(OUT)
+   ai_assoc
+            if a scalar, Ai'(a_n) where a_n is the nth zero of Ai(x)
+            TYPE(REAL), INTENT(OUT)
+            if a vector, values of Ai'(a) at zeros n to n+k-1 of Ai(x)
+            TYPE(REAL), DIMENSION(k), INTENT(OUT)
+   dai_assoc
+            if a scalar, Ai(a_n) where a_n is the nth zero of Ai'(x)
+            TYPE(REAL), INTENT(OUT)
+            if a vector, values of Ai(a) at zeros n to n+k-1 of Ai'(x)
+            TYPE(REAL), DIMENSION(k), INTENT(OUT)
+   bi_zero, dbi_zero, bi_assoc, dbi_assoc
+            analogous to ai_zero, dai_zero, ai_assoc, dai_assoc for Bi(x)
+   radius   radius of the circle separating the integration and asymptotic
+            expansion regions of the mathematical algorithm
+            TYPE(REAL), INTENT(OUT)
+   max_step_size
+            maximum distance between partition points on an integration ray
+            TYPE(REAL), INTENT(OUT), OPTIONAL
+   n_terms_taylor
+            number of terms in the Taylor series integration
+            TYPE(INTEGER), INTENT(OUT), OPTIONAL
+   n_terms_asymp
+            number of asymptotic expansion terms for the Airy functions
+            TYPE(INTEGER), INTENT(OUT), OPTIONAL
+   n_terms_asymp_phase
+            number of asymptotic expansion terms for the phase functions
+            TYPE(INTEGER), INTENT(OUT), OPTIONAL
+   n_terms_asymp_mod
+            number of asymptotic expansion terms for the modulus functions
+            TYPE(INTEGER), INTENT(OUT), OPTIONAL
+   n_partitions
+            number of partitions used in the integration routine
+            TYPE(INTEGER), INTENT(OUT), OPTIONAL
+
+The arguments of airy_info are dynamically determined upon
+the first call to any of the subroutines and are here for diag-
+nostic purposes only.
+
+                Usage of the Complex Subroutines
+
+The single and double precision complex subroutines are contained
+in the modules airy_functions_complex_single.mod and airy_func-
+tions_complex_double.mod, respectively.  The calling Fortran 90
+program must contain an appropriate USE statement; see Main Pro-
+gram Example above.
+
+The subroutines are
+
+   airy_ai( z, ai, dai, ierr, argument_switch=, modify_switch= )
+   airy_ai( r, alpha, ai, dai, ierr, argument_switch=, modify_switch= )
+   airy_bi_zero( n, bi_zero, ierr, bi_assoc=, dbi_zero=, dbi_assoc= )
+
+where
+
+   z        argument (see ARGUMENT_SWITCH below)
+            TYPE(COMPLEX), INTENT(IN), KIND an allowable complex kind
+   ai, dai
+            if a scalar, s(z)*Ai(z), s(z)*Ai'(z) where s(z) is 
+            determined by MODIFY_SWITCH (described below)
+            TYPE(COMPLEX), INTENT(OUT), KIND same as z
+            if a vector, s(z)*Ai(z), s(z)*Ai'(z) where s(z) is 
+            determined by MODIFY_SWITCH (described below) 
+            note:  ARGUMENT_SWITCH must be set to .TRUE.
+            TYPE(COMPLEX), DIMENSION(k), INTENT(OUT), 
+              KIND and SIZE the same as r (see below) 
+   ierr     error flag (described below)
+            TYPE(INTEGER), INTENT(OUT)
+   argument_switch
+            default value: .FALSE.
+            if .FALSE., z = (x,y) = x+i*y
+            if .TRUE. and x>=0 and -pi<y<=pi, z = (x,y) = x*exp(i*y)
+            if .TRUE. and above not satisfied, ierr is set to -10
+            note: returned function values are always in rectangular form
+            TYPE(LOGICAL), INTENT(IN), OPTIONAL
+   modify_switch
+            default value: .FALSE.
+            if .FALSE., s(z) = 1
+            if .TRUE., s(z) = exp((2/3)*z^(3/2)) for airy_ai
+            TYPE(LOGICAL), INTENT(IN), OPTIONAL
+   r        vector of argument moduli which lie along a straight line 
+            segment eminating from the origin 
+            note:  ARGUMENT_SWITCH must be set to .TRUE.
+            TYPE(REAL), DIMENSION(k), INTENT(IN), KIND and SIZE the same
+            as ai(z) and dai(z)
+   alpha    the phase of the straight line segment along which a 
+            vector of fuction and derivative values are desired 
+            note:  ARGUMENT_SWITCH must be set to .TRUE.
+            TYPE(REAL), INTENT(IN), KIND the same as r, ai, and dai
+   n        if n>=1, the index of the desired complex zero
+            if n<=0, ierr is set to -3
+            TYPE(INTEGER), INTENT(IN)
+   bi_zero  if a scalar, nth complex zero of Bi(x) in the upper half-plane
+            TYPE(COMPLEX), INTENT(OUT)
+            if a vector, the nth through the (n+k-1)st zeros of Bi(x)
+            TYPE(COMPLEX), DIMENSION(k), INTENT(OUT)
+   dbi_zero
+            if a scalar, the nth complex zero of Bi'(x)
+            TYPE(COMPLEX), INTENT(OUT)
+            if a vector, the nth through the (n+k-1)st zeros of Bi'(x)
+            TYPE(COMPLEX), DIMENSION(k), INTENT(OUT)
+   bi_assoc
+            if a scalar, Bi'(b_n) where b_n is the nth complex zero of Bi(x)
+            TYPE(COMPLEX), INTENT(OUT)
+            if a vector, the values of Bi'(a) at zeros n to n+k-1 of Bi(x)
+            TYPE(COMPLEX), DIMENSION(k), INTENT(OUT)
+   dbi_assoc
+            if a scalar, Bi(b_n) where b_n is the nth complex zero of Bi'(x)
+            TYPE(COMPLEX), INTENT(OUT)
+            if a vector, the values of Bi(a) at zeros n to n+k-1 of Bi'(x)
+            TYPE(COMPLEX), DIMENSION(k), INTENT(OUT)
+
+Since Ai(z) and Ai'(z) have no zeros in the complex plane other
+than those that lie on the negative real axis, calling the sub-
+routine airy_ai_zero with complex arguments is an error that results in
+ierr being set to -3.
+
+                   Error and Diagnostic Flags
+
+Error flags are negative integers.  They indicate that a computa-
+tion was requested that falls outside the valid range of the
+software or that invalid input was provided.  Returned values are
+likely to be greatly in error.  Error flags are listed below and
+noted also in the Subroutine Usage sections above.
+
+Diagnostic flags are positive integers.  They indicate that a
+special algorithmic step was taken, often to avoid vagaries of
+floating-point arithmetic such as underflow or overflow.  Never-
+theless, the computed values retain full accuracy.
+
+The flags are
+
+   ierr =-50   the largest zero requested exceeds the largest computable
+               zero; the noncomputable ones were returned as zero
+   ierr =-10   z = r*exp(i*alpha) was provided in polar form with r < 0
+               and/or abs(alpha) > pi
+   ierr = -7   the real part of (2/3)*z^(3/2) was too large in the region
+               where the function is exponentially small; function values
+               were set to zero to avoid underflow
+   ierr = -6   the real part of (2/3)*z^(3/2) was too large in the region
+               where the function is exponentially large;  function values
+               were set to zero to avoid overflow
+   ierr = -4   machine's largest integer was exceeded
+   ierr = -3   zeros are given for n => 1 only; or Ai(z) has no complex
+               zeros
+   ierr = -2   modulus and phase functions are generated for x real and
+               x <= 0 only
+   ierr = -1   in the real subroutines, scaling is for x > 0 only.
+   ierr =  0   normal computation, no errors or diagnostics
+
+The vectorized subroutine airy_ai allows the user to fix a phase angle alpha
+along which Ai(z), Ai'(z) are wanted at a sequence of points z =
+r*exp(i*alpha).  When applicable, the vectorized version is much faster than 
+the linear version.  Note that ARGUMENT_SWITCH must be set to TRUE, and 
+that r, ai, dai must be vectors of the same size
+

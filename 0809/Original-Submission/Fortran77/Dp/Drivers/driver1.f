@@ -1,0 +1,193 @@
+c***********************************************************************
+c
+c                       SIMPLE DRIVER FOR PREQN
+c
+c                         * * * * * * * * * *
+c
+c     This driver illustrates the use of the PREQN package. It solves
+c     a sequence of three linear systems
+c
+c                   A x = b_i,   i=1,2,3,
+c
+c     using the preconditioned conjugate gradient (PCG) method.
+c     The coefficient matrix A is taken from:
+c
+c        JL Morales and J Nocedal, ``Automatic Preconditioning by 
+c        Limited Memory Quasi-Newton Updating''. Technical Report 
+c        OTC 97/08. Optimization Technology Center. Argonne National
+c        Laboratory, Northwestern University. 
+c
+c     The right hand side vectors are defined as follows. The first 
+c     vector, b_1, is given by 
+c  
+c                 b_1(1) = b_1(n) = 0,
+c
+c                 b_1(j) = [(j-1)/n-2]*100, j=2,...,n-1.
+c
+c     The vector b_2 is obtained by applying a 5% perturbation, with
+c     random sign, to each of the components of b_1. The last vector,
+c     b_3, is constructed from b_2 by applying the same perturbation.
+c
+c     The first system  Ax = b_1 is solved with the unpreconditioned 
+c     conjugate gradient method. This run is used to collect a set of  
+c     pairs (s_k,y_k) that define a quasi-Newton preconditioner H. 
+c     We solve the two remaining systems, Ax = b_2,  Ax = b_3, with
+c     the PCG method using H as preconditioner. 
+c
+c     We allow a maximum of m=12 correction pairs in the definition of
+c     the preconditioner and make use of the uniform sampling technique 
+c     (IOP=1). 
+c
+c     The procedure used to solve the sequence of problems (1) can be 
+c     summarized as follows:
+c
+c     o   generate A, b_1, x_0 <--- 0
+c     o   set parameters 
+c     o   for iprob=1,...,3 do
+c             if iprob=2 then BUILD = .TRUE.
+c             else  BUILD = .FALSE.
+c             end if
+c             call pcg ( ... iprob, a, x, b_iprob, BUILD, ... )
+c             reset x to x0
+c             get the new rhs b
+c         end for    
+c
+c     where pcg is an implementation of the PCG method. See the
+c     documentation of pcg.f for a description of the parameters
+c     in the calling sequence. The logical variable BUILD determines
+c     if the old preconditioner should be removed and replaced by
+c     the one generated during the previous PCG iteration.
+c
+c     If the user wishes to build a new preconditioner after the 
+c     solution of each problem, it is only necessary to change the 
+c     if-block above by
+c
+c            if iprob >1  then BUILD=.TRUE
+c
+c
+c     The files required by this driver (driver.f) are:
+c
+c        matr50.dat   file containing a 50x50 matrix in dense format
+c        pcg.f        an implementation of the CG method which calls
+c                     PREQN.
+c        extras.f     auxiliary routines required by driver.f and pcg.f
+c                     to deal with A in sparse format. This file also
+c                     contains routines to generate the right hand
+c                     side vectors
+c        preqn.f      is the PREQN package for the automatic 
+c                     computation of quasi-Newton preconditioners
+c        blas.f       a subset of the blas routines
+c
+c**********************************************************************
+c
+
+      integer  nax, max
+      parameter(nax = 50, max = 50)
+      integer  n, nz, jptra(nax+1), indra(nax*10), iwp(2*max + 3), i,
+     *         j, m, iop, liwp, lwp, info, maxit, iout, L, mssg
+      double   precision adf(nax*nax), b(nax), x(nax), a(nax*10), 
+     *         adiag(nax), w(6*nax), wp( (max+1)*(4*nax+2) + 1 ),
+     *         tolcg, anorm, dnorma, zero
+      logical  build
+      data     zero /0.0d0/
+c
+c     Input file
+c
+c     open( 8,  file = 'matr50.dat', status = 'unknown' )
+c
+c     Read A in dense format. 
+c
+      read(5,*) n
+      read(5,*)( adf(i), i=1, n*n )
+c     close (8)
+c
+c     Construct the matrix in sparse format, compute ||A||, construct 
+c     b_1, and define the initial point to be the zero vector.
+c
+      call sparse ( adf, a, n, nz, adiag, jptra, indra  )
+      anorm = dnorma ( n, a, adiag, jptra, indra, w )
+      call rhsg ( n, b )
+c
+      do 10 j=1, n
+         x(j) = zero
+ 10   continue 
+c  
+c------------------
+c     Set the parameters for pcg.f and the PREQN package
+c
+c     L      number of linear systems to be solved
+c     m      maximum number of pairs in the preconditioner
+c     iop    specifies the saving strategy
+c     lwp    length of real workspace for the preconditioner
+c     liwp   length of integer workspace for the preconditioner
+c-------------------
+c
+      L     = 3
+      m     = 12
+      iop   = 1
+      lwp   = (m+1)*(4*n+2) + 1
+      liwp  = 2*m + 30
+c
+c-------------------
+c
+c     build  must be set initially to .false. 
+c     maxit  is the maximum number of PCG iterations
+c     tolcg  is the stopping tolerance in the PCG iteration
+c     iout   controls the amount of output generated by the PCG routine
+c     mssg   specifies the unit for error messages produced by PREQN
+c-------------------
+c
+      build = .false.
+      maxit = 1000
+      tolcg = 1.0d-7
+      iout  = 5
+      mssg  = 6
+c
+c     Call the PCG routine repeatedly.
+c
+      do 100 i=1, L
+c
+c     Build the preconditioner only after solving the first subproblem
+c
+         if ( i.eq.2 ) then 
+            build = .true.
+         else 
+            build = .false.
+         end if
+c
+c     To build a preconditioner after each problem, replace the 
+c     if-statement above by
+c
+c        if ( i.gt.1 ) then
+c            build = .true.
+c        end if
+c
+         call pcg    ( n, nz,  a, adiag, jptra, indra, x, b, anorm,
+     *                 w, 
+     *                 m, iop, i, wp, lwp, iwp, liwp, 
+     *                 build, info,
+     *                 maxit, tolcg, iout, mssg )
+         if ( info.ne.0 ) then 
+            write(mssg,900)
+            go to 200
+         end if
+c
+c     Perturb the rhs vector. Reset x to the zero vector 
+c
+         call perrhs ( n, b )
+c
+         do 90 j=1, n
+            x(j) = zero
+ 90      continue
+c
+ 100  continue    
+c
+ 200  continue
+c
+ 900  format(/,2x,' Error in PCG, INFO = ',i2 )
+c
+      stop
+      end
+
+
+

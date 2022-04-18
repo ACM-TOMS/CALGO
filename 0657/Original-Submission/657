@@ -1,0 +1,591 @@
+C      REMARK ON ALGORITHM 657, COLLECTED ALGORITHMS FROM ACM.
+C      THIS WORK PUBLISHED IN TRANSACTIONS ON MATHEMATICAL SOFTWARE,
+C                                  TEST DRIVER.
+C                                  SHOULD GENERATE FIGURE 4 OF ACM
+C                                  ARTICLE (CONCENTRIC SPHERES).
+      DIMENSION F(11,11,11),CONTR(2),MASK(33000)
+      NX = 11
+      NY = 11
+      NZ = 11
+      NDIMX = 11
+      NDIMY = 11
+      XA = -1.0
+      XB =  1.0
+      YA = -1.0
+      YB =  1.0
+      ZA = -1.0
+      ZB =  1.0
+      VLONG = 45.0
+      VLAT = 45.0
+      NMASK = 1000
+      DO 5 I=1,NX
+      DO 5 J=1,NY
+      DO 5 K=1,NZ
+         X = FLOAT(I-1)/FLOAT(NX-1)*(XB-XA) + XA
+         Y = FLOAT(J-1)/FLOAT(NY-1)*(YB-YA) + YA
+         Z = FLOAT(K-1)/FLOAT(NZ-1)*(ZB-ZA) + ZA
+         F(I,J,K) =  X**2 + Y**2 + Z**2
+    5 CONTINUE
+      CONTR(1) =  0.25
+      CONTR(2) =  0.99
+      NC = 2
+      CALL CON3D(F,NX,NY,NZ,NDIMX,NDIMY,CONTR,NC,XA,XB,YA,YB,ZA,ZB,
+     &           VLONG,VLAT,MASK,NMASK)
+      STOP
+      END
+C                             BEGINNING OF ALGORITHM CON3D
+      SUBROUTINE CON3D (F,NX,NY,NZ,NDIMX,NDIMY,CONTR,NC,XA,XB,YA,YB,
+     &                  ZA,ZB,VLONG,VLAT,MASK,NMASK)
+C
+C     SUBROUTINE CON3D DRAWS CONTOUR SURFACES OF A FUNCTION OF THREE
+C        VARIABLES.
+C
+C     ARGUMENT DESCRIPTIONS
+C
+C     F      - ARRAY CONTAINING THE FUNCTION VALUES.  F(I,J,K) IS
+C              THE VALUE OF THE FUNCTION AT THE POINT (XI,YJ,ZK), WHERE
+C                    XI = XA + (I-1)/(NX-1)*(XB-XA)    FOR I=1...NX
+C                    YJ = YA + (J-1)/(NY-1)*(YB-YA)    FOR J=1...NY
+C                    ZK = ZA + (K-1)/(NZ-1)*(ZB-ZA)    FOR K=1...NZ.
+C              (TYPE = REAL)
+C
+C   NX,NY,NZ - LIMITS ON THE THREE SUBSCRIPTS OF ARRAY F.  (TYPE =
+C              INTEGER)
+C
+C NDIMX,NDIMY- THE FIRST AND SECOND DIMENSIONS OF ARRAY F, EXACTLY
+C              AS SPECIFIED IN THE DIMENSIONING STATEMENT IN THE
+C              CALLING PROGRAM.  NDIMX.GE.NX, NDIMY.GE.NY.  (TYPE =
+C              INTEGER)
+C
+C     CONTR  - A VECTOR OF LENGTH NC.  CONTOUR SURFACES WILL BE DRAWN
+C              CORRESPONDING TO F = CONTR(I), I=1...NC.  (TYPE = REAL)
+C
+C     NC     - THE NUMBER OF CONTOURS TO BE PLOTTED.  (TYPE = INTEGER)
+C
+C     XA,XB  - THE LIMITS OF THE BOX IN WHICH THE FUNCTION IS DEFINED.
+C     YA,YB    (TYPE = REAL)
+C     ZA,ZB
+C
+C     VLONG  - THE VIEWPOINT LONGITUDE AND LATITUDE, IN DEGREES.  EACH
+C     VLAT     MUST BE BETWEEN 10 AND 80 DEGREES.  (TYPE = REAL)
+C
+C     MASK   - INTEGER WORK ARRAY OF LENGTH AT LEAST
+C                              NMASK**2/(NBITS-1) + 1
+C              WHERE NBITS IS THE NUMBER OF USABLE BITS PER INTEGER WORD
+C              (TYPE = INTEGER)
+C
+C     NMASK  - A PARAMETER WHICH CONTROLS THE PLOT RESOLUTION (ACCURACY)
+C              THE PLOT AREA IS PARTITIONED INTO AN NMASK BY NMASK GRID,
+C              WITH EACH GRID RECTANGLE CORRESPONDING TO ONE ELEMENT IN
+C              THE NMASK BY NMASK MASKING ARRAY.  A REASONABLE VALUE IS
+C              NMASK = 1000.  (TYPE = INTEGER)
+C
+C  ***PLOTTING FUNCTIONS OF TWO VARIABLES***
+C
+C        IF NZ=1, F IS ASSUMED TO BE AN NX BY NY TWO-DIMENSIONAL ARRAY.
+C        F(I,J) IS TAKEN TO BE THE VALUE OF A FUNCTION Z(X,Y) OF TWO
+C        VARIABLES AT THE POINT (XI,YJ).
+C
+C     1. IF NC=0, A SURFACE PLOT OF THIS FUNCTION WILL BE DRAWN. IN THIS
+C        CASE (ZA,ZB) ARE THE LIMITS ON THE Z-AXIS, WHICH MUST SATISFY
+C                  ZA .LE. F(I,J) .LE. ZB
+C
+C     2. IF NC>0, A CONTOUR PLOT OF THIS FUNCTION WILL BE DRAWN.
+C        CONTOUR CURVES CORRESPONDING TO Z = CONTR(I), I=1,NC WILL
+C        BE DRAWN.  IN THIS CASE, ZA,ZB,VLONG,VLAT,MASK AND NMASK
+C        ARE NOT USED.
+C
+      DIMENSION          F(NDIMX,NDIMY,*),CONTR(*),MASK(*)
+      LOGICAL            MOVE
+      EXTERNAL           DRAWX,DRAWY,DRAWZ
+      CHARACTER*10       COUT
+      COMMON /BLK/       XX,YY,ZZ,HX,HY,HZ,COSTH,SINTH,COSPI,SINPI,
+     &                   EDGE,WIDTH,NRES,MSTART,MMASK,NBITS1,MOVE
+      DATA               INIT/0/
+      CALL SELPEN(1)
+C                             CALL START TO INITIALIZE PLOTTER, IF
+C                             THIS IS FIRST CALL TO CON3D.
+      IF (INIT.EQ.0) THEN
+         CALL START
+         INIT = 1
+      ENDIF
+C                             EDGE AND WIDTH CONTROL THE SIZE OF THE
+C                             PLOT AREA AND THE WIDTH OF THE LINES.
+      EDGE = 4.0
+      WIDTH = 0.1
+      MSTART = 0.05*NMASK
+      MMASK = NMASK
+      NBITS1 = NBITS(0)-1
+      HX = 1.0/FLOAT(NX-1)
+      HY = 1.0/FLOAT(NY-1)
+      HZ = 1.0
+      IF (NZ.GE.2) HZ = 1.0/FLOAT(NZ-1)
+C      IF (NZ.LE.1 .AND. NC.GE.1) GO TO 30
+C      EDGE2 = 2*EDGE
+C     REMARK IN MARCH 1990 ISSUE SAID TO MAKE THIS CHANGE
+      EDGE2 = 2*EDGE
+      IF (NZ.LE.1 .AND. NC.GE.1) GO TO 30
+      NRES = 0.9*NMASK/SQRT(2.0)/EDGE
+      COSTH = COS(0.017543*VLONG)
+      SINTH = SIN(0.017543*VLONG)
+      COSPI = COS(0.017543*VLAT)
+      SINPI = SIN(0.017543*VLAT)
+      CALL MORIG(EDGE+1.0,1.0)
+C                             DRAW AXES
+      XANG = ATAN2( SINPI*COSTH , SINTH)/0.017543
+      XLEN = SQRT(SINTH**2+SINPI**2*COSTH**2)*EDGE
+      YANG = ATAN2( SINPI*SINTH ,-COSTH)/0.017543
+      YLEN = SQRT(COSTH**2+SINPI**2*SINTH**2)*EDGE
+      ZANG = 90.0
+      ZLEN = ABS(COSPI)*EDGE
+      CALL DAXIS(0.0,0.0,'X',-1,XLEN,XANG,XA,(XB-XA)/XLEN)
+      CALL DAXIS(0.0,0.0,'Y', 1,YLEN,YANG,YA,(YB-YA)/YLEN)
+      CALL DAXIS(-EDGE*COSTH,EDGE*SINPI*SINTH,
+     &                   'Z', 1,ZLEN,ZANG,ZA,(ZB-ZA)/ZLEN)
+      IF (NZ.GE.2) THEN
+C                             DRAW 3-D CONTOUR SURFACES
+         CALL PSYM(EDGE+0.5,0.0,0.14,'KEY',0.0,3)
+         DO 20 IF=1,NC
+            CALL SELPEN(IF)
+C                             CLEAR MASK
+            CALL FILL0(MASK)
+            DO 15 I=1,NX
+            DO 15 J=1,NY
+            DO 15 K=2,NZ
+C                             CONTOURS ON X-SECTIONS
+               IF (J.GT.1) THEN
+                  XX  = (I-1)*HX
+                  YY  = (J-2)*HY
+                  ZZ  = (K-2)*HZ
+                  DO 5 JF=1,NC
+                     MOVE = JF.EQ.IF
+                     CALL CONTOR(F(I,J-1,K-1),F(I,J,K-1),F(I,J-1,K),
+     &                           F(I,J,K),CONTR(JF),DRAWX,MASK)
+    5             CONTINUE
+               ENDIF
+C                             CONTOURS ON Y-SECTIONS
+               IF (I.GT.1) THEN
+                  XX  = (I-2)*HX
+                  YY  = (J-1)*HY
+                  ZZ  = (K-2)*HZ
+                  DO 10 JF=1,NC
+                     MOVE = JF.EQ.IF
+                     CALL CONTOR(F(I-1,J,K-1),F(I,J,K-1),F(I-1,J,K),
+     &                           F(I,J,K),CONTR(JF),DRAWY,MASK)
+   10             CONTINUE
+               ENDIF
+   15       CONTINUE
+            WRITE (COUT,'(E10.3)') CONTR(IF)
+            CALL PSYM(EDGE,0.3*IF,0.14,COUT,0.0,10)
+   20    CONTINUE
+      ELSE
+C                             DRAW SURFACE PLOT
+C                             CLEAR MASK
+         CALL FILL0(MASK)
+         DO 25 I=1,NX
+         DO 25 J=1,NY
+C                             CONTOURS ON X-SECTIONS
+            IF (J.GT.1) THEN
+               XX  = (I-1)*HX
+               YY  = (J-2)*HY
+               ZZ  = 0.0
+               MOVE = .TRUE.
+               CALL CONTOR(F(I,J-1,1)-ZA , F(I,J,1)-ZA , F(I,J-1,1)-ZB ,
+     &                     F(I,J,1)-ZB , 0.0 , DRAWX, MASK)
+            ENDIF
+C                             CONTOURS ON Y-SECTIONS
+            IF (I.GT.1) THEN
+               XX  = (I-2)*HX
+               YY  = (J-1)*HY
+               ZZ  = 0.0
+               MOVE = .TRUE.
+               CALL CONTOR(F(I-1,J,1)-ZA , F(I,J,1)-ZA , F(I-1,J,1)-ZB ,
+     &                     F(I,J,1)-ZB , 0.0 , DRAWY, MASK)
+            ENDIF
+   25    CONTINUE
+      ENDIF
+      CALL MORIG(EDGE2,-1.0)
+      GO TO 45
+C                             DRAW 2-D CONTOUR CURVES
+   30 CONTINUE
+      CALL MORIG(2.0,1.0)
+C                             DRAW AXES
+      CALL DAXIS(0.0,0.0,'X',-1,EDGE2, 0.0,XA,(XB-XA)/EDGE2)
+      CALL DAXIS(0.0,0.0,'Y', 1,EDGE2,90.0,YA,(YB-YA)/EDGE2)
+      CALL PSYM(EDGE2+1.5,0.0,0.14,'KEY',0.0,3)
+      DO 40 IF=1,NC
+         CALL SELPEN(IF)
+C                             BEGIN CONTOUR PLOT
+         DO 35 I=2,NX
+         DO 35 J=2,NY
+            XX = (I-2)*HX
+            YY = (J-2)*HY
+            CALL CONTOR(F(I-1,J-1,1),F(I,J-1,1),
+     &                  F(I-1,J,1),F(I,J,1),CONTR(IF),DRAWZ,MASK)
+   35    CONTINUE
+         WRITE (COUT,'(E10.3)') CONTR(IF)
+         CALL PSYM(EDGE2+1.0,IF*0.3,0.14,COUT,0.0,10)
+   40 CONTINUE
+      CALL MORIG(EDGE2+4.0,-1.0)
+   45 CALL SELPEN(1)
+      RETURN
+      END
+      SUBROUTINE CONTOR(F00,F10,F01,F11,FF,DRAW,MASK)
+      DIMENSION         XIN(4),YIN(4),IN(4),XAR(2),YAR(2),MASK(*)
+C                             DRAW CONTOURS IN A 2-D BOX
+      A = F00
+      B = F10 - A
+      C = F01 - A
+      D = F11 - A - B - C
+      FA = FF-F00
+      FAB = FF-F10
+      FAC = FF-F01
+      FABCD = FF-F11
+      IF (FA.GT.0.0 .AND.   FAC.GT.0.0 .AND.
+     &   FAB.GT.0.0 .AND. FABCD.GT.0.0) RETURN
+      IF (FA.LT.0.0 .AND.   FAC.LT.0.0 .AND.
+     &   FAB.LT.0.0 .AND. FABCD.LT.0.0) RETURN
+      YIN(1) = 0.0
+      YIN(2) = 1.0
+      XIN(3) = 0.0
+      XIN(4) = 1.0
+      IF (B.EQ.0.0 .AND. C.EQ.0.0 .AND. D.EQ.0.0) RETURN
+         DET = D*(A-FF)-B*C
+      IF (D.NE.0.0 .AND. DET.EQ.0.0) THEN
+         X  = -C/D
+         IF (X .GE.0.0 .AND. X .LE.1.0) THEN
+            CALL DRAW (X,0.0,X,1.0,MASK)
+         ENDIF
+         Z  = -B/D
+         IF (Z .GE.0.0 .AND. Z .LE.1.0) THEN
+            CALL DRAW (0.0,Z,1.0,Z,MASK)
+         ENDIF
+      ELSE
+         IF (B.EQ.0.0) THEN
+            IF (FA.EQ.0.0) IN(1) = 2
+            IF (FA.NE.0.0) IN(1) = 0
+         ELSE
+            IN(1) = 1
+            XIN(1) = FA/B
+            IF (B*FA.LT.0.0 .OR. B*FAB.GE.0.0) IN(1) = 0
+            IF (FA.EQ.0.0 .AND. DET.LE.0.0) IN(1) = 0
+         ENDIF
+         IF (B+D.EQ.0.0) THEN
+            IF (FAC.EQ.0.0) IN(2) = 2
+            IF (FAC.NE.0.0) IN(2) = 0
+         ELSE
+            IN(2) = 1
+            XIN(2) = FAC/(B+D)
+            IF ((B+D)*FAC.LE.0.0 .OR. (B+D)*FABCD.GT.0.0) IN(2) = 0
+            IF (FABCD.EQ.0.0 .AND. DET.LE.0.0) IN(2) = 0
+         ENDIF
+         IF (C.EQ.0.0) THEN
+            IF (FA.EQ.0.0) IN(3) = 2
+            IF (FA.NE.0.0) IN(3) = 0
+         ELSE
+            IN(3) = 1
+            YIN(3) = FA/C
+            IF (C*FA.LE.0.0 .OR. C*FAC.GT.0.0) IN(3) = 0
+            IF (FAC.EQ.0.0 .AND. DET.GE.0.0) IN(3) = 0
+         ENDIF
+         IF (C+D.EQ.0.0) THEN
+            IF (FAB.EQ.0.0) IN(4) = 2
+            IF (FAB.NE.0.0) IN(4) = 0
+         ELSE
+            IN(4) = 1
+            YIN(4) = FAB/(C+D)
+            IF ((C+D)*FAB.LT.0.0 .OR. (C+D)*FABCD.GE.0.0) IN(4) = 0
+            IF (FAB.EQ.0.0 .AND. DET.GE.0.0) IN(4) = 0
+         ENDIF
+         ICNT = 0
+         DO 5 L=1,4
+            IF (IN(L).EQ.1) ICNT = ICNT+1
+    5    CONTINUE
+         IF (IN(1).EQ.2) THEN
+            CALL DRAW (0.,0.,1.,0.,MASK)
+         ENDIF
+         IF (IN(2).EQ.2) THEN
+            CALL DRAW (0.,1.,1.,1.,MASK)
+         ENDIF
+         IF (IN(3).EQ.2) THEN
+            CALL DRAW (0.,0.,0.,1.,MASK)
+         ENDIF
+         IF (IN(4).EQ.2) THEN
+            CALL DRAW (1.,0.,1.,1.,MASK)
+         ENDIF
+         IF (ICNT.EQ.2) THEN
+            LL = 0
+            DO 10 L=1,4
+               IF (IN(L).NE.1) GO TO 10
+               LL = LL+1
+               XAR(LL) = XIN(L)
+               YAR(LL) = YIN(L)
+   10       CONTINUE
+            CALL DRAW (XAR(1),YAR(1),XAR(2),YAR(2),MASK)
+         ENDIF
+         IF (ICNT.EQ.4) THEN
+            IF (YIN(3).LE.YIN(4)) THEN
+               CALL DRAW (XIN(1),YIN(1),XIN(3),YIN(3),MASK)
+               CALL DRAW (XIN(2),YIN(2),XIN(4),YIN(4),MASK)
+            ELSE
+               CALL DRAW (XIN(1),YIN(1),XIN(4),YIN(4),MASK)
+               CALL DRAW (XIN(2),YIN(2),XIN(3),YIN(3),MASK)
+            ENDIF
+         ENDIF
+      ENDIF
+      RETURN
+      END
+      SUBROUTINE DRAWX (Y1,Z1,Y2,Z2,MASK)
+      DIMENSION          MASK(*)
+      LOGICAL            MLAST,MNEW,MOVE,IGET
+      COMMON /BLK/       XX,YY,ZZ,HX,HY,HZ,COSTH,SINTH,COSPI,SINPI,
+     &                   EDGE,WIDTH,NRES,MSTART,MMASK,NBITS1,MOVE
+      IDEL(AL,BE) = NRES*(-SINPI*COSTH*AL + SINTH*BE)
+      IEPS(AL,BE) = NRES*( SINPI*SINTH*AL + COSTH*BE)
+      ALPHA(X,Y,Z) = EDGE*(X*SINTH - Y*COSTH)
+      BETA (X,Y,Z) = EDGE*(X*SINPI*COSTH + Y*SINPI*SINTH + Z*COSPI)
+      IF (.NOT.MOVE) GO TO 15
+C                             DRAW THICK LINE
+      DO 10 J=-1,1,2
+      AL1 = ALPHA (XX+J*WIDTH*HX , YY+Y1*HY , ZZ+Z1*HZ)
+      BE1 =  BETA (XX+J*WIDTH*HX , YY+Y1*HY , ZZ+Z1*HZ)
+      AL2 = ALPHA (XX+J*WIDTH*HX , YY+Y2*HY , ZZ+Z2*HZ)
+      BE2 =  BETA (XX+J*WIDTH*HX , YY+Y2*HY , ZZ+Z2*HZ)
+      IDIST = SQRT((AL2-AL1)**2 + (BE2-BE1)**2)*NRES
+      IF (IDIST.EQ.0) GO TO 10
+      ALLAST = AL1
+      BELAST = BE1
+      MLAST = IGET(MASK,IDEL(AL1,BE1),IEPS(AL1,BE1))
+      CALL PENUP(AL1,BE1)
+      DO 5 I=1,IDIST
+         AL = AL1 + FLOAT(I)/FLOAT(IDIST)*(AL2-AL1)
+         BE = BE1 + FLOAT(I)/FLOAT(IDIST)*(BE2-BE1)
+         MNEW = IGET(MASK,IDEL(AL,BE),IEPS(AL,BE))
+         IF (.NOT.MNEW .AND. MLAST) THEN
+             CALL PENDN(ALLAST,BELAST)
+         ENDIF
+         IF (MNEW .AND. .NOT.MLAST) THEN
+             CALL PENUP(AL,BE)
+         ENDIF
+         ALLAST = AL
+         BELAST = BE
+         MLAST = MNEW
+    5 CONTINUE
+      IF (MLAST) CALL PENDN(ALLAST,BELAST)
+   10 CONTINUE
+C                             MASK OUT AREA BEHIND LINE
+   15 CONTINUE
+      AL1= ALPHA(XX , YY+Y1*HY , ZZ+Z1*HZ)
+      BE1 = BETA(XX , YY+Y1*HY , ZZ+Z1*HZ)
+      AL2= ALPHA(XX , YY+Y2*HY , ZZ+Z2*HZ)
+      BE2 = BETA(XX , YY+Y2*HY , ZZ+Z2*HZ)
+      IDEL1 = IDEL(AL1,BE1)
+      IEPS1 = IEPS(AL1,BE1)
+      IDEL2 = IDEL(AL2,BE2)
+      IEPS2 = IEPS(AL2,BE2)
+      INC = IDEL2-IDEL1
+      IF (INC.EQ.0) INC = 1
+      LINC = INC/IABS(INC)
+      IDE = ABS(WIDTH*HX*SINPI*NRES*EDGE)
+      DO 20 ID=IDEL1,IDEL2,LINC
+         IE = IEPS1 + FLOAT(ID-IDEL1)/FLOAT(INC)*(IEPS2-IEPS1)
+         DO 20 I=IE-IDE,IE+IDE
+            CALL MARK1(MASK,ID,I)
+   20 CONTINUE
+      RETURN
+      END
+      SUBROUTINE DRAWY (X1,Z1,X2,Z2,MASK)
+      DIMENSION          MASK(*)
+      LOGICAL            MLAST,MNEW,MOVE,IGET
+      COMMON /BLK/       XX,YY,ZZ,HX,HY,HZ,COSTH,SINTH,COSPI,SINPI,
+     &                   EDGE,WIDTH,NRES,MSTART,MMASK,NBITS1,MOVE
+      IDEL(AL,BE) = NRES*(-SINPI*COSTH*AL + SINTH*BE)
+      IEPS(AL,BE) = NRES*( SINPI*SINTH*AL + COSTH*BE)
+      ALPHA(X,Y,Z) = EDGE*(X*SINTH - Y*COSTH)
+      BETA (X,Y,Z) = EDGE*(X*SINPI*COSTH + Y*SINPI*SINTH + Z*COSPI)
+      IF (.NOT.MOVE) GO TO 15
+C                             DRAW THICK LINE
+      DO 10 J=-1,1,2
+      AL1 = ALPHA (XX+X1*HX , YY+J*WIDTH*HY , ZZ+Z1*HZ)
+      BE1 =  BETA (XX+X1*HX , YY+J*WIDTH*HY , ZZ+Z1*HZ)
+      AL2 = ALPHA (XX+X2*HX , YY+J*WIDTH*HY , ZZ+Z2*HZ)
+      BE2 =  BETA (XX+X2*HX , YY+J*WIDTH*HY , ZZ+Z2*HZ)
+      IDIST = SQRT((AL2-AL1)**2 + (BE2-BE1)**2)*NRES
+      IF (IDIST.EQ.0) GO TO 10
+      ALLAST = AL1
+      BELAST = BE1
+      MLAST = IGET(MASK,IDEL(AL1,BE1),IEPS(AL1,BE1))
+      CALL PENUP(AL1,BE1)
+      DO 5 I=1,IDIST
+         AL = AL1 + FLOAT(I)/FLOAT(IDIST)*(AL2-AL1)
+         BE = BE1 + FLOAT(I)/FLOAT(IDIST)*(BE2-BE1)
+         MNEW = IGET(MASK,IDEL(AL,BE),IEPS(AL,BE))
+         IF (.NOT.MNEW .AND. MLAST) THEN
+             CALL PENDN(ALLAST,BELAST)
+         ENDIF
+         IF (MNEW .AND. .NOT.MLAST) THEN
+             CALL PENUP(AL,BE)
+         ENDIF
+         ALLAST = AL
+         BELAST = BE
+         MLAST = MNEW
+    5 CONTINUE
+      IF (MLAST) CALL PENDN(ALLAST,BELAST)
+   10 CONTINUE
+C                             MASK OUT AREA BEHIND LINE
+   15 CONTINUE
+      AL1= ALPHA(XX+X1*HX , YY , ZZ+Z1*HZ)
+      BE1 = BETA(XX+X1*HX , YY , ZZ+Z1*HZ)
+      AL2= ALPHA(XX+X2*HX , YY , ZZ+Z2*HZ)
+      BE2 = BETA(XX+X2*HX , YY , ZZ+Z2*HZ)
+      IDEL1 = IDEL(AL1,BE1)
+      IEPS1 = IEPS(AL1,BE1)
+      IDEL2 = IDEL(AL2,BE2)
+      IEPS2 = IEPS(AL2,BE2)
+      INC = IEPS2-IEPS1
+      IF (INC.EQ.0) INC = 1
+      LINC = INC/IABS(INC)
+      IDD = ABS(WIDTH*HY*SINPI*NRES*EDGE)
+      DO 20 IE=IEPS1,IEPS2,LINC
+         ID = IDEL1 + FLOAT(IE-IEPS1)/FLOAT(INC)*(IDEL2-IDEL1)
+         DO 20 I=ID-IDD,ID+IDD
+            CALL MARK1(MASK,I,IE)
+   20 CONTINUE
+      RETURN
+      END
+      SUBROUTINE DRAWZ (X1,Y1,X2,Y2,MASK)
+      DIMENSION          MASK(*)
+      LOGICAL            MOVE
+      COMMON /BLK/       XX,YY,ZZ,HX,HY,HZ,COSTH,SINTH,COSPI,SINPI,
+     &                   EDGE,WIDTH,NRES,MSTART,MMASK,NBITS1,MOVE
+C                             DRAW LINE
+      CALL PENUP(2*EDGE*(XX+X1*HX) , 2*EDGE*(YY+Y1*HY))
+      CALL PENDN(2*EDGE*(XX+X2*HX) , 2*EDGE*(YY+Y2*HY))
+      RETURN
+      END
+      SUBROUTINE FILL0(MASK)
+      DIMENSION          MASK(*)
+      LOGICAL            MOVE
+      COMMON /BLK/       XX,YY,ZZ,HX,HY,HZ,COSTH,SINTH,COSPI,SINPI,
+     &                   EDGE,WIDTH,NRES,MSTART,MMASK,NBITS1,MOVE
+C                             FILL MASK WITH 0'S
+      NWORDS = MMASK*MMASK/NBITS1 + 1
+      DO 10 IWORD=1,NWORDS
+         MASK(IWORD) = 0
+   10 CONTINUE
+      RETURN
+      END
+      SUBROUTINE MARK1(MASK,I,J)
+      DIMENSION          MASK(*)
+      LOGICAL            MOVE
+      COMMON /BLK/       XX,YY,ZZ,HX,HY,HZ,COSTH,SINTH,COSPI,SINPI,
+     &                   EDGE,WIDTH,NRES,MSTART,MMASK,NBITS1,MOVE
+C                             PUT 1 IN POSITION (I,J) OF MASK ARRAY
+      IJBIT = (J+MSTART-1)*MMASK + I+MSTART
+      IWORD = 1 + IJBIT/NBITS1
+      IBIT = MOD(IJBIT,NBITS1)
+      MASK(IWORD) = IBSET(MASK(IWORD),IBIT)
+      RETURN
+      END
+      LOGICAL FUNCTION IGET(MASK,I,J)
+      DIMENSION          MASK(*)
+      LOGICAL            MOVE,BTEST
+      COMMON /BLK/       XX,YY,ZZ,HX,HY,HZ,COSTH,SINTH,COSPI,SINPI,
+     &                   EDGE,WIDTH,NRES,MSTART,MMASK,NBITS1,MOVE
+C                             CHECK VALUE OF MASK POSITION (I,J)
+      IJBIT = (J+MSTART-1)*MMASK + I+MSTART
+      IWORD = 1 + IJBIT/NBITS1
+      IBIT = MOD(IJBIT,NBITS1)
+      IGET = .NOT. BTEST(MASK(IWORD),IBIT)
+      RETURN
+      END
+C                             ************************************
+C                             ***  CALLS TO CALCOMP ROUTINES.  ***
+C                             ***  SOME ROUTINES ('PLOTS' IN   ***
+C                             ***  PARTICULAR) MAY VARY FROM   ***
+C                             ***  SITE TO SITE.               ***
+C                             ************************************
+      SUBROUTINE START
+C                             INITIALIZE PLOTTER
+C                             *** LDEV IS UNIT NUMBER OF PLOT FILE ***
+      LDEV = 19
+      CALL PLOTS(0,0,LDEV)
+      RETURN
+      END
+      SUBROUTINE MORIG(X,Y)
+C                             MOVE ORIGIN TO (X,Y)
+      CALL PLOT(X,Y,-3)
+      RETURN
+      END
+      SUBROUTINE PENUP(X,Y)
+C                             MOVE TO (X,Y) WITH PEN UP
+      CALL PLOT(X,Y,3)
+      RETURN
+      END
+      SUBROUTINE PENDN(X,Y)
+C                             MOVE TO (X,Y) WITH PEN DOWN
+      CALL PLOT(X,Y,2)
+      RETURN
+      END
+      SUBROUTINE DAXIS(X,Y,IBCD,NCHAR,AXLEN,ANGLE,FIRSTV,DELTAV)
+      CHARACTER*(*)      IBCD
+C                             DRAW AXIS
+      CALL AXIS(X,Y,IBCD,NCHAR,AXLEN,ANGLE,FIRSTV,DELTAV)
+      RETURN
+      END
+      SUBROUTINE PSYM(X,Y,H,IBCD,ANGLE,NCHAR)
+      CHARACTER*(*)      IBCD
+C                             PRINT SYMBOL
+      CALL SYMBOL(X,Y,H,IBCD,ANGLE,NCHAR)
+      RETURN
+      END
+      SUBROUTINE SELPEN(I)
+C                             SELECT PEN NUMBER I
+      CALL NEWPEN(I)
+      RETURN
+      END
+C                             ************************************
+C                             ***  BIT MANIPULATION FUNCTINS   ***
+C                             ************************************
+C
+C                             THE BIT MANIPULATION FUNCTIONS IBSET
+C                             AND BTEST GIVEN BELOW ARE HIGHLY
+C                             PORTABLE BUT VERY INEFFICIENT.  IF
+C                             EQUIVALENT INTRINSIC FUNCTIONS ARE
+C                             AVAILABLE, IBSET AND BTEST SHOULD BE
+C                             MODIFIED TO CALL THESE FUNCTIONS.  THE
+C                             IBM FORTRAN77 COMPILER AND SOME OTHER
+C                             COMPILERS SUPPLY IBSET AND BTEST AS
+C                             INTRINSIC FUNCTIONS, SO IF THESE ARE
+C                             AVAILABLE, SIMPLY DELETE THE VERSIONS
+C                             BELOW.
+C
+      FUNCTION IBSET(INT,IBIT)
+      LOGICAL            BTEST
+C                             SET BIT NUMBER IBIT OF INTEGER WORD
+C                             INT EQUAL TO 1.
+      IBSET = INT
+      IF (.NOT.BTEST(INT,IBIT)) IBSET = INT + 2**IBIT
+      RETURN
+      END
+      LOGICAL FUNCTION BTEST(INT,IBIT)
+C                             IF BIT NUMBER IBIT OF INTEGER WORD
+C                             INT IS EQUAL TO 1, SET BTEST=.TRUE.
+      N = INT
+      ICNT = 0
+    5 IF (ICNT.EQ.IBIT) GO TO 10
+         N = N/2
+         ICNT = ICNT+1
+         GO TO 5
+   10 BTEST = MOD(N,2).EQ.1
+      RETURN
+      END
+C                             *************************************
+C                             ***  NBITS RETURNS THE NUMBER OF  ***
+C                             ***    USABLE BITS PER INTEGER    ***
+C                             ***    WORD FOR THIS COMPUTER     ***
+C                             *************************************
+      FUNCTION NBITS(IDUMMY)
+      NBITS = 32
+      RETURN
+      END

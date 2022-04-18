@@ -1,0 +1,106 @@
+      INTEGER FUNCTION ZZLEFT (LINE)
+
+C## A R G U M E N T S:
+                      CHARACTER*(*) LINE
+C## S T A T U S:
+C               SYSTEM  DEPENDENCE:                      NONE.
+C               SINGLE/DOUBLE CONVERSION:        NOT REQUIRED.
+C
+C>RCS $HEADER: LEFT.F,V 1.10 91/11/19 16:13:32 BUCKLEY EXP $
+C>RCS $LOG:     LEFT.F,V $
+C>RCS REVISION 1.10  91/11/19  16:13:32  BUCKLEY
+C>RCS FINAL SUBMISSION TO TOMS
+C>RCS
+C>RCS REVISION 1.9  89/06/30  13:28:58  BUCKLEY
+C>RCS PREPARING SUBMITTED VERSION OF MT
+C>RCS
+C>RCS REVISION 1.3.1.1  89/05/20  13:39:33  BUCKLEY
+C>RCS TEMP. TEST OF MT BEFORE SUBMITTING
+C>RCS
+C>RCS REVISION 1.3  89/05/18  14:26:46  BUCKLEY
+C>RCS FINAL TEST OF MT BEFORE SUBMITTING
+C>RCS
+C>RCS REVISION 1.2  89/05/15  14:44:29  BUCKLEY
+C>RCS INITIAL INSTALLATION OF MT INTO RCS FORM.
+C>RCS
+C>RCS REVISION 1.1  89/01/17  16:30:08  BUCKLEY
+C>RCS INITIAL REVISION
+C>RCS
+C## D E S C R I P T I O N:
+C
+C     THIS ROUTINE DETERMINES THE POSITION OF THE LAST NONBLANK
+C     CHARACTER IN THE STRING LINE. IF THE LINE IS ENTIRELY
+C     BLANK, THEN ZZLEFT IS SET TO 0. NOTE THAT IT FIRST CLEARS
+C     ANY LEADING BLANKS BY FIRST LEFT SHIFTING THE LINE IF NEEDED.
+C
+C## E N T R Y   P O I N T S: THE NATURAL ENTRY ZZLEFT.
+C## S U B R O U T I N E S:   LEN (INTRINSIC)
+
+C## P A R A M E T E R S:
+
+      CHARACTER*(*) BLANK,        QUOTE,        HASH
+      PARAMETER (   BLANK  = ' ', QUOTE  = '"', HASH   = '#' )
+
+      CHARACTER*(*) PERIOD,       COMMA,        SEMICN
+      PARAMETER (   PERIOD = '.', COMMA  = ',', SEMICN = ';' )
+
+      CHARACTER*(*) COLON,        DASH,         EQUALS
+      PARAMETER (   COLON  = ':', DASH   = '-', EQUALS = '=' )
+
+      CHARACTER*(*) OBRACE,       CBRACE,       UNDERS
+      PARAMETER (   OBRACE = '{', CBRACE = '}', UNDERS = '_' )
+
+      CHARACTER*(*) PLUS,         MINUS,        EXCLAM
+      PARAMETER (   PLUS   = '+', MINUS  = '-', EXCLAM = '!' )
+
+      CHARACTER*(*) GTHAN,        LTHAN,        QUESMK
+      PARAMETER (   GTHAN  = '>', LTHAN  = '<', QUESMK = '?' )
+
+      CHARACTER*(*) SLASH,        BSLASH,       PERCNT
+      PARAMETER (   SLASH  = '/', BSLASH = '\\',PERCNT = '%' )
+
+      CHARACTER*(*) CARAT,        ATSIGN,       TILDE
+      PARAMETER (   CARAT  = '^', ATSIGN = '@', TILDE = '~' )
+
+C## L O C A L   D E C L:
+                             INTEGER   I, START
+
+C## S A V E:                 NONE SELECTED.
+C## E Q U I V A L E N C E S: NONE ARE DEFINED.
+C## C O M M O N:             NONE IS DEFINED.
+C## D A T A:                 NO DATA VALUES SET.
+
+C##                                                  E X E C U T I O N
+C##                                                  E X E C U T I O N
+      ZZLEFT = 0
+
+      DO 500 I = 1, LEN(LINE)
+         IF ( LINE(I:I) .NE. BLANK ) THEN
+            START = I
+            GOTO 600
+         ENDIF
+  500 CONTINUE
+      GOTO 90000
+
+  600 DO 700  I = LEN(LINE), 1, -1
+         IF ( LINE(I:I) .NE. BLANK ) THEN
+            ZZLEFT = I
+            GOTO 800
+         ENDIF
+  700 CONTINUE
+
+  800 IF ( START .NE. 1 ) THEN
+         CALL ZZSHFT ( LINE, START, 1, ZZLEFT-START+1 )
+         ZZLEFT = ZZLEFT - START + 1
+      ENDIF
+
+ 1000 CONTINUE
+
+C## E X I T
+90000      RETURN
+
+C## F O R M A T S:  NONE ARE DEFINED.
+C##                 E N D         OF ZZLEFT.
+                    END
+C
+C

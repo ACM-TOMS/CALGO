@@ -1,0 +1,264 @@
+.TH FPTHRD_COND 3F "" "FPTHRD API"
+
+.SH NAME
+fpthrd_cond_init, fpthrd_cond_destroy, fpthrd_cond_signal, fpthrd_cond_broadcast, fpthrd_cond_wait, fpthrd_cond_timedwait \- Operations on condition
+variables
+
+.SH SYNOPSIS
+.B USE fpthrd
+ 
+.BI "CALL fpthrd_cond_init(" cond ", " cond_attr " [, " 
+.IB ierr "])"
+
+.BI "CALL fpthrd_cond_signal(" cond " [, " ierr "])"
+
+.BI "CALL fpthrd_cond_broadcast(" cond " [, " ierr "])"
+
+.BI "CALL fpthrd_cond_wait(" cond ", " mutex " [, " 
+.IB ierr "])"
+
+.BI "CALL fpthrd_cond_timedwait(" cond ", " mutex ", " 
+.IB abstime " [, " ierr "])"
+
+.BI "CALL fpthrd_cond_destroy(" cond " [, " ierr "])"
+
+.BI "TYPE(FPTHRD_COND_T) :: " cond
+.br
+.BI "TYPE(FPTHRD_CONDATTR_T) :: " cond_attr
+.br
+.BI "TYPE(FPTHRD_MUTEX_T) :: " mutex
+.br
+.BI "TYPE(FTIMESPEC) :: " abstime
+.br
+.BI "INTEGER :: " ierr
+
+.SH DESCRIPTION
+
+A condition variable is a synchronization
+device that allows threads to suspend execution and relinquish the
+processors until some predicate on shared data is satisfied. The basic
+operations on condition variables are: signal the condition (when the
+predicate becomes true), and wait for the condition, suspending the
+thread execution until another thread signals the condition.
+
+A condition variable must always be associated with a mutex, to avoid
+the race condition where a thread prepares to wait on a condition
+variable and another thread signals the condition variable just before the
+first thread actually waits on it.
+
+.SS Initialize
+.B "fpthrd_cond_init"
+initializes the condition variable 
+.IR "cond" ,
+using the
+condition attributes specified in 
+.IR "cond_attr" ,
+or default attributes
+if 
+.I "cond_attr"
+is 
+.BR "NULL" .
+As with the C version of Pthreads, condition variables of type
+.B "FPTHRD_COND_T"
+can be initialized statically at definition with the parameter
+.B "FPTHRD_COND_INITIALIZER" .
+
+.SS "Signal and Broadcast"
+.B "fpthrd_cond_signal"
+restarts one of the threads that is waiting on
+the condition variable 
+.IR "cond" .
+If several threads are waiting on 
+.IR "cond" ,
+.B "fpthrd_cond_signal"
+will restart exactly one, but it is not specified which.
+.B "fpthrd_cond_broadcast"
+restarts all the threads that are waiting on
+the condition variable 
+.IR "cond" .
+In the case of either routine, if no threads are waiting on 
+.IR "cond" ,
+nothing happens; the signal is lost.
+
+.SS Wait
+.B "fpthrd_cond_wait"
+atomically unlocks the 
+.I "mutex"
+(as per
+.BR "fpthrd_unlock_mutex" (3F))
+and waits for the condition variable 
+.I "cond"
+to
+be signaled. The thread execution is suspended 
+until the condition variable is signaled. The 
+.I "mutex"
+must be locked by the calling thread on entrance to
+.BR "fpthrd_cond_wait" .
+Before returning to the calling thread,
+.B "fpthrd_cond_wait"
+re-acquires 
+.I "mutex"
+(as per 
+.BR "fpthrd_lock_mutex" (3F)).
+
+Unlocking the mutex and suspending on the condition variable is done
+atomically. Thus, if all threads always acquire the mutex before
+signaling the condition variable, this guarantees that the condition 
+variable cannot be
+signaled (and thus ignored) between the time a thread locks the mutex
+and the time it waits on the condition variable.
+
+.SS "Time Wait"
+.B "fpthrd_cond_timedwait"
+atomically unlocks 
+.I "mutex"
+and waits on
+.IR "cond" ,
+as 
+.B "fpthrd_cond_wait"
+does, but it also limits the duration
+of the wait. If 
+.I "cond"
+has not been signaled within the amount of time
+specified by 
+.IR "abstime" ,
+the mutex 
+.I "mutex"
+is re-acquired and
+.B "fpthrd_cond_timedwait"
+returns the error 
+.BR "ETIMEDOUT" .
+
+The 
+.I "abstime"
+parameter specifies an absolute time, with the same
+origin as 
+.BR "time" (2)
+and 
+.BR "gettimeofday" (2):
+an 
+.I "abstime"
+of 0
+corresponds to 00:00:00 GMT, January 1, 1970.
+
+.SS Destroy
+.B "fpthrd_cond_destroy"
+destroys a condition variable.
+No threads must be waiting on the condition
+variable upon calling 
+.BR "fpthrd_cond_destroy" .
+
+.SH CANCELLATION
+
+.B "fpthrd_cond_wait"
+and 
+.B "fpthrd_cond_timedwait"
+are cancellation
+points (see 
+.B "fpthrd_cancel"
+(3F)). If a thread is cancelled while suspended in one of these
+routines, the thread immediately resumes execution, again locks 
+the 
+.I "mutex"
+argument to 
+.B "fpthrd_cond_wait"
+and
+.BR "fpthrd_cond_timedwait" ,
+and finally executes the cancellation.
+
+.SH "DIAGNOSTICS"
+
+All condition variable routines return 0 in the optional
+.I "ierr"
+on success and a non-zero
+error code on error.
+
+The 
+.B "fpthrd_cond_init" 
+routine returns the following error codes on error:
+.RS
+.TP
+.B "EINVAL"
+.I "attr"
+is invalid.
+.TP
+.B "EFAULT"
+.IR "cond " or " attr"
+are invalid.
+.TP
+.B "ENOMEM"
+Insufficient memory.
+.TP
+.B "EAGAIN"
+Insufficient resources.
+.RE
+
+The
+.BR "fpthrd_cond_signal " and " fpthrd_cond_broadcast" 
+routines return the following error code on error:
+.RS
+.TP
+.B "EINVAL"
+.I "cond"
+is invalid.
+.RE
+
+The 
+.B "fpthrd_cond_wait"
+routine returns the following error codes on error:
+.RS
+.TP
+.B "EINVAL"
+.IR "cond " or " mutex" 
+not valid.
+.TP
+.B "EPERM"
+.I "mutex"
+not owned by calling thread.
+.RE
+
+The 
+.B "fpthrd_cond_timedwait"
+routine returns the following error codes
+on error:
+.RS
+.TP
+.B "EINVAL"
+.IR cond ", " mutex " or " abstime
+not valid.
+.TP
+.B "EPERM"
+.I "mutex"
+not owned by calling thread.
+.TP
+.B "ETIMEDOUT"
+The condition variable was not signaled before the timeout specified by
+.I "abstime"
+.TP
+.B "EINTR"
+.br
+.B "fpthrd_cond_timedwait"
+was interrupted by a signal.
+.RE
+
+The 
+.B "fpthrd_cond_destroy"
+routine returns the following error codes
+on error:
+.RS
+.TP
+.B "EINVAL"
+.I "cond"
+is not a condition variable.
+.TP
+.B "EBUSY"
+Some threads are currently waiting on 
+.IR "cond" .
+.RE
+
+.SH "SEE ALSO"
+.BR "fpthrd_condattr_init" (3F),
+.BR "fpthrd_mutex_lock" (3F),
+.BR "fpthrd_mutex_unlock" (3F),
+.BR "gettimeofday" (2),
+.BR "nanosleep" (2).

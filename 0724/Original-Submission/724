@@ -1,0 +1,917 @@
+C      ALGORITHM 724, COLLECTED ALGORITHMS FROM ACM.
+C      THIS WORK PUBLISHED IN TRANSACTIONS ON MATHEMATICAL SOFTWARE,
+C      VOL. 19, NO. 4, DECEMBER, 1993, PP. 481-483.
+C
+C=======================================================================
+C Test driver for FINV.
+C
+       PROGRAM TEST
+       IMPLICIT DOUBLE PRECISION (A-H,O-Z)
+       DIMENSION P(5),M(8),N(8),X(8,8)
+       OPEN(11,FILE='TESTDATA',STATUS='UNKNOWN')
+       P(1) = 9D-1
+       P(2) = 99D-2
+       P(3) = 999D-3
+       P(4) = 9999D-4
+       P(5) = 99999D-5
+       M(1) = 1
+       M(2) = 2
+       M(3) = 3
+       M(4) = 10
+       M(5) = 20
+       M(6) = 50
+       M(7) = 100
+       M(8) = 200
+       DO 3 I = 1,8
+          N(I) = M(I)
+ 3     CONTINUE
+       DO 5 I = 1,5
+          DO 10 J = 1,8
+             DO 10 K = 1,8
+                X(J,K) = FINV(M(J),N(K),P(I))
+                if(X(J,K).LT.0.)write(*,'(A,2I4,F9.6,A)')
+     *            'FINV (',M(J),N(K),P(I),' ) fails'
+ 10       CONTINUE
+          WRITE(11,*)
+          WRITE(11,'(A5,F8.5)') ' P = ',P(I)
+          WRITE(11,*)
+          WRITE(11,1) 'N:M',(M(J),J=1,4)
+          WRITE(11,*)
+          DO 15, K=1,8
+             WRITE(11,2)  N(K),(X(J,K),J=1,4)
+ 15       CONTINUE
+          WRITE(11,*)
+          WRITE(11,1) 'N:M',(M(J),J=5,8)
+          WRITE(11,*)
+          DO 20, K=1,8
+             WRITE(11,2)  N(K),(X(J,K),J=5,8)
+ 20       CONTINUE
+          WRITE(11,*)
+ 5     CONTINUE
+ 1     FORMAT(2X,A5,1X,4(6X,I5,6X))
+ 2     FORMAT(2X,I5,1X,4(E17.8E3))
+ 
+       M1 = -1
+       N1 = 3
+       PR = 0.9D0
+       WRITE(11,'(1X,A11,I3,I3,F17.9)') 'M,N,P = ',M1,N1,PR
+       FI = FINV(M1,N1,PR)
+       WRITE(11,'(1X,A11,F17.9)') ' FINV = ',FI
+       M1 = 3
+       N1 = -1
+       PR = 0.9D0
+       WRITE(11,'(1X,A11,I3,I3,F17.9)') 'M,N,P = ',M1,N1,PR
+       FI = FINV(M1,N1,PR)
+       WRITE(11,'(1X,A11,F17.9)') ' FINV = ',FI
+       M1 = 3
+       N1 = 3
+       PR = -0.5D0
+       WRITE(11,'(1X,A11,I3,I3,F17.9)') 'M,N,P = ',M1,N1,PR
+       FI = FINV(M1,N1,PR)
+       WRITE(11,'(1X,A11,F17.9)') ' FINV = ',FI
+       M1 = 3
+       N1 = 3
+       PR = 0D0
+       WRITE(11,'(1X,A11,I3,I3,F17.9)') 'M,N,P = ',M1,N1,PR
+       FI = FINV(M1,N1,PR)
+       WRITE(11,'(1X,A11,F17.9)') ' FINV = ',FI
+       CLOSE(11)
+       END
+C
+C=======================================================================
+C Software package FINV.
+C
+      DOUBLE PRECISION FUNCTION DBETAI(X,PIN,QIN)
+C      .. Scalar Arguments ..
+      DOUBLE PRECISION           X, PIN, QIN
+C      .. Local Scalars ..
+      DOUBLE PRECISION           C, FINSUM, P, P1, PS, Q, TERM, XB, Y
+      INTEGER                    MAX1
+      REAL                       SNGL
+      DOUBLE PRECISION           ALNEPS, ALNSML, EPS, SML
+      SAVE                       ALNEPS, ALNSML, EPS, SML
+C      .. External Functions ..
+      DOUBLE PRECISION           DLBETA
+      EXTERNAL                   DLBETA
+C      .. Intrinsic Functions ..
+      INTRINSIC                  DBLE, DEXP, DINT, DLOG, DMAX1, DMIN1,
+     +                           MAX1, SNGL
+C      .. Executable Statements ..
+      DATA                       ALNEPS/0.0D0/, ALNSML/0.0D0/,
+     +                           EPS/0.0D0/, SML/0.0D0/
+C**********************************************************************
+C
+C PURPOSE: Evaluate the incomplete beta function ratio.
+C
+C ARGUMENTS:
+C     X   -  Upper Limit of integration.
+C         X must be in the interval (0.0,1.0) inclusive.
+C     PIN -  First beta distribution parameter
+C         PIN must be a positive real number.
+C     QIN -  Second beta distribution parameter
+C         QIN must be a positive real number.
+C
+C EXTERNAL FUNCTIONS CALLED:
+C     DLBETA-DLBETA(A,B) returns the value of the logarithm of the Beta
+C         function having parameters A and B.
+C
+C     Note:  DBETAI is an IMSL library routine.  The authors have been
+C         granted special permission to include this source code from
+C         the IMSL library.
+C         However, anyone wishing to use this code must first
+C         purchased the library routines from IMSL.
+*
+C**********************************************************************
+C
+      IF (EPS .EQ. 0.0D0) THEN
+          EPS = 1.19237D-7
+          ALNEPS = DLOG(EPS)
+          SML = 100.0D0*2.93941D-39
+          ALNSML = DLOG(SML)
+      END IF
+ 
+      Y = X
+      P = PIN
+      Q = QIN
+      IF (Q. LE. P .AND. X .LT. 0.8D0) GO TO 10
+      IF (X .LT. 0.2D0) GO TO 10
+      Y = 1.0D0 - Y
+      P = QIN
+      Q = PIN
+ 
+ 10   IF ((P+Q)*Y/(P+1.0D0) .LT. EPS) GO TO 70
+ 
+      PS = Q - DINT(Q)
+      IF (PS .EQ. 0.0D0) PS = 1.0D0
+      XB = P*DLOG(Y) - DLBETA(PS,P) - DLOG(P)
+      DBETAI = 0.0D0
+      IF (XB .LT. ALNSML) GO TO 30
+ 
+      DBETAI = DEXP(XB)
+      TERM = DBETAI*P
+      IF (PS .EQ. 1.0D0) GO TO 30
+ 
+      N = MAX1(SNGL(ALNEPS/DLOG(Y)),4.0)
+ 
+      DO 20 I=1, N
+          TERM = TERM *(DBLE(I) - PS)*Y/DBLE(I)
+          DBETAI = DBETAI + TERM/(P+DBLE(I))
+  20  CONTINUE
+ 
+ 30   IF (Q .LE. 1.0D0) GO TO 60
+          XB = P*DLOG(Y) + Q*DLOG(1.0D0-Y) - DLBETA(P,Q) - DLOG(Q)
+          IB = MAX1(SNGL(XB/ALNSML),0.0)
+          TERM = DEXP(XB-DBLE(IB)*ALNSML)
+          C = 1.0D0/(1.0D0-Y)
+          P1 = Q*C/(P+Q-1.0D0)
+ 
+          FINSUM = 0.0D0
+          N = Q
+          IF (Q .EQ. DBLE(N)) N = N - 1
+          DO 40 I=1, N
+              IF (P1.LE.1.0D0 .AND. TERM/EPS.LE.FINSUM) GO TO 50
+              TERM = (Q-DBLE(I)+1.0D0)*C*TERM/(P+Q-DBLE(I))
+ 
+              IF (TERM .GT. 1.0D0) THEN
+                  IB = IB - 1
+                  TERM = TERM*SML
+              END IF
+ 
+          IF (IB .EQ. 0) FINSUM = FINSUM + TERM
+ 40   CONTINUE
+ 
+ 50   DBETAI = DBETAI + FINSUM
+ 60   IF (Y.NE.X .OR. P.NE.PIN) DBETAI = 1.0D0 - DBETAI
+      DBETAI = DMAX1(DMIN1(DBETAI,1.0D0),0.0D0)
+      GO TO 9000
+ 
+ 70   DBETAI = 0.0D0
+      XB = P*DLOG(DMAX1(Y,SML)) - DLOG(P) - DLBETA(P,Q)
+      IF (XB.GT.ALNSML .AND. Y.NE.0.0D0) DBETAI = DEXP(XB)
+      IF (Y.NE.X .OR. P.NE.PIN) DBETAI = 1.0 - DBETAI
+ 9000 RETURN
+      END
+ 
+       DOUBLE PRECISION FUNCTION DLBETA(A,B)
+C      .. Parameters ..
+       DOUBLE PRECISION          PI, TOL
+       PARAMETER                 (PI = 3.14159265359D0, TOL = 1D-4)
+C      .. Scalar Arguments ..
+       DOUBLE PRECISION          A, B
+C      .. Local Scalars ..
+       DOUBLE PRECISION          AT, BT, DSPI, HOLD, TEMP
+C      .. Intrinsic Functions ..
+       INTRINSIC                 DABS, DBLE, DEXP, DLOG, DSQRT
+C      .. Executable Statements ..
+C**********************************************************************
+C
+C PURPOSE: The function returns the logarithm of the ratio:
+C                      Gamma(A)*Gamma(B)/Gamma(A+B)
+C          This routine was written by the authors to complement the
+C          IMSL routine DBETAI which calls this function.
+C
+C ARGUMENTS:
+C     A, B  - These are the parameters of the Beta distribution.
+C          A and B are real numbers of the form (integer)/2.
+C
+C**********************************************************************
+ 
+       DSPI = DSQRT(PI)
+       AT = A
+       BT = B
+       IF (AT.LT.BT) THEN
+           HOLD = AT
+           AT = BT
+           BT = HOLD
+       ENDIF
+       IF (AT .GT. 60.0D0) THEN
+           IF (BT .GT. 60.0D0) THEN
+               TEMP = AT*DLOG((AT+BT)/AT) + BT*DLOG((AT+BT)/BT)
+               TEMP = DEXP(TEMP)*DSQRT(AT*BT/(DBLE(2)*PI*(AT+BT)))
+           ELSE
+               TEMP = 1.0D0
+ 10            IF (BT.LE.(1.0D0+TOL)) GOTO 20
+                   BT = BT - 1.0D0
+                   TEMP = TEMP*(AT+BT)/BT
+                   GOTO 10
+ 20            CONTINUE
+               IF (DABS(BT-0.5D0).LT.TOL)  TEMP = TEMP/DSPI
+               TEMP = DLOG(TEMP) + AT*DLOG((AT+BT)/AT) - BT
+               TEMP = DEXP(TEMP)*DSQRT(AT)
+               IF(DABS(BT-1.0D0).LT.TOL) TEMP=TEMP*DSQRT(AT+BT)
+           ENDIF
+       ELSE
+          TEMP = 1.0D0
+ 30       IF (AT.LE.(1.0D0+TOL)) GOTO 40
+              AT = AT - 1.0D0
+              TEMP = TEMP*(AT+BT)/AT
+              GOTO 30
+ 40       IF (BT.LE.(1.0D0+TOL)) GOTO 50
+              BT = BT - 1.0D0
+              TEMP = TEMP*(AT+BT)/BT
+              GOTO 40
+ 50       IF (DABS(AT+BT-1.5D0).LT.TOL) TEMP = TEMP*0.5D0*DSPI
+          IF (DABS(AT-0.5D0).LT.TOL)  TEMP = TEMP/DSPI
+          IF (DABS(BT-0.5D0).LT.TOL)  TEMP = TEMP/DSPI
+       ENDIF
+       DLBETA = -DLOG(TEMP)
+       END
+
+
+ 
+
+       DOUBLE PRECISION FUNCTION FINV(M,N,P)
+C      .. Parameters ..
+       DOUBLE PRECISION          PI
+       PARAMETER               ( PI = 3.14159265359D0 )
+C      .. Scalar Arguments ..
+       INTEGER                   M, N
+       DOUBLE PRECISION          P
+C      .. Local Scalars ..
+       DOUBLE PRECISION          A, B, POWER, T, F
+C      .. External Functions ..
+       DOUBLE PRECISION          BINV, FINIT, TINIT
+       EXTERNAL                  BINV, FINIT, TINIT
+C      .. Intrinsic Functions ..
+       INTRINSIC                 DTAN, DBLE
+C      .. Executable Statements ..
+C***********************************************************************
+C
+C PURPOSE: This function returns percentage points for an F-distribution
+C          having (M,N) degrees of freedom --- P{F(M,N) <= FINV} = P.
+C
+C ARGUMENTS:
+C    M,N  -  The degrees of freedom of an F-distribution.
+C          M and N must both be positive integers.
+C    P    -  The probability for which the inverse of the F-distribution
+C          is to be evaluated. 0 <= P < 1.
+C    FINV -  Function value  (output)
+C          The probability that a random variable with F-distribution
+C          takes a value less than or equal to FINV is equal to P.
+C          If M or N is negative, or if P >=1 or < 0, then FINV
+C          returns with a negative value and an appropriate error
+C          message is sent to standard output.
+C
+C EXTERNAL FUNCTIONS CALLED:
+C
+C    BINV  -  BINV(A,B,VAPP,P) returns the percentage points for a Beta
+C          random variable, B(A,B) --- P{B(A,B) <= BINV} = P.
+C          0 <= VAPP <= 1 is an initial approximation to BINV.
+C          A and B are elements in {N/2 | N is a positive integer}.
+C          If the series used in BINV does not converge, the
+C          expansion is terminated, a negative value is returned and
+C          a message noting this divergence is sent to standard
+C          output.
+C
+C    FINIT -  FINIT(M,N,P) returns an initial approximation for the
+C          point x such that a random variable, F, with F-distribution
+C          having (M,N) degrees of freedom will satisfy  P{F <= x} = P.
+C          0 < P < 1  and  M,N are positive integers >= 3.
+C          This is the approximation due to Carter (1947).
+C
+C    TINIT -  TINIT(N,P) returns an initial approximation for the point
+C          x such that a random variable, T, with t-distribution having
+C          N degrees of freedom will satisfy  P{T >= x} = P.
+C          0 < P < 1  and  N is a positive integer.
+C          This is the approximation due to Goldberg and Levine (1945).
+C
+C***********************************************************************
+
+C                                 ( FIRST, ELIMINATE BAD VALUES FOR P. )
+       IF ((P.LE.0.0D0).OR.(P.GE.1.0D0))  THEN
+           IF (P.EQ.0.0D0) THEN
+               FINV = 0.0D0
+           ELSE IF ((P.LT. 0.0D0).OR.(P.GE.1.0D0))  THEN
+               FINV = -1.0D0
+               PRINT *,'ERROR: PROBABILITY P IS OUT OF RANGE'
+           END IF
+       ELSE IF ((M.LE.0).OR.(N.LE.0)) THEN
+            FINV = -1.0D0
+            PRINT *,'ERROR: A PARAMETER VALUES (M OR N) IS NEGATIVE'
+C                             (          THEN, CONSIDER SPECIAL CASES. )
+C  CASE:  M>2 AND N>2:        (       F-DISTRIBUTION--CONVERT TO BETA. )
+       ELSE IF ((M.GT.2).AND.(N.GT.2)) THEN
+           F = FINIT(M,N,P)
+C          (          TRANSFORM F APPROXIMATION TO BETA APPROXIMATION. )
+           B = DBLE(N)/(DBLE(N)+DBLE(M)*F)
+C          (                           FIND THE BETA PERCENTAGE POINT. )
+           A = BINV( DBLE(N)/2.0D0, DBLE(M)/2.0D0, B, 1.0D0 - P )
+C          (                     CONVERT RESULT TO F PERCENTAGE POINT. )
+           FINV = ( (1.0D0-A)*DBLE(N))/(A*DBLE(M) )
+C  CASE:  M=1, N=1:   (     CAUCHY DISTRIBUTION--DO DIRECT CALCULATION.)
+       ELSE IF ((M.EQ.1).AND.(N.EQ.1)) THEN
+           A = DTAN(P*PI/2)
+           FINV = A*A
+C  CASE:  M=1 OR N=1, BUT NOT BOTH: ( T DISTRIBUTION--CONVERT TO BETA. )
+       ELSE IF ((M.EQ.1).OR.(N.EQ.1)) THEN
+C          (            GET INITIAL APPROXIMATION FOR T, CONVERT TO F. )
+           IF (M.EQ.1)  THEN
+               T = TINIT(N,(1.0D0-P)/2.0D0)
+               F = T*T
+           ELSE
+               T = TINIT(M,P/2.0D0)
+               F = 1.0D0/(T*T)
+           ENDIF
+C          (          TRANSFORM F APPROXIMATION TO BETA APPROXIMATION. )
+           B = DBLE(N)/(DBLE(N)+DBLE(M)*F)
+C          (                           FIND THE BETA PERCENTAGE POINT. )
+           A = BINV( DBLE(N)/2.0D0, DBLE(M)/2.0D0, B, 1.0D0 - P )
+C          (                     CONVERT RESULT TO F PERCENTAGE POINT. )
+           FINV = ( (1.0D0-A)*DBLE(N))/(A*DBLE(M) )
+C  CASE:  M=2 OR N=2:  (    POLYNOMIAL DENSITY--DO DIRECT CALCULATION. )
+       ELSE
+           IF(M.EQ.2) THEN
+               POWER = (1.0D0-P)**(2.0D0/DBLE(N))
+               FINV = DBLE(N)*(1.0D0-POWER)/(2.0D0*POWER)
+           ELSE
+               POWER = P**(2.0D0/DBLE(M))
+               FINV = (2.0D0*POWER)/((1.0D0-POWER)*DBLE(M))
+           ENDIF
+       ENDIF
+       END
+
+       DOUBLE PRECISION FUNCTION BINV(A,B,VAPP,P)
+C      .. Parameters ..
+       DOUBLE PRECISION          ERROR, ERRAPP
+       PARAMETER               ( ERROR = 1.0D-8, ERRAPP = 1.0D-3 )
+C      .. Scalar Arguments ..
+       DOUBLE PRECISION          A, B, P, VAPP
+C      .. Local Scalars ..
+       DOUBLE PRECISION          BCOEFF, Q, S1, S2, SUM, T, TAIL,
+     +                           VHOLD, V
+       INTEGER                   I, J, K, LOOPCT
+C      .. Local Array ..
+       DOUBLE PRECISION          D(2:20,0:18)
+C      .. External Functions ..
+       DOUBLE PRECISION          BETA, DBETAI
+       EXTERNAL                  BETA, DBETAI
+C      .. Intrinsic Functions ..
+       INTRINSIC                 DABS, DBLE, DMAX1, DMIN1
+C      .. Executable Statements ..
+C***********************************************************************
+C
+C PURPOSE: This function uses a series expansion method to compute
+C          percentage points for the Beta distribution.
+C
+C ARGUMENTS:
+C     A,B  -  The parameters of the Beta distribution.
+C          A and B must both be positive real numbers of the form
+C          (integer)/2.
+C     VAPP -  The initial approximation to the Beta percentile.
+C          VAPP is a real number between 0.0 and 1.0.
+C     P    -  The probability for which the inverse Beta percentile is
+C          to be evaluated.
+C          P is a real number between 0.0 and 1.0.
+C
+C EXTERNAL FUNCTION CALLED:
+C     BETA  -  BETA(A,B,X) returns the value of the density function for
+C          a Beta(A,B) random variable.
+C          A and B are elements in  {N/2 | N is a positive integer}.
+C          0 <= X <= 1.
+C
+C     DBETAI - DBETAI(X,A,B) returns the probability that a random
+C          variable from a Beta distribution having parameters (A,B)
+C          will be less than or equal to X --- P{B(A,B) <= X} = DBETAI.
+C          A and B are positive real numbers.
+C
+C***********************************************************************
+
+       V = VAPP
+       VHOLD = 0.0D0
+       LOOPCT = 2
+ 10    IF ((DABS((V-VHOLD)/V).GE.ERRAPP).AND.(LOOPCT.NE.0)) THEN
+          VHOLD = V
+          LOOPCT = LOOPCT - 1
+C        (          USE DBETAI TO FIND  F(V) = PROB{ BETA(A,B) <= V }. )
+C        (          AND THEN COMPUTE    Q = (P - F(V))/f(V).           )
+          Q = (P-DBETAI(V,A,B))/BETA(V,A,B)
+C        (                       LET D(N,K) = C(N,K)*Q**(N+K-1)/(N-1)! )
+          T = 1.0D0 - V
+          S1 = Q*(B-1.0D0)/T
+          S2 = Q*(1.0D0-A)/V
+          D(2,0) = S1 + S2
+          TAIL = D(2,0)*Q/2.0D0
+          V = V + Q + TAIL
+          K = 3
+ 20       IF ((DABS(TAIL/V).GT.ERROR).AND.(K.LE.20)) THEN
+C           (                                   FIRST FIND  D(2,K-2).  )
+             S1 = Q*(DBLE(K)-2.0D0)*S1/T
+             S2 = Q*(2.0D0-DBLE(K))*S2/V
+             D(2,K-2) = S1 + S2
+C           (  NOW FIND  D(3,K-3), D(4,K-4), D(5,K-5), ... , D(K-1,1). )
+             DO 40 I=3,K-1
+                 SUM = D(2,0)*D(I-1,K-I)
+                 BCOEFF = 1.0D0
+                 DO 30 J = 1,K-I
+                     BCOEFF = (BCOEFF*DBLE(K-I-J+1))/DBLE(J)
+                     SUM = SUM + BCOEFF*D(2,J)*D(I-1,K-I-J)
+ 30                  CONTINUE
+                 D(I,K-I) = SUM + D(I-1,K-I+1)/DBLE(I-1)
+ 40              CONTINUE
+C           ( AND THEN COMPUTE D(K,0) AND USE IT TO EXPAND THE SERIES. )
+             D(K,0) = D(2,0)*D(K-1,0) + D(K-1,1)/DBLE(K-1)
+             TAIL = D(K,0)*Q/DBLE(K)
+             V = V + TAIL
+C           (                           CHECK FOR A DIVERGENT SERIES.  )
+             IF ((V .LE. 0.0D0) .OR. (V .GE. 1.0D0))  THEN
+                PRINT *,'SERIES IN BINV DIVERGES'
+                V = -1.0D0
+                GO TO 50
+             END IF
+             K = K+1
+             GO TO 20
+          END IF
+          GO TO 10
+       END IF
+ 50    BINV = V
+       END
+
+       DOUBLE PRECISION FUNCTION BETA(X,A,B)
+C      .. Parameters ..
+       DOUBLE PRECISION                 PI, TOL
+       PARAMETER                      ( PI=3.14159265359D0, TOL=1D-4 )
+C      .. Scalar Arguments ..
+       DOUBLE PRECISION                 A, B, X
+C      .. Local Scalars ..
+       DOUBLE PRECISION                 AT, BT, HOLD, TEMP, XT, YT
+C      .. Intrinsic Functions ..
+       INTRINSIC                        DABS, DBLE, DEXP, DLOG, DSQRT
+C      .. Executable Statements ..
+C***********************************************************************
+C
+C PURPOSE: This function returns the value of the Beta density function:
+C         BETA(X|A,B), where A and B are the parameters of the Beta.
+C
+C ARGUMENTS:
+C     X    - The argument of the Beta density function.
+C         X is a real number.
+C     A,B  - The parameters of the Beta density function.
+C         A and B are real numbers of the form (integer)/2.
+C
+C***********************************************************************
+
+       AT = A
+       BT = B
+       XT = X
+       YT = 1.0D0 - XT
+       IF (AT.LT.BT) THEN
+           HOLD = AT
+           AT = BT
+           BT = HOLD
+           YT = XT
+           XT = 1.0D0 - XT
+       ENDIF
+       IF (AT .GT. 60.0D0) THEN
+           IF (BT .GT. 60.0D0) THEN
+               TEMP = (AT-0.5D0)*DLOG(XT*(AT+BT-1.0D0)/(AT-1.0D0))
+     +              + (BT-0.5D0)*DLOG(YT*(AT+BT-1.0D0)/(BT-1.0D0))
+               TEMP = DEXP(TEMP-1.0D0)*DSQRT((AT+BT-1.0D0)/
+     +                  (DBLE(2)*PI*XT*YT))
+              ELSE
+                  TEMP = 1.0D0
+ 10               IF (BT .LE. (1.0D0+TOL)) GOTO 20
+                      BT = BT - 1.0D0
+                      TEMP = TEMP*YT*(AT+BT)/BT
+                      GOTO 10
+ 20               CONTINUE
+                  IF (DABS(BT-0.5D0).LT.TOL)  TEMP = TEMP/DSQRT(PI*YT)
+                  TEMP = DLOG(TEMP) - BT
+     +                   + (AT-0.5D0)*DLOG(XT*(AT+BT-1.0D0)/(AT-1.0D0))
+     +                   + BT*DLOG(AT+BT-1.0D0)
+                  TEMP = DEXP(TEMP)/DSQRT(XT)
+              ENDIF
+          ELSE
+             TEMP = 1.0D0
+ 30         IF (AT.LE.(1.0D0+TOL)) GOTO 40
+                 AT = AT - 1.0D0
+                 TEMP = TEMP*XT*(AT+BT)/AT
+                 GOTO 30
+ 40          IF (BT.LE.(1.0D0+TOL)) GOTO 50
+                 BT = BT - 1.0D0
+                 TEMP = TEMP*YT*(AT+BT)/BT
+                 GOTO 40
+ 50          IF (DABS(AT+BT-1.5D0).LT.TOL) TEMP = TEMP*0.5D0*DSQRT(PI)
+             IF (DABS(AT-0.5D0).LT.TOL)  TEMP = TEMP/DSQRT(PI*XT)
+             IF (DABS(BT-0.5D0).LT.TOL)  TEMP = TEMP/DSQRT(PI*YT)
+          ENDIF
+          BETA = TEMP
+       END
+
+       DOUBLE PRECISION FUNCTION ZINV(P)
+C      .. Scalar Arguments ..
+       DOUBLE PRECISION                  P
+C      .. Local Scalars ..
+       DOUBLE PRECISION                  C0, C1, C2, D1, D2, D3,
+     +                                   DENOM, NUMER, PTEMP, Z
+C      .. Intrinsic Functions ..
+       INTRINSIC                         DLOG, DSQRT
+C      .. Executable Statements ..
+       DATA         C0,C1,C2 / 2.515517D0, 0.802853D0, 0.010328D0 /
+       DATA         D1,D2,D3 / 1.432788D0, 0.189269D0, 0.001308D0 /
+C***********************************************************************
+C
+C PURPOSE: This function returns an approximation for the pth percentile
+C          of the standard normal distribution function.
+C          This approximation is due to Hastings (1955).
+C
+C ARGUMENTS:
+C     P   - The given percentile.
+C        P is a real number between 0.0 and 1.0.
+C
+C***********************************************************************
+
+       PTEMP = P
+       IF (P .GT. 0.5D0)  PTEMP = 1.0D0 - P
+       Z = DSQRT(-2.0D0*DLOG(PTEMP))
+       NUMER = C0 + Z*(C1 + Z*C2)
+       DENOM = 1.0D0 + Z*(D1 + Z*(D2 + Z*D3))
+       Z = Z - NUMER/DENOM
+       IF (P .LE. 0.5D0)  Z = -Z
+       ZINV = Z
+       END
+
+       DOUBLE PRECISION FUNCTION FINIT(M,N,P)
+C      .. Scalar Arguments ..
+       DOUBLE PRECISION                  P
+       INTEGER                           M, N
+C      .. Local Scalars ..
+       DOUBLE PRECISION                  A, B, C ,D, X
+C      .. External Functions ..
+       DOUBLE PRECISION                  ZINV
+       EXTERNAL                          ZINV
+C      .. Intrinsic Functions ..
+       INTRINSIC                         DBLE, DEXP, DSQRT
+C      .. Executable Statements ..
+C***********************************************************************
+C
+C PURPOSE: This function returns an approximation to the pth percentile
+C          for an F distribution with (m,n) degrees of freedom.
+C          This approximation is due to Carter (1947).
+C
+C ARGUMENTS:
+C     M,N  - The degrees of freedom of the F distribution.
+C         M and N are positive integers, M >=3 and N >= 3.
+C
+C EXTERNAL FUNCTION CALLED:
+C     ZINV -   ZINV returns X, the inverse probability for a Standard
+C           Normal distribution function --- P{Z <= X} = P.
+C
+C***********************************************************************
+
+C           (        USE ZINV TO FIND X WHEN  P = PROB{ N(0,1) <= X }. )
+       X = ZINV(P)
+       A = 1.0D0/(DBLE(M)-1.0D0) + 1.0D0/(DBLE(N)-1.0D0)
+       B = 1.0D0/(DBLE(M)-1.0D0) - 1.0D0/(DBLE(N)-1.0D0)
+       C = (X*X-3.0D0)/6.0D0
+       D = X*A*DSQRT((2.0D0/A)+C) - 2.0D0*B*(C+5.0D0/6.0D0-A/3.0D0)
+       FINIT = DEXP(D)
+       END
+
+       DOUBLE PRECISION FUNCTION TINIT(N,P)
+C      .. Scalar Arguments ..
+       DOUBLE PRECISION                  P
+       INTEGER                           N
+C      .. Local Scalars ..
+       DOUBLE PRECISION                  X, XSQUAR
+C      .. External Functions ..
+       DOUBLE PRECISION                  ZINV
+       EXTERNAL                          ZINV
+C      .. Intrinsic Functions ..
+       INTRINSIC                         DBLE
+C      .. Executable Statements ..
+C***********************************************************************
+C
+C PURPOSE: This function returns an approximation to the pth percentile
+C          for a students-t distribution with n degrees of freedom.
+C          This approximation is due to Goldberg and Levine (1945).
+C
+C ARGUMENTS:
+C     N    -  The degree of freedom of the students-t distribution
+C          N is a positive integer.
+C
+C EXTERNAL FUNCTION CALLED:
+C     ZINV -   ZINV returns X, the inverse probability for a Standard
+C          Normal distribution function --- P{Z <= X} = P.
+C
+C***********************************************************************
+
+C         (          USE ZINV TO FIND X WHEN  P = PROB{N(0,1) <= X}. )
+       X =  ZINV(P)
+       XSQUAR = X*X
+       TINIT = X + X*(XSQUAR+1.0D0)/(4.0D0*DBLE(N)) +  X*(XSQUAR*
+     +    (XSQUAR*5.0D0 + 1.6D1) + 3.0D0)/(9.6D1*DBLE(N)*DBLE(N))
+       END
+C
+C=======================================================================
+C Output from test driver TEST.
+C
+
+
+
+
+
+ P =  0.90000
+ 
+    N:M           1                2                3               10
+ 
+      1   0.39863458E+002  0.49500000E+002  0.53593245E+002  0.60194980E+002
+      2   0.85263158E+001  0.90000000E+001  0.91617902E+001  0.93915728E+001
+      3   0.55383195E+001  0.54623833E+001  0.53907733E+001  0.52304113E+001
+     10   0.32850153E+001  0.29244660E+001  0.27276731E+001  0.23226039E+001
+     20   0.29746530E+001  0.25892541E+001  0.23800871E+001  0.19367383E+001
+     50   0.28086577E+001  0.24119549E+001  0.21967298E+001  0.17291496E+001
+    100   0.27563780E+001  0.23564274E+001  0.21393762E+001  0.16632251E+001
+    200   0.27307304E+001  0.23292992E+001  0.21113394E+001  0.16307758E+001
+ 
+    N:M          20               50              100              200
+ 
+      1   0.61740292E+002  0.62688052E+002  0.63007277E+002  0.63167977E+002
+      2   0.94413094E+001  0.94712356E+001  0.94812251E+001  0.94862225E+001
+      3   0.51844817E+001  0.51546171E+001  0.51442595E+001  0.51390194E+001
+     10   0.22007439E+001  0.21170725E+001  0.20869169E+001  0.20713517E+001
+     20   0.17938433E+001  0.16896163E+001  0.16501336E+001  0.16292174E+001
+     50   0.15681071E+001  0.14409422E+001  0.13884651E+001  0.13590479E+001
+    100   0.14943480E+001  0.13548104E+001  0.12934390E+001  0.12570616E+001
+    200   0.14574916E+001  0.13100201E+001  0.12418229E+001  0.11992434E+001
+ 
+ 
+ P =  0.99000
+ 
+    N:M           1                2                3               10
+ 
+      1   0.40521807E+004  0.49995000E+004  0.54033520E+004  0.60558467E+004
+      2   0.98502513E+002  0.99000000E+002  0.99166201E+002  0.99399196E+002
+      3   0.34116222E+002  0.30816520E+002  0.29456695E+002  0.27228734E+002
+     10   0.10044289E+002  0.75594322E+001  0.65523126E+001  0.48491468E+001
+     20   0.80959581E+001  0.58489319E+001  0.49381934E+001  0.33681864E+001
+     50   0.71705768E+001  0.50566109E+001  0.41993434E+001  0.26981394E+001
+    100   0.68953010E+001  0.48239098E+001  0.39836953E+001  0.25033111E+001
+    200   0.67626803E+001  0.47128548E+001  0.38807134E+001  0.24103654E+001
+ 
+    N:M          20               50              100              200
+ 
+      1   0.62087302E+004  0.63025172E+004  0.63341100E+004  0.63500152E+004
+      2   0.99449171E+002  0.99479164E+002  0.99489163E+002  0.99494163E+002
+      3   0.26689791E+002  0.26354225E+002  0.26240242E+002  0.26182916E+002
+     10   0.44053948E+001  0.41154517E+001  0.40137194E+001  0.39617551E+001
+     20   0.29377353E+001  0.26429545E+001  0.25353126E+001  0.24791618E+001
+     50   0.22652428E+001  0.19489642E+001  0.18247532E+001  0.17567125E+001
+    100   0.20666461E+001  0.17352918E+001  0.15976691E+001  0.15183428E+001
+    200   0.19711304E+001  0.16294909E+001  0.14810567E+001  0.13912712E+001
+ 
+ 
+ P =  0.99900
+ 
+    N:M           1                2                3               10
+ 
+      1   0.40528407E+006  0.49999950E+006  0.54037920E+006  0.60562097E+006
+      2   0.99850025E+003  0.99900000E+003  0.99916662E+003  0.99939992E+003
+      3   0.16702922E+003  0.14850000E+003  0.14110846E+003  0.12924668E+003
+     10   0.21039595E+002  0.14905359E+002  0.12552745E+002  0.87538663E+001
+     20   0.14818776E+002  0.99526231E+001  0.80983798E+001  0.50752462E+001
+     50   0.12222106E+002  0.79564185E+001  0.63363706E+001  0.36710521E+001
+    100   0.11495431E+002  0.74076811E+001  0.58568069E+001  0.32958666E+001
+    200   0.11148262E+002  0.71519305E+001  0.56310496E+001  0.31203674E+001
+ 
+    N:M          20               50              100              200
+ 
+      1   0.62090767E+006  0.63028538E+006  0.63344433E+006  0.63503468E+006
+      2   0.99944992E+003  0.99947992E+003  0.99948992E+003  0.99949492E+003
+      3   0.12641777E+003  0.12466351E+003  0.12406883E+003  0.12376993E+003
+     10   0.78037471E+001  0.71926834E+001  0.69801939E+001  0.68720465E+001
+     20   0.42899664E+001  0.37650223E+001  0.35761909E+001  0.34783319E+001
+     50   0.29506046E+001  0.24413304E+001  0.22458439E+001  0.21399504E+001
+    100   0.25908800E+001  0.20755944E+001  0.18674014E+001  0.17484688E+001
+    200   0.24227258E+001  0.19022348E+001  0.16824310E+001  0.15517293E+001
+ 
+ 
+ P =  0.99990
+ 
+    N:M           1                2                3               10
+ 
+      1   0.40528473E+008  0.50000000E+008  0.54037964E+008  0.60562134E+008
+      2   0.99985000E+004  0.99990000E+004  0.99991667E+004  0.99994000E+004
+      3  -0.60000000E+001  0.69473833E+003 -0.20000000E+001  0.60275497E+003
+     10   0.38577153E+002  0.26547867E+002  0.22037622E+002  0.14900724E+002
+     20   0.23399482E+002  0.15118864E+002  0.12049800E+002  0.71805392E+001
+     50   0.17878604E+002  0.11135994E+002  0.86524418E+001  0.46952294E+001
+    100   0.16429538E+002  0.10113222E+002  0.77912271E+001  0.40841334E+001
+    200   0.15704014E+002  0.96478196E+001  0.73708346E+001  0.37871583E+001
+ 
+    N:M          20               50              100              200
+ 
+      1   0.62090802E+008  0.63028572E+008  0.63344467E+008  0.63503548E+008
+      2   0.99994500E+004  0.99994800E+004  0.99994900E+004  0.99994950E+004
+      3   0.58929668E+003  0.58095747E+003  0.57813163E+003  0.57671147E+003
+     10   0.13149531E+002  0.12031914E+002  0.11645008E+002  0.11448448E+002
+     20   0.59516126E+001  0.51413101E+001  0.48523921E+001  0.47032518E+001
+     50   0.36641832E+001  0.29500260E+001  0.26799064E+001  0.25346666E+001
+    100   0.31036561E+001  0.24037776E+001  0.21261428E+001  0.19626450E+001
+    200   0.28527336E+001  0.21550788E+001  0.18674140E+001  0.16984149E+001
+ 
+ 
+ P =  0.99999
+ 
+    N:M           1                2                3               10
+ 
+      1   0.40528474E+010  0.50000000E+010  0.54037965E+010  0.60562134E+010
+      2   0.99998500E+005  0.99999000E+005  0.99999167E+005  0.99999400E+005
+      3  -0.60000000E+001  0.32301520E+004 -0.20000000E+001 -0.60000000E+000
+     10   0.66427171E+002  0.45000000E+002 -0.66666667E+001  0.24621400E+002
+     20   0.34265428E+002  0.21622777E+002 -0.13333333E+002  0.98057330E+001
+     50   0.24146480E+002  0.14622330E+002 -0.33333333E+002  0.57926949E+001
+    100   0.21661951E+002  0.12946271E+002 -0.66666667E+002  0.48844467E+001
+    200   0.20012255E+002  0.12201845E+002 -0.13333333E+003  0.43125991E+001
+ 
+    N:M          20               50              100              200
+ 
+      1   0.62090802E+010  0.63028572E+010  0.63344467E+010  0.63503548E+010
+      2   0.99999450E+005  0.99999480E+005  0.99999490E+005  0.99999495E+005
+      3  -0.30000000E+000 -0.12000000E+000 -0.60000000E-001 -0.30000000E-001
+     10   0.21601298E+002  0.19682063E+002  0.19019299E+002  0.18682939E+002
+     20   0.80199225E+001  0.68528679E+001  0.64391713E+001  0.62261808E+001
+     50   0.44237026E+001  0.34888613E+001  0.31390205E+001  0.29519431E+001
+    100   0.36185942E+001  0.27301830E+001  0.23825305E+001  0.21887287E+001
+    200   0.32697750E+001  0.23977060E+001  0.20437407E+001  0.18377357E+001
+ 
+    M,N,P =  -1  3      0.900000000
+     FINV =      -1.000000000
+    M,N,P =   3 -1      0.900000000
+     FINV =      -1.000000000
+    M,N,P =   3  3     -0.500000000
+     FINV =      -1.000000000
+    M,N,P =   3  3      0.000000000
+     FINV =       0.000000000
+
+My output:
+
+ 
+ P =  0.90000
+ 
+    N:M           1                2                3               10
+ 
+      1   0.39863458E+002  0.49500000E+002  0.53593245E+002  0.60194980E+002
+      2   0.85263158E+001  0.90000000E+001  0.91617902E+001  0.93915728E+001
+      3   0.55383195E+001  0.54623833E+001  0.53907733E+001  0.52304113E+001
+     10   0.32850153E+001  0.29244660E+001  0.27276731E+001  0.23226039E+001
+     20   0.29746530E+001  0.25892541E+001  0.23800871E+001  0.19367383E+001
+     50   0.28086577E+001  0.24119549E+001  0.21967298E+001  0.17291496E+001
+    100   0.27563780E+001  0.23564274E+001  0.21393762E+001  0.16632251E+001
+    200   0.27307304E+001  0.23292992E+001  0.21113394E+001  0.16307758E+001
+ 
+    N:M          20               50              100              200
+ 
+      1   0.61740292E+002  0.62688052E+002  0.63007277E+002  0.63167977E+002
+      2   0.94413094E+001  0.94712356E+001  0.94812251E+001  0.94862225E+001
+      3   0.51844817E+001  0.51546171E+001  0.51442595E+001  0.51390194E+001
+     10   0.22007439E+001  0.21170725E+001  0.20869169E+001  0.20713517E+001
+     20   0.17938433E+001  0.16896163E+001  0.16501336E+001  0.16292174E+001
+     50   0.15681071E+001  0.14409422E+001  0.13884651E+001  0.13590479E+001
+    100   0.14943480E+001  0.13548104E+001  0.12934390E+001  0.12570616E+001
+    200   0.14574916E+001  0.13100201E+001  0.12418229E+001  0.11992434E+001
+ 
+ 
+ P =  0.99000
+ 
+    N:M           1                2                3               10
+ 
+      1   0.40521807E+004  0.49995000E+004  0.54033520E+004  0.60558467E+004
+      2   0.98502513E+002  0.99000000E+002  0.99166201E+002  0.99399196E+002
+      3   0.34116222E+002  0.30816520E+002  0.29456695E+002  0.27228734E+002
+     10   0.10044289E+002  0.75594322E+001  0.65523126E+001  0.48491468E+001
+     20   0.80959581E+001  0.58489319E+001  0.49381934E+001  0.33681864E+001
+     50   0.71705768E+001  0.50566109E+001  0.41993434E+001  0.26981394E+001
+    100   0.68953010E+001  0.48239098E+001  0.39836953E+001  0.25033111E+001
+    200   0.67626803E+001  0.47128548E+001  0.38807134E+001  0.24103654E+001
+ 
+    N:M          20               50              100              200
+ 
+      1   0.62087302E+004  0.63025172E+004  0.63341100E+004  0.63500152E+004
+      2   0.99449171E+002  0.99479164E+002  0.99489163E+002  0.99494163E+002
+      3   0.26689791E+002  0.26354225E+002  0.26240242E+002  0.26182916E+002
+     10   0.44053948E+001  0.41154517E+001  0.40137194E+001  0.39617551E+001
+     20   0.29377353E+001  0.26429545E+001  0.25353126E+001  0.24791618E+001
+     50   0.22652428E+001  0.19489642E+001  0.18247532E+001  0.17567125E+001
+    100   0.20666461E+001  0.17352918E+001  0.15976691E+001  0.15183428E+001
+    200   0.19711304E+001  0.16294909E+001  0.14810567E+001  0.13912712E+001
+ 
+ 
+ P =  0.99900
+ 
+    N:M           1                2                3               10
+ 
+      1   0.40528407E+006  0.49999950E+006  0.54037920E+006  0.60562097E+006
+      2   0.99850025E+003  0.99900000E+003  0.99916662E+003  0.99939992E+003
+      3   0.16702927E+003  0.14850000E+003  0.14110846E+003  0.12924668E+003
+     10   0.21039595E+002  0.14905359E+002  0.12552745E+002  0.87538663E+001
+     20   0.14818776E+002  0.99526231E+001  0.80983798E+001  0.50752462E+001
+     50   0.12222106E+002  0.79564185E+001  0.63363706E+001  0.36710521E+001
+    100   0.11495431E+002  0.74076811E+001  0.58568069E+001  0.32958666E+001
+    200   0.11148262E+002  0.71519305E+001  0.56310496E+001  0.31203674E+001
+ 
+    N:M          20               50              100              200
+ 
+      1   0.62090767E+006  0.63028538E+006  0.63344433E+006  0.63503468E+006
+      2   0.99944992E+003  0.99947992E+003  0.99948992E+003  0.99949492E+003
+      3   0.12641777E+003  0.12466351E+003  0.12406883E+003  0.12376993E+003
+     10   0.78037471E+001  0.71926834E+001  0.69801939E+001  0.68720465E+001
+     20   0.42899664E+001  0.37650223E+001  0.35761909E+001  0.34783319E+001
+     50   0.29506046E+001  0.24413304E+001  0.22458439E+001  0.21399504E+001
+    100   0.25908800E+001  0.20755944E+001  0.18674014E+001  0.17484688E+001
+    200   0.24227258E+001  0.19022348E+001  0.16824310E+001  0.15517293E+001
+ 
+ 
+ P =  0.99990
+ 
+    N:M           1                2                3               10
+ 
+      1   0.40528473E+008  0.49999999E+008  0.54037964E+008  0.60562134E+008
+      2   0.99985000E+004  0.99990000E+004  0.99991667E+004  0.99994000E+004
+      3  -0.60000000E+001  0.69473833E+003 -0.20000000E+001  0.60275497E+003
+     10   0.38577153E+002  0.26547867E+002  0.22037622E+002  0.14900724E+002
+     20   0.23399482E+002  0.15118864E+002  0.12049800E+002  0.71805392E+001
+     50   0.17878604E+002  0.11135994E+002  0.86524418E+001  0.46952294E+001
+    100   0.16429538E+002  0.10113222E+002  0.77912271E+001  0.40841334E+001
+    200   0.15704014E+002  0.96478196E+001  0.73708353E+001  0.37871583E+001
+ 
+    N:M          20               50              100              200
+ 
+      1   0.62090802E+008  0.63028572E+008  0.63344467E+008  0.63503548E+008
+      2   0.99994500E+004  0.99994800E+004  0.99994900E+004  0.99994950E+004
+      3   0.58929668E+003  0.58095747E+003  0.57813163E+003  0.57671147E+003
+     10   0.13149531E+002  0.12031914E+002  0.11645008E+002  0.11448448E+002
+     20   0.59516126E+001  0.51413101E+001  0.48523921E+001  0.47032518E+001
+     50   0.36641832E+001  0.29500260E+001  0.26799064E+001  0.25346666E+001
+    100   0.31036561E+001  0.24037776E+001  0.21261428E+001  0.19626450E+001
+    200   0.28527336E+001  0.21550788E+001  0.18674140E+001  0.16984149E+001
+ 
+ 
+ P =  0.99999
+ 
+    N:M           1                2                3               10
+ 
+      1   0.40528474E+010  0.50000000E+010  0.54037965E+010  0.60562134E+010
+      2   0.99998500E+005  0.99999000E+005  0.99999167E+005  0.99999400E+005
+      3  -0.60000000E+001  0.32301520E+004 -0.20000000E+001 -0.60000000E+000
+     10   0.66427171E+002  0.45000000E+002 -0.66666667E+001  0.24621400E+002
+     20   0.34265428E+002  0.21622777E+002 -0.13333333E+002  0.98057330E+001
+     50   0.24146480E+002  0.14622330E+002 -0.33333333E+002  0.57926949E+001
+    100   0.21661951E+002  0.12946271E+002 -0.66666667E+002  0.48844467E+001
+    200   0.20012255E+002  0.12201845E+002 -0.13333333E+003  0.43125991E+001
+ 
+    N:M          20               50              100              200
+ 
+      1   0.62090802E+010  0.63028572E+010  0.63344467E+010  0.63503548E+010
+      2   0.99999450E+005  0.99999480E+005  0.99999490E+005  0.99999495E+005
+      3  -0.30000000E+000 -0.12000000E+000 -0.60000000E-001 -0.30000000E-001
+     10   0.21601298E+002  0.19682063E+002  0.19019299E+002  0.18682939E+002
+     20   0.80199225E+001  0.68528679E+001  0.64391713E+001  0.62261808E+001
+     50   0.44237026E+001  0.34888613E+001  0.31390205E+001  0.29519431E+001
+    100   0.36185942E+001  0.27301830E+001  0.23825305E+001  0.21887287E+001
+    200   0.32697750E+001  0.23977060E+001  0.20437407E+001  0.18377357E+001
+ 
+    M,N,P =  -1  3      0.900000000
+    M,N,P =   3 -1      0.900000000
+    M,N,P =   3  3     -0.500000000
+    M,N,P =   3  3      0.000000000
+     FINV =       0.000000000

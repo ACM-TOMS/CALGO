@@ -1,0 +1,270 @@
+dnl Process this file with autoconf to produce a configure script.
+dnl ====================================================================
+dnl This file would be only 3 or 4 lines long if only Fortran code
+dnl needed to be supported.  However, as a demonstration of the use of
+dnl the log quadrature routines in Fortran from C and C++ compilers on
+dnl several UNIX systems, we provide additional configuration code that,
+dnl at least for those systems, solves the problem of finding the
+dnl correct compiler and linker switches, and the needed Fortran
+dnl libraries when the main program is in C or C++.  It is certainly a
+dnl nuisance that the required Fortran libraries have different names on
+dnl each system, and in some cases, do not reside in a directory that
+dnl the linker normally searches.
+dnl
+dnl If this script is not successful in handling this job, then the user
+dnl will have to locate the required Fortran libraries manually, and
+dnl then supply them with a LIBS="..." option passed to "make".  Usually
+dnl a small Fortran hello-world test program linked with "f77 -v foo.f"
+dnl will result in sufficient compiler status reports to identify the
+dnl name and location of the Fortran library or libraries.
+dnl [07-Apr-2000]
+dnl ====================================================================
+
+AC_INIT(Makefile.in)
+
+dnl Checks for compiler
+AC_PROG_CC
+AC_PROG_F77(f77 g77 xlf cf77 cft77 pgf77 fl32 af77 fort77 f90 xlf90 pgf90 epcf90 f95 xlf95 lf95 g95 fc fort ifc ifort)
+
+dnl Checks for support programs
+AC_CHECK_PROGS(AUTOCONF,	autoconf)
+
+dnl ====================================================================
+dnl Checks for libraries.  At least one UNIX system, Apple Macintosh
+dnl Rhapsody 5.5, does not have -lm.  We cannot use the simpler
+dnl AC_CHECK_LIB(m,sin), because that fails for C++.
+dnl
+dnl Originally, I used
+dnl	[double x; printf("sin(1.0) = %g\n", sin(1.0));]
+dnl as the test program, but at least one optimizing compiler
+dnl evaluated sin(1.0) at compile time, so the test failed to detect
+dnl that -lm was needed.  The rewrite below foiled the optimizer,
+dnl producing the correct conclusion about the need for -lm.
+dnl We have to turn off CFLAGS, because on Intel x86 systems, gcc -O2
+dnl uses hardware for the elementary function, and thus configure
+dnl concludes, erroneously, that -lm is unnecessary.
+SAVECFLAGS="$CFLAGS"
+CFLAGS=
+AC_CACHE_CHECK(if -lm needed for math functions,
+	my_ac_cv_need_libm,
+	AC_TRY_LINK([
+	#include <stdio.h>
+	#include <math.h>
+	],
+	[double x; x = 1.0; printf("sin(%g) = %g\n", x, sin(x));],
+	[my_ac_cv_need_libm=no],
+	[my_ac_cv_need_libm=yes]))
+CFLAGS="$SAVECFLAGS"
+
+if test "$my_ac_cv_need_libm" = yes
+then
+	LIBS="$LIBS -lm"
+fi
+
+dnl In order to link the C version of a test program on some systems,
+dnl the Fortran aint() function called by ../common/dgamma.f needs to
+dnl be found.  Its library location varies, and these tests serve to
+dnl find it.  Each supported system needs a special test case, which
+dnl we select via the returned value of the uname utility.
+if test "`uname`" = "SunOS"
+then
+	dnl This test works for C, but not for C++:
+	dnl	AC_CHECK_LIB(sunmath,__aint,[LIBS="$LIBS -lsunmath"],[])
+	dnl Here is an alternate:
+	SAVELIBS="$LIBS"
+	dnl gcc doesn't know where to find -lsunmath, so we find it ourselves
+	LIBDIR="`find /opt/SUNWspro -name libsunmath.so | grep lib/libsun | sed -n -e 's@/[[^/]]*$@@' -e 1p`"
+	LIBS="$LIBS -L$LIBDIR -R$LIBDIR -lsunmath -lF77"
+	CFLAGS="$CFLAGS -DHAVE_SUNMATH_H"
+	AC_CACHE_CHECK(if -lsunmath needed for aint(),
+		my_ac_cv_need_libsunmath,
+		AC_TRY_LINK([
+		#include <stdio.h>
+		#if defined(__cplusplus)
+		extern "C" { double __aint(double); }
+		#endif
+		],
+		[double x; x = 1.5; printf("aint(%g) = %g\n", x, __aint(x));],
+		[my_ac_cv_need_libsunmath=no],
+		[my_ac_cv_need_libsunmath=yes]))
+	LIBS="$SAVELIBS"
+	if test "$my_ac_cv_need_libsunmath" = yes
+	then
+		LIBS="$LIBS -L$LIBDIR -R$LIBDIR -lsunmath -lfsu -lmtsk"
+	fi
+elif test "`uname`" = "AIX"
+then
+	SAVELIBS="$LIBS"
+	LIBS="$LIBS -lxlf90"
+	AC_CACHE_CHECK(if -lxlf90 needed for library routines,
+		my_ac_cv_need_libxlf90,
+		AC_TRY_LINK([
+		#include <stdio.h>
+		#if defined(__cplusplus)
+		extern "C" { double _xldintv(double); }
+		#endif
+		],
+		[double x; x = 1.5; printf("aint(%g) = %g\n", x, _xldintv(x));],
+		[my_ac_cv_need_libxlf90=yes],
+		[]))
+	LIBS="$SAVELIBS"
+	if test "$my_ac_cv_need_libxlf90" = yes
+	then
+		LIBS="$LIBS -lxlf90"
+	else
+		SAVELIBS="$LIBS"
+		LIBS="$LIBS -lxlf90"
+		AC_CACHE_CHECK(if -lxlf90 needed for library routines,
+			my_ac_cv_need_libxlf90,
+			AC_TRY_LINK([
+			#include <stdio.h>
+			#if defined(__cplusplus)
+			extern "C" { double _xldint(double); }
+			#endif
+			],
+			[double x; x = 1.5; printf("aint(%g) = %g\n", x, _xldint(x));],
+			[my_ac_cv_need_libxlf90=yes],
+			[my_ac_cv_need_libxlf90=no]))
+		LIBS="$SAVELIBS"
+		if test "$my_ac_cv_need_libxlf90" = yes
+		then
+			LIBS="$LIBS -lxlf90"
+		fi
+	fi
+elif test "`uname`" = "HP-UX"
+then
+	dnl The HP-UX Fortran library is -lcl, but the Fortran compiler
+	dnl generates library routine names with embedded dollar signs,
+	dnl which not all compilers can handle, so we must create a
+	dnl small temporary Fortran file that is linked with the C test
+	dnl program.
+	cat <<EOF >conftes2.f
+      DOUBLE PRECISION FUNCTION MYEXP(X)
+      DOUBLE PRECISION X
+      MYEXP = DEXP(X)
+      END
+EOF
+	fort77 -c conftes2.f 1>/dev/null 2>&1
+	SAVELIBS="$LIBS"
+	LIBS="conftes2.o $LIBS -lcl"
+	AC_CACHE_CHECK(if -lcl needed for dexp(),
+		my_ac_cv_need_libcl,
+		AC_TRY_LINK([
+		#include <stdio.h>
+		#if defined(__cplusplus)
+		extern "C" { double myexp(double*); }
+		#else
+		double myexp(double*);
+		#endif
+		],
+		[double x; x = 1.5; printf("aint(%g) = %g\n", x, myexp(&x));],
+		[my_ac_cv_need_libcl=yes],
+		[my_ac_cv_need_libcl=no]))
+	rm -f conftes2.*
+	LIBS="$SAVELIBS"
+	if test "$my_ac_cv_need_libcl" = yes
+	then
+		LIBS="$LIBS -lcl"
+	fi
+fi
+
+dnl Compaq/DEC Alpha systems need the Fortran -fpe3 flag to get
+dnl nonstop IEEE 754 behavior; without it, NaN and Infinity terminate
+dnl the process, sigh...
+if test "`uname -m`" = "alpha"
+then
+	if test "`uname -s`" = "Linux"
+	then
+		case $CC in
+			cc|gcc|g++)	CEXTRA="$CEXTRA -mieee" ;;
+		esac
+		case $F77 in
+			f77|g77)	FEXTRA="$FEXTRA -mieee" ;;
+			fort)		FEXTRA="$FEXTRA -fpe3" ;;
+		esac
+	elif test "`uname -s`" = "OSF1"
+	then
+		case $CC in
+			cc|c89|cxx*)	CEXTRA="$CEXTRA -ieee" ;;
+			gcc|g++)	CEXTRA="$CEXTRA -mieee" ;;
+		esac
+		case $F77 in
+			f77|f90|f95)	FEXTRA="$FEXTRA -fpe3" ;;
+			g77)		FEXTRA="$FEXTRA -mieee" ;;
+		esac
+	fi
+fi
+
+dnl The IBM Fortran 90 and 95 compilers need switches to select
+dnl fixed-form input.
+if test "`uname -s`" = "AIX"
+then
+	case $F77 in
+		xlf90|xlf95)	FEXTRA="$FEXTRA -qfixed" ;;
+	esac
+fi
+
+dnl The NAG Fortran 90 and 95 compilers need switches to select
+dnl fixed-form input, and to use IEEE 754-conformant arithmetic.
+if test "$F77" = "nagf90" -o  "$F77" = "nagf95"
+then
+	FEXTRA="$FEXTRA -ieee=full -fixed"
+fi
+
+dnl The SGI IRIX 5.3 f77 compiler needs -Wf,-Idirname instead of
+dnl -Idirname, sigh...
+if test "`uname -s`" = "IRIX" -a "$F77" = "f77"
+then
+	AC_CACHE_CHECK(for SGI IRIX 5.x f77 include option,
+		my_ac_cv_need_sgi5_include,
+		[
+	cat <<EOF >conftest.f
+      include 'stdio.inc'
+      end
+EOF
+		if f77 -Wf,-I../common -c conftest.f 1>/dev/null 2>&1
+		then
+			my_ac_cv_need_sgi5_include=yes
+		else
+			my_ac_cv_need_sgi5_include=no
+		fi
+	])
+	if test "$my_ac_cv_need_sgi5_include" = yes
+	then
+		FINC="$FINC -Wf,-I../common"
+	fi
+fi
+
+dnl Sun f90 and f95 foolishly default to stop-on-trap behavior, so
+dnl force nonstop computation.
+if test "`uname -s`" = "SunOS"
+then
+	case $F77 in
+		f90|f95)	FEXTRA="$FEXTRA -ftrap=%none" ;;
+	esac
+fi
+
+dnl Compilation on GNU/Linux Intel x86 with Lahey lf95 unfortunately
+dnl requires runtime flags to prevent termination on numeric
+dnl exceptions, and even then, terminates on quadruple-precision
+dnl underflow, sigh...
+if test "`uname -s`" = "Linux" -a "$F77" = "lf95"
+then
+	RUNFLAGS=-Wl,-i
+else
+ 	RUNFLAGS=
+fi
+
+AC_SUBST(CEXTRA)
+AC_SUBST(FEXTRA)
+AC_SUBST(FINC)
+AC_SUBST(LIBS)
+AC_SUBST(RUNFLAGS)
+
+dnl Remove -O2 from CFLAGS gratuitously inserted by configure.
+CFLAGS="`echo $CFLAGS | sed -e 's/-O2 //g' -e 's/ -O2$//g' -e 's/^-O2$//'`"
+
+dnl Remove -g from CFLAGS gratuitously inserted by configure.
+CFLAGS="`echo $CFLAGS | sed -e 's/-g //g' -e 's/ -g$//g' -e 's/^-g$//'`"
+
+AC_OUTPUT(Makefile)

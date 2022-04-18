@@ -1,0 +1,382 @@
+\documentclass[acmtoms]{acmtrans2m}
+
+\markboth{J. Money and Q. Ye}{EIGIFP: User Manual}
+\title{EIGIFP: User Manual}
+\author{    JAMES H. MONEY$^\dagger$ and QIANG YE$^*$\\
+        UNIVERSITY OF KENTUCKY
+}
+
+\begin{document}
+\maketitle
+
+\newcommand{\eigifp}{{\tt eigifp}  }
+\section{\eigifp Calls}
+\newcommand{\Or}{{\cal O}}
+
+\eigifp has a simple calling structure but also take  several options. 
+We will first discuss the basic calling structure
+of the program, working our way up to the more complex cases, and finally introduce all
+the advanced optional arguments a user can use to optimize performance.
+
+
+The most basic call to \eigifp is
+\[
+ {\tt >>[Evalues,Evectors]=eigifp(A)}
+\]
+where $A$ is a matrix in sparse format. This returns 
+the smallest eigenvalue of $A$ in 
+{\tt Evalues}  and and its corresponding eigenvector in {\tt Evectors}.
+
+To compute
+the $k$ smallest eigenpairs of the matrix $A$, one appends 
+the value $k$ to the above call 
+\[
+ {\tt >>[Evalues,Evectors]=eigifp(A,k)}
+\]
+where $k\geq 1$ is an integer. Then the returned results are 
+a vector of $k$ smallest eigenvalues {\tt Evalues} and
+an $n \times k$ matrix of the corresponding eigenvectors {\tt Evectors}.
+
+Now, for solving the pencil eigenvalue problem of $(A,B)$ which is
+$Ax= \lambda B x$, one appends 
+$B$ after $A$ in the above calls, namely,   
+\[
+ {\tt >>[Evalues,Evectors]=eigifp(A,B)}
+\]
+returns the smallest eigenpair and 
+\[
+ {\tt >>[Evalues,Evectors]=eigifp(A,B,k) }
+\]
+returns the $k$ smallest eigenpairs as above. 
+
+In all cases, replacing $A$ by $-A$ in the input argument and multiplying  
+the output by $-1$ compute the largest eigenvalue correspondingly. 
+For example, 
+\[
+ {\tt >>[Evalues,Evectors]= eigifp(-A,B,k);  Evalues = - Evalues;}
+\]
+returns the $k$ largest eigenpairs of $(A,B)$. This can also be done by 
+directly calling $A,B$ with the option {\tt opt.maxeig}. 
+
+
+\eigifp also uses an option structure to provide   
+extra information to the algorithm and
+to help improve performance. Users can pass  a set of optional parameters via a structure in MATLAB. This is done by first setting the value in the structure, e.g. 
+\[
+{\tt >>opt.initialvec=ones(n,1)}
+\]
+and then pass {\tt opt} to  \eigifp by calling 
+\[
+ {\tt >>[Evalues,Evectors]=eigifp(A,B,k,opt)}
+\]
+One can pass less parameters, as long as the {\tt opt} structure 
+is the last 
+parameter in the list.
+
+The following discuss various optional parameters  one can set.
+
+\subsection{Informational Options}
+Below is a list of the informational options \eigifp takes:
+
+\medskip 
+
+\begin{tabular}{p{1.5in}p{3in}}
+{\tt opt.size} & The dimension of $A$.\\
+{\tt opt.normA} & An estimate of the norm of $A$.\\
+{\tt opt.normB} & An estimate of the norm of $B$.\\
+{\tt opt.tolerance} 
+\mbox{(or {\tt opt.tol})} & Set  the termination threshold for the 
+        norm of the residual. Default value is given by (\ref{eq:threshold}) \\
+{\tt opt.maxiteration} \mbox{(or {\tt opt.maxit})}
+& Set the maximal number of outer iterations to perform. 
+Default value = $500$. \\
+{\tt opt.disp}  
+& Set to $0$ to disable on-screen display of output and to any other numerical
+value to enable display. 
+Default value = $1$. \\
+{\tt opt.maxeig}&Set to $1$ to compute the largest eigenvalue. 
+Default value = $0$. 
+\end{tabular}
+
+The first three options are primarily used when the matrices are passed as functions (discussed in Sec.3.3 below). 
+The first one provides the dimension of
+vectors and is required in the use of functions. 
+The other two are optional, and estimate
+the norm of   $A$ and $B$. If they are not provided, then the norms are estimated by $\|Ax\|$ and $\|Bx\|$ for a random vector $x$. 
+
+The {\tt tolerance} option allows the user to specify a tolerance 
+different from the default value (\ref{eq:threshold}). 
+It can be set to be much larger
+(e.g. of $\Or (\sqrt{\epsilon})$) if only eigenvalues are desired.  
+
+The {\tt maxiteration} option lets the user specify how many outer iterations \eigifp will perform before it
+terminates without convergence. The user can set a larger value 
+for particularly difficult problems. 
+
+
+
+\subsection{Performance Options}
+
+Below is a list of performance options one can specify to optimize 
+the performance. 
+
+
+\medskip 
+
+\begin{tabular}{p{1.5in}p{3in}}
+
+{\tt opt.initialvec} \mbox{(or {\tt opt.V0})}
+& An $n \times k$ matrix whose $j$-th column is the initial guess for the $j$-th eigenvector.   \\
+
+{\tt opt.inneriteration} \mbox{(or {\tt opt.innerit})}
+& Set the number of inner iteration (i.e. the dimension of the Krylov subspaces).  \\
+{\tt opt.useprecon} & Setting this to 'NO' causes no preconditioning to happen. Otherwise, this is assumed to be the
+initial shift to be used for computing the preconditioner.\\
+\end{tabular}
+
+\begin{tabular}{p{1.5in}p{3in}}
+{\tt opt.iluthresh} \mbox{(or {\tt opt.ilu})}
+& Set  the threshold used in the incomplete LU 
+factorization that is called for preconditioning. Setting it to $0$ 
+will lead to full  factorization while setting it to $1$ 
+corresponds to incomplete factorization with no fill-in. \\
+{\tt opt.preconditioner} \mbox{(or {\tt opt.precon})}
+& Input a matrix or a function to be used as a user specified preconditioner.\\
+\end{tabular}
+
+\medskip
+
+The {\tt initialvec} option allows the user to input  initial eigenvector guesses and should be provided whenever they are available.
+If it is  
+$n \times p$, then {\tt initialvec(:,1)} is used as the initial vector 
+for the first eigenvalue, 
+{\tt initialvec(:,2)} for the second, and so on. 
+
+The {\tt inneriteration} option allows the user to set a fixed inner iteration. This will disable the adaptive setting by default. 
+It can be used either to limit memory usage in the inner iteration
+or to   improve convergence for more 
+difficult problems.  
+Thus, it should be set to a 
+small value if \eigifp runs out of memory but to 
+a larger value when a very slow convergence is observed.
+
+The  {\tt useprecon} option allows the user either 
+to disable preconditioning totally when computing the incomplete factorization is not efficient,   
+or   to input an approximate eigenvalue to be used as a   
+shift for computing a preconditioner. The latter setting saves 
+the program to search for an initial approximation and will use 
+the preconditioned iteration throughout.   
+
+The {\tt iluthresh} option sets the threshold value for computing the incomplete $LDL^T$ decomposition.  Setting it to a smaller value leads 
+to a better preconditioner which is more expensive to compute. 
+The default value is $10^{-3}$.
+
+
+Finally, the  {\tt preconditioner} option allows the user to supply 
+either a matrix or a function  for the preconditioner. If it is a 
+matrix, it should be the factor $L$; if it is a function, it should 
+perform $L^{-T}L^{-1}x$ for an input $x$.  
+
+\subsection{Matrices as Functions}
+In addition to passing $A$ and $B$ as sparse matrices, one 
+can pass in the name of functions to call. The function should be
+of the form
+\[
+ {\tt >>Ax=functionA(x)}
+\]
+where {\tt functionA} returns the result of $A*x$ as a vector. Similarly, one can provide a function call for $B$. In this case, the dimension of 
+the matrices must be passed through {\tt opt.size}. 
+Then, one can call \eigifp as
+\[
+{\tt >>[Evalues,Evectors]=eigifp('functionA',k, opt)}
+\]
+It is also desirable to pass the norms of the matrices through 
+{\tt opt.normA} and 
+{\tt opt.normB}. 
+
+\section{Examples}
+
+In this section, we will present some examples of calling \eigifp 
+(version 2.1.1) and its outputs (with part of on-screen printout  omitted)  
+from  execution. 
+%All the executions were
+%carried out using MATLAB version 6.0 with the most recent patches 
+% from MathWorks  on
+% a Pentium III Xeon 1.8Ghz with 1GB of RAM. 
+Below,  $A$  is the $7668 \times 7668$ matrix from discretizing
+the 2 dimensional Laplacian operator on a unit disc using a 5 point stencil. The boundary conditions
+are Dirichlet boundary conditions. 
+We generate the sparse matrix in MATLAB and call \eigifp as follows
+
+
+\begin{verbatim}
+>> A=delsq(numgrid('D',100));
+>> eigenvalues=eigifp(A)
+Computing Eigenvalue 1:
+...
+  ------------
+  Eigenvalue 1 converged.
+  # of multiplications by A (and B):      197.
+  # of multiplications by preconditioner: 9.
+-----
+  CPU Time:3.250000.
+eigenvalues =
+    0.0023
+\end{verbatim}
+
+ For the pencil problem, we use a diagonal matrix for $B$. 
+
+\begin{verbatim}                    
+>>B=spdiags([1:size(A,1)]',0,size(A,1),size(A,2));
+>>eigenvalues=eigifp(A,B)
+Computing Eigenvalue 1:
+...
+  ------------
+  Eigenvalue 1 converged.
+  # of multiplications by A (and B):      155.
+  # of multiplications by preconditioner: 9.
+-----
+  CPU Time:3.990000.
+eigenvalues =
+   5.5653e-07
+\end{verbatim}
+
+To compute the first three eigenpairs of $(A,B)$, we use:
+\begin{verbatim}
+>>eigenvalues=eigifp(A,B,3)
+Computing Eigenvalue 1:
+...
+  ------------
+  Eigenvalue 1 converged.
+  # of multiplications by A (and B):      159.
+  # of multiplications by preconditioner: 9.
+Computing Eigenvalue 2:
+...
+  ------------
+  Eigenvalue 2 converged.
+  # of multiplications by A (and B):      39.
+  # of multiplications by preconditioner: 37.
+Computing Eigenvalue 3:
+...
+  ------------
+  Eigenvalue 3 converged.
+  # of multiplications by A (and B):      18.
+  # of multiplications by preconditioner: 16.
+-----
+  CPU Time:7.860000.
+eigenvalues =
+   1.0e-05 *
+    0.0557
+    0.1365
+    0.1557
+\end{verbatim}
+
+Now we present some examples using the options. The 
+following specifies an initial guess for $x_0$ 
+and a tolerance of $10^{-5}$:
+
+ 
+\begin{verbatim}
+>>opt.v0=ones(size(A,1),1);
+>>opt.tol=1e-5;
+>>eigenvalues=eigifp(A,B,opt)
+Computing Eigenvalue 1:
+...
+  ------------
+  Eigenvalue 1 converged.
+  # of multiplications by A (and B):      62.
+  # of multiplications by preconditioner: 2.
+-----
+  CPU Time:2.030000.
+eigenvalues =
+   5.5653e-07
+\end{verbatim}
+
+Next, we can disable preconditioning totally by setting the {\tt useprecon} option.
+\begin{verbatim}
+>>opt.useprecon='NO';
+>>eigenvalues=eigifp(A,B,opt)
+Computing Eigenvalue 1:
+...
+  ------------
+  Eigenvalue 1 converged.
+  # of multiplications by A (and B):      148.
+-----
+  CPU Time:2.940000.
+eigenvalues =
+   5.5653e-07
+\end{verbatim}
+
+On the other hand, since $0$ is an approximate eigenvalue here, 
+we can use it as a shift to start the 
+preconditioned iterations by setting {\tt opt.useprecon} to $0$. 
+\begin{verbatim}
+>>opt.useprecon=0;
+>>eigenvalues=eigifp(A,B,opt)
+Computing threshold ILU factorization using the shift provided.
+Computing Eigenvalue 1:
+...
+  ------------
+  Eigenvalue 1 converged.
+  # of multiplications by A (and B):      7.
+  # of multiplications by preconditioner: 5.
+-----
+  CPU Time:0.360000.
+eigenvalues =
+   5.5653e-07
+\end{verbatim}
+
+We can also  
+manually set a fixed value for the inner iterations:
+\begin{verbatim}
+>>opt.innerit=32;
+>>eigenvalues=eigifp(A,B,opt)
+Computing Eigenvalue 1:
+...
+  ------------
+  Eigenvalue 1 converged.
+  # of multiplications by A (and B):      202. 
+  # of multiplications by preconditioner: 8.
+-----
+  CPU Time:7.330000.
+eigenvalues =
+   5.5653e-07
+\end{verbatim}
+
+
+Lastly, here is an example using a function $Afunc$ and $Bfunc$ to compute the two {\bf largest} eigenvalues of (A,B). Here
+the functions use the matrices $A$ and $B$ respectively as they were defined above. 
+%Here the eigenvalues
+%of $(-A,B)$ are computed and then the eigenvalues are negated before returning.
+\begin{verbatim}
+>> opt.maxeig=1;
+>> opt.size=size(A,1);
+>> opt.normA=norm(A,1);
+>> opt.normB=norm(B,1);
+>> eigenvalues=eigifp('Afunc','Bfunc',2,opt);
+Computing the smallest eigenvalues of (-A,B) first.
+ 
+Computing Eigenvalue 1:
+...
+  ------------
+  Eigenvalue 1 converged.
+  # of multiplications by A (and B):      1244.
+ 
+Computing Eigenvalue 2:
+...
+  ------------
+  Eigenvalue 2 converged.
+  # of multiplications by A (and B):      1250.
+ 
+-----
+  CPU Time:105.520000.
+  Negating the eigenvalues of (-A, B) => the largest eigenvalues of (A,B):
+  4.239535e+00
+  2.032777e+00
+eigenvalues =
+    4.2395
+    2.0328
+\end{verbatim}
+
+
+\end{document}

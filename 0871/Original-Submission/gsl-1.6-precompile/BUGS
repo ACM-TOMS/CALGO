@@ -1,0 +1,244 @@
+This file is the GSL bug tracking system.  The CVS version of this
+file should be kept up-to-date.
+
+----------------------------------------------------------------------
+BUG#1 -- gsl_sf_hyperg_2F1_e fails for some arguments 
+
+From: keith.briggs@bt.com
+Subject: gsl_sf_hyperg_2F1 bug report
+Date: Thu, 31 Jan 2002 12:30:04 -0000
+
+gsl_sf_hyperg_2F1_e fails with arguments (1,13,14,0.999227196008978,&r).
+It should return 53.4645... .
+
+#include <gsl/gsl_sf.h>
+#include <stdio.h>
+
+int main (void)
+{
+  gsl_sf_result r;
+  gsl_sf_hyperg_2F1_e (1,13,14,0.999227196008978,&r);
+  printf("r = %g %g\n", r.val, r.err);
+}
+
+NOTES: The program overflows the maximum number of iterations in
+gsl_sf_hyperg_2F1, due to the presence of a nearby singularity at
+(c=a+b,x=1) so the sum is slowly convergent.
+
+The exact result is 53.46451441879150950530608621 as calculated by
+gp-pari using sumpos(k=0,gamma(a+k)*gamma(b+k)*gamma(c)*gamma(1)/
+(gamma(c+k)*gamma(1+k)*gamma(a)*gamma(b))*x^k)
+
+The code needs to be extended to handle the case c=a+b. This is the
+main problem. The case c=a+b is special and needs to be computed
+differently.  There is a special formula given for it in Abramowitz &
+Stegun 15.3.10
+
+As reported by Lee Warren <warren@atom.chem.utk.edu> another set of
+arguments which fail are:
+
+#include <gsl/gsl_sf.h>
+#include <stdio.h>
+
+int main (void)
+{
+  gsl_sf_result r;
+  gsl_sf_hyperg_2F1_e (-1, -1, -0.5, 1.5, &r);
+  printf("r = %g %g\n", r.val, r.err);
+}
+
+The correct value is -2.
+
+----------------------------------------------------------------------
+BUG#10 -- gsl_sf_fermi_dirac_int error estimates 
+
+Some of the error estimates on gsl_sf_fermi_dirac_int are much too
+large.  The value itself is pretty accurate.
+
+In the test_sf_result you need to work in something like
+
+  if(r.err > 1.0e5 * (fabs(r.val - val) + GSL_DBL_EPSILON * fabs(val)))
+        s |= TEST_SF_INCONS;   /* error estimate too large */
+
+in addition to the existing
+
+   if(fabs(val - r.val) > 2.0*r.err) s |= TEST_SF_INCONS;
+
+to catch those.  
+
+#include<stdio.h>
+#include<gsl/gsl_errno.h>
+#include<gsl/gsl_sf.h>
+
+int main() {
+  gsl_sf_result r;
+  int status;
+
+  status = gsl_sf_fermi_dirac_int_e (9, 500.0, &r);
+  printf("FD_9(500) = %.18e +- %.18e\n", r.val, r.err);
+}
+
+result,
+
+FD_9(500) = 2.692738498426942915e+20 +- 2.629627439870118259e+47
+
+Exact     = 2.692738498...e+20
+
+----------------------------------------------------------------------
+BUG#14 -- qagil
+
+The extrapolation used in qags gives negative results when integrating
+the small tails of probability distributions using qagil, even though
+each individual term in the sequence is positive and increasing (!).
+This is a feature of the original quadpack and appears to be due to
+the extrapolation algorithm, which should probably be tweaked to avoid
+this undesirable behavior.
+
+----------------------------------------------------------------------
+BUG#18 -- R250 discrepancy, and initialisation in R250 / GSFR4
+
+This bug report is correct. The original paper has the same discrepancy.
+
+From: Andreas Schneider <1@c07.de>
+To: bug-gsl@gnu.org
+Subject: [Bug-gsl] Wrong algorithm in gsl_rng_r250
+Date: Sun, 25 Apr 2004 13:23:39 +0200
+
+The documentation claims that gsl_rng_r250 does
+
+   x_n = x_{n-103} ^ x_{n-250},
+
+but actually the implementation does
+
+   x_n = x_{n-147} ^ x_{n-250}.
+
+This error seems to be very common. It must have been introduced long time ago.
+
+I fed some data from both variants into Marsaglia's diehard and found that the 
+documented version is better in most tests. Thus the error is probably in the 
+implementation and the documentation is right.
+
+The orthogonalisation routine for R250 is different from the original
+paper (it should be k=7*i+3 instead of k=7+i*3)
+
+Also in the initialisation of GSFR, the initial lower 6695 indices
+never participate in calculations of subsequent random numbers, so the
+"orthogonalisation" has no effect.  Check whether this also affects
+R250.
+
+----------------------------------------------------------------------
+BUG#20 -- seg fault from gsl_sf_legendre_sphPlm_e (underflow)
+
+In the following bit of code, the first call works, but the second call 
+fails with an internal underflow gsl: exp.c:541: ERROR: underflow
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <math.h>
+#include <gsl/gsl_sf_legendre.h>
+
+int main() {
+  gsl_sf_result y;
+  gsl_sf_legendre_sphPlm_e(140,135,1,&y);
+  gsl_sf_legendre_sphPlm_e(140,135,0.99998689456491752,&y);
+  return(0);
+}
+
+Reported by "Kevin M. Huffenberger" <khuffenb@Princeton.EDU>
+----------------------------------------------------------------------
+BUG#22 - test suite fails with djgpp
+
+Andris Pavenis <pavenis@latnet.lv> reports that the test suite fails
+on DOS with djgpp due to missing $(EXEEXT) extensions on the
+executables in TESTS.  This is an automake problem, but can be worked
+around by adding the extensions $(EXEEXT) manually to each executable
+in the TEST= lines in */Makefile.am.  He supplied a patch to do this.
+----------------------------------------------------------------------
+BUG#26 - underflow in gsl_sf_legendre_sphPlm_array
+
+there is a potential underflow in legendre_poly.c in the lines
+
+      lnpre = -0.25*M_LNPI + 0.5 * (lnpoch.val + m*lncirc.val);
+      y_mm   = sqrt((2.0+1.0/m)/(4.0*M_PI)) * sgn * exp(lnpre);
+
+for large negative values of lnpre.
+
+  #include <math.h>
+  #include <stdio.h>
+  #include <gsl/gsl_sf.h>
+
+  int main (void) {
+   int lmax=2000, l=1997, m=796;
+   double Xlm[2005];
+   double cx = 0.921;
+   int status = gsl_sf_legendre_sphPlm_array(lmax,m,cx,Xlm);
+   double v = Xlm[l-m];
+   printf("cx= %.5e l=%d m=%d  Plm=%.18e status=%d\n",cx,l,m,v, status);
+  }
+
+----------------------------------------------------------------------
+BUG#27 - handling of zero leading coefficients in poly/*solve routines
+
+The poly/solve_ and poly/zsolve_ routines should handle the case of
+leading coefficients being zero more gracefully.  Currently the
+leading coefficient is assumed to be non-zero.
+
+----------------------------------------------------------------------
+BUG#28 - underflow for small parameters in gsl_ran_gamma
+
+The function gsl_ran_gamma does not handle the case of small
+parameters well, a<<1, returning 0 (probably via underflow).
+
+#include <stdio.h>
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
+
+int main() {
+  gsl_rng *rng;
+  double x;
+  gsl_rng_env_setup();
+  rng = gsl_rng_alloc (gsl_rng_default);
+  x = gsl_ran_gamma(rng, 1e-3, 1.0);
+  printf("%.18e\n", x);
+}
+----------------------------------------------------------------------
+BUG#29 - missing documentation for gsl_sf_legendre_Pl_deriv_array etc
+
+There is no documentation for the _deriv_ functions in
+specfunc/legendre_poly.c.  They are tested and part of the public API
+so they should be documented.
+
+----------------------------------------------------------------------
+BUG#30 - incorrect result from gsl_sf_elljac_e
+
+The function gsl_sf_elljac_e returns an incorrect result in the first
+case below, due propagated inaccuracies from cancellation error.  The
+correct result should be dn(3K)=sqrt(2) but the returned result is
+1.0.
+
+#include <stdio.h>
+#include <math.h>
+#include <gsl/gsl_math.h>
+#include <gsl/gsl_sf_elljac.h>
+#include <gsl/gsl_sf_ellint.h>
+     
+int main (void)
+{
+  double m = 0.5;
+  double phi = M_PI_2;
+  double sn;
+  double cn;
+  double dn1,dn2;
+  double K;
+  int ignore;
+  
+  K = gsl_sf_ellint_F(M_PI_2,sqrt(m), GSL_PREC_DOUBLE);
+  ignore = gsl_sf_elljac_e(3*K, m, &sn, &cn, &dn1);
+  ignore = gsl_sf_elljac_e(3*K+0.00000001, m, &sn, &cn, &dn2);
+  
+  printf("%.18e\n", dn1);
+  printf("%.18e\n", dn2);
+  return 0;
+}
+
+----------------------------------------------------------------------

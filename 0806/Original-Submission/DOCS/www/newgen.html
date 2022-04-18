@@ -1,0 +1,329 @@
+
+<html><head>
+<title>
+  SPRNG: Scalable Parallel Pseudo-Random Number Generator Library
+</title>
+</head>
+
+
+<body bgcolor="#ffffff" alink="#CC3300" vlink="#666666"
+link="#006666">
+
+ 
+<H1><A HREF="users-guide.html">User's Guide:</A>Details:Creating New SPRNG Generators</H1> 
+Next:<A HREF="tests.html">Testing</A> 
+Previous:<A HREF="message-passing.html">Message Passing</A> 
+<P> 
+<HR> 
+<P> 
+<BLOCKQUOTE> 
+ 
+<H1 ALIGN=CENTER> Creating New Generators in SPRNG Format</H1> 
+<P> 
+We have made it easy for developers to create new parallel random 
+number generators in SPRNG format. The developer just needs to make a copy 
+of the file <SAMP>.template.c</SAMP> in the <SAMP>sprng/SRC</SAMP> 
+directory and modify the functions <SAMP>init_rng</SAMP> and 
+<SAMP>get_rng_dbl</SAMP> which initialize a random number <A 
+HREF="definitions.html#stream"><EM>stream</EM></A> and return a double 
+precision random number respectively. All other features of SPRNG are 
+automatically implemented. 
+ 
+<P> 
+<A NAME="scheme"></A>  
+<H2>SPRNG Scheme</H2> 
+We shall first explain the philosophy behind the SPRNG parallelization 
+scheme which should enable others to develop generators along the same 
+lines. 
+ 
+<P> 
+SPRNG generators maintain a set of <A 
+HREF="definitions.html#independence"><EM>independent</EM></A> <A 
+HREF="definitions.html#stream"><EM>streams</EM></A>. Each stream is 
+identified by a unique integer in [0,MAX_STREAMS) where MAX_STREAMS is 
+the number of independent streams available. When a user performs an 
+initialization, one of these streams is returned. Typically on each 
+process the user will initialize a stream identified by the same 
+number as the process rank. 
+ 
+<P> 
+The user also specifies a <A 
+HREF="definitions.html#seed"><EM>seed</EM></A> during 
+initialization. The initialization routine should return different 
+sequences for different seeds. This may be done in various ways. For 
+instance, the same stream could be returned but with a different 
+starting <A 
+HREF="definitions.html#state"><EM>state</EM></A>. Alternatively, the 
+developer can shuffle the set of streams in different ways depending 
+on the seed, so that the same stream is identified by different 
+integers with different seeds. 
+ 
+<P> 
+The user also specifies a "parameter". Generators can normally be used 
+used with different sets of parameters. For example, the multiplier is 
+a parameter for the <A HREF="generators.html#lcg48">48 bit Linear 
+Congruential Generator with prime addend</A>, while the lags are 
+parameters for the <A HREF="generators.html#lfg">modified Lagged 
+Fibonacci Generator</A>. The developer must prepare a list of 
+<SAMP>NPARAMS</SAMP> parameter sets that are known to produce highly 
+random streams. Each of these is identified with an integer in 
+[0,NPARAMS). The user will request an initialization with a parameter 
+specified by a number. The parameter set corresponding to that number 
+must be then used. In order to help the user remember the parameter 
+better, we have define macros that give a name to each parameter. For 
+example, SPRNG_DEFAULT is defined to be 0. So if users ask for the SPRNG_DEFAULT 
+parameter, then they will get a stream initialized with the first 
+parameter in the list, such as the multiplier 
+<SAMP>0x2875a2e7b175</SAMP> for the 48 bit Linear Congruential Generator. 
+<P> 
+ 
+<H2>Modifying the template</H2> 
+We explain below the changes that need to be made to the file 
+<SAMP>.template.c</SAMP> in the sprng/SRC directory in order to create a 
+new generator. We shall also give an example of the 64 bit Linear 
+Congruential Generator with prime addend. This example is written for 
+a 64 bit machine in order to simplify the presentation. The actual 
+SPRNG generator differs due to optimizations, and also because it is 
+generalized to cover 32 bit systems too. 
+ 
+The locations where changes need to be made to .template.c are indicated by comments 
+starting with <STRONG>/***</STRONG> in order to make it easy for the developer 
+to perform a search. 
+ 
+<P> 
+<STRONG>Preliminary steps:</STRONG>  
+<OL> 
+<LI>Define a string indicating the generator type. This string will be 
+used while printing out the information about the random number 
+streams. 
+ 
+<P> 
+<STRONG>Example 1:</STRONG> 
+<PRE> 
+<CODE> 
+#define GENTYPE "64 Bit Linear Congruential Generator" 
+</CODE> 
+</PRE> 
+ 
+<LI>Define the number of valid parameters. 
+ 
+<P> 
+<STRONG>Example 1:</STRONG> 
+<PRE> 
+<CODE> 
+#define NPARAMS 3		/*** number of valid parameters ***/ 
+</CODE> 
+</PRE> 
+ 
+<LI>Define the number of independent streams. If users try to use more 
+than these streams, then they will get warning messages stating that 
+the independence of streams is not guaranteed. 
+ 
+<P> 
+<STRONG>Example 1:</STRONG> 
+<PRE> 
+<CODE> 
+int MAX_STREAMS = (1&lt&lt19);  /*** Maximum number of independent streams ***/ 
+</CODE> 
+</PRE> 
+ 
+<A NAME="struct"></A> 
+<LI>Modify the structure <SAMP>rngen</SAMP>. Such a structure is 
+associated with each stream initialized. This structure maintains 
+information about the state of the stream and also other information 
+needed for spawning new streams. Developers should not change anything 
+above the line that states: <SAMP>  /*** declare other variables here 
+***/</SAMP> before they understand the purpose of these 
+variables. While the data structure itself should be modified in the 
+preliminary stages, the assignment of values to these variables will 
+be done during the initialization. We however mention some aspects of 
+these assignments at this stage itself since it is difficult to 
+explain the purpose of the variables without actually mentioning what 
+kinds of values they will contain. 
+ 
+<P> 
+Each random number stream needs to store its state in scalar variables 
+or arrays. Developers should declare their scalar variables below the 
+line that states<SAMP>  /*** declare other variables here 
+***/</SAMP>.  
+ 
+<P> 
+<STRONG>Example 1:</STRONG> 
+<PRE> 
+<CODE> 
+struct rngen 
+{ 
+  char *gentype; 
+  int stream_number; 
+  int nstreams; 
+  int init_seed; 
+  int parameter; 
+  int narrays; 
+  int *array_sizes; 
+  int **arrays; 
+  int spawn_offset; 
+  /*** declare other variables here ***/ 
+  unsigned long multiplier; 
+  unsigned long prime; 
+  unsigned long state; 
+}; 
+</CODE> 
+</PRE> 
+ 
+Certain generators such as the lagged Fibonacci Generator require 
+arrays to store their information. In that case developers can make 
+use of the variables <SAMP>narrays, array_sizes, and 
+arrays</SAMP>. <SAMP>narrays</SAMP> is the number of arrays that are 
+required. Often this will be just <SAMP>1</SAMP>. If no array is 
+required then this will be <SAMP>0</SAMP>. <SAMP>array_sizes</SAMP> 
+lists the size of each array. For example, if we have two arrays with 
+the first one consisting of 24 integers and the second one consisting 
+of 17 integers, then narrays = 2, array_sizes[0] = 24, 
+array_sizes[1] = 17. <SAMP>arrays</SAMP> is a pointer to the actual 
+set of arrays. <SAMP>arrays[0]</SAMP> in our example is an array of 24 
+integers and <SAMP>arrays[1]</SAMP> is of 17 integers. Developers are 
+not restricted to using integer types. For example, if they wish to 
+use a double precision type with 13 elements, then they can declare a 
+variable:<P> 
+double *r<P> 
+and set the corresponding array_size[i] to 
+<SAMP>13*sizeof(double)/sizeof(int)</SAMP> in the initialization 
+routine. Then in that routine they can set <SAMP>r = (double *) 
+arrays[i]</SAMP>. While this may not be great from a software 
+engineering point of view, we feel that people in scientific computing 
+are used to even worse practises! 
+</OL> 
+ 
+Next the developer has to modify the functions that perform the 
+initialization and produce the actual random number. 
+ 
+<OL> 
+<LI><STRONG>init_rng:</STRONG> This function follows the specifications 
+for <A HREF="default-reference.html#initsprng">init_sprng</A>. We 
+have written code that allocates all the memory required. The developer 
+still has to write code to initialize some of the data, though. This 
+function returns a pointer to the memory location where the data 
+concerning the newly initialized stream is located. Though the data 
+structure is of type <SAMP>rngen</SAMP>, we convert the pointer to a 
+pointer to an <SAMP>int</SAMP> when we return it. 
+ 
+The developer has to perform the following actions: 
+ 
+<OL> 
+<LI>Specify the number of arrays as explained <A HREF="#struct">earlier</A>. 
+ 
+<P> 
+<STRONG>Example 1:</STRONG> 
+<PRE> 
+<CODE> 
+  genptr-&gtnarrays = 0;		/* number of arrays needed by your generator */ 
+</CODE> 
+</PRE> 
+ 
+<LI>Specify the sizes of the arrays as explained <A HREF="#struct">earlier</A>. 
+<P> 
+<STRONG>Example (not for the Linear Congruential Generator):</STRONG> 
+<PRE> 
+<CODE> 
+  		/* initialize ...array_sizes to the sizes of the arrays */ 
+array_sizes[0] = 24; 
+array_sizes[1] = 17; 
+</CODE> 
+</PRE> 
+ 
+<LI> 
+Initialize the data in the arrays <SAMP>arrays[1], ..., 
+arrays[narrays-1]</SAMP> and in the scalar variables 
+based on the requirements of your generator. The initial values will 
+typically depend on the argument <SAMP>gennum</SAMP>. 
+<P> 
+<STRONG>Example 1:</STRONG> 
+<PRE> 
+<CODE> 
+  genptr->multiplier = PARAMLIST[param]; 
+  genptr->prime = get_prime(gennum); 
+  genptr->state = 0xffffffffffffffff^(((unsigned long) seed<<33)|gennum); 
+</CODE> 
+</PRE> 
+ 
+where <SAMP>get_prime(i)</SAMP> is a function that returns the i th 
+prime, and PARAMLIST is an array of multipliers defined as follows: 
+<PRE> 
+<CODE> 
+unsigned long PARAMLIST[NPARAMS] = {5015080152056721395UL, 2447899643824353475UL, 
+				  10678851390245329133UL}; 
+</CODE> 
+</PRE> 
+ 
+</OL> 
+ 
+<LI><STRONG>get_rng_dbl:</STRONG> The argument to this function is a 
+pointer to the data structure that stores the information concerning a 
+random number stream. This function returns a random double precision 
+number in (0,1). 
+ 
+<P> 
+<OL> 
+<STRONG>Example 1:</STRONG> We first multiply the current state by the 
+multiplier and add the addend to get the new state. We then multiply 
+this by 2<SUP>-64</SUP> to get the desired random number: 
+ 
+<P> 
+<PRE> 
+<CODE> 
+/* Returns a double precision random number */ 
+ 
+double get_rn_dbl(int *igenptr) 
+{ 
+    struct rngen *genptr = (struct rngen *) igenptr; 
+ 
+    genptr->state = genptr-&gtstate*genptr->multiplier + genptr-&gtprime; 
+			  /* modulo 64 is automatic in 64 bit arithmetic */ 
+    return genptr-&gtstate*FLT_MULT;			 
+}  
+</CODE> 
+</PRE> 
+<P> 
+where we had 
+defined the macro FLT_MULT to be 2<SUP>-64</SUP> earlier: 
+<P> 
+<PRE> 
+<CODE> 
+#define FLT_MULT 5.4210108624275222e-20 /* 2^(-64) */ 
+</CODE> 
+</PRE> 
+</OL> 
+<P> 
+</OL> 
+ 
+<H2>Further Optimization</H2> 
+If developers want faster implementations of the functions that return 
+random integers and random single precision numbers, then they can 
+modify <SAMP>get_rn_int</SAMP> and <SAMP>get_rn_flt</SAMP> 
+respectively. 
+ 
+<P> 
+Developers may also wish to modify <SAMP>print_rng</SAMP> if they wish 
+to print more information than we have provided. 
+ 
+<P> 
+</BLOCKQUOTE> 
+<HR> 
+<CENTER> 
+<TABLE WIDTH=400 ALIGN=CENTER COL=5 CELLSPACING =0 BORDER=0 > 
+<TR><TD><A HREF="quick-start.html"><IMG SRC="qs.gif" BORDER=0 ALT="[Quick 
+Start]"></A></TD> 
+<TD><A HREF="users-guide.html"><IMG SRC="us.gif" BORDER=0 ALT="[User's 
+Guide]"></A></TD> 
+<TD><A HREF="reference.html"><IMG SRC="ref.gif" BORDER=0 ALT="[Reference 
+Manual]"></A></TD> 
+<TD><A HREF="quick-reference.html"><IMG SRC="qr.gif" BORDER=0 ALT="[Quick 
+Reference]"></A></TD> 
+<TD><A HREF="test-results.html"><IMG SRC="next.gif" BORDER=0 ALT="[Next: 
+Test Results]"></A></TD></TR></TABLE> 
+</CENTER> 
+<HR> 
+ 
+<p>
+
+</body></html>

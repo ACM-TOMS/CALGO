@@ -1,0 +1,189 @@
+      double precision function student(t, ndf, normal, ier)
+c
+c     Calculates the two-tailed probability of Student's t.
+c     The user must supply a function `normal' to calculate the area
+c     under the normal distribution curve, such as Applied Statistics
+c     algorithm AS 66.
+c
+c     Translation from Algol by Alan Miller, CSIRO Division of Mathematics
+c     & Statistics, Clayton, Victoria 3169, Australia of:
+c
+c     Algorithm 395: Student's t-distribution by G.W. Hill
+c     Comm. A.C.M., vol.13(10), 617-619, October 1970
+c
+c     N.B. The number of degrees of freedom is not necessarily an integer
+c
+c     Arguments:
+c     t       double precision    Value of Student's t
+c     ndf     double precision    Number of degrees of freedom
+c     normal  double precision    External function to return the
+c                                 area under the standard normal curve
+c     ier     integer             Error indicator = 0 for normal exit
+c                                                 = 1 if ndf < 1
+c
+      double precision t, ndf, normal
+      integer          ier
+      external         normal
+c
+c     Local variables
+c
+      double precision a, b, eps, n, one, t2, twoonpi, y, z
+      parameter (eps = 1.d-12, one = 1.d0, twoonpi = 0.63661977236758d0)
+      integer          j
+c
+      if (ndf .lt. one) then
+        ier = 1
+        return
+      else
+        ier = 0
+      end if
+c
+      t2 = t*t
+      y = t2/ndf
+      b = one + y
+      z = one
+c
+      if ( (ndf - int(ndf)) .gt. eps
+     +    .or. (ndf .gt. 20.d0 - eps .and. ndf .gt. t2)
+     +    .or.  ndf .gt. 200.d0 ) then
+c
+c     Asymptotic series for large or non-integer ndf
+c
+        if (y .gt. 1.d-06) y = log(b)
+        a = ndf - 0.5d0
+        b = 48.d0 * a**2
+        y = a * y
+        y = (((((-0.4d0*y - 3.3d0)*y - 24.d0)*y - 85.5d0) /
+     +      (0.8d0*y**2 + 100.d0 + b) + y +3.d0) / b + one) * sqrt(y)
+        student = 2.d0 * normal(-y)
+        return
+c
+      else if ( ndf .lt. 20.d0 .and. t2 .lt. 4.d0) then
+c
+c     Nested summation of cosine series
+c
+        y = sqrt(y)
+        a = y
+        if (ndf .eq. one) a = 0.d0
+        n = ndf
+c
+c     Tail series expansion for large t-values
+c
+      else
+        a = sqrt(b)
+        y = a * ndf
+        j = 0
+   10   j = j + 2
+        if (abs(a-z) .gt. eps) then
+          z = a
+          y = y * (j - 1) / (b * j)
+          a = a + y / (ndf + j)
+          go to 10
+        end if
+        n = ndf + 2.d0
+        z = 0.d0
+        y = 0.d0
+        a = - a
+      end if
+c
+c     This is the `loop' from the Algol code.
+c     It required jumping between different parts of an IF () THEN
+c     ELSE IF () .. block.
+c
+   20 n = n - 2.d0
+      if (n .gt. 1.d0) then
+        a = (n - 1.d0) * a / (b * n) + y
+        go to 20
+      end if
+c
+      if ( abs(n) .lt. eps ) then
+        a = a / sqrt(b)
+      else
+        a = (atan(y) + a/b) * twoonpi
+      end if
+      student = z - a
+c
+      return
+      end
+
+
+      double precision function normal(z)
+      double precision z, p, q, pdf
+c
+      call NORMP(Z, P, Q, PDF)
+      normal = p
+      return
+      end
+
+
+      SUBROUTINE NORMP(Z, P, Q, PDF)
+C
+C      Normal distribution probabilities accurate to 1.e-15.
+C      Z = no. of standard deviations from the mean.
+C      P, Q = probabilities to the left & right of Z.   P + Q = 1.
+C      PDF = the probability density.
+C
+C       Based upon algorithm 5666 for the error function, from:
+C       Hart, J.F. et al, 'Computer Approximations', Wiley 1968
+C
+C       Programmer: Alan Miller
+C
+C      Latest revision - 30 March 1986
+C
+      IMPLICIT DOUBLE PRECISION (A-H, O-Z)
+      DATA P0, P1, P2, P3, P4, P5, P6/220.20 68679 12376 1D0,
+     *        221.21 35961 69931 1D0, 112.07 92914 97870 9D0,
+     *        33.912 86607 83830 0D0, 6.3739 62203 53165 0D0,
+     *        .70038 30644 43688 1D0, .35262 49659 98910 9D-01/,
+     *        Q0, Q1, Q2, Q3, Q4, Q5, Q6, Q7/440.41 37358 24752 2D0,
+     *        793.82 65125 19948 4D0, 637.33 36333 78831 1D0,
+     *        296.56 42487 79673 7D0, 86.780 73220 29460 8D0,
+     *        16.064 17757 92069 5D0, 1.7556 67163 18264 2D0,
+     *        .88388 34764 83184 4D-1/,
+     *        CUTOFF/7.071D0/, ROOT2PI/2.5066 28274 63100 1D0/
+C
+      ZABS = ABS(Z)
+C
+C      |Z| > 37.
+C
+      IF (ZABS .GT. 37.D0) THEN
+        PDF = 0.D0
+        IF (Z .GT. 0.D0) THEN
+          P = 1.D0
+          Q = 0.D0
+        ELSE
+          P = 0.D0
+          Q = 1.D0
+        END IF
+        RETURN
+      END IF
+C
+C      |Z| <= 37.
+C
+      EXPNTL = EXP(-0.5D0*ZABS**2)
+      PDF = EXPNTL/ROOT2PI
+C
+C      |Z| < CUTOFF = 10/sqrt(2).
+C
+      IF (ZABS .LT. CUTOFF) THEN
+        P = EXPNTL*((((((P6*ZABS + P5)*ZABS + P4)*ZABS + P3)*ZABS +
+     *            P2)*ZABS + P1)*ZABS + P0)/(((((((Q7*ZABS + Q6)*ZABS +
+     *            Q5)*ZABS + Q4)*ZABS + Q3)*ZABS + Q2)*ZABS + Q1)*ZABS +
+     *            Q0)
+C
+C      |Z| >= CUTOFF.
+C
+      ELSE
+        P = PDF/(ZABS + 1.D0/(ZABS + 2.D0/(ZABS + 3.D0/(ZABS + 4.D0/
+     *            (ZABS + 0.65D0)))))
+      END IF
+C
+      IF (Z .LT. 0.D0) THEN
+        Q = 1.D0 - P
+      ELSE
+        Q = P
+        P = 1.D0 - Q
+      END IF
+      RETURN
+      END
+

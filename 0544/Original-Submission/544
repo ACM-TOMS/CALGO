@@ -1,0 +1,2304 @@
+C MAIN PROGRAM TO CALL SUBROUTINES L2A AND L2B FOR SOLVING LINEAR       DRV   10
+C LEAST SQUARES PROBLEMS.                                               DRV   20
+C                                                                       DRV   30
+C VERSION OF NOVEMBER 2, 1978.                                          DRV   40
+C                                                                       DRV   50
+C WRITTEN BY ROY H. WAMPLER, STATISTICAL ENGINEERING                    DRV   60
+C LABORATORY, NATIONAL BUREAU OF STANDARDS,                             DRV   70
+C WASHINGTON, D. C. 20234.                                              DRV   80
+C                                                                       DRV   90
+C THE MAIN PROGRAM READS AND PRINTS THE INPUT DATA, CALLS EITHER        DRV  100
+C SUBROUTINE L2A OR L2B, COMPUTES CERTAIN QUANTITIES DERIVED FROM       DRV  110
+C OUTPUT OF THE SUBROUTINE, AND PRINTS COMPUTED RESULTS.                DRV  120
+C                                                                       DRV  130
+C SEE COMMENTS AT THE BEGINNING OF SUBROUTINES L2A AND L2B FOR A        DRV  140
+C DESCRIPTION OF THE INPUT, OUTPUT AND INTERNAL VARIABLES WHICH APPEAR  DRV  150
+C IN THE CALLS TO THOSE SUBROUTINES.                                    DRV  160
+C                                                                       DRV  170
+C MODE IS A PARAMETER WHICH CONTROLS WHETHER SUBROUTINE L2A OR          DRV  180
+C SUBROUTINE L2B SHALL BE CALLED BY THIS MAIN PROGRAM.  THE TWO         DRV  190
+C SUBROUTINES WILL FURNISH THE SAME SOLUTIONS WHENEVER THE COMPUTED     DRV  200
+C RANK OF THE SYSTEM OF M EQUATIONS IN N UNKNOWNS EQUALS N AND M.GE.N.  DRV  210
+C IN CASES WHERE THE COMPUTED RANK N1 IS LESS THAN N, THE USER          DRV  220
+C SPECIFIES THE TYPE OF SOLUTION TO BE COMPUTED ACCORDING TO WHETHER    DRV  230
+C MODE = 1 OR MODE = 2.                                                 DRV  240
+C MATRIX A IS THE GIVEN MATRIX OF A SYSTEM OF M LINEAR EQUATIONS IN N   DRV  250
+C UNKNOWNS.  MATRIX W IS A GIVEN DIAGONAL MATRIX OF WEIGHTS WITH ALL    DRV  260
+C DIAGONAL ELEMENTS NONNEGATIVE.  LET H = (SQRT(W))*A.                  DRV  270
+C                                                                       DRV  280
+C MODE = 1 INDICATES THAT IF N1.LT.N THE ORIGINAL MATRIX H (M BY N)     DRV  290
+C          IS TO BE REPLACED BY A SMALLER MATRIX (M BY N1) WHOSE        DRV  300
+C          COLUMNS ARE LINEARLY INDEPENDENT, AND A SOLUTION IS TO BE    DRV  310
+C          SOUGHT FOR THE SMALLER SYSTEM OF EQUATIONS.  THUS N - N1     DRV  320
+C          COLUMNS OF THE ORIGINAL MATRIX H ARE DELETED, AND            DRV  330
+C          COEFFICIENTS CORRESPONDING TO THESE N - N1 DELETED COLUMNS   DRV  340
+C          WILL BE SET EQUAL TO ZERO.                                   DRV  350
+C MODE = 2 INDICATES THAT A SOLUTION IS SOUGHT FOR A LEAST SQUARES      DRV  360
+C          PROBLEM HAVING N ELEMENTS IN THE SOLUTION VECTOR.  IN ORDER  DRV  370
+C          TO OBTAIN A UNIQUE SOLUTION, THE CONDITION THAT THE          DRV  380
+C          SOLUTION VECTOR BE OF MINIMAL EUCLIDEAN NORM IS IMPOSED.     DRV  390
+C                                                                       DRV  400
+C THE SEQUENCE OF INPUT CARDS FOR THIS MAIN PROGRAM IS --               DRV  410
+C 0. CARD SPECIFYING MODE DESIRED FOR PROBLEMS WHICH FOLLOW, IN (I5)    DRV  420
+C    FORMAT.                                                            DRV  430
+C 1. PROBLEM HEADING CARD, IN (80A1) FORMAT.                            DRV  440
+C 2. PARAMETER CARD IN (6I5,5X,F10.0) FORMAT, GIVING VALUES OF THE      DRV  450
+C    PARAMETERS M, N, M1, L, ITYPE, IWGHT, TOL.                         DRV  460
+C    M     TOTAL NUMBER OF EQUATIONS.                                   DRV  470
+C    N     NUMBER OF UNKNOWN COEFFICIENTS.                              DRV  480
+C    M1    NUMBER OF LINEAR CONSTRAINTS (0.LE.M1.LE.M AND M1.LE.N).     DRV  490
+C    L     NUMBER OF RIGHT-HAND SIDES (VECTORS OF OBSERVATIONS).        DRV  500
+C    ITYPE PARAMETER WHICH SPECIFIES WHETHER OR NOT DATA FOR A          DRV  510
+C          POLYNOMIAL TYPE FIT ARE TO BE READ IN.                       DRV  520
+C          ITYPE = 1 INDICATES POLYNOMIAL TYPE.                         DRV  530
+C          ITYPE = 2 INDICATES NON-POLYNOMIAL TYPE.                     DRV  540
+C    IWGHT PARAMETER WHICH SPECIFIES WHETHER OR NOT WEIGHTS ARE TO      DRV  550
+C          BE READ IN.                                                  DRV  560
+C          IWGHT = 1 INDICATES WEIGHTS ARE NOT TO BE READ IN.  (THE     DRV  570
+C                    PROGRAM SETS ALL WEIGHTS EQUAL TO 1.0.)            DRV  580
+C          IWGHT = 2 INDICATES WEIGHTS ARE TO BE READ IN.               DRV  590
+C    TOL   PARAMETER USED IN DETERMINING THE RANK OF MATRIX H.          DRV  600
+C          NOTE --                                                      DRV  610
+C          (1) IF TOL EQUALS ZERO, THE TOLERANCE USED IN THE            DRV  620
+C              DECOMPOSITION SUBROUTINE WILL BE BASED ON MACHINE        DRV  630
+C              PRECISION.                                               DRV  640
+C          (2) IF TOL IS GREATER THAN ZERO, THIS VALUE OF TOL WILL BE   DRV  650
+C              USED IN SETTING AN ABSOLUTE TOLERANCE FOR COMPARISON     DRV  660
+C              WITH DIAGONAL ELEMENTS OF THE TRIANGULAR MATRIX OBTAINED DRV  670
+C              IN THE DECOMPOSITION SUBROUTINE.  THE VALUE OF TOL CAN   DRV  680
+C              BE BASED ON KNOWLEDGE CONCERNING THE ACCURACY OF THE     DRV  690
+C              DATA.                                                    DRV  700
+C 3. CARD GIVING FORMAT OF THE DATA CARDS (CONTAINING A, B AND          DRV  710
+C    POSSIBLY W) WHICH FOLLOW.  THIS FORMAT CARD IS IN (80A1)           DRV  720
+C    FORMAT.                                                            DRV  730
+C 4. DATA CARDS FOR THE ARRAYS A, B AND POSSIBLY W.  THERE ARE FOUR     DRV  740
+C    POSSIBLE CONFIGURATIONS FOR THE DATA, DEPENDING ON THE VALUES      DRV  750
+C    OF ITYPE AND IWGHT.  (FOR POLYNOMIAL FITS, THE FIRST POWER OF A    DRV  760
+C    IS READ IN AND HIGHER POWERS ARE COMPUTED BY THE PROGRAM WHEN      DRV  770
+C    N.GT.2.)  THE FOUR CONFIGURATIONS ARE ILLUSTRATED BELOW BY         DRV  780
+C    SHOWING WHAT THE CARD (OR CARDS) FOR THE I-TH ROW OF DATA          DRV  790
+C    CONTAINS.                                                          DRV  800
+C   A. ITYPE = 1, IWGHT = 1.                                            DRV  810
+C      POLYNOMIAL TYPE FIT.  EQUAL WEIGHTS, NOT TO BE READ IN.          DRV  820
+C     A(I,2)  B(I,1) B(I,2) ... B(I,L)                                  DRV  830
+C   B. ITYPE = 1, IWGHT = 2.                                            DRV  840
+C      POLYNOMIAL TYPE FIT.  UNEQUAL WEIGHTS, TO BE READ IN.            DRV  850
+C     A(I,2)  B(I,1) B(I,2) ... B(I,L)  W(I)                            DRV  860
+C   C. ITYPE = 2, IWGHT = 1.                                            DRV  870
+C      NON-POLYNOMIAL TYPE FIT.  EQUAL WEIGHTS, NOT TO BE READ IN.      DRV  880
+C     A(I,1) A(I,2) ... A(I,N)  B(I,1) B(I,2) ... B(I,L)                DRV  890
+C   D. ITYPE = 2, IWGHT = 2.                                            DRV  900
+C      NON-POLYNOMIAL TYPE FIT.  UNEQUAL WEIGHTS, TO BE READ IN.        DRV  910
+C     A(I,1) A(I,2) ... A(I,N)  B(I,1) B(I,2) ... B(I,L)  W(I)          DRV  920
+C 5. CARD IN (I5) FORMAT GIVING VALUE OF THE PARAMETER IFDONE.  IF      DRV  930
+C    THE PROBLEM AT HAND IS TO BE FOLLOWED BY ANOTHER PROBLEM,          DRV  940
+C    IFDONE = 1.  OTHERWISE, IFDONE EQUALS ANY INTEGER EXCEPT 1.        DRV  950
+C                                                                       DRV  960
+C DIMENSIONS OF ARRAYS ARE SET ASSUMING THAT M.LE.21, N.LE.8, AND       DRV  970
+C L.LE.3.                                                               DRV  980
+C                                                                       DRV  990
+      INTEGER IPIVOT(8)                                                 DRV 1000
+      REAL A(21,8), B(21,3), RES(21,3), TOL, W(21), X(8,3)              DRV 1010
+C ARRAYS Q AND R ARE USED IN SUBROUTINE L2A.                            DRV 1020
+C ARRAY QR IS USED IN SUBROUTINE L2B.                                   DRV 1030
+      REAL Q(21,8), R(8,8)                                              DRV 1040
+      REAL QR(29,8)                                                     DRV 1050
+C SUBROUTINE L2A REQUIRES THAT C BE DIMENSIONED AT LEAST 4*(M+N) + 2*L. DRV 1060
+C SUBROUTINE L2B REQUIRES THAT C BE DIMENSIONED AT LEAST 6*(M+N) + 2*L. DRV 1070
+      REAL C(180)                                                       DRV 1080
+      REAL SD, SDX(8), SNORM, SS, Z                                     DRV 1090
+      LOGICAL FAIL(3)                                                   DRV 1100
+      DIMENSION HEAD(80), IFMT(80)                                      DRV 1110
+C                                                                       DRV 1120
+C IN THE FOLLOWING DATA STATEMENT, NR IS THE CARD READER DEVICE         DRV 1130
+C AND NW IS THE PRINTER DEVICE NUMBER.                                  DRV 1140
+C                                                                       DRV 1150
+      DATA NR,NW /5,6/                                                  DRV 1160
+C                                                                       DRV 1170
+C THE PARAMETERS MM, NN AND MMPNN WHICH APPEAR IN THE STATEMENTS        DRV 1180
+C CALL L2A(...) AND CALL L2B(...) ARE USED IN SETTING ADJUSTABLE        DRV 1190
+C DIMENSIONS OF ARRAYS.  THEY ARE GIVEN SPECIFIC VALUES IN THE          DRV 1200
+C FOLLOWING DATA STATEMENTS.  MMPNN IS USED ONLY IN CALL L2B(...).      DRV 1210
+C                                                                       DRV 1220
+      DATA MM,NN /21,8/                                                 DRV 1230
+      DATA MMPNN /29/                                                   DRV 1240
+C                                                                       DRV 1250
+      READ (NR,99730) MODE                                              DRV 1260
+C                                                                       DRV 1270
+C DEFAULT VALUE FOR MODE IS 1.                                          DRV 1280
+C                                                                       DRV 1290
+      IF (MODE.NE.2) MODE = 1                                           DRV 1300
+      IPROB = 0                                                         DRV 1310
+   10 READ (NR,99990) HEAD                                              DRV 1320
+      IPROB = IPROB + 1                                                 DRV 1330
+      WRITE (NW,99980) IPROB                                            DRV 1340
+      WRITE (NW,99970) HEAD                                             DRV 1350
+      READ (NR,99960) M,N,M1,L,ITYPE,IWGHT,TOL                          DRV 1360
+      WRITE (NW,99950)                                                  DRV 1370
+      WRITE (NW,99940) M,N,M1,L,ITYPE,IWGHT,MODE,TOL                    DRV 1380
+      READ (NR,99990) IFMT                                              DRV 1390
+      WRITE (NW,99930) IFMT                                             DRV 1400
+      GO TO (20,100), ITYPE                                             DRV 1410
+C                                                                       DRV 1420
+C TYPE 1.  POLYNOMIAL FIT.                                              DRV 1430
+   20 GO TO (30,50), IWGHT                                              DRV 1440
+C      A.  EQUAL WEIGHTS, NOT TO BE READ IN.                            DRV 1450
+   30 DO 40 I=1,M                                                       DRV 1460
+        READ (NR,IFMT) A(I,2),(B(I,K),K=1,L)                            DRV 1470
+        W(I) = 1.0                                                      DRV 1480
+   40 CONTINUE                                                          DRV 1490
+      GO TO 70                                                          DRV 1500
+C      B.  UNEQUAL WEIGHTS, TO BE READ IN.                              DRV 1510
+   50 DO 60 I=1,M                                                       DRV 1520
+        READ (NR,IFMT) A(I,2),(B(I,K),K=1,L),W(I)                       DRV 1530
+   60 CONTINUE                                                          DRV 1540
+   70 DO 90 I=1,M                                                       DRV 1550
+        A(I,1) = 1.0                                                    DRV 1560
+        IF (N.LT.3) GO TO 90                                            DRV 1570
+        DO 80 J=3,N                                                     DRV 1580
+          A(I,J) = A(I,2)**(J-1)                                        DRV 1590
+   80   CONTINUE                                                        DRV 1600
+   90 CONTINUE                                                          DRV 1610
+      GO TO 150                                                         DRV 1620
+C                                                                       DRV 1630
+C TYPE 2.  NON-POLYNOMIAL FIT.                                          DRV 1640
+  100 GO TO (110,130), IWGHT                                            DRV 1650
+C      C.  EQUAL WEIGHTS, NOT TO BE READ IN.                            DRV 1660
+  110 DO 120 I=1,M                                                      DRV 1670
+        READ (NR,IFMT) (A(I,J),J=1,N),(B(I,K),K=1,L)                    DRV 1680
+        W(I) = 1.0                                                      DRV 1690
+  120 CONTINUE                                                          DRV 1700
+      GO TO 150                                                         DRV 1710
+C      D.  UNEQUAL WEIGHTS, TO BE READ IN.                              DRV 1720
+  130 DO 140 I=1,M                                                      DRV 1730
+        READ (NR,IFMT) (A(I,J),J=1,N),(B(I,K),K=1,L),W(I)               DRV 1740
+  140 CONTINUE                                                          DRV 1750
+  150 IF (M1.EQ.0 .OR. IWGHT.EQ.1) GO TO 170                            DRV 1760
+C                                                                       DRV 1770
+C INSURE THAT WEIGHTS EQUAL 1.0 FOR THE FIRST M1 EQUATIONS WHEN M1      DRV 1780
+C IS GREATER THAN ZERO.                                                 DRV 1790
+C                                                                       DRV 1800
+      DO 160 I=1,M1                                                     DRV 1810
+        W(I) = 1.0                                                      DRV 1820
+  160 CONTINUE                                                          DRV 1830
+C                                                                       DRV 1840
+C PRINT A, B AND W.                                                     DRV 1850
+C                                                                       DRV 1860
+  170 WRITE (NW,99920)                                                  DRV 1870
+      KZ = 0                                                            DRV 1880
+      DO 180 I=1,M                                                      DRV 1890
+        IF (W(I).EQ.0.0) KZ = KZ + 1                                    DRV 1900
+        WRITE (NW,99910) (A(I,J),J=1,N),(B(I,K),K=1,L),W(I)             DRV 1910
+  180 CONTINUE                                                          DRV 1920
+C                                                                       DRV 1930
+      GO TO (190,200), MODE                                             DRV 1940
+C                                                                       DRV 1950
+  190 CALL L2A(M, N, M1, L, A, B, W, TOL, MM, NN,                       DRV 1960
+     * N1, IPIVOT, X, RES, R, Q, C, IFAULT)                             DRV 1970
+C                                                                       DRV 1980
+      GO TO 210                                                         DRV 1990
+C                                                                       DRV 2000
+  200 CALL L2B(M, N, M1, L, A, B, W, TOL, MM, NN, MMPNN,                DRV 2010
+     * N1, IPIVOT, X, RES, QR, C, IFAULT)                               DRV 2020
+C                                                                       DRV 2030
+C PRINT COMPUTED RESULTS.                                               DRV 2040
+C                                                                       DRV 2050
+  210 WRITE (NW,99900)                                                  DRV 2060
+      WRITE (NW,99890) MODE,IFAULT                                      DRV 2070
+      IF (IFAULT.GE.1 .AND. IFAULT.LE.4) GO TO 390                      DRV 2080
+      WRITE (NW,99880) N1                                               DRV 2090
+      IF (N1.EQ.0) GO TO 390                                            DRV 2100
+      IF (N1.LT.M1) GO TO 390                                           DRV 2110
+      WRITE (NW,99870)                                                  DRV 2120
+      WRITE (NW,99860) (IPIVOT(J),J=1,N1)                               DRV 2130
+      IF (N1.EQ.N) GO TO 220                                            DRV 2140
+      N1P1 = N1 + 1                                                     DRV 2150
+      WRITE (NW,99850)                                                  DRV 2160
+      WRITE (NW,99860) (IPIVOT(J),J=N1P1,N)                             DRV 2170
+  220 NDF = M - N1 - KZ                                                 DRV 2180
+      WRITE (NW,99720) KZ,NDF                                           DRV 2190
+      WRITE (NW,99840)                                                  DRV 2200
+      DO 240 K=1,L                                                      DRV 2210
+        K2 = L + K                                                      DRV 2220
+        IF (C(K).LT.0.0) GO TO 230                                      DRV 2230
+        FAIL(K) = .FALSE.                                               DRV 2240
+        WRITE (NW,99830) K,C(K),C(K2)                                   DRV 2250
+        GO TO 240                                                       DRV 2260
+  230   FAIL(K) = .TRUE.                                                DRV 2270
+        C(K) = -C(K)                                                    DRV 2280
+        WRITE (NW,99820) K,C(K),C(K2)                                   DRV 2290
+  240 CONTINUE                                                          DRV 2300
+      IF (IFAULT.EQ.7) GO TO 390                                        DRV 2310
+      DO 350 K=1,L                                                      DRV 2320
+C                                                                       DRV 2330
+C COMPUTE SUM OF SQUARED RESIDUALS, NORM OF RESIDUALS, RESIDUAL         DRV 2340
+C STANDARD DEVIATION, STANDARD DEVIATIONS OF COEFFICIENTS, AND          DRV 2350
+C PREDICTED VALUES.  PRINT THESE QUANTITIES, TOGETHER WITH              DRV 2360
+C COEFFICIENTS, OBSERVED VALUES AND RESIDUALS.                          DRV 2370
+C                                                                       DRV 2380
+        IF (FAIL(K)) GO TO 350                                          DRV 2390
+        WRITE (NW,99810) K                                              DRV 2400
+        SS = 0.0                                                        DRV 2410
+        IF (M.EQ.M1) GO TO 310                                          DRV 2420
+        M1P1 = M1 + 1                                                   DRV 2430
+        DO 250 I=M1P1,M                                                 DRV 2440
+          SS = SS + (RES(I,K)*W(I))**2                                  DRV 2450
+  250   CONTINUE                                                        DRV 2460
+        IF (M.LE.N1+KZ) GO TO 310                                       DRV 2470
+        IF (MODE.EQ.2 .AND. N1.LT.N) GO TO 310                          DRV 2480
+        SD = SQRT(SS/FLOAT(NDF))                                        DRV 2490
+        IF (MODE.EQ.2) GO TO 270                                        DRV 2500
+        DO 260 J=1,N                                                    DRV 2510
+          IF (R(J,J).LT.0.0) R(J,J) = 0.0                               DRV 2520
+          SDX(J) = SD*SQRT(R(J,J))                                      DRV 2530
+  260   CONTINUE                                                        DRV 2540
+        GO TO 290                                                       DRV 2550
+  270   DO 280 J=1,N                                                    DRV 2560
+          IF (QR(J,J).LT.0.0) QR(J,J) = 0.0                             DRV 2570
+          SDX(J) = SD*SQRT(QR(J,J))                                     DRV 2580
+  280   CONTINUE                                                        DRV 2590
+  290   WRITE (NW,99800)                                                DRV 2600
+        DO 300 J=1,N                                                    DRV 2610
+          WRITE (NW,99770) J,X(J,K),SDX(J)                              DRV 2620
+  300   CONTINUE                                                        DRV 2630
+        GO TO 330                                                       DRV 2640
+  310   WRITE (NW,99790)                                                DRV 2650
+        DO 320 J=1,N                                                    DRV 2660
+          WRITE (NW,99770) J,X(J,K)                                     DRV 2670
+  320   CONTINUE                                                        DRV 2680
+  330   WRITE (NW,99780)                                                DRV 2690
+        DO 340 I=1,M                                                    DRV 2700
+          Z = B(I,K) - RES(I,K)                                         DRV 2710
+          WRITE (NW,99770) I,B(I,K),Z,RES(I,K)                          DRV 2720
+  340   CONTINUE                                                        DRV 2730
+        SNORM = SQRT(SS)                                                DRV 2740
+        WRITE (NW,99760) SS,SNORM                                       DRV 2750
+        IF ((MODE.EQ.2 .AND. N1.LT.N) .OR. (M.EQ.N1+KZ)) GO TO 350      DRV 2760
+        WRITE (NW,99750) SD                                             DRV 2770
+  350 CONTINUE                                                          DRV 2780
+C                                                                       DRV 2790
+C PRINT LOWER TRIANGULAR PORTION OF SYMMETRIC UNSCALED COVARIANCE       DRV 2800
+C MATRIX.                                                               DRV 2810
+C                                                                       DRV 2820
+      IF (MODE.EQ.2 .AND. N1.LT.N) GO TO 390                            DRV 2830
+      WRITE (NW,99740)                                                  DRV 2840
+      IF (MODE.EQ.2) GO TO 370                                          DRV 2850
+      DO 360 I=1,N                                                      DRV 2860
+        WRITE (NW,99910) (R(I,J),J=1,I)                                 DRV 2870
+  360 CONTINUE                                                          DRV 2880
+      GO TO 390                                                         DRV 2890
+  370 DO 380 I=1,N                                                      DRV 2900
+        WRITE (NW,99910) (QR(I,J),J=1,I)                                DRV 2910
+  380 CONTINUE                                                          DRV 2920
+  390 READ (NR,99730) IFDONE                                            DRV 2930
+      IF (IFDONE.EQ.1) GO TO 10                                         DRV 2940
+C                                                                       DRV 2950
+      STOP                                                              DRV 2960
+C                                                                       DRV 2970
+C FORMAT STATEMENTS.                                                    DRV 2980
+C                                                                       DRV 2990
+99990 FORMAT (80A1)                                                     DRV 3000
+99980 FORMAT (1H1,115(1H*),4X,7HPROBLEM,I4)                             DRV 3010
+99970 FORMAT (1H0,80A1)                                                 DRV 3020
+99960 FORMAT (6I5,5X,F10.0)                                             DRV 3030
+99950 FORMAT (1H0,3X,1HM,4X,1HN,3X,2HM1,4X,1HL,5X,5HITYPE,5X,4HIWGH,    DRV 3040
+     * 1HT,6X,4HMODE,7X,3HTOL)                                          DRV 3050
+99940 FORMAT (4I5,3I10,G15.8)                                           DRV 3060
+99930 FORMAT (8H0FORMAT ,80A1)                                          DRV 3070
+99920 FORMAT (41H0MATRIX A, MATRIX B AND VECTOR OF WEIGHTS/)            DRV 3080
+99910 FORMAT (1X,8G15.8)                                                DRV 3090
+99900 FORMAT (17H0COMPUTED RESULTS)                                     DRV 3100
+99890 FORMAT (7H0MODE =,I4,5X,8HIFAULT =,I4)                            DRV 3110
+99880 FORMAT (44H0N1 = COMPUTED RANK OF SYSTEM OF EQUATIONS =,I4)       DRV 3120
+99870 FORMAT (50H0COLUMNS OF H = (SQRT(W))*A WERE SELECTED BY THE P,    DRV 3130
+     * 37HIVOTING SCHEME IN THE FOLLOWING ORDER/)                       DRV 3140
+99860 FORMAT (30I4)                                                     DRV 3150
+99850 FORMAT (50H0THE FOLLOWING COLUMNS OF H ARE LINEARLY DEPENDENT,    DRV 3160
+     * 48H.  IF MODE 1, THEY DID NOT ENTER THE REGRESSION./6H IF MO,    DRV 3170
+     * 24HDE 2, THEY ENTERED LAST./)                                    DRV 3180
+99840 FORMAT (1H0,15X,9HREPORT ON,12X,9HNUMBER OF,4X,11HESTIMATED N,    DRV 3190
+     * 16HUMBER OF CORRECT/13H B-VECTOR NO.,3X,11HCONVERGENCE,10X,      DRV 3200
+     * 10HITERATIONS,3X,26HDIGITS IN INITIAL SOLUTION/)                 DRV 3210
+99830 FORMAT (I7,9X,9HCONVERGED,14X,F4.0,10X,G15.8)                     DRV 3220
+99820 FORMAT (I7,9X,18HFAILED TO CONVERGE,5X,F4.0,10X,G15.8)            DRV 3230
+99810 FORMAT (26H0SOLUTION FOR B-VECTOR NO.,I3)                         DRV 3240
+99800 FORMAT (1H0,27X,18HSTANDARD DEVIATION/5X,1HJ,4X,10HCOEFFICIEN,    DRV 3250
+     * 4HT(J),5X,17HOF COEFFICIENT(J)/)                                 DRV 3260
+99790 FORMAT (1H0,4X,1HJ,4X,14HCOEFFICIENT(J)/)                         DRV 3270
+99780 FORMAT (1H0,4X,1HI,4X,11HOBSERVED(I),9X,12HPREDICTED(I),10X,      DRV 3280
+     * 11HRESIDUAL(I)/)                                                 DRV 3290
+99770 FORMAT (I6,G17.8,2G21.8)                                          DRV 3300
+99760 FORMAT (30H0SUM OF SQUARED RESIDUALS    =,G15.8/1X,8HNORM OF ,    DRV 3310
+     * 9HRESIDUALS,11X,1H=,G15.8)                                       DRV 3320
+99750 FORMAT (30H RESIDUAL STANDARD DEVIATION =,G15.8)                  DRV 3330
+99740 FORMAT (27H0UNSCALED COVARIANCE MATRIX/)                          DRV 3340
+99730 FORMAT (I5)                                                       DRV 3350
+99720 FORMAT(25H0NUMBER OF ZERO WEIGHTS =,I3,5X,17HDEG. OF FREEDOM =,I3)DRV 3360
+      END                                                               DRV 3370
+      SUBROUTINE L2A(M, N, M1, L, A, B, W, TOL, MM, NN,                 L2A   10
+     * N1, IPIVOT, X, RES, R, Q, C, IFAULT)
+C ** PURPOSE **
+C SUBROUTINE L2A COMPUTES LEAST SQUARES SOLUTIONS TO OVERDETERMINED
+C SYSTEMS OF LINEAR EQUATIONS.  THE METHOD USED IS A MODIFIED
+C GRAM-SCHMIDT ORTHOGONAL DECOMPOSITION WITH ITERATIVE REFINEMENT OF
+C THE SOLUTION.  THE SOLUTION MAY BE SUBJECT TO LINEAR EQUALITY
+C CONSTRAINTS.  OUTPUT INCLUDES THE LEAST SQUARES COEFFICIENTS,
+C RESIDUALS, UNSCALED COVARIANCE MATRIX, AND INFORMATION ON THE
+C BEHAVIOR OF THE ITERATIVE REFINEMENT PROCEDURE.
+C MATRIX A IS THE GIVEN MATRIX OF A SYSTEM OF M LINEAR EQUATIONS IN N
+C UNKNOWNS, AND MATRIX W IS A GIVEN DIAGONAL MATRIX OF WEIGHTS WITH ALL
+C DIAGONAL ELEMENTS NONNEGATIVE.  LET H = (SQRT(W))*A.
+C IN THE EVENT THAT N1 (THE COMPUTED RANK OF MATRIX H) IS LESS THAN N
+C (THE NUMBER OF UNKNOWN COEFFICIENTS), THE ORIGINAL MATRIX H (M BY N)
+C IS REPLACED BY A SMALLER MATRIX (M BY N1) WHOSE COLUMNS ARE LINEARLY
+C INDEPENDENT, AND A SOLUTION IS SOUGHT FOR THE SMALLER SYSTEM OF
+C EQUATIONS.  THUS N - N1 COLUMNS OF THE ORIGINAL MATRIX H ARE DELETED,
+C AND COEFFICIENTS CORRESPONDING TO THESE N - N1 DELETED COLUMNS WILL
+C BE SET EQUAL TO ZERO.
+C
+C ** INPUT VARIABLES **
+C M      TOTAL NUMBER OF EQUATIONS.
+C N      NUMBER OF UNKNOWN COEFFICIENTS.
+C M1     NUMBER OF LINEAR CONSTRAINTS (0.LE.M1.LE.M AND M1.LE.N).
+C L      NUMBER OF RIGHT-HAND SIDES (VECTORS OF OBSERVATIONS).
+C A      TWO-DIMENSIONAL ARRAY OF SIZE (MM,N).  ON ENTRY, THE ARRAY A
+C        CONTAINS THE GIVEN MATRIX OF A SYSTEM OF M LINEAR EQUATIONS
+C        IN N UNKNOWNS, WHERE THE FIRST M1 EQUATIONS ARE TO BE
+C        SATISFIED EXACTLY.  A IS LEFT INTACT ON EXIT.
+C B      TWO-DIMENSIONAL ARRAY OF SIZE (MM,L).  ON ENTRY, B CONTAINS
+C        THE L GIVEN RIGHT-HAND SIDES (VECTORS OF OBSERVATIONS).  B IS
+C        LEFT INTACT ON EXIT.
+C W      VECTOR OF SIZE M.  ON ENTRY, W CONTAINS THE DIAGONAL ELEMENTS
+C        OF A GIVEN DIAGONAL MATRIX OF WEIGHTS, ALL NONNEGATIVE.
+C        (THE FIRST M1 ELEMENTS OF W ARE SET EQUAL TO 1.0 BY THE
+C        PROGRAM WHEN M1 IS GREATER THAN ZERO.)  ON EXIT, THE ORIGINAL
+C        ELEMENTS OF W HAVE BEEN REPLACED BY THEIR SQUARE ROOTS.
+C TOL    PARAMETER USED IN DETERMINING THE RANK OF MATRIX H.
+C        NOTE --
+C        (1) IF TOL EQUALS ZERO, THE TOLERANCE USED IN SUBROUTINE
+C            DECOM1 WILL BE BASED ON MACHINE PRECISION.
+C        (2) IF TOL IS GREATER THAN ZERO, THIS VALUE OF TOL WILL BE
+C            USED IN SETTING AN ABSOLUTE TOLERANCE FOR COMPARISON WITH
+C            DIAGONAL ELEMENTS OF THE TRIANGULAR MATRIX OBTAINED IN
+C            SUBROUTINE DECOM1.  THE VALUE OF TOL CAN BE BASED ON
+C            KNOWLEDGE CONCERNING THE ACCURACY OF THE DATA.
+C MM     DIMENSIONING PARAMETER SPECIFYING MAXIMUM NUMBER OF ROWS IN
+C        THE ARRAYS A, B, RES AND Q.  MM MUST SATISFY MM.GE.M.
+C NN     DIMENSIONING PARAMETER SPECIFYING MAXIMUM NUMBER OF ROWS IN
+C        THE ARRAYS X AND R.  NN MUST SATISFY NN.GE.N.
+C
+C ** OUTPUT VARIABLES AND INTERNAL VARIABLES **
+C N1     COMPUTED RANK OF MATRIX H, WHERE H = (SQRT(W))*A.
+C IPIVOT VECTOR OF SIZE N.  ON EXIT, THIS ARRAY RECORDS THE ORDER
+C        IN WHICH THE COLUMNS OF H WERE SELECTED BY THE PIVOTING
+C        SCHEME IN THE COURSE OF THE ORTHOGONAL DECOMPOSITION.
+C        WHENEVER N1.LT.N, THE FIRST N1 ELEMENTS OF IPIVOT INDICATE
+C        WHICH COLUMNS OF H WERE FOUND TO BE LINEARLY INDEPENDENT.
+C X      TWO-DIMENSIONAL ARRAY OF SIZE (NN,L).  ON EXIT, X CONTAINS
+C        THE SOLUTION VECTORS.
+C RES    TWO-DIMENSIONAL ARRAY OF SIZE (MM,L).  ON EXIT, RES CONTAINS
+C        THE RESIDUAL VECTORS.
+C R      TWO-DIMENSIONAL ARRAY OF SIZE (NN,N).  ON EXIT, R CONTAINS
+C        THE LOWER TRIANGULAR PORTION OF THE SYMMETRIC UNSCALED
+C        COVARIANCE MATRIX.  (THIS ARRAY IS USED INTERNALLY TO STORE
+C        RESULTS FROM SUBROUTINE DECOM1 WHICH ARE DESTROYED IN
+C        COMPUTING THE COVARIANCE MATRIX.)
+C Q      TWO-DIMENSIONAL ARRAY OF SIZE (MM,N) USED INTERNALLY ONLY.
+C C      VECTOR HAVING AT LEAST 4*(M+N)+2*L ELEMENTS USED (1) FOR
+C        INTERNAL WORK SPACE AND (2) FOR RETURNING INFORMATION ON THE
+C        BEHAVIOR OF THE ITERATIVE REFINEMENT PROCEDURE.
+C        (A) NUMIT IS THE NUMBER OF ITERATIONS CARRIED OUT DURING THE
+C            ITERATIVE REFINEMENT IN ATTEMPTING TO OBTAIN A SOLUTION
+C            FOR THE K-TH RIGHT-HAND SIDE.
+C            ON EXIT, C(K) = +NUMIT IF THE SOLUTION CONVERGED, AND
+C                     C(K) = -NUMIT IF THE SOLUTION FAILED TO CONVERGE.
+C        (B) DIGITX GIVES AN ESTIMATE OF THE NUMBER OF CORRECT DIGITS
+C            IN THE INITIAL SOLUTION OF THE COEFFICIENTS FOR THE K-TH
+C            RIGHT-HAND SIDE.  ON EXIT, C(K+L) = DIGITX.
+C IFAULT FAULT INDICATOR WHICH IS ZERO IF NO ERRORS WERE ENCOUNTERED
+C        AND POSITIVE IF ERRORS WERE DETECTED OR IF EVIDENCE OF SEVERE
+C        ILL-CONDITIONING WAS FOUND.  DIAGNOSTIC MESSAGES ARE PRINTED
+C        FROM SUBROUTINE ERROR.  IF IFAULT IS SET EQUAL TO 1, 2, 3, 4,
+C        5, 6 OR 7, EXECUTION IS TERMINATED.  EXECUTION CONTINUES WHEN
+C        IFAULT IS SET EQUAL TO 8, 9 OR 10 PROVIDED THAT A SOLUTION
+C        WAS OBTAINED FOR AT LEAST ONE RIGHT-HAND SIDE.  THE VALUE OF
+C        IFAULT IS USED TO INDICATE THE FOLLOWING --
+C        0 = NO ERRORS ENCOUNTERED.
+C        1 = BAD INPUT PARAMETER (M, N OR L).
+C        2 = BAD INPUT PARAMETER (M1).
+C        3 = BAD DIMENSION.  EITHER M.GT.MM OR N.GT.NN.
+C        4 = AT LEAST ONE WEIGHT IS NEGATIVE.
+C        5 = EITHER MATRIX H OR MATRIX OF CONSTRAINTS EQUALS ZERO.
+C        6 = CONSTRAINTS ARE LINEARLY DEPENDENT.
+C        7 = ALL SOLUTIONS FAILED TO CONVERGE.
+C        8 = SOLUTION FAILED TO CONVERGE FOR AT LEAST ONE RIGHT-HAND
+C            SIDE.
+C        9 = LARGE NUMBER OF ITERATIONS REQUIRED FOR CONVERGENCE.
+C       10 = ESTIMATED NUMBER OF DIGITS IN INITIAL SOLUTION OF
+C            COEFFICIENTS IS SMALL.
+C       11 = DIAGONAL ELEMENT OF COVARIANCE MATRIX WAS COMPUTED TO BE
+C            NEGATIVE OWING TO ROUNDING ERROR.
+C
+C ** SUBROUTINES REQUIRED **
+C SUBROUTINE DECOM1
+C        USES MODIFIED GRAM-SCHMIDT ALGORITHM WITH PIVOTING TO
+C        OBTAIN AN ORTHOGONAL DECOMPOSITION OF THE INPUT MATRIX.
+C SUBROUTINE SOLVE1
+C        COMPUTES COEFFICIENTS AND RESIDUALS.  ITERATIVE REFINEMENT IS
+C        USED TO IMPROVE THE ACCURACY OF THE INITIAL SOLUTION.
+C SUBROUTINE COVAR
+C        COMPUTES UNSCALED COVARIANCE MATRIX OF THE COEFFICIENTS.
+C SUBROUTINE ERROR
+C        PRINTS ERROR DIAGNOSTICS WHEN ERRORS ARE DETECTED OR WHEN
+C        EVIDENCE OF SEVERE ILL-CONDITIONING IS FOUND.
+C
+C ** STORAGE REQUIREMENTS **
+C THE STORAGE REQUIRED FOR THE DIMENSIONED ARRAYS IN SUBROUTINE L2A IS
+C   M*(2*N + 2*L + 5) + N*(N + L + 5) + 2*L
+C LOCATIONS.  ALL ARRAYS REQUIRED IN SUBROUTINES CALLED BY L2A ARE
+C DECLARED HEREIN AND ARE TRANSMITTED ONLY THROUGH PARAMETER LISTS OF
+C CALL-SEQUENCES.
+C
+C ** PRECISION OF ARITHMETIC CALCULATIONS **
+C SINGLE PRECISION ARITHMETIC IS USED FOR ALL CALCULATIONS EXCEPT THE
+C DOUBLE PRECISION ACCUMULATION OF INNER PRODUCTS.  (THE VARIABLE SUM
+C IS DECLARED TO BE DOUBLE PRECISION IN SUBROUTINES DECOM1, SOLVE1 AND
+C COVAR.)  IT IS ESSENTIAL FOR THE SUCCESS OF THE ITERATIVE REFINEMENT
+C PROCEDURE THAT INNER PRODUCTS BE ACCUMULATED IN DOUBLE PRECISION.
+C
+C ** CONVERSION OF THE PROGRAM TO DOUBLE PRECISION **
+C *********************************************************************
+C * ON COMPUTERS HAVING SHORT WORD LENGTH (AS THE IBM 360/370) IT MAY *
+C * BE DESIRABLE TO PERFORM ALL CALCULATIONS IN DOUBLE PRECISION.  IN *
+C * THIS CASE, THE ITERATIVE REFINEMENT PRESENTLY INCLUDED IN SOLVE1  *
+C * SHOULD BE OMITTED.                                                *
+C * TO CONVERT THE PROGRAM TO DOUBLE PRECISION, THE FOLLOWING         *
+C * APPROACH IS SUGGESTED.                                            *
+C *                                                                   *
+C * 1. VARIABLES PRESENTLY DECLARED TO BE REAL SHOULD BE DECLARED     *
+C *    DOUBLE PRECISION.  THOSE TYPED INTEGER, DOUBLE PRECISION AND   *
+C *    LOGICAL SHOULD NOT BE CHANGED.                                 *
+C * 2. THE USE OF FAIL, NUMIT AND DIGITX SHOULD BE OMITTED.           *
+C * 3. DESCRIPTION OF VARIABLE C (AT L2A 700-800) SHOULD READ --      *
+C *    C  VECTOR HAVING AT LEAST 4*(M+N) ELEMENTS USED ONLY FOR       *
+C *       INTERNAL WORK SPACE.                                        *
+C * 4. THE VALUE OF ETA (AT L2A 1930) SHOULD BE SET SO THAT IT IS THE *
+C *    SMALLEST POSITIVE DOUBLE PRECISION NUMBER SUCH THAT 1.0 + ETA  *
+C *    IS GREATER THAN 1.0 IN DOUBLE PRECISION ARITHMETIC.            *
+C *    FOR IBM COMPUTER TYPE, ETA = 16.**(-13)                        *
+C *    FOR UNIVAC COMPUTER TYPE, ETA = 2.**(-59)                      *
+C * 5. THE FOLLOWING FORTRAN FUNCTIONS SHOULD BE CHANGED --           *
+C *      SINGLE PRECISION NAME     DOUBLE PRECISION NAME              *
+C *             DBLE(X)                X                              *
+C *             FLOAT(N)               DBLE(FLOAT(N))                 *
+C *             SQRT(X)                DSQRT(X)                       *
+C *    DBLE(X) IS USED IN SUBROUTINES DECOM1, SOLVE1 AND COVAR.       *
+C *    FLOAT(N) IS USED IN SUBROUTINE DECOM1.                         *
+C *    SQRT(X) IS USED IN SUBROUTINE L2A.                             *
+C * 6. IT MAY BE NECESSARY OR DESIRABLE TO CHANGE CERTAIN FORMATS IN  *
+C *    SUBROUTINE ERROR, REPLACING G SPECIFICATIONS BY D.             *
+C * 7. REPLACE STATEMENT L2A 2450 BY A STATEMENT READING              *
+C *          K3 = 1                                                   *
+C * 8. FURTHER DETAILS ARE GIVEN IN SUBROUTINE SOLVE1 IN CONNECTION   *
+C *    WITH THE OMISSION OF ITERATIVE REFINEMENT.                     *
+C * 9. IN SUBROUTINE L2A, STATEMENTS L2A 960-1010, 1790-1800, 1990,   *
+C *    2320-2330, 2430-2440, 2970, 3170-3460 AND 3480-3510 SHOULD BE  *
+C *    OMITTED.                                                       *
+C *    STATEMENT NUMBERS GIVEN HERE REFER TO THOSE IN THE RIGHT-HAND  *
+C *    MARGIN.  CERTAIN COMMENTS IN SUBROUTINE L2A DO NOT APPLY TO    *
+C *    THE DOUBLE PRECISION VERSION.                                  *
+C *                                                                   *
+C *********************************************************************
+C
+      INTEGER IPIVOT(N)
+      REAL A(MM,N), B(MM,L), C(1), ETA, Q(MM,N), R(NN,N),
+     * RES(MM,L), TOL, W(M), X(NN,L), Z
+      REAL DIGITX
+      LOGICAL FAIL
+      LOGICAL SING
+C
+C SET VALUE OF ETA, A MACHINE-DEPENDENT PARAMETER.
+C ETA, THE RELATIVE MACHINE PRECISION, IS THE SMALLEST POSITIVE REAL
+C NUMBER SUCH THAT 1.0 + ETA IS GREATER THAN 1.0 IN FLOATING-POINT
+C ARITHMETIC.
+C
+C FOR IBM COMPUTER TYPE, ETA = 16.**(-5)
+C FOR UNIVAC COMPUTER TYPE, ETA = 2.**(-26)
+C FOR CDC COMPUTER TYPE, ETA = 2.**(-47)
+C FOR HONEYWELL COMPUTER TYPE, ETA = 2.**(-27)
+C
+      ETA = 2.**(-26)
+C
+C DEFAULT VALUE FOR TOL IS ZERO.
+C
+      IF (TOL.LT.0.0) TOL = 0.0
+      IFAULT = 0
+      KSUM = 0
+C
+C PERFORM INITIAL CHECKING OF INPUT PARAMETERS, DIMENSIONS AND
+C WEIGHTS FOR POSSIBLE ERRORS.
+C
+      IF (M.GT.0 .AND. N.GT.0 .AND. L.GT.0) GO TO 10
+      IFAULT = 1
+      CALL ERROR(IFAULT, K, Z)
+      RETURN
+   10 IF (M1.LE.M .AND. M1.LE.N .AND. M1.GE.0) GO TO 20
+      IFAULT = 2
+      CALL ERROR(IFAULT, K, Z)
+      RETURN
+   20 IF (M.LE.MM .AND. N.LE.NN) GO TO 30
+      IFAULT = 3
+      K = 1
+      CALL ERROR(IFAULT, K, Z)
+      RETURN
+   30 DO 40 I=1,M
+        IF (M1.GT.0 .AND. I.LE.M1) W(I) = 1.0
+        IF (W(I).GE.0.0) GO TO 40
+        IFAULT = 4
+        Z = W(I)
+        CALL ERROR(IFAULT, I, Z)
+   40 CONTINUE
+      IF (IFAULT.EQ.4) RETURN
+      DO 50 I=1,M
+        W(I) = SQRT(W(I))
+   50 CONTINUE
+C
+C SET PARAMETERS WHICH ALLOCATE VECTOR C TO CONTAIN CERTAIN FINAL
+C RESULTS AND ALSO TO BE USED AS WORK SPACE.
+C
+C K1 IS STARTING POINT FOR NUMIT AND FAIL, OF LENGTH L.
+C K2 IS STARTING POINT FOR DIGITX, OF LENGTH L.
+C K3 IS STARTING POINT FOR D, OF LENGTH N.
+C K4 IS STARTING POINT FOR K-TH COLUMN OF B, OF LENGTH M.
+C K5 IS STARTING POINT FOR K-TH COLUMN OF X, OF LENGTH N.
+C K6 IS STARTING POINT FOR K-TH COLUMN OF RES, OF LENGTH M.
+C K7 IS STARTING POINT FOR WORK SPACE OF LENGTH M.
+C K8 IS STARTING POINT FOR WORK SPACE OF LENGTH M.
+C K9 IS STARTING POINT FOR WORK SPACE OF LENGTH N.
+C K10 IS STARTING POINT FOR WORK SPACE OF LENGTH N.
+C
+      K1 = 1
+      K2 = K1 + L
+      K3 = K2 + L
+      K4 = K3 + N
+      K5 = K4 + M
+      K6 = K5 + N
+      K7 = K6 + M
+      K8 = K7 + M
+      K9 = K8 + M
+      K10 = K9 + N
+      K = K10 + N - 1
+C
+C MULTIPLY EACH ROW OF MATRIX A (M BY N) BY ITS APPROPRIATE WEIGHT AND
+C STORE THE RESULT IN ARRAY Q.  SET ARRAYS C AND R EQUAL TO ZERO.
+C
+      DO 60 I=1,K
+        C(I) = 0.0
+   60 CONTINUE
+      DO 90 J=1,N
+        DO 70 I=1,M
+          Q(I,J) = A(I,J)*W(I)
+   70   CONTINUE
+        DO 80 I=1,N
+          R(I,J) = 0.0
+   80   CONTINUE
+   90 CONTINUE
+C
+C OBTAIN AN ORTHOGONAL DECOMPOSITION OF THE MATRIX Q AND COMPUTE ITS
+C RANK.
+C
+      CALL DECOM1(M, N, M1, ETA, TOL, Q, R, C(K3), N1, IPIVOT, SING,
+     * MM, NN)
+C
+      IF (.NOT.SING) GO TO 110
+      IF (N1.GT.0) GO TO 100
+      IFAULT = 5
+      CALL ERROR(IFAULT, K, Z)
+      RETURN
+  100 IFAULT = 6
+      CALL ERROR(IFAULT, K, Z)
+      RETURN
+C
+C SEEK A SOLUTION (COEFFICIENTS AND RESIDUALS) FOR EACH OF THE L LEAST
+C SQUARES PROBLEMS WHOSE RIGHT-HAND SIDES ARE GIVEN IN THE ARRAY B.
+C
+  110 DO 200 K=1,L
+C K-TH RIGHT-HAND SIDE.
+        K0 = K4 - 1
+        DO 120 I=1,M
+          K0 = K0 + 1
+          C(K0) = B(I,K)
+  120   CONTINUE
+C
+        CALL SOLVE1(M, N, M1, A, C(K4), W, N1, IPIVOT, Q, R, C(K3),
+     *   ETA, FAIL, NUMIT, DIGITX,
+     *   C(K5), C(K6), C(K7), C(K8), C(K9), C(K10), MM, NN)
+C
+        K0 = K5 - 1
+        DO 130 J=1,N
+          K0 = K0 + 1
+          X(J,K) = C(K0)
+  130   CONTINUE
+        IF (M1.EQ.0) GO TO 150
+        DO 140 I=1,M1
+          RES(I,K) = 0.0
+  140   CONTINUE
+  150   M1P1 = M1 + 1
+        IF (M1P1.GT.M) GO TO 170
+        K0 = K6 + M1 - 1
+        DO 160 I=M1P1,M
+          K0 = K0 + 1
+          RES(I,K) = C(K0)
+  160   CONTINUE
+  170   CONTINUE
+C
+C FOR RIGHT-HAND SIDES WHERE CONVERGENCE OF A SOLUTION IS REPORTED,
+C A CHECK IS MADE FOR EVIDENCE OF SEVERE ILL-CONDITIONING.  SUCH
+C EVIDENCE IS FURNISHED BY LARGE VALUES OF NUMIT (NUMBER OF ITERATIONS
+C BEFORE CONVERGENCE WAS OBTAINED) AND SMALL VALUES OF DIGITX
+C (ESTIMATE OF THE NUMBER OF CORRECT DIGITS IN THE INITIAL SOLUTION
+C OF THE COEFFICIENTS).  IF NUMIT EXCEEDS -ALOG10(ETA) A DIAGNOSTIC
+C MESSAGE IS PRINTED TO WARN OF ILL-CONDITIONING.  IF DIGITX IS LESS
+C THAN 0.5 (HALF A DECIMAL DIGIT) A SIMILAR DIAGNOSTIC MESSAGE IS
+C PRINTED.
+C
+        C(K) = FLOAT(NUMIT)
+        IF (FAIL) C(K) = -C(K)
+        K0 = K2 + K - 1
+        C(K0) = DIGITX
+        IF (.NOT.FAIL) GO TO 180
+C KSUM IS A TALLY OF SOLUTIONS WHICH FAILED TO CONVERGE.
+        KSUM = KSUM + 1
+        IFAULT = 8
+        CALL ERROR(IFAULT, K, Z)
+        GO TO 200
+  180   Z = -ALOG10(ETA)
+        IF (FLOAT(NUMIT).LE.Z) GO TO 190
+        IFAULT = 9
+        Z = FLOAT(NUMIT)
+        CALL ERROR(IFAULT, K, Z)
+  190   IF (DIGITX.GE.0.5) GO TO 200
+        IFAULT = 10
+        Z = DIGITX
+        CALL ERROR(IFAULT, K, Z)
+  200 CONTINUE
+      IF (KSUM.LT.L) GO TO 210
+      IFAULT = 7
+      CALL ERROR(IFAULT, K, Z)
+      RETURN
+C
+C COMPUTE THE UNSCALED COVARIANCE MATRIX OF THE COEFFICIENTS.
+C
+  210 CALL COVAR(N, M1, N1, IPIVOT, R, C(K3), C(K9), NN)
+C
+C IN CERTAIN PROBLEMS, SOME DIAGONAL TERMS OF THE UNSCALED COVARIANCE
+C MATRIX ARE EQUAL TO ZERO OR TO SMALL POSITIVE NUMBERS.  BECAUSE OF
+C ROUNDING ERRORS, COMPUTED VALUES FOR THESE TERMS MAY BE SMALL
+C NEGATIVE NUMBERS.  AN ERROR DIAGNOSTIC IS PRINTED IF ANY DIAGONAL
+C TERM IS NEGATIVE.
+C
+      DO 220 J=1,N
+        IF (R(J,J).GE.0.0) GO TO 220
+        IFAULT = 11
+        Z = R(J,J)
+        CALL ERROR(IFAULT, J, Z)
+  220 CONTINUE
+      RETURN
+      END
+      SUBROUTINE L2B(M, N, M1, L, A, B, W, TOL, MM, NN, MMPNN,          L2B   10
+     * N1, IPIVOT, X, RES, QR, C, IFAULT)
+C ** PURPOSE **
+C SUBROUTINE L2B COMPUTES LEAST SQUARES SOLUTIONS TO OVERDETERMINED
+C AND UNDERDETERMINED SYSTEMS OF LINEAR EQUATIONS.  THE METHOD USED IS
+C A MODIFIED GRAM-SCHMIDT ORTHOGONAL DECOMPOSITION WITH ITERATIVE
+C REFINEMENT OF THE SOLUTION.  THE SOLUTION MAY BE SUBJECT TO LINEAR
+C EQUALITY CONSTRAINTS.  OUTPUT INCLUDES THE LEAST SQUARES
+C COEFFICIENTS, RESIDUALS, UNSCALED COVARIANCE MATRIX, AND INFORMATION
+C ON THE BEHAVIOR OF THE ITERATIVE REFINEMENT PROCEDURE.
+C MATRIX A IS THE GIVEN MATRIX OF A SYSTEM OF M LINEAR EQUATIONS IN N
+C UNKNOWNS, AND MATRIX W IS A GIVEN DIAGONAL MATRIX OF WEIGHTS WITH ALL
+C DIAGONAL ELEMENTS NONNEGATIVE.  LET H = (SQRT(W))*A.
+C IN THE EVENT THAT N1 (THE COMPUTED RANK OF MATRIX H) IS LESS THAN N
+C (THE NUMBER OF UNKNOWN COEFFICIENTS), A UNIQUE SOLUTION VECTOR HAVING
+C N ELEMENTS CAN BE OBTAINED BY IMPOSING THE CONDITION THAT THE
+C SOLUTION BE OF MINIMAL EUCLIDEAN NORM.  SUCH A SOLUTION IS SOUGHT IN
+C THE CASE OF UNDERDETERMINED OR RANK-DEFICIENT PROBLEMS.
+C
+C ** INPUT VARIABLES **
+C M      TOTAL NUMBER OF EQUATIONS.
+C N      NUMBER OF UNKNOWN COEFFICIENTS.
+C M1     NUMBER OF LINEAR CONSTRAINTS (0.LE.M1.LE.M AND M1.LE.N).
+C L      NUMBER OF RIGHT-HAND SIDES (VECTORS OF OBSERVATIONS).
+C A      TWO-DIMENSIONAL ARRAY OF SIZE (MM,N).  ON ENTRY, THE ARRAY A
+C        CONTAINS THE GIVEN MATRIX OF A SYSTEM OF M LINEAR EQUATIONS
+C        IN N UNKNOWNS, WHERE THE FIRST M1 EQUATIONS ARE TO BE
+C        SATISFIED EXACTLY.  A IS LEFT INTACT ON EXIT.
+C B      TWO-DIMENSIONAL ARRAY OF SIZE (MM,L).  ON ENTRY, B CONTAINS
+C        THE L GIVEN RIGHT-HAND SIDES (VECTORS OF OBSERVATIONS).  B IS
+C        LEFT INTACT ON EXIT.
+C W      VECTOR OF SIZE M.  ON ENTRY, W CONTAINS THE DIAGONAL ELEMENTS
+C        OF A GIVEN DIAGONAL MATRIX OF WEIGHTS, ALL NONNEGATIVE.
+C        (THE FIRST M1 ELEMENTS OF W ARE SET EQUAL TO 1.0 BY THE
+C        PROGRAM WHEN M1 IS GREATER THAN ZERO.)  ON EXIT, THE ORIGINAL
+C        ELEMENTS OF W HAVE BEEN REPLACED BY THEIR SQUARE ROOTS.
+C TOL    PARAMETER USED IN DETERMINING THE RANK OF MATRIX H.
+C        NOTE --
+C        (1) IF TOL EQUALS ZERO, THE TOLERANCE USED IN SUBROUTINE
+C            DECOM2 WILL BE BASED ON MACHINE PRECISION.
+C        (2) IF TOL IS GREATER THAN ZERO, THIS VALUE OF TOL WILL BE
+C            USED IN SETTING AN ABSOLUTE TOLERANCE FOR COMPARISON WITH
+C            DIAGONAL ELEMENTS OF THE TRIANGULAR MATRIX OBTAINED IN
+C            SUBROUTINE DECOM2.  THE VALUE OF TOL CAN BE BASED ON
+C            KNOWLEDGE CONCERNING THE ACCURACY OF THE DATA.
+C MM     DIMENSIONING PARAMETER SPECIFYING MAXIMUM NUMBER OF ROWS IN
+C        THE ARRAYS A, B AND RES.  MM MUST SATISFY MM.GE.M.
+C NN     DIMENSIONING PARAMETER SPECIFYING MAXIMUM NUMBER OF ROWS IN
+C        THE ARRAY X.  NN MUST SATISFY NN.GE.N.
+C MMPNN  DIMENSIONING PARAMETER SPECIFYING MAXIMUM NUMBER OF ROWS IN
+C        THE ARRAY QR.  MMPNN MUST SATISFY MMPNN.GE.M+N.
+C
+C ** OUTPUT VARIABLES AND INTERNAL VARIABLES **
+C N1     COMPUTED RANK OF MATRIX H, WHERE H = (SQRT(W))*A.
+C IPIVOT VECTOR OF SIZE N.  ON EXIT, THIS ARRAY RECORDS THE ORDER
+C        IN WHICH THE COLUMNS OF H WERE SELECTED BY THE PIVOTING
+C        SCHEME IN THE COURSE OF THE ORTHOGONAL DECOMPOSITION.
+C        WHENEVER N1.LT.N, THE FIRST N1 ELEMENTS OF IPIVOT INDICATE
+C        WHICH COLUMNS OF H WERE FOUND TO BE LINEARLY INDEPENDENT.
+C X      TWO-DIMENSIONAL ARRAY OF SIZE (NN,L).  ON EXIT, X CONTAINS
+C        THE SOLUTION VECTORS.
+C RES    TWO-DIMENSIONAL ARRAY OF SIZE (MM,L).  ON EXIT, RES CONTAINS
+C        THE RESIDUAL VECTORS.
+C QR     TWO-DIMENSIONAL ARRAY OF SIZE (MMPNN,N).  ON EXIT, QR
+C        CONTAINS THE LOWER TRIANGULAR PORTION OF THE SYMMETRIC
+C        UNSCALED COVARIANCE MATRIX.  (THIS ARRAY IS USED INTERNALLY
+C        TO STORE RESULTS FROM SUBROUTINE DECOM2 WHICH ARE
+C        DESTROYED IN COMPUTING THE COVARIANCE MATRIX.)
+C C      VECTOR HAVING AT LEAST 6*(M+N)+2*L ELEMENTS USED (1) FOR
+C        INTERNAL WORK SPACE AND (2) FOR RETURNING INFORMATION ON THE
+C        BEHAVIOR OF THE ITERATIVE REFINEMENT PROCEDURE.
+C        (A) NUMIT IS THE NUMBER OF ITERATIONS CARRIED OUT DURING THE
+C            ITERATIVE REFINEMENT IN ATTEMPTING TO OBTAIN A SOLUTION
+C            FOR THE K-TH RIGHT-HAND SIDE.
+C            ON EXIT, C(K) = +NUMIT IF THE SOLUTION CONVERGED, AND
+C                     C(K) = -NUMIT IF THE SOLUTION FAILED TO CONVERGE.
+C        (B) DIGITX GIVES AN ESTIMATE OF THE NUMBER OF CORRECT DIGITS
+C            IN THE INITIAL SOLUTION OF THE COEFFICIENTS FOR THE K-TH
+C            RIGHT-HAND SIDE.  ON EXIT, C(K+L) = DIGITX.
+C IFAULT FAULT INDICATOR WHICH IS ZERO IF NO ERRORS WERE ENCOUNTERED
+C        AND POSITIVE IF ERRORS WERE DETECTED OR IF EVIDENCE OF SEVERE
+C        ILL-CONDITIONING WAS FOUND.  DIAGNOSTIC MESSAGES ARE PRINTED
+C        FROM SUBROUTINE ERROR.  IF IFAULT IS SET EQUAL TO 1, 2, 3, 4,
+C        5, 6 OR 7, EXECUTION IS TERMINATED.  EXECUTION CONTINUES WHEN
+C        IFAULT IS SET EQUAL TO 8, 9 OR 10 PROVIDED THAT A SOLUTION
+C        WAS OBTAINED FOR AT LEAST ONE RIGHT-HAND SIDE.  THE VALUE OF
+C        IFAULT IS USED TO INDICATE THE FOLLOWING --
+C        0 = NO ERRORS ENCOUNTERED.
+C        1 = BAD INPUT PARAMETER (M, N OR L).
+C        2 = BAD INPUT PARAMETER (M1).
+C        3 = BAD DIMENSION.  EITHER M.GT.MM, N.GT.NN OR M+N.GT.MMPNN.
+C        4 = AT LEAST ONE WEIGHT IS NEGATIVE.
+C        5 = EITHER MATRIX H OR MATRIX OF CONSTRAINTS EQUALS ZERO.
+C        6 = CONSTRAINTS ARE LINEARLY DEPENDENT.
+C        7 = ALL SOLUTIONS FAILED TO CONVERGE.
+C        8 = SOLUTION FAILED TO CONVERGE FOR AT LEAST ONE RIGHT-HAND
+C            SIDE.
+C        9 = LARGE NUMBER OF ITERATIONS REQUIRED FOR CONVERGENCE.
+C       10 = ESTIMATED NUMBER OF DIGITS IN INITIAL SOLUTION OF
+C            COEFFICIENTS IS SMALL.
+C       11 = DIAGONAL ELEMENT OF COVARIANCE MATRIX WAS COMPUTED TO BE
+C            NEGATIVE OWING TO ROUNDING ERROR.
+C
+C ** SUBROUTINES REQUIRED **
+C SUBROUTINE DECOM2
+C        USES MODIFIED GRAM-SCHMIDT ALGORITHM WITH PIVOTING TO
+C        OBTAIN AN ORTHOGONAL DECOMPOSITION OF THE INPUT MATRIX.
+C SUBROUTINE SOLVE2
+C        COMPUTES COEFFICIENTS AND RESIDUALS.  ITERATIVE REFINEMENT IS
+C        USED TO IMPROVE THE ACCURACY OF THE INITIAL SOLUTION.
+C SUBROUTINE SOLVE3
+C        CALLED ONLY BY SUBROUTINE SOLVE2.
+C SUBROUTINE COVAR
+C        COMPUTES UNSCALED COVARIANCE MATRIX OF THE COEFFICIENTS.
+C SUBROUTINE ERROR
+C        PRINTS ERROR DIAGNOSTICS WHEN ERRORS ARE DETECTED OR WHEN
+C        EVIDENCE OF SEVERE ILL-CONDITIONING IS FOUND.
+C
+C ** STORAGE REQUIREMENTS **
+C THE STORAGE REQUIRED FOR THE DIMENSIONED ARRAYS IN SUBROUTINE L2B IS
+C   M*(2*N + 2*L + 7) + N*(N + L + 7) + 2*L
+C LOCATIONS.  ALL ARRAYS REQUIRED IN SUBROUTINES CALLED BY L2B ARE
+C DECLARED HEREIN AND ARE TRANSMITTED ONLY THROUGH PARAMETER LISTS OF
+C CALL-SEQUENCES.
+C
+C ** PRECISION OF ARITHMETIC CALCULATIONS **
+C SINGLE PRECISION ARITHMETIC IS USED FOR ALL CALCULATIONS EXCEPT THE
+C DOUBLE PRECISION ACCUMULATION OF INNER PRODUCTS.  (THE VARIABLE SUM
+C IS DECLARED TO BE DOUBLE PRECISION IN SUBROUTINES DECOM2, SOLVE2,
+C SOLVE3 AND COVAR.)  IT IS ESSENTIAL FOR THE SUCCESS OF THE ITERATIVE
+C REFINEMENT PROCEDURE THAT INNER PRODUCTS BE ACCUMULATED IN DOUBLE
+C PRECISION.
+C
+C ** CONVERSION OF THE PROGRAM TO DOUBLE PRECISION **
+C *********************************************************************
+C * ON COMPUTERS HAVING SHORT WORD LENGTH (AS THE IBM 360/370) IT MAY *
+C * BE DESIRABLE TO PERFORM ALL CALCULATIONS IN DOUBLE PRECISION.  IN *
+C * THIS CASE, THE ITERATIVE REFINEMENT PRESENTLY INCLUDED IN SOLVE2  *
+C * SHOULD BE OMITTED.                                                *
+C * TO CONVERT THE PROGRAM TO DOUBLE PRECISION, THE FOLLOWING         *
+C * APPROACH IS SUGGESTED.                                            *
+C *                                                                   *
+C * 1. VARIABLES PRESENTLY DECLARED TO BE REAL SHOULD BE DECLARED     *
+C *    DOUBLE PRECISION.  THOSE TYPED INTEGER, DOUBLE PRECISION AND   *
+C *    LOGICAL SHOULD NOT BE CHANGED.                                 *
+C * 2. THE USE OF FAIL, NUMIT AND DIGITX SHOULD BE OMITTED.           *
+C * 3. DESCRIPTION OF VARIABLE C (AT L2B 690-790) SHOULD READ --      *
+C *    C  VECTOR HAVING AT LEAST 6*(M+N) ELEMENTS USED ONLY FOR       *
+C *       INTERNAL WORK SPACE.                                        *
+C * 4. THE VALUE OF ETA (AT L2B 1960) SHOULD BE SET SO THAT IT IS THE *
+C *    SMALLEST POSITIVE DOUBLE PRECISION NUMBER SUCH THAT 1.0 + ETA  *
+C *    IS GREATER THAN 1.0 IN DOUBLE PRECISION ARITHMETIC.            *
+C *    FOR IBM COMPUTER TYPE, ETA = 16.**(-13)                        *
+C *    FOR UNIVAC COMPUTER TYPE, ETA = 2.**(-59)                      *
+C * 5. THE FOLLOWING FORTRAN FUNCTIONS SHOULD BE CHANGED --           *
+C *      SINGLE PRECISION NAME     DOUBLE PRECISION NAME              *
+C *             DBLE(X)                X                              *
+C *             FLOAT(N)               DBLE(FLOAT(N))                 *
+C *             SQRT(X)                DSQRT(X)                       *
+C *    DBLE(X) IS USED IN SUBROUTINES DECOM2, SOLVE2, SOLVE3 AND      *
+C *       COVAR.                                                      *
+C *    FLOAT(N) IS USED IN SUBROUTINE DECOM2.                         *
+C *    SQRT(X) IS USED IN SUBROUTINE L2B.                             *
+C * 6. IT MAY BE NECESSARY OR DESIRABLE TO CHANGE CERTAIN FORMATS IN  *
+C *    SUBROUTINE ERROR, REPLACING G SPECIFICATIONS BY D.             *
+C * 7. REPLACE STATEMENT L2B 2500 BY A STATEMENT READING              *
+C *          K3 = 1                                                   *
+C * 8. FURTHER DETAILS ARE GIVEN IN SUBROUTINE SOLVE2 IN CONNECTION   *
+C *    WITH THE OMISSION OF ITERATIVE REFINEMENT.                     *
+C * 9. IN SUBROUTINE L2B, STATEMENTS L2B 950-1000, 1820-1830, 2020,   *
+C *    2350-2360, 2480-2490, 3070, 3280-3570 AND 3590-3620 SHOULD BE  *
+C *    OMITTED.                                                       *
+C *    STATEMENT NUMBERS GIVEN HERE REFER TO THOSE IN THE RIGHT-HAND  *
+C *    MARGIN.  CERTAIN COMMENTS IN SUBROUTINE L2B DO NOT APPLY TO    *
+C *    THE DOUBLE PRECISION VERSION.                                  *
+C *                                                                   *
+C *********************************************************************
+C
+      INTEGER IPIVOT(N)
+      REAL A(MM,N), B(MM,L), C(1), ETA, QR(MMPNN,N),
+     * RES(MM,L), TOL, W(M), X(NN,L), Z
+      REAL DIGITX
+      LOGICAL FAIL
+      LOGICAL SING
+C
+C SET VALUE OF ETA, A MACHINE-DEPENDENT PARAMETER.
+C ETA, THE RELATIVE MACHINE PRECISION, IS THE SMALLEST POSITIVE REAL
+C NUMBER SUCH THAT 1.0 + ETA IS GREATER THAN 1.0 IN FLOATING-POINT
+C ARITHMETIC.
+C
+C FOR IBM COMPUTER TYPE, ETA = 16.**(-5)
+C FOR UNIVAC COMPUTER TYPE, ETA = 2.**(-26)
+C FOR CDC COMPUTER TYPE, ETA = 2.**(-47)
+C FOR HONEYWELL COMPUTER TYPE, ETA = 2.**(-27)
+C
+      ETA = 2.**(-26)
+C
+C DEFAULT VALUE FOR TOL IS ZERO.
+C
+      IF (TOL.LT.0.0) TOL = 0.0
+      IFAULT = 0
+      KSUM = 0
+C
+C PERFORM INITIAL CHECKING OF INPUT PARAMETERS, DIMENSIONS AND
+C WEIGHTS FOR POSSIBLE ERRORS.
+C
+      IF (M.GT.0 .AND. N.GT.0 .AND. L.GT.0) GO TO 10
+      IFAULT = 1
+      CALL ERROR(IFAULT, K, Z)
+      RETURN
+   10 IF (M1.LE.M .AND. M1.LE.N .AND. M1.GE.0) GO TO 20
+      IFAULT = 2
+      CALL ERROR(IFAULT, K, Z)
+      RETURN
+   20 IF (M.LE.MM .AND. N.LE.NN .AND. M+N.LE.MMPNN) GO TO 30
+      IFAULT = 3
+      K = 2
+      CALL ERROR(IFAULT, K, Z)
+      RETURN
+   30 DO 40 I=1,M
+        IF (M1.GT.0 .AND. I.LE.M1) W(I) = 1.0
+        IF (W(I).GE.0.0) GO TO 40
+        IFAULT = 4
+        Z = W(I)
+        CALL ERROR(IFAULT, I, Z)
+   40 CONTINUE
+      IF (IFAULT.EQ.4) RETURN
+      DO 50 I=1,M
+        W(I) = SQRT(W(I))
+   50 CONTINUE
+C
+C SET PARAMETERS WHICH ALLOCATE VECTOR C TO CONTAIN CERTAIN FINAL
+C RESULTS AND ALSO TO BE USED AS WORK SPACE.
+C
+C K1 IS STARTING POINT FOR NUMIT AND FAIL, OF LENGTH L.
+C K2 IS STARTING POINT FOR DIGITX, OF LENGTH L.
+C K3 IS STARTING POINT FOR D, OF LENGTH N.
+C K4 IS STARTING POINT FOR K-TH COLUMN OF B, OF LENGTH M.
+C K5 IS STARTING POINT FOR K-TH COLUMN OF X, OF LENGTH N.
+C K6 IS STARTING POINT FOR K-TH COLUMN OF RES, OF LENGTH M.
+C K7 IS STARTING POINT FOR WORK SPACE OF LENGTH M.
+C K8 IS STARTING POINT FOR WORK SPACE OF LENGTH M.
+C K9 IS STARTING POINT FOR WORK SPACE OF LENGTH N.
+C K10 IS STARTING POINT FOR WORK SPACE OF LENGTH N.
+C K11 IS STARTING POINT FOR WORK SPACE OF LENGTH M + N.
+C K12 IS STARTING POINT FOR WORK SPACE OF LENGTH M + N.
+C
+      K1 = 1
+      K2 = K1 + L
+      K3 = K2 + L
+      K4 = K3 + N
+      K5 = K4 + M
+      K6 = K5 + N
+      K7 = K6 + M
+      K8 = K7 + M
+      K9 = K8 + M
+      K10 = K9 + N
+      K11 = K10 + N
+      K12 = K11 + M + N
+      K = K12 + M + N - 1
+C
+C MULTIPLY EACH ROW OF MATRIX A (M BY N) BY ITS APPROPRIATE WEIGHT AND
+C STORE THE RESULT IN THE FIRST M ROWS OF ARRAY QR.  SET ARRAY C AND
+C THE LAST N ROWS OF ARRAY QR EQUAL TO ZERO.
+C
+      DO 60 I=1,K
+        C(I) = 0.0
+   60 CONTINUE
+      MP1 = M + 1
+      MPN = M + N
+      DO 90 J=1,N
+        DO 70 I=1,M
+          QR(I,J) = A(I,J)*W(I)
+   70   CONTINUE
+        DO 80 I=MP1,MPN
+          QR(I,J) = 0.0
+   80   CONTINUE
+   90 CONTINUE
+C
+C OBTAIN AN ORTHOGONAL DECOMPOSITION OF THE MATRIX STORED IN THE FIRST
+C M ROWS OF ARRAY QR AND COMPUTE ITS RANK.
+C
+      CALL DECOM2(M, N, M1, ETA, TOL, QR, C(K3), N1, IPIVOT, SING,
+     * MMPNN)
+C
+      IF (.NOT.SING) GO TO 110
+      IF (N1.GT.0) GO TO 100
+      IFAULT = 5
+      CALL ERROR(IFAULT, K, Z)
+      RETURN
+  100 IFAULT = 6
+      CALL ERROR(IFAULT, K, Z)
+      RETURN
+C
+C SEEK A SOLUTION (COEFFICIENTS AND RESIDUALS) FOR EACH OF THE L LEAST
+C SQUARES PROBLEMS WHOSE RIGHT-HAND SIDES ARE GIVEN IN THE ARRAY B.
+C
+  110 DO 200 K=1,L
+C K-TH RIGHT-HAND SIDE.
+        K0 = K4 - 1
+        DO 120 I=1,M
+          K0 = K0 + 1
+          C(K0) = B(I,K)
+  120   CONTINUE
+C
+        CALL SOLVE2(M, N, M1, A, C(K4), W, N1, IPIVOT, QR, C(K3),
+     *   ETA, FAIL, NUMIT, DIGITX,
+     *   C(K5), C(K6), C(K7), C(K8), C(K9), C(K10), C(K11), C(K12),
+     *   MM, MMPNN)
+C
+        K0 = K5 - 1
+        DO 130 J=1,N
+          K0 = K0 + 1
+          X(J,K) = C(K0)
+  130   CONTINUE
+        IF (M1.EQ.0) GO TO 150
+        DO 140 I=1,M1
+          RES(I,K) = 0.0
+  140   CONTINUE
+  150   M1P1 = M1 + 1
+        IF (M1P1.GT.M) GO TO 170
+        K0 = K6 + M1 - 1
+        DO 160 I=M1P1,M
+          K0 = K0 + 1
+          RES(I,K) = C(K0)
+  160   CONTINUE
+  170   CONTINUE
+C
+C FOR RIGHT-HAND SIDES WHERE CONVERGENCE OF A SOLUTION IS REPORTED,
+C A CHECK IS MADE FOR EVIDENCE OF SEVERE ILL-CONDITIONING.  SUCH
+C EVIDENCE IS FURNISHED BY LARGE VALUES OF NUMIT (NUMBER OF ITERATIONS
+C BEFORE CONVERGENCE WAS OBTAINED) AND SMALL VALUES OF DIGITX
+C (ESTIMATE OF THE NUMBER OF CORRECT DIGITS IN THE INITIAL SOLUTION
+C OF THE COEFFICIENTS).  IF NUMIT EXCEEDS -ALOG10(ETA) A DIAGNOSTIC
+C MESSAGE IS PRINTED TO WARN OF ILL-CONDITIONING.  IF DIGITX IS LESS
+C THAN 0.5 (HALF A DECIMAL DIGIT) A SIMILAR DIAGNOSTIC MESSAGE IS
+C PRINTED.
+C
+        C(K) = FLOAT(NUMIT)
+        IF (FAIL) C(K) = -C(K)
+        K0 = K2 + K - 1
+        C(K0) = DIGITX
+        IF (.NOT.FAIL) GO TO 180
+C KSUM IS A TALLY OF SOLUTIONS WHICH FAILED TO CONVERGE.
+        KSUM = KSUM + 1
+        IFAULT = 8
+        CALL ERROR(IFAULT, K, Z)
+        GO TO 200
+  180   Z = -ALOG10(ETA)
+        IF (FLOAT(NUMIT).LE.Z) GO TO 190
+        IFAULT = 9
+        Z = FLOAT(NUMIT)
+        CALL ERROR(IFAULT, K, Z)
+  190   IF (DIGITX.GE.0.5) GO TO 200
+        IFAULT = 10
+        Z = DIGITX
+        CALL ERROR(IFAULT, K, Z)
+  200 CONTINUE
+      IF (KSUM.LT.L) GO TO 210
+      IFAULT = 7
+      CALL ERROR(IFAULT, K, Z)
+      RETURN
+  210 IF (N1.LT.N) RETURN
+      DO 230 I=1,N
+        MPI = M + I
+        DO 220 J=1,N
+          QR(I,J) = QR(MPI,J)
+  220   CONTINUE
+        QR(I,I) = 0.0
+  230 CONTINUE
+C
+C COMPUTE THE UNSCALED COVARIANCE MATRIX OF THE COEFFICIENTS.
+C
+      CALL COVAR(N, M1, N1, IPIVOT, QR, C(K3), C(K9), MMPNN)
+C
+C IN CERTAIN PROBLEMS, SOME DIAGONAL TERMS OF THE UNSCALED COVARIANCE
+C MATRIX ARE EQUAL TO ZERO OR TO SMALL POSITIVE NUMBERS.  BECAUSE OF
+C ROUNDING ERRORS, COMPUTED VALUES FOR THESE TERMS MAY BE SMALL
+C NEGATIVE NUMBERS.  AN ERROR DIAGNOSTIC IS PRINTED IF ANY DIAGONAL
+C TERM IS NEGATIVE.
+C
+      DO 240 J=1,N
+        IF (QR(J,J).GE.0.0) GO TO 240
+        IFAULT = 11
+        Z = QR(J,J)
+        CALL ERROR(IFAULT, J, Z)
+  240 CONTINUE
+      RETURN
+      END
+C     SUBROUTINE DECOM1(...)                                            DC1   10
+C SUBROUTINE DECOM1 USES A MODIFIED GRAM-SCHMIDT ALGORITHM WITH         DC1   20
+C PIVOTING TO OBTAIN AN ORTHOGONAL DECOMPOSITION OF THE INPUT MATRIX    DC1   30
+C GIVEN IN Q.                                                           DC1   40
+C THE INPUT PARAMETER TOL (EQUAL EITHER TO ZERO OR TO A POSITIVE        DC1   50
+C NUMBER) IS USED IN DETERMINING THE RANK OF MATRIX Q.                  DC1   60
+C NOTE --                                                               DC1   70
+C     (1) IF TOL EQUALS ZERO, THE TOLERANCE USED AT STATEMENT DC1 1080  DC1   80
+C         WILL BE BASED ON MACHINE PRECISION.                           DC1   90
+C         UNDER THIS APPROACH, THE TOLERANCE (TOL2) IS SET EQUAL TO     DC1  100
+C         (FLOAT(N)*ETA)**2*D(M1+1) AT STATEMENT DC1 1070.              DC1  110
+C         IF DESIRED, THE USER CAN OBTAIN A MORE CONSERVATIVE           DC1  120
+C         TOLERANCE BY REPLACING N IN THIS STATEMENT BY A LARGER        DC1  130
+C         QUANTITY.                                                     DC1  140
+C     (2) IF TOL IS GREATER THAN ZERO, TOL2 (EQUAL TO THE SQUARE OF     DC1  150
+C         TOL) WILL BE USED AT STATEMENT DC1 1080 AS AN ABSOLUTE        DC1  160
+C         TOLERANCE FOR COMPARISON WITH DIAGONAL ELEMENTS OF THE        DC1  170
+C         TRIANGULAR MATRIX OBTAINED IN THE DECOMPOSITION.  UNDER THIS  DC1  180
+C         APPROACH, THE VALUE OF TOL CAN BE BASED ON KNOWLEDGE          DC1  190
+C         CONCERNING THE ACCURACY OF THE DATA.                          DC1  200
+C ON EXIT, THE ARRAYS Q, R, D AND IPIVOT CONTAIN THE RESULTS OF THE     DC1  210
+C DECOMPOSITION WHICH ARE NEEDED FOR OBTAINING AN INITIAL SOLUTION      DC1  220
+C AND FOR ITERATIVE REFINEMENT.                                         DC1  230
+C ON EXIT, N1 IS THE COMPUTED RANK OF THE INPUT MATRIX Q.               DC1  240
+C ON EXIT, SING IS SET EQUAL TO .TRUE. WHENEVER                         DC1  250
+C     (1) N1 = 0 (I.E., INPUT MATRIX Q EQUALS ZERO OR MATRIX OF         DC1  260
+C         CONSTRAINTS EQUALS ZERO), OR                                  DC1  270
+C     (2) N1 IS LESS THAN M1 (I.E., THE M1 BY N MATRIX OF LINEAR        DC1  280
+C         CONSTRAINTS IS SINGULAR).                                     DC1  290
+C OTHERWISE, ON EXIT FROM DECOM1, SING = .FALSE.                        DC1  300
+C ON EXIT, THE VECTOR IPIVOT RECORDS THE ORDER IN WHICH THE COLUMNS     DC1  310
+C OF Q WERE SELECTED BY THE PIVOTING SCHEME IN THE COURSE OF THE        DC1  320
+C ORTHOGONAL DECOMPOSITION.                                             DC1  330
+      SUBROUTINE DECOM1(M, N, M1, ETA, TOL, Q, R, D, N1, IPIVOT, SING,  DC1  340
+     * MM, NN)
+      INTEGER IPIVOT(N)
+      REAL C, D(1), DM, DS, ETA, Q(MM,N), R(NN,N), RSJ, TOL, TOL2
+      DOUBLE PRECISION SUM
+      LOGICAL FSUM, SING
+      N1 = 0
+      SING = .TRUE.
+      FSUM = .TRUE.
+      MV = 1
+      MH = M1
+      IF (TOL.GT.0.0) TOL2 = TOL**2
+      DO 10 J=1,N
+        D(J) = 0.0
+        IPIVOT(J) = J
+   10 CONTINUE
+C STEP NUMBER NS OF THE DECOMPOSITION.
+      DO 210 NS=1,N
+        NSM1 = NS - 1
+        NSP1 = NS + 1
+        IF (NS.EQ.M1+1) GO TO 20
+        GO TO 30
+   20   IF (M1.EQ.M) GO TO 150
+        MV = M1 + 1
+        MH = M
+        FSUM = .TRUE.
+C PIVOT SEARCH.
+   30   DS = 0.0
+        NP = NS
+        DO 80 J=NS,N
+          IK = IPIVOT(J)
+          IF (FSUM) GO TO 40
+          GO TO 60
+   40     SUM = 0.0
+          DO 50 L=MV,MH
+            SUM = SUM + DBLE(Q(L,IK))*DBLE(Q(L,IK))
+   50     CONTINUE
+          D(J) = SUM
+   60     IF (DS.LT.D(J)) GO TO 70
+          GO TO 80
+   70     DS = D(J)
+          NP = J
+   80   CONTINUE
+C END PIVOT SEARCH.
+        IK = IPIVOT(NP)
+        IF (FSUM) DM = DS
+        IF (DS.LT.ETA*DM) GO TO 90
+        FSUM = .FALSE.
+        GO TO 100
+   90   FSUM = .TRUE.
+  100   IF (FSUM) GO TO 30
+        IF (NP.NE.NS) GO TO 110
+        GO TO 130
+C COLUMN INTERCHANGE.
+  110   IPIVOT(NP) = IPIVOT(NS)
+        IPIVOT(NS) = IK
+        D(NP) = D(NS)
+        IF (NS.EQ.1) GO TO 130
+        DO 120 L=1,NSM1
+          C = R(L,NP)
+          R(L,NP) = R(L,NS)
+          R(L,NS) = C
+  120   CONTINUE
+C END COLUMN INTERCHANGE.
+C RETURN HERE IF N1 = 0.  EITHER INPUT MATRIX Q EQUALS ZERO OR MATRIX
+C OF CONSTRAINTS EQUALS ZERO.
+  130   IF (NS.EQ.1 .AND. DS.EQ.0.0) RETURN
+        SUM = 0.0
+        DO 140 L=MV,MH
+          SUM = SUM + DBLE(Q(L,IK))*DBLE(Q(L,IK))
+  140   CONTINUE
+        D(NS) = SUM
+        DS = D(NS)
+        IF (TOL.EQ.0.0) TOL2 = (FLOAT(N)*ETA)**2*D(M1+1)
+        IF (NS.GT.M1 .AND. DS.LE.TOL2) GO TO 150
+        GO TO 160
+  150   SING = .FALSE.
+C RETURN HERE IF N1.LT.N, N1.GT.0 AND N1.GE.M1.
+        RETURN
+C RETURN HERE IF MATRIX OF CONSTRAINTS IS FOUND TO BE SINGULAR.
+  160   IF (DS.EQ.0.0) RETURN
+        IF (NSP1.GT.N) GO TO 200
+C BEGIN ORTHOGONALIZATION.
+        DO 190 J=NSP1,N
+          NP = IPIVOT(J)
+          SUM = 0.0
+          DO 170 L=MV,MH
+            SUM = SUM + DBLE(Q(L,NP))*DBLE(Q(L,IK))
+  170     CONTINUE
+          RSJ = SUM
+          RSJ = RSJ/DS
+          R(NS,J) = RSJ
+          DO 180 L=MV,M
+            Q(L,NP) = Q(L,NP) - RSJ*Q(L,IK)
+  180     CONTINUE
+          D(J) = D(J) - DS*RSJ*RSJ
+  190   CONTINUE
+C END ORTHOGONALIZATION.
+  200   N1 = N1 + 1
+  210 CONTINUE
+C END STEP NUMBER NS.
+      SING = .FALSE.
+C NORMAL RETURN.  N1 = N.
+      RETURN
+      END
+C     SUBROUTINE DECOM2(...)                                            DC2   10
+C SUBROUTINE DECOM2 USES A MODIFIED GRAM-SCHMIDT ALGORITHM WITH         DC2   20
+C PIVOTING TO OBTAIN AN ORTHOGONAL DECOMPOSITION OF THE INPUT MATRIX    DC2   30
+C GIVEN IN QR.                                                          DC2   40
+C THE INPUT PARAMETER TOL (EQUAL EITHER TO ZERO OR TO A POSITIVE        DC2   50
+C NUMBER) IS USED IN DETERMINING THE RANK OF MATRIX QR.                 DC2   60
+C NOTE --                                                               DC2   70
+C     (1) IF TOL EQUALS ZERO, THE TOLERANCE USED AT STATEMENT DC2 1180  DC2   80
+C         WILL BE BASED ON MACHINE PRECISION.                           DC2   90
+C         UNDER THIS APPROACH, THE TOLERANCE (TOL2) IS SET EQUAL TO     DC2  100
+C         (FLOAT(N)*ETA)**2*D(M1+1) AT STATEMENT DC2 1170.              DC2  110
+C         IF DESIRED, THE USER CAN OBTAIN A MORE CONSERVATIVE           DC2  120
+C         TOLERANCE BY REPLACING N IN THIS STATEMENT BY A LARGER        DC2  130
+C         QUANTITY.                                                     DC2  140
+C     (2) IF TOL IS GREATER THAN ZERO, TOL2 (EQUAL TO THE SQUARE OF     DC2  150
+C         TOL) WILL BE USED AT STATEMENT DC2 1180 AS AN ABSOLUTE        DC2  160
+C         TOLERANCE FOR COMPARISON WITH DIAGONAL ELEMENTS OF THE        DC2  170
+C         TRIANGULAR MATRIX OBTAINED IN THE DECOMPOSITION.  UNDER THIS  DC2  180
+C         APPROACH, THE VALUE OF TOL CAN BE BASED ON KNOWLEDGE          DC2  190
+C         CONCERNING THE ACCURACY OF THE DATA.                          DC2  200
+C ON EXIT, THE ARRAYS QR, D AND IPIVOT CONTAIN THE RESULTS OF THE       DC2  210
+C DECOMPOSITION WHICH ARE NEEDED FOR OBTAINING AN INITIAL SOLUTION      DC2  220
+C AND FOR ITERATIVE REFINEMENT.                                         DC2  230
+C ON EXIT, N1 IS THE COMPUTED RANK OF THE INPUT MATRIX QR.              DC2  240
+C ON EXIT, SING IS SET EQUAL TO .TRUE. WHENEVER                         DC2  250
+C     (1) N1 = 0 (I.E., INPUT MATRIX QR EQUALS ZERO OR MATRIX OF        DC2  260
+C         CONSTRAINTS EQUALS ZERO), OR                                  DC2  270
+C     (2) N1 IS LESS THAN M1 (I.E., THE M1 BY N MATRIX OF LINEAR        DC2  280
+C         CONSTRAINTS IS SINGULAR).                                     DC2  290
+C OTHERWISE, ON EXIT FROM DECOM2, SING = .FALSE.                        DC2  300
+C ON EXIT, THE VECTOR IPIVOT RECORDS THE ORDER IN WHICH THE COLUMNS     DC2  310
+C OF QR WERE SELECTED BY THE PIVOTING SCHEME IN THE COURSE OF THE       DC2  320
+C ORTHOGONAL DECOMPOSITION.                                             DC2  330
+      SUBROUTINE DECOM2(M, N, M1, ETA, TOL, QR, D, N1, IPIVOT, SING,    DC2  340
+     * MMPNN)
+      INTEGER IPIVOT(N)
+      REAL C, D(1), DM, DS, ETA, QR(MMPNN,N), RSJ, TOL, TOL2
+      DOUBLE PRECISION SUM
+      LOGICAL FINIS, FSUM, SING
+      N1 = 0
+      SING = .TRUE.
+      FSUM = .TRUE.
+      MV = 1
+      MH = M1
+      MS = M
+      MP1 = M + 1
+      FINIS = .FALSE.
+      IF (TOL.GT.0.0) TOL2 = TOL**2
+      DO 10 J=1,N
+        D(J) = 0.0
+        IPIVOT(J) = J
+   10 CONTINUE
+C STEP NUMBER NS OF THE DECOMPOSITION.
+      DO 350 NS=1,N
+        K = M + NS
+        IF (NS.EQ.M1+1) GO TO 20
+        GO TO 30
+   20   IF (M1.EQ.M) GO TO 200
+        MV = M1 + 1
+        MH = M
+        FSUM = .TRUE.
+   30   IF (.NOT.FINIS) GO TO 40
+        GO TO 150
+C PIVOT SEARCH.
+   40   DS = 0.0
+        NP = NS
+        DO 90 J=NS,N
+          IF (FSUM) GO TO 50
+          GO TO 70
+   50     SUM = 0.0
+          DO 60 L=MV,MH
+            SUM = SUM + DBLE(QR(L,J))*DBLE(QR(L,J))
+   60     CONTINUE
+          D(J) = SUM
+   70     IF (DS.LT.D(J)) GO TO 80
+          GO TO 90
+   80     DS = D(J)
+          NP = J
+   90   CONTINUE
+        IF (FSUM) DM = DS
+        IF (DS.LT.ETA*DM) GO TO 100
+        FSUM = .FALSE.
+        GO TO 110
+  100   FSUM = .TRUE.
+  110   IF (FSUM) GO TO 40
+        IF (NP.NE.NS) GO TO 120
+        GO TO 140
+C COLUMN INTERCHANGE.
+  120   IK = IPIVOT(NP)
+        IPIVOT(NP) = IPIVOT(NS)
+        IPIVOT(NS) = IK
+        D(NP) = D(NS)
+        KM1 = K - 1
+        DO 130 L=1,KM1
+          C = QR(L,NP)
+          QR(L,NP) = QR(L,NS)
+          QR(L,NS) = C
+  130   CONTINUE
+C END COLUMN INTERCHANGE.
+C END PIVOT SEARCH.
+C RETURN HERE IF N1 = 0.  EITHER INPUT MATRIX QR EQUALS ZERO OR
+C MATRIX OF CONSTRAINTS EQUALS ZERO.
+  140   IF (NS.EQ.1 .AND. DS.EQ.0.0) RETURN
+        GO TO 160
+  150   MS = K - 1
+        MH = K - 1
+  160   IF (FINIS) GO TO 170
+        C = 0.0
+        GO TO 180
+  170   C = 1.0
+  180   SUM = DBLE(C)
+        DO 190 L=MV,MH
+          SUM = SUM + DBLE(QR(L,NS))*DBLE(QR(L,NS))
+  190   CONTINUE
+        D(NS) = SUM
+        DS = D(NS)
+        IF (TOL.EQ.0.0) TOL2 = (FLOAT(N)*ETA)**2*D(M1+1)
+        IF (.NOT.FINIS .AND. NS.GT.M1 .AND. DS.LE.TOL2) GO TO 200
+        GO TO 290
+  200   FINIS = .TRUE.
+        MV = M + 1
+        DO 280 NP=NS,N
+          IF (1.GT.M1) GO TO 250
+          DO 210 L=1,M1
+            QR(L,NP) = 0.0
+  210     CONTINUE
+          DO 240 J=1,M1
+            SUM = 0.0
+            DO 220 L=1,M
+              SUM = SUM + DBLE(QR(L,J))*DBLE(QR(L,NP))
+  220       CONTINUE
+            C = SUM
+            C = C/D(J)
+            DO 230 L=1,M1
+              QR(L,NP) = QR(L,NP) - C*QR(L,J)
+  230       CONTINUE
+  240     CONTINUE
+  250     MPN1 = M + N1
+          DO 270 JJ=MP1,MPN1
+            J = (M + 1) + (M + N1) - JJ
+            SUM = 0.0
+            DO 260 L=J,MPN1
+              LMM = L - M
+              SUM = SUM + DBLE(QR(J,LMM))*DBLE(QR(L,NP))
+  260       CONTINUE
+            QR(J,NP) = -SUM
+  270     CONTINUE
+  280   CONTINUE
+        GO TO 150
+C RETURN HERE IF MATRIX OF CONSTRAINTS IS FOUND TO BE SINGULAR.
+  290   IF (DS.EQ.0.0) RETURN
+        QR(K,NS) = -1.0
+        NSP1 = NS + 1
+        IF (NSP1.GT.N) GO TO 340
+C BEGIN ORTHOGONALIZATION.
+        DO 330 J=NSP1,N
+          SUM = 0.0
+          DO 300 L=MV,MH
+            SUM = SUM + DBLE(QR(L,J))*DBLE(QR(L,NS))
+  300     CONTINUE
+          RSJ = SUM
+          RSJ = RSJ/DS
+          QR(K,J) = RSJ
+          DO 310 L=1,MS
+            QR(L,J) = QR(L,J) - RSJ*QR(L,NS)
+  310     CONTINUE
+          IF (.NOT.FINIS) GO TO 320
+          GO TO 330
+  320     D(J) = D(J) - DS*RSJ*RSJ
+  330   CONTINUE
+C END ORTHOGONALIZATION.
+  340   IF (.NOT.FINIS) N1 = N1 + 1
+  350 CONTINUE
+C END STEP NUMBER NS.
+      SING = .FALSE.
+C NORMAL RETURN.
+      RETURN
+      END
+C     SUBROUTINE SOLVE1(...)                                            SV1   10
+C SUBROUTINE SOLVE1 USES THE ORTHOGONAL DECOMPOSITION STORED IN Q, R,   SV1   20
+C D AND IPIVOT TO COMPUTE THE SOLUTION (COEFFICIENTS AND RESIDUALS)     SV1   30
+C TO THE LEAST SQUARES PROBLEM WHOSE RIGHT-HAND SIDE IS GIVEN IN B.     SV1   40
+C IN THE EVENT THAT N1 (THE COMPUTED RANK OF MATRIX H) IS LESS THAN N   SV1   50
+C (THE NUMBER OF UNKNOWN COEFFICIENTS), THE ORIGINAL MATRIX H (M BY N)  SV1   60
+C IS REPLACED BY A SMALLER MATRIX (M BY N1) WHOSE COLUMNS ARE LINEARLY  SV1   70
+C INDEPENDENT, AND A SOLUTION IS SOUGHT FOR THE SMALLER SYSTEM OF       SV1   80
+C EQUATIONS.  THUS N - N1 COLUMNS OF THE ORIGINAL MATRIX H ARE DELETED, SV1   90
+C AND COEFFICIENTS CORRESPONDING TO THESE N - N1 DELETED COLUMNS WILL   SV1  100
+C BE SET EQUAL TO ZERO.                                                 SV1  110
+C IN NORMAL EXITS, THE SOLUTION IS CONTAINED IN THE VECTOR X            SV1  120
+C (COEFFICIENTS) AND THE VECTOR RES (RESIDUALS).                        SV1  130
+C ITERATIVE REFINEMENT IS USED TO IMPROVE THE ACCURACY OF THE INITIAL   SV1  140
+C SOLUTION.                                                             SV1  150
+C ON EXIT, FAIL IS SET EQUAL TO .TRUE. IF THE SOLUTION FAILS TO         SV1  160
+C IMPROVE SUFFICIENTLY.  OTHERWISE, FAIL = .FALSE.  INFORMATION ON THE  SV1  170
+C BEHAVIOR OF THE ITERATIVE REFINEMENT PROCEDURE IS GIVEN BY NUMIT AND  SV1  180
+C DIGITX.  NUMIT IS THE NUMBER OF ITERATIONS CARRIED OUT IN ATTEMPTING  SV1  190
+C TO OBTAIN A SOLUTION.  DIGITX IS AN ESTIMATE OF THE NUMBER OF         SV1  200
+C CORRECT DIGITS IN THE INITIAL SOLUTION OF THE COEFFICIENTS.           SV1  210
+C                                                                       SV1  220
+C ********* CONVERSION OF THIS SUBROUTINE TO DOUBLE PRECISION ********* SV1  230
+C * IF THE PROGRAM IS CONVERTED SO THAT ALL CALCULATIONS ARE DONE IN  * SV1  240
+C * DOUBLE PRECISION ARITHMETIC, THE ITERATIVE REFINEMENT PRESENTLY   * SV1  250
+C * INCLUDED IN SOLVE1 SHOULD BE OMITTED, SINCE THE SUCCESS OF THIS   * SV1  260
+C * PROCEDURE DEPENDS ON COMPUTING INNER PRODUCTS IN GREATER          * SV1  270
+C * PRECISION THAN OTHER CALCULATIONS.                                * SV1  280
+C * SEE COMMENTS IN SUBROUTINE L2A REGARDING CONVERSION TO DOUBLE     * SV1  290
+C * PRECISION.  IN ADDITION, THE FOLLOWING COMMENTS INDICATE HOW TO   * SV1  300
+C * OMIT THE ITERATIVE REFINEMENT FROM THIS SUBROUTINE.  STATEMENT    * SV1  310
+C * NUMBERS GIVEN HERE REFER TO THOSE IN THE RIGHT-HAND MARGIN.       * SV1  320
+C *                                                                   * SV1  330
+C * 1. IN STATEMENT SV1 480 CHANGE REAL TO DOUBLE PRECISION.          * SV1  340
+C * 2. REPLACE STATEMENT SV1 810 BY A STATEMENT READING               * SV1  350
+C *       30 DO 50 I=1,M                                              * SV1  360
+C * 3. AFTER STATEMENT SV1 1050 INSERT A STATEMENT READING            * SV1  370
+C *          RETURN                                                   * SV1  380
+C * 4. OMIT STATEMENTS SV1 140-210, 450, 500-510, 530-560, 610,       * SV1  390
+C *    680-780, 1600-1780 AND 1800-1860.                              * SV1  400
+C *                                                                   * SV1  410
+C ********************************************************************* SV1  420
+C                                                                       SV1  430
+      SUBROUTINE SOLVE1(M, N, M1, A, B, W, N1, IPIVOT, Q, R, D,         SV1  440
+     * ETA, FAIL, NUMIT, DIGITX,
+     * X, RES, F, WRES, G, Y, MM, NN)
+      INTEGER IPIVOT(N)
+      REAL A(MM,N), B(1), C, D(1), F(1), G(1), Q(MM,N),
+     * R(NN,N), RES(1), W(M), WRES(1), X(1), Y(1)
+      REAL DIGITX, DXNORM, ETA, ETA2, RDR1, RDR2, RDX1, RDX2, RNR,
+     * RNX, XNORM
+      DOUBLE PRECISION SUM
+      LOGICAL FAIL
+      NUMIT = 0
+      KZ = 0
+      ETA2 = ETA*ETA
+      DO 10 I=1,M
+        F(I) = B(I)*W(I)
+        WRES(I) = 0.0
+        RES(I) = 0.0
+        IF (W(I).EQ.0.0) KZ = KZ + 1
+   10 CONTINUE
+      DO 20 J=1,N
+        X(J) = 0.0
+        G(J) = 0.0
+   20 CONTINUE
+      K = 0
+      RDX2 = 0.0
+      RDR2 = 0.0
+C BEGIN K-TH ITERATION STEP.
+   30 IF (K.LT.2) GO TO 40
+      IF (((64.*RDX2.LT.RDX1) .AND. (RDX2.GT.ETA2*RNX)) .OR.
+     * ((64.*RDR2.LT.RDR1) .AND. (RDR2.GT.ETA2*RNR))) GO TO 40
+      GO TO 300
+   40 RDX1 = RDX2
+      RDR1 = RDR2
+      RDX2 = 0.0
+      RDR2 = 0.0
+      IF (K.EQ.0) GO TO 100
+C NEW RESIDUALS.
+      DO 50 I=1,M
+        WRES(I) = WRES(I) + F(I)*W(I)
+        IF (W(I).EQ.0.0) GO TO 50
+        RES(I) = RES(I) + F(I)/W(I)
+   50 CONTINUE
+      DO 70 NS=1,N1
+        J = IPIVOT(NS)
+        X(J) = X(J) + G(NS)
+        SUM = 0.0
+        DO 60 L=1,M
+          SUM = SUM + DBLE(A(L,J))*DBLE(WRES(L))
+   60   CONTINUE
+        G(NS) = -SUM
+   70 CONTINUE
+      DO 90 I=1,M
+        SUM = 0.0
+        IF (I.GT.M1) SUM = DBLE(RES(I))
+        DO 80 L=1,N
+          SUM = SUM + DBLE(A(I,L))*DBLE(X(L))
+   80   CONTINUE
+        SUM = SUM - DBLE(B(I))
+        F(I) = -SUM
+        F(I) = F(I)*W(I)
+        IF (W(I).EQ.0.0) RES(I) = DBLE(RES(I)) - SUM
+   90 CONTINUE
+C END NEW RESIDUALS.
+  100 MV = 1
+      MH = M1
+      DO 160 NS=1,N1
+        J = IPIVOT(NS)
+        IF (NS.NE.M1+1) GO TO 110
+        MV = M1 + 1
+        MH = M
+  110   NSM1 = NS - 1
+        SUM = -DBLE(G(NS))
+        IF (1.GT.NSM1) GO TO 130
+        DO 120 L=1,NSM1
+          SUM = SUM + DBLE(R(L,NS))*DBLE(Y(L))
+  120   CONTINUE
+  130   Y(NS) = -SUM
+        C = 0.0
+        IF (NS.GT.M1) C = -Y(NS)
+        SUM = DBLE(C)
+        DO 140 L=MV,MH
+          SUM = SUM + DBLE(Q(L,J))*DBLE(F(L))
+  140   CONTINUE
+        C = SUM
+        C = C/D(NS)
+        G(NS) = C
+        DO 150 I=MV,M
+          F(I) = F(I) - C*Q(I,J)
+  150   CONTINUE
+  160 CONTINUE
+      IF (1.GT.M1) GO TO 210
+      DO 170 I=1,M1
+        F(I) = 0.0
+  170 CONTINUE
+      DO 200 NS=1,M1
+        J = IPIVOT(NS)
+        SUM = -DBLE(Y(NS))
+        DO 180 L=1,M
+          SUM = SUM + DBLE(Q(L,J))*DBLE(F(L))
+  180   CONTINUE
+        C = SUM
+        C = C/D(NS)
+        DO 190 I=1,M1
+          F(I) = F(I) - C*Q(I,J)
+  190   CONTINUE
+  200 CONTINUE
+  210 DO 240 I=1,N1
+        NS = N1 + 1 - I
+        NSP1 = NS + 1
+        SUM = -DBLE(G(NS))
+        IF (NSP1.GT.N1) GO TO 230
+        DO 220 L=NSP1,N1
+          SUM = SUM + DBLE(R(NS,L))*DBLE(G(L))
+  220   CONTINUE
+  230   G(NS) = -SUM
+  240 CONTINUE
+      DO 250 NS=1,N1
+        RDX2 = RDX2 + G(NS)*G(NS)
+  250 CONTINUE
+      DO 260 I=1,M
+        RDR2 = RDR2 + F(I)*F(I)
+  260 CONTINUE
+      IF (K.NE.0) GO TO 270
+      RNX = RDX2
+      RNR = RDR2
+  270 IF (K.NE.1) GO TO 290
+      XNORM = SQRT(RNX)
+      DXNORM = SQRT(RDX2)
+      IF (XNORM.NE.0.0) GO TO 280
+      DIGITX = -ALOG10(ETA)
+      GO TO 290
+  280 DIGITX = -ALOG10(AMAX1(DXNORM/XNORM,ETA))
+C END K-TH ITERATION STEP.
+  290 NUMIT = K
+      K = K + 1
+      GO TO 30
+  300 IF ((M1+KZ.EQ.M) .AND. (RDX2.GT.4.*ETA2*RNX)) GO TO 310
+      IF ((RDR2.GT.4.*ETA2*RNR) .AND.
+     * (RDX2.GT.4.*ETA2*RNX)) GO TO 310
+      FAIL = .FALSE.
+      RETURN
+  310 FAIL = .TRUE.
+      RETURN
+      END
+C     SUBROUTINE SOLVE2(...)                                            SV2   10
+C SUBROUTINE SOLVE2 USES THE ORTHOGONAL DECOMPOSITION STORED IN QR, D   SV2   20
+C AND IPIVOT TO COMPUTE THE SOLUTION (COEFFICIENTS AND RESIDUALS)       SV2   30
+C TO THE LEAST SQUARES PROBLEM WHOSE RIGHT-HAND SIDE IS GIVEN IN B.     SV2   40
+C IN THE EVENT THAT N1 (THE COMPUTED RANK OF MATRIX H) IS LESS THAN N   SV2   50
+C (THE NUMBER OF UNKNOWN COEFFICIENTS), A UNIQUE SOLUTION VECTOR HAVING SV2   60
+C N ELEMENTS CAN BE OBTAINED BY IMPOSING THE CONDITION THAT THE         SV2   70
+C SOLUTION BE OF MINIMAL EUCLIDEAN NORM.  SUCH A SOLUTION IS SOUGHT IN  SV2   80
+C THE CASE OF UNDERDETERMINED OR RANK-DEFICIENT PROBLEMS.               SV2   90
+C IN NORMAL EXITS, THE SOLUTION IS CONTAINED IN THE VECTOR X            SV2  100
+C (COEFFICIENTS) AND THE VECTOR RES (RESIDUALS).                        SV2  110
+C ITERATIVE REFINEMENT IS USED TO IMPROVE THE ACCURACY OF THE INITIAL   SV2  120
+C SOLUTION.                                                             SV2  130
+C ON EXIT, FAIL IS SET EQUAL TO .TRUE. IF THE SOLUTION FAILS TO         SV2  140
+C IMPROVE SUFFICIENTLY.  OTHERWISE, FAIL = .FALSE.  INFORMATION ON THE  SV2  150
+C BEHAVIOR OF THE ITERATIVE REFINEMENT PROCEDURE IS GIVEN BY NUMIT AND  SV2  160
+C DIGITX.  NUMIT IS THE NUMBER OF ITERATIONS CARRIED OUT IN ATTEMPTING  SV2  170
+C TO OBTAIN A SOLUTION.  DIGITX IS AN ESTIMATE OF THE NUMBER OF         SV2  180
+C CORRECT DIGITS IN THE INITIAL SOLUTION OF THE COEFFICIENTS.           SV2  190
+C THIS SUBROUTINE CALLS SUBROUTINE SOLVE3.                              SV2  200
+C                                                                       SV2  210
+C ********* CONVERSION OF THIS SUBROUTINE TO DOUBLE PRECISION ********* SV2  220
+C * IF THE PROGRAM IS CONVERTED SO THAT ALL CALCULATIONS ARE DONE IN  * SV2  230
+C * DOUBLE PRECISION ARITHMETIC, THE ITERATIVE REFINEMENT PRESENTLY   * SV2  240
+C * INCLUDED IN SOLVE2 SHOULD BE OMITTED, SINCE THE SUCCESS OF THIS   * SV2  250
+C * PROCEDURE DEPENDS ON COMPUTING INNER PRODUCTS IN GREATER          * SV2  260
+C * PRECISION THAN OTHER CALCULATIONS.                                * SV2  270
+C * SEE COMMENTS IN SUBROUTINE L2B REGARDING CONVERSION TO DOUBLE     * SV2  280
+C * PRECISION.  IN ADDITION, THE FOLLOWING COMMENTS INDICATE HOW TO   * SV2  290
+C * OMIT THE ITERATIVE REFINEMENT FROM THIS SUBROUTINE.  STATEMENT    * SV2  300
+C * NUMBERS GIVEN HERE REFER TO THOSE IN THE RIGHT-HAND MARGIN.       * SV2  310
+C *                                                                   * SV2  320
+C * 1. IN STATEMENT SV2 470 CHANGE REAL TO DOUBLE PRECISION.          * SV2  330
+C * 2. REPLACE STATEMENT SV2 880 BY A STATEMENT READING               * SV2  340
+C *       30 DO 50 I=1,M                                              * SV2  350
+C * 3. REPLACE STATEMENTS SV2 1310-1400 BY A STATEMENT READING        * SV2  360
+C *          RETURN                                                   * SV2  370
+C * 4. OMIT STATEMENTS SV2 120-190, 440, 490-500, 520-550, 650,       * SV2  380
+C *    750-850, 1650-1830 AND 1850-1910.                              * SV2  390
+C *                                                                   * SV2  400
+C ********************************************************************* SV2  410
+C                                                                       SV2  420
+      SUBROUTINE SOLVE2(M, N, M1, A, B, W, N1, IPIVOT, QR, D,           SV2  430
+     * ETA, FAIL, NUMIT, DIGITX,
+     * X, RES, WRES, Y1, Y2, Y, F, G, MM, MMPNN)
+      INTEGER IPIVOT(N)
+      REAL A(MM,N), B(1), C, D(1), F(1), G(1),
+     * QR(MMPNN,N), RES(1), W(M), WRES(1), X(1), Y(1), Y1(1), Y2(1)
+      REAL DIGITX, DXNORM, ETA, ETA2, RDR1, RDR2, RDX1, RDX2, RNR,
+     * RNX, XNORM
+      DOUBLE PRECISION SUM
+      LOGICAL FAIL
+      NUMIT = 0
+      KZ = 0
+      ETA2 = ETA*ETA
+      MP1 = M + 1
+      MPN = M + N
+      N1P1 = N1 + 1
+      DO 10 I=1,M
+        F(I) = B(I)*W(I)
+        G(I) = 0.0
+        WRES(I) = 0.0
+        RES(I) = 0.0
+        Y1(I) = 0.0
+        IF (W(I).EQ.0.0) KZ = KZ + 1
+   10 CONTINUE
+      DO 20 NS=1,N
+        J = M + NS
+        F(J) = 0.0
+        G(J) = 0.0
+        X(NS) = 0.0
+        Y2(NS) = 0.0
+   20 CONTINUE
+      K = 0
+      RDX2 = 0.0
+      RDR2 = 0.0
+C BEGIN K-TH ITERATION STEP.
+   30 IF (K.LT.2) GO TO 40
+      IF (((64.*RDX2.LT.RDX1) .AND. (RDX2.GT.ETA2*RNX)) .OR.
+     * ((64.*RDR2.LT.RDR1) .AND. (RDR2.GT.ETA2*RNR))) GO TO 40
+      GO TO 270
+   40 RDX1 = RDX2
+      RDR1 = RDR2
+      RDX2 = 0.0
+      RDR2 = 0.0
+      IF (K.EQ.0) GO TO 160
+C NEW RESIDUALS.
+      DO 50 I=1,M
+        WRES(I) = WRES(I) + F(I)*W(I)
+        IF (W(I).EQ.0.0) GO TO 50
+        RES(I) = RES(I) + F(I)/W(I)
+        Y1(I) = Y1(I) + G(I)
+   50 CONTINUE
+      DO 100 NS=1,N
+        J = M + NS
+        NP = IPIVOT(NS)
+        X(NP) = X(NP) + F(J)
+        Y2(NP) = Y2(NP) + G(J)
+        SUM = -DBLE(X(NP))
+        DO 60 L=1,M
+          SUM = SUM + DBLE(A(L,NP))*DBLE(Y1(L))
+   60   CONTINUE
+        G(J) = -SUM
+        IF (NS.GT.N1) GO TO 70
+        GO TO 80
+   70   F(J) = 0.0
+        GO TO 100
+   80   SUM = 0.0
+        DO 90 L=1,M
+          SUM = SUM + DBLE(A(L,NP))*DBLE(WRES(L))
+   90   CONTINUE
+        F(J) = -SUM
+  100 CONTINUE
+      DO 130 I=1,M
+        SUM = 0.0
+        IF (I.GT.M1) SUM = DBLE(RES(I))
+        DO 110 L=1,N
+          SUM = SUM + DBLE(A(I,L))*DBLE(X(L))
+  110   CONTINUE
+        SUM = SUM - DBLE(B(I))
+        F(I) = -SUM
+        F(I) = F(I)*W(I)
+        IF (W(I).EQ.0.0) RES(I) = DBLE(RES(I)) - SUM
+        SUM = 0.0
+        IF (I.GT.M1) SUM = DBLE(Y1(I))
+        DO 120 L=1,N
+          SUM = SUM + DBLE(A(I,L))*DBLE(Y2(L))
+  120   CONTINUE
+        G(I) = -SUM
+  130 CONTINUE
+      IF (N1P1.GT.N) GO TO 160
+      DO 150 I=N1P1,N
+        NS = N + N1P1 - I
+        J = M + NS
+        SUM = 0.0
+        DO 140 L=1,J
+          SUM = SUM + DBLE(QR(L,NS))*DBLE(G(L))
+  140   CONTINUE
+        G(J) = SUM
+  150 CONTINUE
+C END NEW RESIDUALS.
+C
+  160 CALL SOLVE3(F, M1, M, N1, QR, D, Y, MMPNN)
+C
+      IF (N1P1.GT.N) GO TO 200
+      DO 190 NS=N1P1,N
+        J = M + NS
+        SUM = DBLE(G(J))
+        DO 170 L=MP1,J
+          SUM = SUM + DBLE(QR(L,NS))*DBLE(F(L))
+  170   CONTINUE
+        C = SUM
+        C = C/D(NS)
+        DO 180 I=1,J
+          F(I) = F(I) - C*QR(I,NS)
+  180   CONTINUE
+  190 CONTINUE
+  200 DO 210 J=MP1,MPN
+        G(J) = 0.0
+        IF (J.LE.M+N1) G(J) = G(J) + F(J)
+  210 CONTINUE
+C
+      CALL SOLVE3(G, M1, M, N1, QR, D, Y, MMPNN)
+C
+      DO 220 I=1,M
+        RDR2 = RDR2 + F(I)*F(I)
+  220 CONTINUE
+      DO 230 I=MP1,MPN
+        RDX2 = RDX2 + F(I)*F(I)
+  230 CONTINUE
+      IF (K.NE.0) GO TO 240
+      RNR = RDR2
+      RNX = RDX2
+  240 IF (K.NE.1) GO TO 260
+      XNORM = SQRT(RNX)
+      DXNORM = SQRT(RDX2)
+      IF (XNORM.NE.0.0) GO TO 250
+      DIGITX = -ALOG10(ETA)
+      GO TO 260
+  250 DIGITX = -ALOG10(AMAX1(DXNORM/XNORM,ETA))
+C END K-TH ITERATION STEP.
+  260 NUMIT = K
+      K = K + 1
+      GO TO 30
+  270 IF ((M1+KZ.EQ.M) .AND. (RDX2.GT.4.*ETA2*RNX)) GO TO 280
+      IF ((RDR2.GT.4.*ETA2*RNR) .AND.
+     * (RDX2.GT.4.*ETA2*RNX)) GO TO 280
+      FAIL = .FALSE.
+      RETURN
+  280 FAIL = .TRUE.
+      RETURN
+      END
+      SUBROUTINE SOLVE3(F, M1, M, N1, QR, D, Y, MMPNN)                  SV3   10
+C SUBROUTINE SOLVE3 IS CALLED ONLY BY SUBROUTINE SOLVE2.
+C THIS SUBROUTINE CALCULATES NEW VALUES OF F.
+      REAL C, D(1), F(1), QR(MMPNN,N1), Y(1)
+      DOUBLE PRECISION SUM
+      MV = 1
+      MH = M1
+      DO 100 NS=1,N1
+        J = M + NS
+        IF (NS.EQ.M1+1) GO TO 10
+        GO TO 20
+   10   MV = M1 + 1
+        MH = M
+   20   NSM1 = NS - 1
+        SUM = -DBLE(F(J))
+        IF (NS.EQ.1) GO TO 40
+        DO 30 L=1,NSM1
+          MPL = M + L
+          SUM = SUM + DBLE(QR(MPL,NS))*DBLE(Y(L))
+   30   CONTINUE
+   40   Y(NS) = -SUM
+        IF (NS.GT.M1) GO TO 50
+        GO TO 60
+   50   C = -Y(NS)
+        GO TO 70
+   60   C = 0.0
+   70   SUM = DBLE(C)
+        DO 80 L=MV,MH
+          SUM = SUM + DBLE(QR(L,NS))*DBLE(F(L))
+   80   CONTINUE
+        C = SUM
+        C = C/D(NS)
+        F(J) = C
+        DO 90 L=MV,M
+          F(L) = F(L) - C*QR(L,NS)
+   90   CONTINUE
+  100 CONTINUE
+      IF (1.GT.M1) GO TO 150
+      DO 110 L=1,M1
+        F(L) = 0.0
+  110 CONTINUE
+      DO 140 NS=1,M1
+        SUM = -DBLE(Y(NS))
+        DO 120 L=1,M
+          SUM = SUM + DBLE(QR(L,NS))*DBLE(F(L))
+  120   CONTINUE
+        C = SUM
+        C = C/D(NS)
+        DO 130 L=1,M1
+          F(L) = F(L) - C*QR(L,NS)
+  130   CONTINUE
+  140 CONTINUE
+  150 DO 170 NS=1,N1
+        J = M + N1 + 1 - NS
+        MPN1 = M + N1
+        SUM = 0.0
+        DO 160 L=J,MPN1
+          LMM = L - M
+          SUM = SUM + DBLE(QR(J,LMM))*DBLE(F(L))
+  160   CONTINUE
+        F(J) = -SUM
+  170 CONTINUE
+      RETURN
+      END
+      SUBROUTINE COVAR(N, M1, N1, IPIVOT, C, D, Z, NN)                  COV   10
+C SUBROUTINE COVAR USES RESULTS FROM THE ORTHOGONAL DECOMPOSITION
+C STORED IN C, D AND IPIVOT TO COMPUTE THE UNSCALED COVARIANCE MATRIX
+C OF THE LEAST SQUARES COEFFICIENTS.
+C ON ENTRY, THE FIRST N ROWS AND THE FIRST N COLUMNS OF C CONTAIN THE
+C UPPER TRIANGULAR MATRIX OBTAINED FROM THE DECOMPOSITION.  THIS INPUT
+C MATRIX IS DESTROYED IN SUBSEQUENT CALCULATIONS.
+C ON EXIT, THE LOWER TRIANGULAR PORTION OF THE SYMMETRIC UNSCALED
+C COVARIANCE MATRIX IS CONTAINED IN
+C     C(1,1)
+C     C(2,1) C(2,2)
+C     . . .
+C     C(N,1) C(N,2) ... C(N,N)
+C IF N1 IS LESS THAN N, ONE OR MORE COLUMNS OF THE MATRIX
+C H = (SQRT(W))*A WERE REJECTED AS BEING LINEARLY DEPENDENT.  WHENEVER
+C THE K-TH COLUMN OF H WAS SO REJECTED, C(I,J) IS SET EQUAL TO ZERO,
+C FOR I = K OR J = K, I.GE.J.
+      INTEGER IPIVOT(N)
+      REAL C(NN,N), D(1), Z(1)
+      DOUBLE PRECISION SUM
+      L = N1
+      IF (L.GT.M1) C(L,L) = 1.0/D(L)
+      IF (L.EQ.1) GO TO 60
+   10 J = L - 1
+      IF (J.GT.M1) C(J,J) = 1.0/D(J)
+      DO 20 K=L,N1
+        Z(K) = C(J,K)
+   20 CONTINUE
+      I = N1
+      DO 40 KA=J,N1
+        SUM = 0.0
+        IF (I.EQ.J) SUM = DBLE(C(I,J))
+        DO 30 K=L,N1
+          SUM = SUM - DBLE(Z(K))*DBLE(C(K,I))
+   30   CONTINUE
+        C(I,J) = SUM
+        I = I - 1
+   40 CONTINUE
+      DO 50 K=L,N1
+        C(J,K) = C(K,J)
+   50 CONTINUE
+      L = L - 1
+      IF (L.GT.1) GO TO 10
+   60 IF (N1.EQ.N) GO TO 90
+      N1P1 = N1 + 1
+      DO 80 I=1,N
+        DO 70 J=N1P1,N
+          C(I,J) = 0.0
+   70   CONTINUE
+   80 CONTINUE
+C PERMUTE THE COLUMNS AND ROWS OF MATRIX C TO ACCOUNT FOR PIVOTING.
+   90 DO 120 I=1,N
+        DO 100 J=1,N
+          K = IPIVOT(J)
+          Z(K) = C(I,J)
+  100   CONTINUE
+        DO 110 J=1,N
+          C(I,J) = Z(J)
+  110   CONTINUE
+  120 CONTINUE
+      DO 150 I=1,N
+        DO 130 J=1,N
+          K = IPIVOT(J)
+          Z(K) = C(J,I)
+  130   CONTINUE
+        DO 140 J=I,N
+          C(J,I) = Z(J)
+  140   CONTINUE
+  150 CONTINUE
+      RETURN
+      END
+      SUBROUTINE ERROR(IFAULT, K, Z)                                    ERR   10
+C SUBROUTINE ERROR PRINTS ERROR DIAGNOSTICS IN THE CASE OF ERROR
+C FAILURE.
+C ALSO PRINTED ARE SOME INFORMATIVE DIAGNOSTICS RELATED TO THE
+C ITERATIVE REFINEMENT OF ILL-CONDITIONED SYSTEMS OF EQUATIONS AND TO
+C ROUNDING ERROR PROBLEMS IN COMPUTING THE COVARIANCE MATRIX.
+C IN THE DATA STATEMENT BELOW, NW IS THE PRINTER DEVICE NUMBER.
+      REAL Z
+      DATA NW /6/
+      GO TO (10,20,30,40,50,60,70,80,90,100,110), IFAULT
+   10 WRITE (NW,99999)
+      RETURN
+   20 WRITE (NW,99998)
+      RETURN
+   30 WRITE (NW,99997)
+      IF (K.EQ.2) WRITE (NW,99996)
+      RETURN
+   40 WRITE (NW,99995) K,Z
+      RETURN
+   50 WRITE (NW,99994)
+      RETURN
+   60 WRITE (NW,99993)
+      RETURN
+   70 WRITE (NW,99992)
+      RETURN
+   80 WRITE (NW,99991) K
+      RETURN
+   90 WRITE (NW,99990) K,Z
+      RETURN
+  100 WRITE (NW,99989) K,Z
+      RETURN
+  110 WRITE (NW,99988) K,Z
+      RETURN
+C FORMAT STATEMENTS.
+99999 FORMAT (50H0***  PARAMETER ERROR.  M, N AND L MUST BE GREATER,
+     * 11H THAN ZERO.)
+99998 FORMAT (50H0***  PARAMETER ERROR.  M1 CANNOT EXCEED M OR N, B,
+     * 26HUT M1 MUST BE NONNEGATIVE.)
+99997 FORMAT (50H0***  DIMENSION ERROR.  ONE OR MORE OF THE FOLLOWI,
+     * 32HNG ERROR CONDITIONS WAS FOUND --/7X,12HM EXCEEDS MM/7X,
+     * 12HN EXCEEDS NN)
+99996 FORMAT (5X,17HM+N EXCEEDS MMPNN)
+99995 FORMAT (43H0***  WEIGHTS MUST BE NONNEGATIVE.  FOR I =,I3,2X,
+     * 9HWEIGHT = ,G15.8)
+99994 FORMAT (50H0***  EITHER MATRIX H EQUALS ZERO OR MATRIX OF CON,
+     * 51HSTRAINTS EQUALS ZERO.  NO SOLUTION CAN BE COMPUTED.)
+99993 FORMAT (50H0***  SINCE THE CONSTRAINTS ARE LINEARLY DEPENDENT,
+     * 29H NO SOLUTION CAN BE COMPUTED.)
+99992 FORMAT (39H0***  ALL SOLUTIONS FAILED TO CONVERGE.)
+99991 FORMAT (22H0***  FOR B-VECTOR NO.,I3,21H SOLUTION FAILED TO C,
+     * 8HONVERGE.)
+99990 FORMAT (22H0***  FOR B-VECTOR NO.,I3,21H THE NUMBER OF ITERAT,
+     * 45HIONS REQUIRED FOR CONVERGENCE OF SOLUTION WAS,F4.0/4H ***,
+     * 57H  THIS NUMBER IS LARGE, INDICATING THE PROBLEM IS ILL-CON,
+     * 40HDITIONED AND SOLUTION MAY BE INACCURATE.)
+99989 FORMAT (22H0***  FOR B-VECTOR NO.,I3,21H ESTIMATED NUMBER OF ,
+     * 54HCORRECT DIGITS IN INITIAL SOLUTION OF COEFFICIENTS IS ,
+     * G15.8/51H ***  SINCE THIS IS SMALL, THE FINAL SOLUTION MAY B,
+     * 13HE INACCURATE.)
+99988 FORMAT (26H0***  DIAGONAL ELEMENT NO.,I3,17H OF THE UNSCALED ,
+     * 57HCOVARIANCE MATRIX WAS COMPUTED TO BE NEGATIVE OWING TO RO,
+     * 13HUNDING ERROR./29H ***  THE COMPUTED VALUE WAS ,G15.8)
+      END
+    1     MODE 1    ************************************************************
+(1) WAMPLER, J.AMER.STAT.ASSN. 1970, P.549, 5TH DEG. POLYNOMIALS, EQUAL WEIGHTS.
+   21    6    0    2    1    1    1        0.
+(F2.0,2F8.0)
+ 0       1     760
+ 1       6   -2042
+ 2      63    2111
+ 3     364   -1684
+ 4    1365    3888
+ 5    3906    1858
+ 6    9331   11379
+ 7   19608   17560
+ 8   37449   39287
+ 9   66430   64382
+10  111111  113159
+11  177156  175108
+12  271453  273291
+13  402234  400186
+14  579195  581243
+15  813616  811568
+16 1118481 1121004
+17 1508598 1506550
+18 2000719 2002767
+19 2613660 2611612
+20 3368421 3369180
+    1
+(2) FIRST DEGREE POLYNOMIAL, UNEQUAL WEIGHTS.
+    6    2    0    1    1    2    1        0.
+(3F3.0)
+ 1. 2. 2.
+ 2. 2. 1.
+ 3. 5. 1.
+ 4. 4. 1.
+ 5. 7. 1.
+ 6. 7. 2.
+    1
+(3) J. M. CAMERON DATA, UNEQUAL WEIGHTS, TWO COLUMNS LINEARLY DEPENDENT.
+    7    6    0    2    2    2    1        0.
+(2F3.0,F3.1,F3.0,F4.2,F3.0,F5.1,F4.0,F2.0)
+  1  1 .5  2 .25  2 13.0 130 2
+  1  2 .5  2 .25  3 17.0 170 2
+  0  3 .0  3 .00  3 18.2 182 1
+  0  2 .0  1 .00  1  8.8  88 1
+  0  1 .0 -3 .00  0 -3.0 -30 1
+  0  1 .0  0 .00  0  2.8  28 1
+  0  0 .0  1 .00  0  2.1  21 1
+    1
+(4) EXAMPLE WITH WEIGHTS AND CONSTRAINTS.
+   12    6    3    1    2    2    1        0.
+(8F3.0)
+  1  1  1  1  1  1  6  1
+  1  1  1  0  0  0  3  1
+  1  1  0  0  0  0  2  1
+  1 -1  0  0  0  0  1  3
+  1  0 -1  0  0  0 -1  3
+  1  0  0 -1  0  0  1  3
+  1  0  0  0  0 -1 -1  2
+  0  1 -1  0  0  0  1  2
+  0  1  0  0 -1  0 -1  2
+  0  1  0  0  0 -1  1  1
+  0  0  1 -1  0  0 -1  1
+  0  0  1  0 -1  0  1  1
+    1
+(5) INVERSE OF HILBERT MATRIX OF ORDER 4.  M = 4, N = 4, M1 = 0.
+    4    4    0    1    2    1    1        0.
+  (5F7.0)
+    16.  -120.   240.  -140.    -4.
+  -120.  1200. -2700.  1680.    60.
+   240. -2700.  6480. -4200.  -180.
+  -140.  1680. -4200.  2800.   140.
+    1
+(6) INVERSE OF HILBERT MATRIX OF ORDER 4.  M = 4, N = 4, M1 = 4.
+    4    4    4    1    2    1    1        0.
+  (5F7.0)
+    16.  -120.   240.  -140.    -4.
+  -120.  1200. -2700.  1680.    60.
+   240. -2700.  6480. -4200.  -180.
+  -140.  1680. -4200.  2800.   140.
+    1
+(7) BUSINGER-GOLUB, NUM. MATH. 1965, P.269, INVERSE OF HILBERT MATRIX, ORDER 6.
+    6    5    1    2    2    1    1        0.
+(5F10.0,10X,2F10.0)
+       36.     -630.     3360.    -7560.     7560.                463.      463.
+     -630.    14700.   -88200.   211680.  -220500.             -13860.   -17820.
+     3360.   -88200.   564480. -1411200.  1512000.              97020.    93555.
+    -7560.   211680. -1411200.  3628800. -3969000.            -258720.  -261800.
+     7560.  -220500.  1512000. -3969000.  4410000.             291060.   288288.
+    -2772.    83160.  -582120.  1552320. -1746360.            -116424.  -118944.
+    1
+(8) EXAMPLE WITH X = 0 (HENCE XNORM = 0).  TOL = -1 ON ENTRY TO L2A OR L2B.
+    1    1    0    1    2    1    0       -1.
+(2F3.0)
+ 1. 0.
+    1
+(9) ALBERT, REGRESSION AND THE MOORE-PENROSE INVERSE, 1972, P. 63.
+    3    4    0    3    2    1    2        0.
+(7F4.0)
+  1.  0.  1.  1.  1.  0.  0.
+  0.  1. -1.  0.  0.  1.  0.
+  1.  1.  0.  1.  0.  0.  1.
+    1
+(10) FIFTH DEGREE POLYNOMIAL WITH HEAVY WEIGHTS, MATRIX A SCALED.      IFAULT=11
+   21    6    0    1    2    2    1        0.
+(F8.0,3F9.0,2F10.0,F13.2,F10.0)
+1000000.       0.       0.       0.        0.        0.  100000.1853 16777216.
+1000000.  100000.   10000.    1000.      100.        1.  -8277497.00        1.
+1000000.  200000.   40000.    8000.     1600.       32.   8513600.00        1.
+1000000.  300000.   90000.   27000.     8100.      243.  -8245855.00        1.
+1000000.  400000.  160000.   64000.    25600.     1024.  10500192.00        1.
+1000000.  500000.  250000.  125000.    62500.     3125.  -8191733.00        1.
+1000000.  600000.  360000.  216000.   129600.     7776.   8626944.00        1.
+1000000.  700000.  490000.  343000.   240100.    16807.  -8094491.00        1.
+1000000.  800000.  640000.  512000.   409600.    32768.   7897376.00        1.
+1000000.  900000.  810000.  729000.   656100.    59049.  -7920049.00        1.
+1000000. 1000000. 1000000. 1000000.  1000000.   100000.    600000.50 16777216.
+1000000. 1100000. 1210000. 1331000.  1464100.   161051.  -7617047.00        1.
+1000000. 1200000. 1440000. 1728000.  2073600.   248832.   8521440.00        1.
+1000000. 1300000. 1690000. 2197000.  2856100.   371293.  -7113005.00        1.
+1000000. 1400000. 1960000. 2744000.  3841600.   537824.  10020992.00        1.
+1000000. 1500000. 2250000. 3375000.  5062500.   759375.  -6310483.00        1.
+1000000. 1600000. 2560000. 4096000.  6553600.  1048576.  12963744.00        1.
+1000000. 1700000. 2890000. 4913000.  8352100.  1419857.  -5083241.00        1.
+1000000. 1800000. 3240000. 5832000. 10497600.  1889568.  12515136.00        1.
+1000000. 1900000. 3610000. 6859000. 13032100.  2476099.  -3272399.00        1.
+1000000. 2000000. 4000000. 8000000. 16000000.  3200000. 6300000.1853 16777216.
+    1
+(11) LAWSON-HANSON, SOLVING LEAST SQUARES PROBLEMS, 1974, SET 1 EX.16. IFAULT=10
+    8    6    4    1    2    1    1        0.
+(7F6.0)
+  155.  105. -445. -495.  -45.  -95. -245.
+  355.  305. -245. -295.  155.  105. -295.
+ -445. -495.  -45.  -95.  355.  305.  155.
+ -245. -295.  155.  105. -445. -495.  105.
+  -45.  -95.  355.  305. -245. -295. -445.
+  155.  105. -445. -495.  -45.  -95. -495.
+  355.  305. -245. -295.  155.  105.  -45.
+ -445. -495.  -45.  -95.  355.  305.  -95.
+    1
+(12) LAWSON-HANSON, SOLVING LEAST SQUARES PROBLEMS, P.252, SET 1, EX.16, TOL=.5.
+    8    6    4    1    2    1    2       0.5
+(7F6.0)
+  155.  105. -445. -495.  -45.  -95. -245.
+  355.  305. -245. -295.  155.  105. -295.
+ -445. -495.  -45.  -95.  355.  305.  155.
+ -245. -295.  155.  105. -445. -495.  105.
+  -45.  -95.  355.  305. -245. -295. -445.
+  155.  105. -445. -495.  -45.  -95. -495.
+  355.  305. -245. -295.  155.  105.  -45.
+ -445. -495.  -45.  -95.  355.  305.  -95.
+    1
+(13) BJORCK-GOLUB, BIT 1967, P.322, HILBERT MATRIX INVERSE, ORDER 8.  IFAULT=8,9
+    8    6    2    3    2    1    1        0.
+(6F12.0)
+      20160.     -92400.     221760.    -288288.     192192.     -51480.
+        945.        945.    8400945.
+    -952560.    4656960.  -11642400.   15567552.  -10594584.    2882880.
+     -40320.     -40320.    4159680.
+   11430720.  -58212000.  149688000. -204324120.  141261120.  -38918880.
+     456120.    3256120.    3256120.
+  -58212000.  304920000. -800415000. 1109908800. -776936160.  216216000.
+   -2236080.    -136080.    -136080.
+  149688000. -800415000. 2134440000.-2996753760. 2118916800. -594594000.
+    5599440.    7279440.    7279440.
+ -204324120. 1109908800.-2996753760. 4249941696.-3030051024.  856215360.
+   -7495488.   -6095488.   -6095488.
+  141261120. -776936160. 2118916800.-3030051024. 2175421248. -618377760.
+    5105100.    6305100.    6305100.
+  -38918880.  216216000. -594594000.  856215360. -618377760.  176679360.
+   -1389960.    -339960.    -339960.
+    1
+(14) LAWSON-HANSON, SOLVING LEAST SQUARES PROBLEMS, 1974, SET 1, EX.12. IFAULT=7
+    6    8    6    1    2    1    1        0.
+(9F6.0)
+ -245. -295.  155.  105. -445. -495.  -45.  -95.  355.    1.
+  355.  305. -245. -295.  155.  105. -445. -495.  305.    1.
+  -45.  -95.  355.  305. -245. -295.  155.  105. -245.    1.
+ -445. -495.  -45.  -95.  355.  305. -245. -295. -295.    4.
+  155.  105. -445. -495.  -45.  -95.  355.  305.  155.    9.
+ -245. -295.  155.  105. -445. -495.  -45.  -95.  105.   16.
+    1
+(15) EXAMPLE WITH SINGULAR MATRIX OF CONSTRAINTS.  M1 = 3, N1 = 2.      IFAULT=6
+    6    3    3    1    2    1    1        0.
+(4F2.0)
+ 1 1 1 1
+ 2 2 2 1
+ 1 0 0 1
+ 1 2 4 1
+ 1 3 9 1
+ 1 4 9 1
+    1
+(16) EXAMPLE WITH MATRIX A EQUAL TO ZERO (HENCE RANK EQUALS ZERO).      IFAULT=5
+    3    2    0    1    2    1    1        0.
+(3F2.0)
+ 0 0 1
+ 0 0 1
+ 0 0 1
+    1
+(17) EXAMPLE WITH ZERO AND NEGATIVE WEIGHTS.                            IFAULT=4
+    2    1    0    1    2    2    1        0.
+(2F3.0,F4.0)
+ 1. 1.  0.
+ 1. 1. -1.
+    1
+(18) EXAMPLE WHERE N EXCEEDS THE CORRESPONDING DIMENSION LIMIT.         IFAULT=3
+    1   21    0    1    2    1    2        0.
+   (22F2.0)
+ 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 1
+    1
+(19) EXAMPLE WHERE M1 EXCEEDS M AND N.                                  IFAULT=2
+    1    1    2    1    2    1    1        0.
+(2F3.0)
+ 1. 1.
+    1
+(20) EXAMPLE WITH M = 0.                                                IFAULT=1
+    0    1    0    1    2    1    1        0.
+(2F3.0)
+ 1. 1. 1.
+    0
+    2     MODE 2    ************************************************************
+(3) J. M. CAMERON DATA, UNEQUAL WEIGHTS, TWO COLUMNS LINEARLY DEPENDENT.
+    7    6    0    2    2    2    1        0.
+(2F3.0,F3.1,F3.0,F4.2,F3.0,F5.1,F4.0,F2.0)
+  1  1 .5  2 .25  2 13.0 130 2
+  1  2 .5  2 .25  3 17.0 170 2
+  0  3 .0  3 .00  3 18.2 182 1
+  0  2 .0  1 .00  1  8.8  88 1
+  0  1 .0 -3 .00  0 -3.0 -30 1
+  0  1 .0  0 .00  0  2.8  28 1
+  0  0 .0  1 .00  0  2.1  21 1
+    1
+(9) ALBERT, REGRESSION AND THE MOORE-PENROSE INVERSE, 1972, P. 63.
+    3    4    0    3    2    1    2        0.
+(7F4.0)
+  1.  0.  1.  1.  1.  0.  0.
+  0.  1. -1.  0.  0.  1.  0.
+  1.  1.  0.  1.  0.  0.  1.
+    1
+(12) LAWSON-HANSON, SOLVING LEAST SQUARES PROBLEMS, P.252, SET 1, EX.16, TOL=.5.
+    8    6    4    1    2    1    2       0.5
+(7F6.0)
+  155.  105. -445. -495.  -45.  -95. -245.
+  355.  305. -245. -295.  155.  105. -295.
+ -445. -495.  -45.  -95.  355.  305.  155.
+ -245. -295.  155.  105. -445. -495.  105.
+  -45.  -95.  355.  305. -245. -295. -445.
+  155.  105. -445. -495.  -45.  -95. -495.
+  355.  305. -245. -295.  155.  105.  -45.
+ -445. -495.  -45.  -95.  355.  305.  -95.
+    1
+(14) LAWSON-HANSON, SOLVING LEAST SQUARES PROBLEMS, 1974, SET 1, EX.12. IFAULT=7
+    6    8    6    1    2    1    1        0.
+(9F6.0)
+ -245. -295.  155.  105. -445. -495.  -45.  -95.  355.    1.
+  355.  305. -245. -295.  155.  105. -445. -495.  305.    1.
+  -45.  -95.  355.  305. -245. -295.  155.  105. -245.    1.
+ -445. -495.  -45.  -95.  355.  305. -245. -295. -295.    4.
+  155.  105. -445. -495.  -45.  -95.  355.  305.  155.    9.
+ -245. -295.  155.  105. -445. -495.  -45.  -95.  105.   16.
+    1
+(18) EXAMPLE WHERE N EXCEEDS THE CORRESPONDING DIMENSION LIMIT.         IFAULT=3
+    1   21    0    1    2    1    2        0.
+   (22F2.0)
+ 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 1
+    0
+    1     MODE 1    ************************************************************
+(21) FIRST DEGREE POLYNOMIAL, POSITIVE AND ZERO WEIGHTS.  COMPARE EXAMPLE (2).
+    8    2    0    1    1    2             0.
+(3F3.0)
+ 1. 2. 2.
+ 2. 2. 1.
+ 3. 5. 1.
+ 4. 4. 1.
+ 5. 7. 1.
+ 6. 7. 2.
+ 7. 9. 0.
+ 8. 6. 0.
+    1
+(22) EXAMPLE WITH WEIGHTS AND CONSTRAINTS.  COMPARE EXAMPLE (4).
+   14    6    3    1    2    2             0.
+(8F3.0)
+  1  1  1  1  1  1  6  1
+  1  1  1  0  0  0  3  1
+  1  1  0  0  0  0  2  1
+  1 -1  0  0  0  0  1  3
+  1  0 -1  0  0  0 -1  3
+  1  0  0 -1  0  0  1  3
+  1  0  0  0  0 -1 -1  2
+  0  1 -1  0  0  0  1  2
+  0  1  0  0 -1  0 -1  2
+  0  1  0  0  0 -1  1  1
+  0  0  1 -1  0  0 -1  1
+  0  0  1  0 -1  0  1  1
+  1  0  0  0 -1  0 -1  0
+  0  1  0 -1  0  0  1  0
+    1
+(23) EXAMPLE WITH ZERO WEIGHTS, WHERE RANK A = RANK H = 2.  H = (SQRT(W))*A.
+    4    2    0    1    2    2             0.
+(4F3.0)
+ 1. 0. 1. 1.
+ 0. 1. 2. 1.
+ 0. 0. 3. 0.
+ 0. 0. 4. 0.
+    1
+(24) EXAMPLE WITH ZERO WEIGHTS, WHERE RANK A = 2, RANK H = 1.  H = (SQRT(W))*A.
+    4    2    0    1    2    2             0.
+(4F3.0)
+ 1. 0. 1. 1.
+ 0. 1. 2. 0.
+ 0. 0. 3. 0.
+ 0. 0. 4. 1.
+    0
+ 
+ 
+ 
+ 

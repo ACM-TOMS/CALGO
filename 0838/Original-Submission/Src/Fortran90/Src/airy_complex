@@ -1,0 +1,827 @@
+!
+! begin file airy_functions_complex   
+!    version 1.0  
+!    edited 07/24/2002
+!
+!***
+!************************************************************************
+!***
+      subroutine airy_aic (z, ai, dai, ierr, argument_switch, modify_switch)
+      complex(prd), intent(in)            :: z
+      complex(prd), intent(out)           :: ai, dai
+      integer,      intent(out)           :: ierr
+      logical,      intent(in), optional  :: argument_switch, modify_switch
+!*
+!  The following subroutine is the driver routine that computes the 
+!   Airy function Ai(z) and its derivative for complex arguments.
+!   The parameter PRD specifies the precision as determined by the 
+!   module being used, e.g. single, double, quad.  The subroutines 
+!   called are:
+!     parameter_airy = determines the machine specific parameters
+!     flowsc  = checks for over- and under- flow regions 
+!     asympc  = asymptotic expansion (direct evaluation),
+!     taylorc = taylor series expansion (integration).
+!*
+      integer nn, iregion
+      complex(prd) dG_z, dG_mz, G_z, G_mz, zeta_local, ai0s, ai1s
+      complex(prd), dimension(2,2) :: tsm
+!
+      if (.not. is_init_airy) call parameter_airy
+      iflag = 0
+      mod_local = .false.
+      arg_local = .false.
+      if (present(modify_switch)) mod_local = modify_switch
+      if (present(argument_switch)) arg_local = argument_switch
+      if (.not. arg_local) then  
+        r_global     =  abs(z)       ! argument in rectangular form
+        if ( r_global /= zero ) then
+          theta_global =  atan2(aimag(z),real(z,prd))
+        else
+          theta_global =  zero
+        end if
+	z_global     =  z
+      else  
+        r_global     =  z            ! argument in polar form
+        theta_global =  aimag(z)
+	if (floor(abs(theta_global)/pi) /= 0 .or. r_global < zero) iflag = -10
+	z_global     =  r_global*exp(ciunit*theta_global)
+      end if
+      call flowsc 
+      if (iflag == 0 .or. iflag == 1) then
+        zeta_global = two_third*z_global*sqrt(z_global)
+!
+!  choose the region where z lies according to the paper
+	iregion = 0
+        if (r_global >= r_min) then
+          if (abs(theta_global) <= two_pi_third) then
+            iregion = 1
+          else
+            iregion = 2
+          end if
+        else
+          if (abs(theta_global) <= pi_thirds) then
+	    iregion = 3
+            if ( r_global <= r_min/n_parts ) iregion = 4
+          else
+	    iregion = 4
+	  end if
+        end if
+!
+! call the appropriate subroutine(s) to evaluate Ai(z) and/or Ai'(z)
+	select case (iregion)
+	  case(1)
+            call asympc (G_z, dG_z)
+            ai0s = G_z
+            ai1s = dG_z
+          case(2)
+            if (iflag == 1) then      !  exp(2*zeta) < underflow limit
+              call asympc (G_z, dG_z)
+              ai0s = G_z
+              ai1s = dG_z
+            else
+              call asympc (G_z, dG_z, G_mz, dG_mz)
+              if (theta_global > zero) then
+                ai0s = G_z  + ciunit*G_mz*exp(two*zeta_global)
+                ai1s = dG_z - ciunit*dG_mz*exp(two*zeta_global)
+              else
+                ai0s = G_z  - ciunit*G_mz*exp(two*zeta_global)
+                ai1s = dG_z + ciunit*dG_mz*exp(two*zeta_global)
+              end if
+            end if
+          case(3)
+            nn    = ceiling(n_parts*(one-r_global/r_min)) 
+            call asympc (G_z, dG_z, r_in=r_min )
+            call taylorc (nn, r_min, r_global, tsm)
+            zeta_local = two_third*r_min*sqrt(r_min) & 
+                 *exp(ciunit*1.50_prd*theta_global)
+            zeta_local = zeta_global - zeta_local
+            ai0s  = exp(zeta_local)*(tsm(1,1)*G_z + tsm(1,2)*dG_z)
+            ai1s  = exp(zeta_local)*(tsm(2,1)*G_z + tsm(2,2)*dG_z)
+          case(4)
+            nn    = ceiling(n_parts*r_global/r_min)
+            call taylorc (nn, zero, r_global, tsm)
+            ai0s  = tsm(1,1)*ai0zer + tsm(1,2)*ai1zer
+            ai1s  = tsm(2,1)*ai0zer + tsm(2,2)*ai1zer
+	end select
+	if ( iregion <= 3  .and. .not. mod_local ) then
+          ai0s = exp(-zeta_global)*ai0s
+          ai1s = exp(-zeta_global)*ai1s
+        elseif ( iregion == 4 .and. mod_local) then 
+          ai0s  = exp(zeta_global)*ai0s
+          ai1s  = exp(zeta_global)*ai1s
+        end if
+      end if
+!
+!  error handling and return values
+      select case (iflag)
+        case(:-1)
+          ai  = czero
+          dai = czero
+	  ierr = iflag
+        case(0:1)
+          ai  = ai0s
+          dai = ai1s
+	  ierr = 0
+        case(5)
+          ai  = cmplx(ai0zer,zero,prd)         ! the value of Ai(0)
+          dai = cmplx(ai1zer,zero,prd)         ! the value of d(Ai(0))/dz
+	  ierr = 0
+	case default
+	  ai  = czero
+	  dai = czero
+	  ierr = -2000
+      end select
+      end subroutine airy_aic
+!***
+!************************************************************************
+!***
+      subroutine airy_ai_rayc (rin, zph, ai, dai, ierr, &
+		argument_switch, modify_switch)
+      real(prd),    intent(in), dimension(:)  :: rin
+      real(prd),    intent(in)                :: zph
+      complex(prd), intent(out), dimension(:) :: ai, dai
+      integer,      intent(out)               :: ierr
+      logical,      intent(in)                :: argument_switch
+      logical,      intent(in), optional      :: modify_switch
+!*
+!  This subroutine is the driver routine that computes the 
+!   Airy function Ai(z) and its derivative for complex arguments
+!   on rays directed from the origin.  The subroutines called are:
+!     parameter_airy = determines the machine specific parameters
+!     flowsc  = checks for over- and under- flow regions 
+!     airy_aic  = asymptotic expansion (direct evaluation),
+!*
+      real(prd) h
+      integer iplace, i, j, iregion, iflag2
+      complex(prd) ai0s, ai1s, G_z, dG_z, g_mz, dG_mz 
+      complex(prd), dimension(2,2) :: tsm
+!
+      if (.not. is_init_airy) call parameter_airy
+      iflag =  0; iflag2 = 0
+      if ( argument_switch .eqv. .false. ) then
+	ai = czero
+	dai = czero
+	ierr = -10
+	return
+      end if
+      arg_local = argument_switch
+      mod_local = .false.
+      if (present(modify_switch)) mod_local = modify_switch
+      theta_global = zph
+!
+!  run the routine for each point on the ray
+      do j = 1,size(rin)
+        r_global = rin(j)
+	z_global = r_global*exp(ciunit*theta_global)
+        if (r_global < zero) iflag = -10
+        call flowsc
+        if (iflag == 0 .or. iflag == 1) then
+          if (j == 1 .and. minval(rin) < r_min) call biggrid
+          zeta_global = two_third*z_global*sqrt(z_global)
+!
+!  choose the region where z lies according to the paper
+	  iregion = 0
+          if (r_global >= r_min) then
+            if (abs(theta_global) <= two_pi_third) then
+              iregion = 1
+            else
+              iregion = 2
+            end if
+          else
+            if (abs(theta_global) <= pi_thirds) then
+  	      iregion = 3
+            else
+	      iregion = 4
+	    end if
+          end if
+!
+!  call the appropriate subroutine to evaluate Ai(z) and/or Ai'(z)
+	  select case (iregion)
+	    case(1)
+              call asympc (G_z, dG_z)
+              ai0s = G_z
+              ai1s = dG_z
+            case(2)
+              if (iflag == 1) then      !  exp(2*zeta) < underflow limit
+                call asympc (G_z, dG_z)
+                ai0s = G_z
+                ai1s = dG_z
+              else
+                call asympc (G_z, dG_z, G_mz, dG_mz)
+                if (theta_global > zero) then
+                  ai0s = G_z  + ciunit*G_mz*exp(two*zeta_global)
+                  ai1s = dG_z - ciunit*dG_mz*exp(two*zeta_global)
+                else
+                  ai0s = G_z  - ciunit*G_mz*exp(two*zeta_global)
+                  ai1s = dG_z + ciunit*dG_mz*exp(two*zeta_global)
+                end if
+              end if
+            case(3:4)
+              h = r_min/n_parts
+              if (iregion == 3) then
+                do i = n_parts-1,0,-1
+                  if ( r_global >= h*i ) then
+                    iplace  = i+1
+                    exit
+                  end if
+                end do
+              else
+                do i = n_parts-1,0,-1
+                  if ( r_global >= h*i ) then
+                    iplace  = i
+                   exit
+                  end if
+                end do
+              end if
+              call taylorc (1, h*iplace, r_global, tsm)
+              ai0s  = tsm(1,1)*aigrid(1,iplace) + tsm(1,2)*aigrid(2,iplace)
+              ai1s  = tsm(2,1)*aigrid(1,iplace) + tsm(2,2)*aigrid(2,iplace)
+	    case default 
+	      ai0s = czero
+    	      ai1s = czero
+	      iflag = -1000
+          end select
+	  if ( (iregion == 1 .or. iregion == 2) .and. .not. mod_local ) then 
+            ai0s = exp(-zeta_global)*ai0s
+            ai1s = exp(-zeta_global)*ai1s
+          elseif ( (iregion == 3 .or. iregion == 4) .and. mod_local) then
+            ai0s  = exp(zeta_global)*ai0s
+            ai1s  = exp(zeta_global)*ai1s
+          end if
+        end if
+!
+!  error handling and return values
+        select case (iflag)
+          case(:-1)
+            ai(j)  = czero
+            dai(j) = czero
+          case(0:1)
+            ai(j)  = ai0s
+            dai(j) = ai1s
+          case(5)
+            ai(j)  = cmplx(ai0zer,prd)           ! the value of Ai(0)
+            dai(j) = cmplx(ai1zer,prd)           ! the value of d(Ai(0))/dz
+	  case default
+	    ai(j)  = czero
+	    dai(j) = czero
+        end select
+        iflag2 = min(iflag2,iflag)
+        iflag = 0
+      end do
+      ierr = 0
+      if ( iflag2 < 0 ) ierr = -20     
+      end subroutine airy_ai_rayc
+!***
+!************************************************************************
+!***
+      subroutine flowsc 
+!*
+!  PRIVATE subroutine to check overflow and underflow regions
+!*
+      real(prd) tol, val
+!
+      if (iflag /= 0) return
+!
+! underflow for small |z|
+      if (r_global <= r_lolimit) then
+        iflag = 5
+        return
+      end if
+!
+! test to see if r**(3/2) is out of the range of floating point
+      if (r_global >= r_uplimit) then
+        iflag = -6
+        return
+      end if
+!
+! underflow in exp(2*xi) for large |z| and 2*pi/3 < |arg(z)| < pi.
+!   the value of the series is O(1), so once the difference between
+!   exp(2*xi) and G_z is larger than epsilon(tol), then the 
+!   contribution is negligible.  So we can make this tolerance 
+!   significantly larger than underflow/overflow limit.  
+      tol = min(log(huge(tol)),-log(tiny(tol)))-15.0_prd
+      val = abs(real(z_global*sqrt(z_global),prd))
+      if (abs(theta_global) > two_pi_third .and. val >= 0.75_prd*tol ) then
+        iflag = 1
+      end if
+!   test to see if  multiplication by exp(=/-xi) for unscaled option
+!         will over- or under-flow
+      tol = min( -log(two*sqrt(pi)*abs(z_global**0.25_prd)) - log(tiny(tol)), &
+	         -log(two*sqrt(pi)/abs(z_global**0.25_prd)) - log(tiny(tol)), &
+                  log(two*sqrt(pi)/abs(z_global**0.25_prd)) + log(huge(tol)), &
+                  log(two*sqrt(pi)*abs(z_global**0.25_prd)) + log(huge(tol)) ) &
+	         - 15.0_prd
+      if (.not. mod_local) then
+        if ( val >= 1.50_prd*tol ) then
+          iflag = -7  
+          return
+        end if
+      end if
+      end subroutine flowsc
+!***
+!************************************************************************
+!***
+      subroutine asympc (G_z, dG_z, G_mz, dG_mz, r_in)
+      complex(prd), intent(out)           :: G_z, dG_z
+      complex(prd), intent(out), optional :: G_mz, dG_mz
+      real(prd), intent(in), optional     :: r_in
+!*
+!  PRIVATE subroutine to compute the asymptotic expansion for large |z|
+!*
+      integer i
+      complex(prd) zetar, z_local
+!
+!  summation of asymptotic series is done using nested multiplication
+!  Compute G(zeta), G(-zeta), G'(zeta), G'(-zeta)
+      if ( present(r_in) ) then
+        z_local = r_in*exp(ciunit*theta_global)
+        zetar =  cunit/(two_third*z_local*sqrt(z_local))
+      else
+        z_local = z_global
+        zetar   = cunit/zeta_global
+      end if
+      G_z   = cmplx(ucoef(n_asymp),zero,prd)
+      dG_z  = cmplx(vcoef(n_asymp),zero,prd)
+      do i = n_asymp-1, 1, -1
+        G_z   = cmplx(ucoef(i),zero,prd) - zetar*G_z
+        dG_z  = cmplx(vcoef(i),zero,prd) - zetar*dG_z
+      end do
+      G_z   = (cunit - zetar*G_z)/(two_sqrpi*z_local**fourth)
+      dG_z  = -(cunit - zetar*dG_z)/two_sqrpi*z_local**fourth
+      if (present(G_mz)) then
+        G_mz  = cmplx(ucoef(n_asymp),zero,prd)
+        dG_mz = cmplx(vcoef(n_asymp),zero,prd)
+        do i = n_asymp-1, 1, -1
+          G_mz  = cmplx(ucoef(i),zero,prd) + zetar*G_mz
+          dG_mz = cmplx(vcoef(i),zero,prd) + zetar*dG_mz
+        end do
+        G_mz   = (cunit + zetar*G_mz)/(two_sqrpi*z_local**fourth)
+        dG_mz  = -(cunit + zetar*dG_mz)/two_sqrpi*z_local**fourth
+      end if
+      end subroutine asympc
+!***
+!************************************************************************
+!***
+      subroutine taylorc (nn, r_start, r_stop, tsm, index)
+      integer,                      intent(in)  :: nn
+      real(prd),                    intent(in)  :: r_start, r_stop
+      complex(prd), dimension(2,2), intent(out) :: tsm
+      integer, optional,            intent(in)  :: index
+!*
+!  PRIVATE subroutine to integrate along a ray
+!*
+      integer     i, j
+      complex(prd) h, xm, z_start, z_stop
+      complex(prd), dimension(0:n_taylor) :: pterm, qterm
+      complex(prd), dimension(nn,2,2) :: Phi 
+!
+      j = 0 ! local error indicator--trap small step size
+      if ( r_start == zero .and. abs(log(r_stop)) < epsilon(one) &
+         .and. abs(r_stop-one) > two*epsilon(one) ) j = 1
+      if ( r_start /= zero .and. r_stop /= zero ) then
+        if ( abs(log(r_start/r_stop)) < epsilon(one) ) j = 1
+      end if
+      if ( j == 1 ) then
+	tsm = reshape( (/ cunit, czero, czero, cunit /), (/ 2,2 /) )
+        return
+      end if
+      z_start = r_start*exp( ciunit*theta_global)
+      z_stop = z_global
+      if ( r_stop /= r_global ) z_stop = r_stop*exp( ciunit*theta_global)
+      h = (z_stop-z_start)/nn
+!
+! compute the Taylor series in each partition
+      do i = 1, nn
+        xm    = z_start+h*(i-1)
+!
+! compute the reduced derivatives:  
+        pterm(0) = cunit;  pterm(1) = czero; pterm(2) = xm*pterm(0)*half
+        qterm(0) = czero;  qterm(1) = cunit; qterm(2) = czero
+        do j = 3,n_taylor
+          pterm(j) =  (xm*pterm(j-2) + pterm(j-3))/real(j*j-j,prd)
+          qterm(j) =  (xm*qterm(j-2) + qterm(j-3))/real(j*j-j,prd)
+        end do 
+!
+! now sum the series
+        Phi(i,1,1) = pterm(n_taylor)
+        Phi(i,2,1) = pterm(n_taylor)*n_taylor
+        Phi(i,1,2) = qterm(n_taylor)
+        Phi(i,2,2) = qterm(n_taylor)*n_taylor
+        do j = n_taylor-1,1,-1
+          Phi(i,1,1) = pterm(j)   + h*Phi(i,1,1)
+          Phi(i,2,1) = pterm(j)*j + h*Phi(i,2,1)
+          Phi(i,1,2) = qterm(j)   + h*Phi(i,1,2)
+          Phi(i,2,2) = qterm(j)*j + h*Phi(i,2,2)
+        end do
+        Phi(i,1,1) = pterm(0) + h*Phi(i,1,1)
+        Phi(i,1,2) = qterm(0) + h*Phi(i,1,2)
+      end do 
+!
+! multiply all the matrices together to obtain the fundamental solution matrix
+!   for the entire ray.
+      do i = 1,nn-1
+        Phi(i+1,:,:) = matmul(Phi(i+1,:,:),Phi(i,:,:))
+      end do
+!
+! return values
+      tsm(:,:) = Phi(nn,:,:)
+!
+! populuate a vector full of function and derivative values that 
+!   lie along a given value of theta
+      if (present(index)) then
+        if (abs(theta_global) <= pi_thirds) then 
+          do i = 1,n_parts-1
+            aigrid(:,n_parts-i) = matmul(Phi(i,:,:),aigrid(:,n_parts))
+          end do
+        else
+          do i = 1,n_parts-1
+            aigrid(:,i) = matmul(Phi(i,:,:),aigrid(:,0))
+          end do
+        end if
+      end if
+      end subroutine taylorc
+!***
+!************************************************************************
+!***
+      subroutine biggrid 
+!*
+!  PRIVATE subroutine to generate the values of the Airy fucntions
+!   at the grid points along a ray.
+!*
+      complex(prd), dimension(2,2) :: tsm
+      complex(prd) G_z, dG_z, G_mz, dG_mz, zeta_local
+!
+      if (.not.allocated(aigrid)) allocate(aigrid(2,0:n_parts))
+!
+! values at the origin are well known
+      aigrid(1,0) = cmplx(ai0zer,zero,prd)
+      aigrid(2,0) = cmplx(ai1zer,zero,prd)
+!
+! values on the circle are computed from the asymptotic expansions
+      zeta_local = r_min*exp(ciunit*theta_global)  ! dummy storage
+      zeta_local = two_third*zeta_local*sqrt(zeta_local)
+      if (abs(theta_global) <= two_pi_third) then        ! region (I)
+        call asympc (G_z, dG_z, r_in=r_min) 
+        aigrid(1,n_parts) = G_z
+        aigrid(2,n_parts) = dG_z
+      else      ! region(II)
+        call asympc (G_z, dG_z, G_mz, dG_mz, r_min)
+        if (theta_global > zero) then 
+          aigrid(1,n_parts) = (G_z  + ciunit*G_mz*exp(two*zeta_local))
+          aigrid(2,n_parts) = (dG_z - ciunit*dG_mz*exp(two*zeta_local))
+        else
+          aigrid(1,n_parts) = (G_z  - ciunit*G_mz*exp(two*zeta_local))
+          aigrid(2,n_parts) = (dG_z + ciunit*dG_mz*exp(two*zeta_local))
+        end if
+      end if 
+      aigrid(:,n_parts) = exp(-zeta_local)*aigrid(:,n_parts)
+!
+! now integrate once and populate the vector of function and derivative
+!   values on the grid
+      if (abs(theta_global) <= pi_thirds) then   ! integrate towards the origin
+        call taylorc (n_parts, r_min, zero, tsm, 1)
+      else                                ! integrate away from the origin
+        call taylorc (n_parts, zero, r_min, tsm, 1)
+      end if 
+      end subroutine biggrid
+!***
+!************************************************************************
+!***
+!
+!  end file airy_functions_complex
+!
+! begin file airy_zeros
+!    version 1.0 
+!    edited 07/24/2002
+!
+!***
+!************************************************************************
+!***
+      subroutine ai_zeroc (n, ai_zero, ierr, ai_assoc, dai_zero, dai_assoc)
+      integer,   intent(in)            :: n
+      complex(prd), intent(out)           :: ai_zero
+      integer,   intent(out)           :: ierr
+      complex(prd), intent(out), optional :: ai_assoc, dai_zero, dai_assoc
+!*
+!  PUBLIC subroutine which returns zeros with an error flag since  
+!    Ai(z) and Ai'(z), do not have non-real zeros.   
+!*
+      ai_zero = czero 
+      if (present(ai_assoc))   ai_assoc = czero 
+      if (present(dai_zero))   dai_zero = czero 
+      if (present(dai_assoc)) dai_assoc = czero 
+      ierr = n; ierr = -3  ! the first is a dummy statement to use n 
+!
+      end subroutine ai_zeroc
+!***
+!************************************************************************
+!***
+      subroutine bi_zeroc (n, bi_zero, ierr, bi_assoc, dbi_zero, dbi_assoc)
+      integer,   intent(in)            :: n
+      complex(prd), intent(out)           :: bi_zero
+      integer,   intent(out)           :: ierr
+      complex(prd), intent(out), optional :: bi_assoc, dbi_zero, dbi_assoc
+!*
+!  PUBLIC subroutine which is the driver routine that computes the 
+!    zeros of Bi(z) and optionally of Bi'(z), and the associated 
+!    values Bi'(beta_n) and Bi(beta_n') for scalar arguments.  The first 25   
+!    zeros are stored in an array and the rest are computed by summing 
+!    approriate asymptotic expansions.  The (PRIVATE) subroutines called are: 
+!     parameters_airy = determines the machine specific parameters 
+!     zero_parameters_airy = populates the vectors containing the  
+!	stored zeros and the coefficients of the asymptotic expansions 
+!     airy_bic = computes the associated function value for stored zeros 
+!     ae_zero_c = sums the appropriate asymptotic expansion for the  
+!	zeros of the Airy functions and their associated function values 
+!*
+      integer itemp
+      complex(prd) xbi, xdbi, lam
+!
+      if (.not. is_zero_init_airy) call zero_parameter_airy 
+      iflag = 0
+      if (n <= 0)     iflag = -3
+      itemp = floor(0.25*(huge(itemp)-1))
+      if (n >= itemp) iflag = -4   ! zero requested cannot be computed
+      if (iflag < 0) then
+        bi_zero = zero
+        if (present(bi_assoc))   bi_assoc = czero
+        if (present(dbi_zero))   dbi_zero = czero
+        if (present(dbi_assoc)) dbi_assoc = czero
+        ierr = iflag
+        return
+      end if
+      if (n <= n_zeros) then
+        bi_zero = bizc(n) 
+        if (present(bi_assoc)) then 
+          call airy_aic (bi_zero*exp(-ciunit*two_third*pi), lam, xdbi, ierr)
+          call airy_aic (bi_zero*exp( ciunit*two_third*pi), lam, xbi, ierr) 
+          lam = 5.0_prd*pi*ciunit/six
+          bi_assoc = exp(-lam)*xdbi + exp(lam)*xbi
+        end if 
+        if (present(dbi_zero)) dbi_zero = dbizc(n) 
+        if (present(dbi_assoc)) then
+          call airy_aic (dbizc(n)*exp(-ciunit*two_third*pi), xdbi, lam, ierr)
+          call airy_aic (dbizc(n)*exp( ciunit*two_third*pi), xbi, lam, ierr) 
+          lam = pi*ciunit/six 
+          dbi_assoc = exp(-lam)*xdbi + exp(lam)*xbi
+        end if
+      else 
+        lam = cmplx(three_pi_ate*real(4*n-1,prd), & 
+                    0.75_prd*log(2.0_prd),prd) 
+        call ae_zero_c (xbi, lam, 1)
+        bi_zero =  exp(ciunit*pi/three)*xbi 
+        call ae_zero_c (xbi, lam, 3)
+        if (present(bi_assoc)) then
+          bi_assoc = sqrt(two)*exp(-ciunit*pi/six)*xbi 
+          if ( mod(n,2) == 1 ) bi_assoc = -bi_assoc 
+        end if
+        if (present(dbi_zero) .or. present(dbi_assoc)) then
+          lam = cmplx(three_pi_ate*real(4*n-3,prd),& 
+                    0.75_prd*log(2.0_prd),prd) 
+          call ae_zero_c (xbi, lam, 2)
+          if (present(dbi_zero)) dbi_zero =  exp(ciunit*pi/three)*xbi 
+          call ae_zero_c (xdbi, lam, 4)
+          if (present(dbi_assoc)) then
+            dbi_assoc = sqrt(two)*exp(ciunit*pi/six)*xdbi 
+            if ( mod(n-1,2) == 1 ) dbi_assoc = -dbi_assoc 
+          end if
+        end if
+      end if
+      end subroutine bi_zeroc
+!***
+!************************************************************************
+!***
+      subroutine ae_zero_c (zr, lam, in)
+      complex(prd), intent (out) :: zr
+      complex(prd), intent (in)  :: lam
+      integer,   intent (in)  :: in
+!*
+!  PRIVATE subroutine to sum the asymptotic expansions for the zeros 
+!   of the Airy functions and their associated functions
+!*
+      complex(prd) zrsum, lamr
+      integer i
+!
+      lamr  =  one/lam**2
+      select case (in)
+      case(1)                   ! sum the T(x) expansion
+        zrsum =  cmplx(Tcoeff(n_asymp_zero),zero,prd)
+        do i = n_asymp_zero-1,0,-1
+          zrsum = cmplx(Tcoeff(i),zero,prd) + zrsum*lamr
+        end do
+        zr = zrsum*lam**two_third
+      case(2)                   ! sum the U(x) expansion
+        zrsum =  cmplx(Ucoeff(n_asymp_zero),zero,prd)
+        do i = n_asymp_zero-1,0,-1
+          zrsum = cmplx(Ucoeff(i),zero,prd) + zrsum*lamr
+        end do
+        zr = zrsum*lam**two_third
+      case(3)                   ! sum the V(x) expansion
+        zrsum =  cmplx(Vcoeff(n_asymp_asso),zero,prd)
+        do i = n_asymp_asso-1,0,-1
+          zrsum = cmplx(Vcoeff(i),zero,prd) + zrsum*lamr
+        end do
+        zr = zrsum*lam**(half/three)/sqrpi
+      case(4)                   ! sum the W(x) expansion
+        zrsum =  cmplx(Wcoeff(n_asymp_asso),zero,prd)
+        do i = n_asymp_asso-1,0,-1
+          zrsum = cmplx(Wcoeff(i),zero,prd) + zrsum*lamr
+        end do
+        zr = zrsum/lam**(half/three)/sqrpi
+      end select
+      end subroutine ae_zero_c
+!***
+!************************************************************************
+!***
+      subroutine ai_zerocv (n, ai_zero, ierr, ai_assoc, dai_zero, dai_assoc)
+      integer,   intent(in)                          :: n
+      complex(prd), intent(out), dimension(:)           :: ai_zero
+      integer,   intent(out)                         :: ierr
+      complex(prd), intent(out), dimension(:), optional :: &
+                                            ai_assoc, dai_zero, dai_assoc
+!*
+!*
+!  PUBLIC subroutine which returns zeros with an error flag since  
+!    Ai(z) and Ai'(z), do not have non-real zeros.   
+!*
+      ai_zero = czero 
+      if (present(ai_assoc))   ai_assoc = czero 
+      if (present(dai_zero))   dai_zero = czero 
+      if (present(dai_assoc)) dai_assoc = czero 
+      ierr = n; ierr = -3  ! the first is a dummy statement to use n 
+!
+!
+      end subroutine ai_zerocv
+!***
+!************************************************************************
+!***
+      subroutine bi_zerocv (n, bi_zero, ierr, bi_assoc, dbi_zero, dbi_assoc)
+      integer,   intent(in)                          :: n
+      complex(prd), intent(out), dimension(:)           :: bi_zero
+      integer,   intent(out)                         :: ierr
+      complex(prd), intent(out), dimension(:), optional :: &
+                                          bi_assoc, dbi_zero, dbi_assoc
+!*
+!*
+!  PUBLIC subroutine which is the driver routine that computes the 
+!    zeros of Bi(z) and optionally of Bi'(z), and the associated 
+!    values Bi'(beta_n) and Bi(beta_n') for vector arguments.  The first 25   
+!    zeros are stored in an array and the rest are computed by summing 
+!    approriate asymptotic expansions.  The (PRIVATE) subroutines called are: 
+!     parameters_airy = determines the machine specific parameters 
+!     zero_parameters_airy = populates the vectors containing the  
+!	stored zeros and the coefficients of the asymptotic expansions 
+!     airy_bic = computes the associated function value for stored zeros 
+!     ae_zero_cv = sums the appropriate asymptotic expansion for the  
+!	zeros of the Airy functions and their associated function values 
+!*
+      integer itemp, K, i, iflag_zero
+      complex(prd) xbi, xdbi, lam1 
+      complex(prd), dimension(:), allocatable :: lam
+!
+      if (.not. is_zero_init_airy) call zero_parameter_airy 
+      iflag_zero = 0
+      if (n <= 0)     iflag_zero = -3
+      itemp = floor(0.25*(huge(itemp)-1))
+      if (n >= itemp) iflag_zero = -4  ! zero requested cannot be computed
+      K = size(bi_zero)
+!
+! check to see if the last zero requested is computable
+!        and change the last zero returned accordingly.
+      if (n+K >= itemp .and. iflag_zero /= -4) then
+        do i = n+K-1,n,-1
+          if ( i < itemp ) then
+            K = i-n
+            iflag_zero = 50  
+            exit
+          end if
+        end do
+      end if
+      if (iflag_zero < 0) then
+        bi_zero(:) = czero
+        if (present(bi_assoc))   bi_assoc(:) = czero
+        if (present(dbi_zero))   dbi_zero(:) = czero
+        if (present(dbi_assoc)) dbi_assoc(:) = czero
+	ierr = iflag_zero
+        return
+      end if
+      if (n <= n_zeros) then
+        itemp = min(n+K,n_zeros)
+        bi_zero(1:itemp-n+1) = bizc(n:itemp)
+        if (present(bi_assoc)) then
+          do i = n, itemp 
+            call airy_aic (bizc(i)*exp(-ciunit*two_third*pi), lam1, xdbi, ierr)
+            call airy_aic (bizc(i)*exp( ciunit*two_third*pi), lam1, xbi, ierr) 
+            lam1 = 5.0_prd*pi*ciunit/six
+            bi_assoc(i-n+1) = exp(-lam1)*xdbi + exp(lam1)*xbi
+          end do
+        end if 
+        if (present(dbi_zero)) dbi_zero(1:itemp-n+1) = dbizc(n:itemp)
+        if (present(dbi_assoc)) then
+          do i = n, itemp
+            call airy_aic (dbizc(i)*exp(-ciunit*two_third*pi), xdbi, lam1, ierr)
+            call airy_aic (dbizc(i)*exp( ciunit*two_third*pi), xbi, lam1, ierr) 
+            lam1 = pi*ciunit/six 
+            dbi_assoc(i-n+1) = exp(-lam1)*xdbi + exp(lam1)*xbi
+          end do
+        end if
+      end if
+      if (n+K > n_zeros) then
+        itemp = max(n,n_zeros+1)
+        allocate (lam(itemp:n+K-1))
+        do i = itemp,n+K-1
+          lam(i) = cmplx(three_pi_ate*real(4*i-1,prd), & 
+                              0.75_prd*log(2.0_prd),prd) 
+        end do
+        call ae_zero_cv (bi_zero(itemp-n+1:K), lam, 1)
+        bi_zero(itemp-n+1:K) =  exp(ciunit*pi/three)*bi_zero(itemp-n+1:K) 
+        if (present(bi_assoc)) then
+          call ae_zero_cv (bi_assoc(itemp-n+1:K), lam, 3)
+          bi_assoc(itemp-n+1:K) = & 
+              sqrt(two)*exp(-ciunit*pi/six)*bi_assoc(itemp-n+1:K) 
+          do i = itemp,n+K-1
+            if ( mod(i,2) == 1 ) bi_assoc(i-n+1) = -bi_assoc(i-n+1) 
+          end do
+        end if
+        deallocate (lam)
+        if (present(dbi_zero) .or. present(dbi_assoc)) then
+          allocate (lam(itemp:n+K-1))
+          do i = itemp,n+K-1
+            lam(i) = cmplx(three_pi_ate*real(4*i-3,prd), & 
+                              0.75_prd*log(2.0_prd),prd) 
+          end do
+          if (present(dbi_zero)) then
+            call ae_zero_cv (dbi_zero(itemp-n+1:K), lam, 2)
+            dbi_zero(itemp-n+1:K) =  exp(ciunit*pi/three)*dbi_zero(itemp-n+1:K) 
+          end if
+          if (present(dbi_assoc)) then
+            call ae_zero_cv (dbi_assoc(itemp-n+1:K), lam, 4)
+            dbi_assoc(itemp-n+1:K) = & 
+                 sqrt(two)*exp(ciunit*pi/six)*dbi_assoc(itemp-n+1:K) 
+            do i = itemp,n+K-1
+              if ( mod(i-1,2) == 1 ) dbi_assoc(i-n+1) = -dbi_assoc(i-n+1) 
+            end do
+          end if
+          deallocate (lam)
+        end if
+      end if
+      ierr = iflag_zero
+      end subroutine bi_zerocv
+!***
+!************************************************************************
+!***
+      subroutine ae_zero_cv (zr, lam, in)
+      complex(prd), intent (out), dimension(1:) :: zr
+      complex(prd), intent (in), dimension(1:)  :: lam
+      integer,   intent (in)                 :: in
+      complex(prd), dimension(size(zr))         :: zrsum, lamr
+!*
+!  PRIVATE subroutine to sum the asymptotic expansions for the zeros 
+!   of the Airy functions and their associated functions for the 
+!   vector case
+!*
+      integer k, i, j
+!
+      k = size(zr)
+      do i = 1,k
+        lamr(i)  =  cunit/lam(i)**2
+      end do
+      if (in == 1) then                  ! sum the T(x) expansion
+        do j = 1,k
+          zrsum(j) =  cmplx(Tcoeff(n_asymp_zero),zero,prd)
+          do i = n_asymp_zero-1,0,-1
+            zrsum(j) = cmplx(Tcoeff(i),zero,prd) + zrsum(j)*lamr(j)
+          end do
+        end do
+        zr(:) = zrsum(:)*lam(:)**two_third
+      elseif (in == 2) then               ! sum the U(x) expansion
+        do j = 1,k
+          zrsum(j) =  cmplx(Ucoeff(n_asymp_zero),zero,prd)
+          do i = n_asymp_zero,0,-1
+            zrsum(j) = cmplx(Ucoeff(i),zero,prd) + zrsum(j)*lamr(j)
+          end do
+        end do
+        zr(:) = zrsum(:)*lam(:)**two_third
+      elseif (in == 3) then               ! sum the V(x) expansion
+        do j = 1,k
+          zrsum(j) =  cmplx(Vcoeff(n_asymp_asso),zero,prd)
+          do i = n_asymp_asso-1,0,-1
+            zrsum(j) = cmplx(Vcoeff(i),zero,prd) + zrsum(j)*lamr(j)
+          end do
+        end do
+        zr(:) = zrsum(:)*lam(:)**(half/three)/sqrpi
+      else                                  ! sum the W(x) expansion
+        do j = 1,k
+          zrsum(j) =  cmplx(Wcoeff(n_asymp_asso),zero,prd)
+          do i = n_asymp_asso-1,0,-1
+            zrsum(j) = cmplx(Wcoeff(i),zero,prd) + zrsum(j)*lamr(j)
+          end do
+        end do
+        zr(:) = zrsum(:)/lam(:)**(half/three)/sqrpi
+      end if
+      end subroutine ae_zero_cv
+!***
+!************************************************************************
+!***
+!
+!  end file airy_zeros

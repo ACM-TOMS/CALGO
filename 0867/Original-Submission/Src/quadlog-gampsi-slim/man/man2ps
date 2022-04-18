@@ -1,0 +1,54 @@
+#! /bin/sh
+# Filter for converting "troff -mxx" to PostScript.  This script is
+# normally linked to the names man2ps, ms2ps, me2ps, and mm2ps.
+#
+# Usage:
+#	man2ps [<] foo.1  >foo.ps
+#	me2ps  [<] foo.me >foo.ps
+#	mm2ps  [<] foo.mm >foo.ps
+#	ms2ps  [<] foo.ms >foo.ps
+#
+# [09-Oct-1997] -- update to use gtbl with groff, after discovering that
+# 		   Sun Solaris 2.5 tbl has a bug in placement and length
+# 		   of vertical rules in tables, sigh...
+# 		   Also, add path search to try to find groff.
+# [08-May-1993] -- original version
+
+# Choose a troff format according to the script name.
+case `basename $0` in
+	man*)	FORMAT=-man ;;
+	me*)	FORMAT=-me ;;
+	mm*)	FORMAT=-mm ;;
+	ms*)	FORMAT=-ms ;;
+	*)	echo "Unknown troff format:" ; exit 1 ;;
+esac
+
+# Search the PATH to find if groff is available
+GNUBIN=
+for dir in `echo $PATH | sed -e 's/:/ /g'`
+do
+    if test -x $dir/groff
+    then
+        GNUBIN=$dir/
+	break
+    fi
+done
+
+# We can use either GNU groff or Sun Solaris troff + dpost
+if [ -x ${GNUBIN}groff ]
+then	# GNU groff
+	TROFF="${GNUBIN}groff $FORMAT"
+	TROFF2PS="cat"
+	TBL=${GNUBIN}gtbl
+elif [ -x /usr/lib/lp/postscript/dpost ]
+then	# Solaris 2.1
+	TROFF="troff $FORMAT"
+	TROFF2PS="/usr/lib/lp/postscript/dpost"
+	TBL=tbl
+else
+	echo "Cannot find troff-to-PostScript filter"
+	exit 1
+fi
+
+echo "$TBL $* | eqn | $TROFF | $TROFF2PS" 1>&2
+$TBL $* | eqn | $TROFF | $TROFF2PS

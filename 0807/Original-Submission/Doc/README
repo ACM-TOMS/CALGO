@@ -1,0 +1,454 @@
+--------------------------------------------------------------------------------
+-                                                                              -
+-                      README file for the SBR toolbox                         -
+-                                                                              -
+--------------------------------------------------------------------------------
+
+Author: Bruno Lang
+        Aachen University of Technology
+        na.blang@na-net.ornl.gov
+Date: May 17, 2000
+Version: SBR Toolbox, Rev. 1.4.1
+
+This file provides information for installing, tuning, and testing
+the SBR toolbox library on a UNIX system.
+
+Overview:
+
+0.    The installation procedure
+1.    Getting and unpacking the SBR toolbox
+2.    Building the SBR library
+  2.1    Editing the makefile
+  2.2    Building
+  2.3    Cross-compiling
+3.    Performance tuning
+4.    Running the testing driver
+5.    Running additional timings
+6.    Making the SBR toolbox available to other users
+7.    Bug reports
+8.    Revision history
+
+% ------------------------------------------------------------------------------
+
+0.    The installation procedure
+      ==========================
+
+The standard installation procedure is
+   1. Get and unpack the SBR toolbox (see Sec. 1).
+   2. Build the SBR library
+   3. (Optional.) Performance tuning
+   4. (Recommended.) Running the testing driver
+   5. (Optional.) Running additional timings
+   6. (Optional.) Making the SBR toolbox available to other users
+
+If you are adventurous then try the following short cut.
+Otherwise, or if anything goes wrong, follow the detailed instructions.
+
+   1.   Get and unpack the SBR toolbox (see Sec. 1).
+
+   2/4. Type
+
+           make checks
+
+        to build the library libSBR.a and to run the quick checks.
+
+   6.   (Optional.) Move the library to a directory searched by the linker.
+
+% ------------------------------------------------------------------------------
+
+1.    Getting and unpacking the SBR toolbox
+      =====================================
+
+Get the file sbr.tar.Z and unpack it with the command
+
+   zcat sbr.tar.Z | tar xf -
+
+(Since you are reading this file you probably have already done both.)
+This will create a new subdirectory sbr in the current working directory.
+Change to this directory. The following files should be present:
+
+   README                           this file
+
+   makefile					a UNIX makefile for building the library
+   make.inc					the file containing site-specific settings
+
+   sbr.f                            the SBR toolbox routines
+   drun.f                           the double-precision testing program
+   srun.f                           the single-precision testing program
+   INCHK                            input file for the test runs
+   REFCHK                           sample output file from the testing driver
+   INTUN1					input file for the first tuning phase
+   INTUN2					input file for the second tuning phase
+   INTIM 					input file for the additional timings
+
+   la_ori.f					original LAPACK routines needed by the
+						testing program
+   la_mod.f					modified LAPACK routines needed by the
+						testing program
+   la_tmg.f					routines from the LAPACK test matrix
+						generation suite, needed by the testing
+						program
+   aux_blas.f                       auxiliary routines for IBM RS machines
+   etime.c                          timing routine for IBM RS machines
+
+% ------------------------------------------------------------------------------
+
+2.    Building the SBR library
+      ========================
+
+2.1   Editing the file make.inc
+      -------------------------
+
+Edit the file make.inc to match your system setup.
+In particular, you may want to set:
+
+  * F77           The name of the Fortran compiler (if you don't have a
+                  Fortran77 compiler you can't build the library).
+
+  * FF77OPTS      The compile flags for the Fortran compiler with optimization
+			turned on.
+
+  * F77LINK		The Fortran linker.
+
+  * F77LINKOPTS	Options for the linker when optimization is on.
+
+  * F77NOOPT      The compile flags for the Fortran compiler with optimization
+			turned off.
+
+  * FF77LINKNOOPT Options for the linker when optimization is off.
+
+  * CC		The C compiler.
+
+  * CCOPTS		Compile flags for the C compiler.
+
+  * AR            The command (including flags) for building object archives.
+
+  * RANLIB        The command for converting archives to random libraries.
+                  If that's already done with $(AR), set RANLIB = echo.
+
+  * SBR_LIB       The name of the resulting library will be lib$(SBR_LIB).a,
+                  e.g., libSBR.a when the default setting SBR_LIB=SBR is used.
+
+  * NEW_LIBS      Additional object files that must be compiled for the
+			testing program.
+  * OLD_LIBS	Linking options for pre-compiled objects, in particular the
+			BLAS.
+
+                  !!! If the BLAS are not already installed then you
+                      must install them before installing the SBR toolbox !!!
+
+			The testing program requires some LAPACK routines. There are
+			two ways to provide these:
+
+                  - You can compile just the required LAPACK routines; for
+                    convenience, they are included in the files la_ori.f and
+                    la_tmg.f of the SBR distribution. The makefile is
+			  pre-configured to use this option.
+
+                  - Instead you may link to an installed LAPACK library.
+                    Then you can include the name of the LAPACK library
+                    and the test matrix generation library in OLDLIBS:
+                    e.g.,
+                    NEW_LIBS  = la_mod.o
+                    OLD_LIBS  = -lLAPACK -lTMG -lBLAS
+
+                  Note that the modified LAPACK routines must be recompiled in
+			any case.
+
+                  Auxiliary objects: additional objects required for successful
+                  linking may be specified in NEW_LIBS:
+
+                  - The ESSL library does not contain the lsame and xerbla
+                    functions. Also, etime is provided for timing.
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+2.2   Building
+      --------
+
+Type
+
+   make library
+
+to build the SBR library.
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+2.3   Cross-compiling
+      ---------------
+
+If the compile server is not identical to the target machine for which the
+library is built then you must issue a
+
+   make drivers
+
+on the compile server before running the performance tuning and testing driver
+on the target machine.
+Otherwise, the programs will be compiled on the target machine or be run on
+the compile server.
+(If you do not intend to run the divers, you may omit this step.)
+
+% ------------------------------------------------------------------------------
+
+3.    Performance tuning
+      ==================
+
+The block sizes for the blocked Householder transformations in the SBR toolbox
+routines are set in the function NBDFLT, which is the first routine in sbr.f.
+The default settings may be adequate to obtain reasonable performance on a
+variety of platforms, but for optimal performance this function must be adapted
+to the machine.
+
+The toolbox comes with double-precision and single-precision drivers and an
+input file for timing the routines DSYRDB (SSYRDB), DSBRDB (SSBRDB), and
+DSBRDT (SSBRDT) with matrices of specified size and varying bandwidths and
+block sizes. The output of the drivers helps to determine a function that can
+compute a (nearly) optimal block size for a given matrix.
+
+* To (build and) run the drivers, have a look at the file INTUN1 (in particular
+  you might want to uncomment one of the 'MaxDim' lines at the beginning -
+  remember that the time grows cubically with the matrix dimension) and then
+  type
+
+     make tuning1
+
+  This command may take a few minutes to complete (about half an hour on a
+  400 MHz PentiumII, if the matrix size is not restricted).
+  The drivers, 'drun' and 'srun' read the file INTUN1 and produce two output
+  files, DOUTTUN1 and SOUTTUN1.
+
+These two files contain the data necessary to determine an optimum block
+size: the order and semibandwidth(s) of the matrix, the block size, and the
+time required.
+
+In general, the optimum block size will depend on many factors, e.g.,
+- the semibandwidth of the matrix before and after the reduction,
+- are the transformations accumulated in another matrix U or not ? ,
+- the working precision (single or double)
+- is the upper or lower triangle of the mattrix worked upon (routines
+  DSYRDB and SSYRDB only) ? , and
+- the dimension of the matrix.
+We have listed the factors with respect to decreasing importance.
+
+In our experience, it is sufficient to consider only the number of diagonals
+REMOVED (provided in the variable DELTAB in NBDFLT) for the band reduction
+routines, or the matrix size for the reduction of full matrices.
+In addition, the working precision (provided in the logical variable SINGLE)
+and the accumulation of the transformations (logical variable NEEDU) must
+be taken into account.
+
+Therefore, the code for determining a nearly optimal block size for one of
+the reduction routines might look like
+
+   IF ( ALGO .EQ. 'SBRDB' ) THEN
+*
+*       --- blocksize for reduction banded -> banded ---
+*
+     IF ( NEEDU ) THEN
+       IF ( SINGLE ) THEN
+         some code
+	 ELSE
+	   some code
+	 ENDIF
+     ELSE
+       IF ( SINGLE ) THEN
+         some code
+	 ELSE
+	   some code
+	 ENDIF
+     ENDIF
+
+
+where each instance of "some code" might be of the form
+
+        IF ( DELTAB .LT. some threshold )
+     >  THEN
+*
+*              --- suppress blocking ---
+*
+          NBDFLT = 1
+        ELSEIF ( DELTAB .GT. some other threshold )
+     >  THEN
+*
+*              --- do not use excessive block sizes ---
+*
+          NBDFLT = some maximum block size
+        ELSE
+*
+*              --- between these thresholds, increase NBDFLT linearly
+*                  with the number of diagonals removed               ---
+*
+          NBDFLT = nbmin + ( DELTAB / some factor )
+        ENDIF
+
+Choosing suitable thresholds and limiting block sizes (which may be obtained
+from a close inspection of the xOUTTUN1 files) will give an NBDFLT function
+that delivers close to optimum performance for any matrix size.
+
+Note that NBDFLT needs not take care of algorithmic restrictions in the
+choice of NB (for example, when reducing banded matrices from semibandwidth
+B1 to B2, the block size must not exceed B2). These restrictions are enforced
+WITHIN THE REDUCTION ROUTINES. (In the xOUTTUN1 files, NB indicates the
+block size proposed by the driver, and INFO returns the block size that was
+eventually used in the routine. Thus, you should have a closer look at NB.)
+This feature may facilitate obtaining a simple formula for NBDFLT.
+
+!!! You must re-build the library after modifying the routine NBDFLT !!!
+
+If you are cross-compiling, re-make the drivers on the compile server before
+proceeding.
+
+The next step is to set the intermediate bandwidths in the reduction drivers
+and the cross-over point in the driver xSBRDD from using the LAPACK routine
+xSBRDT for tridiagonalizing banded matrices to the SBR routine xSBRDT, which
+does the same job.
+To this end, have a look at the file INTUN2 (in particular, you might want to
+limit the matrix size), and then type
+
+   make tuning2
+
+which will after some minutes (about half an hour on a 400 MHz PentiumII, if
+the matrix size was not restricted) produce the files DOUTTUN2 and SOUTTUN2.
+These contain timings for the drivers with varying intermediate bandwidths and
+comparisons of xSBTRD with xSBRDT for varying bandwidths.
+
+Based on this information, suitable intermediate bandwidths and the crossover
+point are coded into NBDFLT.
+
+Now the tuning phase is completed, except ...
+
+!!! You must re-build the library after modifying the routine NBDFLT !!!
+
+If you are cross-compiling, re-make the drivers on the compile server before
+proceeding.
+
+% ------------------------------------------------------------------------------
+
+4.    Running the testing drivers
+      ===========================
+
+The SBR toolbox comes with double-precision and single-precision testing
+drivers and an input file INCHK that tests the following reduction paths:
+
+   - One-step tridiagonalization of a symmetric full matrix (LAPACK)
+   - Reduction of a full matrix to banded form (SBR)
+   - One-step tridiagonalization of a symmetric banded matrix (LAPACK)
+   - Alternative one-step tridiagonalization of a symmetric banded matrix (SBR)
+   - Reduction of a full matrix with the SBR driver
+   - Reduction of a banded matrix with the SBR driver
+
+To (build and) run the testing drivers, type
+
+   make checks
+
+The testing drivers, 'drun' and 'srun', read the input file INCHK and produce
+two output files DOUTCHK and SOUTCHK. This may require a few minutes (about
+half a minute on a 400 MHz PentiumII). A sample output file, REFCHK, is
+provided with the SBR toolbox.
+
+Note that you can follow the progress of the testing driver through the
+input file, as the line numbers are written to the standard output.
+
+By default, INCHK instructs the testing driver to produce only a summary
+of all the tests. If the SBR toolbox is installed correctly then
+the OUTCHK file should not contain lines starting with '***', and it should
+not report any failed or skipped tests.
+
+Note that you may run additional tests or cancel some tests by modifying the
+input file INCHK.  The format of the entries is described in that file.
+
+If any of the tests fails, indicating that the residual and/or orthogonality
+error exceeded some bound, proceed as follows:
+
+   1. Edit the INCHK file to enable medium or full output (change line 83 to
+      '3' or '4'). (Medium output generates output for each reduction path,
+      including the problem parameters and timings, full output also includes
+      output for each major routine called in the path, with a listing of
+      its scalar arguments.)
+
+   2. Re-run the testing driver.
+
+   3. Analyze the output to find the test(s) that failed.
+      Usually the ratios will only marginally exceed the thresholds. In this
+      case, you may either accept the results or increase the thresholds
+      by editing INCHK and re-run the testing driver.
+      If the ratios exceed the thresholds by some orders of magnitude there
+      is some serious problem.
+
+If the output files contain lines with '*** Error in line ...' then there
+was some problem with the input file. Change the INCHK file to enable full
+output, re-run the testing driver, and try to localize the problem.
+
+!!! The testing driver may also be used for getting timings: depending on
+    the desired level of detail, you should set the output level to "1" or
+    "2" by changing line 7 of the INCHK file. Output level 1 will produce
+    overall timings for each reduction path, whereas level 2 will also give
+    the timings for each subroutine call in the path.                       !!!
+
+% ------------------------------------------------------------------------------
+
+5.    Running additional timings
+      ==========================
+
+First have a look at the input file INTIM (in particular you might want to
+restrict the matrix size - remember that the execution time grows cubically
+with the matrix dimension), then type
+
+   make timing
+
+This will take some minutes (slightly over one hour on a 400 MHz PentiumII)
+and produce two output files, DOUTTIM and SOUTTIM for the double and single
+precision results, respectively.
+These files contain data for the following reduction paths:
+  - LAPACK reduction full -> tridiagonal
+  - SBR driver full -> tridiagonal
+  - LAPACK reduction banded -> tridiagonal
+  - SBR one-step reduction banded -> tridiagonal
+  - SBR driver banded -> tridiagonal
+
+% ------------------------------------------------------------------------------
+
+6.    Making the SBR toolbox available to other users
+      ===============================================
+
+Move the SBR toolbox library (libSBR.a if you did not change the name) into
+a directory searched by the linker, e.g., /usr/lib or /usr/local/lib.
+This may require superuser privileges.
+
+% ------------------------------------------------------------------------------
+
+7.    Bug reports
+      ===========
+
+Please help us to eliminate any remaining bug in the SBR toolbox.
+If you discover a bug in one of the SBR toolbox routines, please send a
+mail to one of the following addresses
+
+   bischof@sc.rwth-aachen.de        (Christian H. Bischof)
+   na.blang@na-net.ornl.gov         (Bruno Lang)
+   xiaobai@cs.duke.edu              (Xiaobai Sun)
+
+indicating the version number of the SBR toolbox, the faulty routine and the
+conditions under which the error occured (parameters, machine, underlying
+BLAS / LAPACK libraries, etc.)
+
+We will try to fix these problems as soon as possible.
+
+% ------------------------------------------------------------------------------
+
+7.    History
+      =======
+
+1.0   April 30, 1996.         First public release
+1.1   May 09, 1996.           Minor fixes; Fortran standard adherence enhanced;
+                              matrix size for the checks reduced.
+1.2   June 17, 1996.          Minor changes; number of files reduced;
+                              single check driver provided
+1.3   July 01, 1996.          Minor fixes; check driver expanded
+1.4   December 29, 1999.	Major changes:
+					- completely new testing driver
+					- added reduction drivers
+					- repacking routines have changed
+					- reduction routines can now handle tightly
+					  packed band.
+1.4.1 May 17, 2000.		Minor fixes in the output formats

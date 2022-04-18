@@ -1,0 +1,123 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+                "http://www.w3.org/TR/REC-html40/loose.dtd">
+<html>
+<head>
+  <title>Description of wasc_monte_carlo</title>
+  <meta name="keywords" content="wasc_monte_carlo">
+  <meta name="description" content="">
+  <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+  <meta name="generator" content="m2html v1.5 &copy; 2003-2005 Guillaume Flandin">
+  <meta name="robots" content="index, follow">
+  <link type="text/css" rel="stylesheet" href="../../m2html.css">
+</head>
+<body>
+<a name="_top"></a>
+<div><a href="../../index.html">Home</a> &gt;  <a href="../index.html">code</a> &gt; <a href="index.html">main</a> &gt; wasc_monte_carlo.m</div>
+
+<!--<table width="100%"><tr><td align="left"><a href="../../index.html"><img alt="<" border="0" src="../../left.png">&nbsp;Master index</a></td>
+<td align="right"><a href="index.html">Index for code/main&nbsp;<img alt=">" border="0" src="../../right.png"></a></td></tr></table>-->
+
+<h1>wasc_monte_carlo
+</h1>
+
+<h2><a name="_name"></a>PURPOSE <a href="#_top"><img alt="^" border="0" src="../../up.png"></a></h2>
+<div class="box"><strong></strong></div>
+
+<h2><a name="_synopsis"></a>SYNOPSIS <a href="#_top"><img alt="^" border="0" src="../../up.png"></a></h2>
+<div class="box"><strong>This is a script file. </strong></div>
+
+<h2><a name="_description"></a>DESCRIPTION <a href="#_top"><img alt="^" border="0" src="../../up.png"></a></h2>
+<div class="fragment"><pre class="comment"></pre></div>
+
+<!-- crossreference -->
+<h2><a name="_cross"></a>CROSS-REFERENCE INFORMATION <a href="#_top"><img alt="^" border="0" src="../../up.png"></a></h2>
+This function calls:
+<ul style="list-style-image:url(../../matlabicon.gif)">
+<li><a href="../../code/boot.html" class="code" title="">boot</a>	BOOT Startup script for all applications of CGMM estimation</li><li><a href="../../code/core/estimation/cgmm.html" class="code" title="function [theta_cgmm, theta_first] = cgmm(y, tau, cf, theta_0, grid_min, grid_max, grid_res, lb, ub, options)">cgmm</a>	CGMM Performs continuum of moments estimation for the model specified by cf.</li><li><a href="../../code/core/simulation/sim_wasc_2d.html" class="code" title="function [y, vol] = sim_wasc_2d(y0, mu, Sigma_0, M, Q, rho, beta, t)">sim_wasc_2d</a>	SIM_WASC_2D Simulates a 2d WASC model for the given time points in t.</li><li><a href="../../code/util/parameter_transformation/mappings/cf_wasc_v_theta.html" class="code" title="function phi = cf_wasc_v_theta(decode, omega, theta, y_t, tau)">cf_wasc_v_theta</a>	</li><li><a href="../../code/util/parameter_transformation/mappings/encode_wasc_param.html" class="code" title="function [theta, decode] = encode_wasc_param(mu, Sigma_0, M, Q, rho, beta)">encode_wasc_param</a>	ENCODE_WASC_PARAM Encodes all parameters of a WASC model into a single vector</li></ul>
+This function is called by:
+<ul style="list-style-image:url(../../matlabicon.gif)">
+</ul>
+<!-- crossreference -->
+
+
+
+<h2><a name="_source"></a>SOURCE CODE <a href="#_top"><img alt="^" border="0" src="../../up.png"></a></h2>
+<div class="fragment"><pre>0001 cd(<span class="string">'..'</span>);
+0002 <a href="../../code/boot.html" class="code" title="">boot</a>;
+0003 cd(cgmm_config.directories.main);
+0004 
+0005 <span class="comment">% Init parameters</span>
+0006 n = 2
+0007 dt = 1/250;
+0008 
+0009 <span class="comment">% load WASC parameters estimated from the corresponding time series</span>
+0010 <span class="comment">% to be used as 'true' parameters for simulation</span>
+0011 load(cgmm_config.estimates.wasc);
+0012 
+0013 <span class="comment">% rename estimates to make clear that they play the role of true parameters here</span>
+0014 mu = mu_cgmm
+0015 Sigma_0 = Sigma_0_cgmm
+0016 M = M_cgmm
+0017 Q = Q_cgmm
+0018 rho = rho_cgmm
+0019 beta = round(beta_cgmm) <span class="comment">% integer beta required for simulation</span>
+0020 
+0021 <span class="comment">% prepare simulation parameters</span>
+0022 S_0 = [100 100];
+0023 y_0 = log(S_0);
+0024 time_steps = cgmm_config.monte_carlo.time_steps/dt;
+0025 
+0026 <span class="comment">% encode true parameters into flat parameter vector</span>
+0027 [theta_flat_0, decode] = <a href="../../code/util/parameter_transformation/mappings/encode_wasc_param.html" class="code" title="function [theta, decode] = encode_wasc_param(mu, Sigma_0, M, Q, rho, beta)">encode_wasc_param</a>(mu, Sigma_0, M, Q, rho, beta);
+0028 <span class="comment">% prepare characteristic function call with the encoded parameters</span>
+0029 cf = @(omega, th, y_t, tau) <a href="../../code/util/parameter_transformation/mappings/cf_wasc_v_theta.html" class="code" title="function phi = cf_wasc_v_theta(decode, omega, theta, y_t, tau)">cf_wasc_v_theta</a>(decode, omega, th, y_t, tau);
+0030 <span class="comment">% prepare options for optimization routine</span>
+0031 options = optimset(<span class="string">'Display'</span>, <span class="string">'iter'</span> <span class="keyword">...</span>
+0032                   , <span class="string">'Algorithm'</span>, <span class="string">'interior-point'</span>);
+0033 <span class="comment">% contraint for all parameters of +-10% around heuristic estimate</span>
+0034 lb = theta_flat_0 - abs(theta_flat_0)*0.1;
+0035 ub = theta_flat_0 + abs(theta_flat_0)*0.1;
+0036 <span class="comment">%lb(6) = -max(abs(theta_flat_0(5:8)))*0.1; % lower left Q; heurist estimate = 0</span>
+0037 <span class="comment">%ub(6) = max(abs(theta_flat_0(5:8)))*0.1; % lower left Q; heurist estimate = 0</span>
+0038 <span class="comment">% except for correlation (where absolute constraints are more feasible)</span>
+0039 <span class="comment">%lb(end-2:end-1) = max(theta_flat_0(end-2:end-1)-0.6, -1);</span>
+0040 <span class="comment">%ub(end-2:end-1) = min(theta_flat_0(end-2:end-1)+0.6, 1);</span>
+0041 
+0042 simulation_runs = cgmm_config.monte_carlo.simulation_runs
+0043 <span class="keyword">if</span> exist(cgmm_config.monte_carlo.wasc)
+0044   load(cgmm_config.monte_carlo.wasc);
+0045   <span class="comment">% loaded file contains cell array 'estimates'</span>
+0046   first_run = size(estimates{1},1) + 1
+0047 <span class="keyword">else</span>
+0048   estimates = {}; <span class="comment">% store a cell of estimates for each time step</span>
+0049   <span class="comment">% each estimates{k} is a simulation_runs x number of params matrix</span>
+0050   <span class="keyword">for</span> k = 1:length(time_steps)
+0051     estimates{k} = theta_flat_0;
+0052   <span class="keyword">end</span>
+0053   first_run = 1
+0054 <span class="keyword">end</span>
+0055 
+0056 <span class="keyword">for</span> run = first_run:simulation_runs
+0057   disp(strcat(<span class="string">'Simulation run: '</span>,num2str(run),<span class="string">'/'</span>,num2str(simulation_runs)));
+0058   <span class="keyword">for</span> k = 1:length(time_steps)
+0059     t = 0:dt:(time_steps(k)*dt);
+0060     <span class="comment">% simulate time series</span>
+0061     y = <a href="../../code/core/simulation/sim_wasc_2d.html" class="code" title="function [y, vol] = sim_wasc_2d(y0, mu, Sigma_0, M, Q, rho, beta, t)">sim_wasc_2d</a>(y_0, mu, Sigma_0, M, Q, rho, beta, t);
+0062     <span class="comment">% perform parameter estimation</span>
+0063     tic;
+0064     [theta_flat_cgmm, theta_flat_first] = <a href="../../code/core/estimation/cgmm.html" class="code" title="function [theta_cgmm, theta_first] = cgmm(y, tau, cf, theta_0, grid_min, grid_max, grid_res, lb, ub, options)">cgmm</a>(y, dt, cf, theta_flat_0 <span class="keyword">...</span>
+0065                                             , cgmm_config.cgmm.grid_min <span class="keyword">...</span>
+0066                                             , cgmm_config.cgmm.grid_max <span class="keyword">...</span>
+0067                                             , cgmm_config.cgmm.grid_res <span class="keyword">...</span>
+0068                                             , lb, ub, options);
+0069     <span class="comment">%theta_flat_cgmm = theta_flat_first = theta_flat_0;</span>
+0070     toc;
+0071     estimates{k} = [estimates{k}; theta_flat_first];
+0072   <span class="keyword">end</span>
+0073   <span class="comment">% save monte carlo estimates in each iteration</span>
+0074   save(cgmm_config.monte_carlo.wasc, <span class="string">'estimates'</span>, <span class="string">'time_steps'</span>);
+0075 <span class="keyword">end</span>
+0076</pre></div>
+<hr><address>Generated on Mon 29-Apr-2013 19:29:13 by <strong><a href="http://www.artefact.tk/software/matlab/m2html/" title="Matlab Documentation in HTML">m2html</a></strong> &copy; 2005</address>
+</body>
+</html>

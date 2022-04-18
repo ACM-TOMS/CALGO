@@ -1,0 +1,2604 @@
+C      ALGORITHM 728, COLLECTED ALGORITHMS FROM ACM.
+C      THIS WORK PUBLISHED IN TRANSACTIONS ON MATHEMATICAL SOFTWARE,
+C      VOL. 20, NO. 1, MARCH, 1994, PP. 120-123.
+      subroutine qbpgen(rhom2,rhom4,nx,ny,m1,m2,m3,m4,lcondm,non0,
+     1                  info,iseed)
+      integer maxn
+      parameter (maxn=2000)
+
+c     **********
+c
+c     To change the precision of this program, run the change
+c     program on qbpgen.f
+c     Alternatively, to make a single precision version append a
+c     comment character to the start of all lines between sequential
+c        precision > double
+c     and
+c        end precision > double
+c     comments and delete the comment character at the start of all
+c     lines between sequential
+c        precision > single
+c     and
+c        end precision > single
+c     comments.  To make a double precision version interchange
+c     the append and delete operations in these instructions.
+c
+c     This routine generates random quadratic bilevel programs of
+c     the form:
+c
+c     Minimize Q(x,y)= (1/2)(Mv)'(Mv) + c'(Mv) + nx/2
+c
+c     where v' = [ x' y' ] and y(x) solves the lower-level problem
+c
+c           minimize q(x,y)= (1/2)v'(MSM)v
+c
+c           subject to Av <= b
+c
+c     Here
+c
+c                                    ( Sxx  Sxy )
+c      c' = [ -1(x)' 0(y)' ] and S = (          )
+c                                    ( Sxy' Syy )
+c
+c     where Sxx is the order-nx zero matrix, Syy is the order-ny
+c     identity matrix and
+c
+c                { -1  1 <= i=j <= m
+c      (Sxy)   = {
+c           ij   {  0  otherwise
+c
+c
+c      and A = [ Ax Ay ] and  b = [ 1(m)'  rho' -1(m)' ]
+c
+c     with rho' = [ 1(m1)' rhom2' 2(m3)' rhom4' ] and
+c
+c           (  Px )       ( -Py )                    { 1  1 <= i=j <= m
+c      Ax = (  Px ), Ay = (  Py ), (Px)   = (Py)   = {
+c           ( -Px )       ( -Py )      ij       ij   { 0  otherwise
+c
+c     and
+c
+c      nx is the number of upper-level variables
+c      ny is the number of lower-level variables
+c       n is the total number of variables (ie. n=nx+ny)
+c       m equals min{nx,ny}
+c    0(v) is the zero vector of the same dimension as v,
+c    1(v) is the ones vector of the same dimension as v,
+c       M is a (sparse) positive definite matrix defined by M = HDH
+c         where H is a block-diagonal matrix defined by H=diag(Hx,Hy),
+c         Hx and Hy are order nx and ny Householder matrices generated
+c         by the (Householder) unit 2-norm vectors zx and zy
+c         respectively, z'=[zx' zy'] has non0 components from (-1,1)
+c         in rows pz(1) through pz(non0), and D=diag(d(1) ,..., d(n))
+c         is a positive definite diagonal matrix with 2-norm condition
+c         10**lcondm
+c       W is the inverse of M
+c      m1 is as described below
+c      m2 is as described below
+c      m3 is as described below
+c      m4 is as described below
+c   rhom2 is as described below
+c   rhom4 is as described below
+c
+c     This problem has 2^{m3} global solutions and an additional
+c     2^{abs(m2)+m3+abs(m4)} - 2^{m3} local solutions.
+c
+c     The user is referred to:
+c       Calamai, P.H. and Vicente, L.N., "Generating Quadratic Bilevel
+c       Programming Test Problems", ACM TOMS, (1993)
+c     for a description of how this is accomplished.
+c
+c     **********
+c
+c INTEGER INPUT PARAMETERS (unchanged on exit)
+c
+c nx     - the number of upper-level variables (1 <= nx <= maxn - ny)
+c
+c ny     - the number of lower-level variables (1 <= ny <= maxn - nx)
+c
+c m1     - in the untransformed space the components
+c               (x(i),y(i)), i=1,...,m1
+c          have their (only) minimizer at
+c               (1,0)
+c
+c m2     - in the untransformed space the components
+c              (x(m1+i),y(m1+i)), i=1,...,im2
+c          have their global minimizer at
+c            ((1+rhom2(i))/2,(rhom2(i)-1)/2), i=1,...,im2
+c          respectively, and their local minimizer at
+c                       (1/2,1/2)
+c          where im2=abs(m2)
+c
+c m3     - in the untransformed space the components
+c              (x(m1+im2+i),y(m1+im2+i)), i=1,...,m3
+c          have their global minimizers at both
+c              (1/2,1/2) and (3/2,1/2)
+c
+c m4     - in the untransformed space the components
+c              (x(m1+im2+m3+i),y(m1+im2+m3+i)), i=1,...,im4
+c          have their global minimizer at
+c                       (1/2,1/2)
+c          and their local minimizer at
+c            ((1+rhom4(i))/2,(rhom4(i)-1)/2), i=1,...,im4
+c          respectively, where im4=abs(m4).
+c
+c *************************************************
+c NOTE - m1+im2+m3+im4 must equal m in this version
+c *************************************************
+c
+c lcondm - log (base 10) of the condition number of M (lcondm >= 0)
+c
+c non0   - (maximum) number of nonzeros in z (0 < non0 <= n)
+c
+c INTEGER INPUT PARAMETERS (changed on exit)
+c
+c iseed  - see comments in subprogram rand
+c
+c REAL INPUT PARAMETERS
+c
+c rhom2  - real vector of length im2 that controls the minima
+c          corresponding to components m1+1 through m1+im2 of x
+c          and y as described above under m2.
+c          The use of rhom2 depends on the sign of m2 as follows:
+c
+c        value   use
+c
+c        m2 < 0  input values are ignored and the im2 components of
+c                rhom2 are generated randomly to fall in the open
+c                interval (1,2)
+c
+c        m2 > 0  if -2 < rhom2(1) < -1 then the im2 components of
+c                rhom2 are all set to -rhom2(1); otherwise, the
+c                values that are input are used and these must all
+c                lie in the open interval (1,2)
+c
+c rhom4  - real vector of length im4 that controls the minima
+c          corresponding to components m1+im2+m3+1 through m1+im2+
+c          m3+im4 of x and y as described above under m4.
+c          The use of rhom4 depends on the sign of m4 as follows:
+c
+c        value   use
+c
+c        m4 < 0  input values are ignored and the im4 components of
+c                rhom4 are generated randomly to fall in the open
+c                interval (2,rhom4(1)).  NOTE: rhom4(1) must be
+c                greater than 2 when m4 < 0.
+c
+c        m4 > 0  if rhom4(1) < -2 then the im4 components of
+c                rhom4 are all set to -rhom4(1); otherwise, the
+c                values that are input are used and these must all
+c                be greater than 2
+c
+c DIAGNOSTIC PARAMETERS
+c
+c info - on exit contains a value indicating the state of program
+c         qbpgen when it terminated
+c
+c     value     definition
+c
+c         0     program terminated normally
+c
+c        >0     the state is given by that subset of the following
+c               conditions whose value sum to the value of info:
+c
+c            value   condition
+c
+c                1   nx and/or ny outside permissible range
+c                2   lcondm outside permissible range
+c                4   non0 outside permissible range
+c                8   m1 and/or m2 and/or m3 and/or m4 outside
+c                    permissible range
+c               16   components of rhom2 outside permissible range
+c               32   components of rhom4 outside permissible range
+c
+c PARAMETERS OF COMMON /M/
+c
+c d      - the diagonals of D
+c
+c z      - the Householder vectors that generate Hx and Hy
+c
+c pz     - row indices of (possible) nonzeros in z
+c
+c num0   - same as non0
+c
+c PARAMETERS OF COMMON /OBJ/
+c
+c c      - the coefficients of the linear term of Q(x,y)
+c
+c b      - the upper-bounds on the linear constraints
+c
+c PARAMETERS OF COMMON /DIM/
+c
+c dimx   - same as nx
+c
+c dimy   - same as ny
+c
+c im1    - same as m1
+c
+c im2    - abs(m2)
+c
+c im3    - same as m3
+c
+c im4    - abs(m4)
+c
+c m      - min(nx,ny)
+c
+c n      - nx+ny
+c
+c ********************
+c Subprograms called
+c   Modified Linpack:                copy
+c   TOMS (MINPACK project) supplied: rand
+c   Fortran supplied:                abs,min
+c   Local suite:                     qbpmkm,dload
+c ********************
+c
+c     Authors:		Paul H. Calamai and Luis N. Vicente
+c     Date Written:	October 26, 1991
+c     Dates Modified:   July 7, 1992
+c                       September 18, 1992
+c
+c ********************
+
+c declarations for passed parameters
+
+      integer nx,ny,m1,m2,m3,m4,lcondm,non0,info,iseed
+c*****precision > double
+      double precision rhom2(*),rhom4(*)
+c*****end precision > double
+c*****precision > single
+c      real rhom2(*),rhom4(*)
+c*****end precision > single
+
+c declarations for local parameters
+
+      logical fault
+      integer i,msum
+c*****precision > double
+      double precision rho
+c*****end precision > double
+c*****precision > single
+c      real rho
+c*****end precision > single
+
+c function declarations
+
+      real rand
+      intrinsic abs,min
+
+c parameter declarations
+
+c*****precision > double
+      double precision minus2,minus1,zero,one,two
+      parameter (minus2=-2.d0,minus1=-1.d0)
+      parameter (zero=0.d0,one=1.d0,two=2.d0)
+c*****end precision > double
+c*****precision > single
+c      real minus2,minus1,zero,one,two
+c      parameter (minus2=-2.0,minus1=-1.0)
+c      parameter (zero=0.0,one=1.0,two=2.0)
+c*****end precision > single
+
+c declarations for named common /m/
+
+      integer num0
+      integer pz(maxn)
+c*****precision > double
+      double precision d(maxn),z(maxn)
+c*****end precision > double
+c*****precision > single
+c      real d(maxn),z(maxn)
+c*****end precision > single
+      common/m/d,z,pz,num0
+
+c declarations for named common /obj/
+
+c*****precision > double
+      double precision c(maxn),b(3*maxn/2)
+c*****end precision > double
+c*****precision > single
+c      real c(maxn),b(3*maxn/2)
+c*****end precision > single
+      common/obj/c,b
+
+c declarations for named common /dim/
+
+      integer dimx,dimy,im1,im2,im3,im4,m,n
+      common/dim/dimx,dimy,im1,im2,im3,im4,m,n
+
+c store information for commons
+
+      dimx = nx
+      dimy = ny
+      im1  = m1
+      im2  = abs(m2)
+      im3  = m3
+      im4  = abs(m4)
+      m    = min(nx,ny)
+      n    = nx + ny
+      num0 = non0
+
+c check validity of integer input parameters and set info
+
+      msum = m1+im2+m3+im4
+      info = 0
+      if (nx.lt.1 .or. ny.lt.1 .or. n.gt.maxn) then
+        info=1
+      endif
+      if (lcondm.lt.0) then
+        info=info+2
+      endif
+      if (non0.lt.1 .or. non0.gt.n) then
+        info=info+4
+      endif
+      if (m1.lt.0 .or. m3.lt.0 .or. msum.ne.m) then
+        info=info+8
+      endif
+      if (info.ne.0) return
+
+c check and adjust rhom2 when appropriate
+
+      if (m2.ne.0) then
+        if (m2.gt.0) then
+          if (minus2.lt.rhom2(1) .and. rhom2(1).lt.minus1) then
+            rho=-rhom2(1)
+            call dload(im2,rho,rhom2,1)
+          else
+            fault=.false.
+            do 10 i=1,im2
+              if (rhom2(i).lt.one .or. rhom2(i).gt.two) fault=.true.
+   10       continue
+            if (fault) info=info+16
+          endif
+        else
+          do 20 i=1,im2
+            rhom2(i)=rand(iseed)+one
+   20     continue
+        endif
+      endif
+
+c check and adjust rhom4 when appropriate
+
+      if (m4.ne.0) then
+        if (m4.gt.0) then
+          if (rhom4(1).lt.minus2) then
+            rho=-rhom4(1)
+            call dload(im4,rho,rhom4,1)
+          else
+            fault=.false.
+            do 30 i=1,im4
+              if (rhom4(i).lt.two) fault=.true.
+   30       continue
+            if (fault) info=info+32
+          endif
+        else
+          rho=rhom4(1)
+          if (rho.le.two) then
+            info=info+32
+          else
+            do 40 i=1,im4
+              rhom4(i)=rho*rand(iseed)+two
+   40       continue
+          endif
+        endif
+      endif
+      if (info.ne.0) return
+
+c store data for constructing M
+
+      call qbpmkm(lcondm,iseed)
+
+c construct c
+
+      call dload(nx,minus1,c,1)
+      call dload(ny,zero,c(nx+1),1)
+
+c construct b
+
+      call dload(m,one,b,1)
+      call dload(m1,one,b(m+1),1)
+      call copy(im2,rhom2,1,b(m+m1+1),1)
+      call dload(m3,two,b(m+m1+im2+1),1)
+      call copy(im4,rhom4,1,b(m+m1+im2+m3+1),1)
+      call dload(m,minus1,b(m+m+1),1)
+
+c end of subroutine qbpgen
+
+      end
+      subroutine qbpfun(v,upper,lower,res)
+      integer maxn
+      parameter (maxn=2000)
+
+c     **********
+c
+c     This subroutine computes the value of the upper-
+c     and lower-level objectives and the residuals of
+c     the lower-level constraints of the quadratic bilevel
+c     programming problem generated using subroutine
+c     qbpgen
+c
+c     Details of this problem generation can be found
+c     in the comments of qbpgen
+c
+c     To change the precision of this program, run the change
+c     program on qbpfun.f
+c     Alternatively, to make a single precision version append a
+c     comment character to the start of all lines between sequential
+c        precision > double
+c     and
+c        end precision > double
+c     comments and delete the comment character at the start of all
+c     lines between sequential
+c        precision > single
+c     and
+c        end precision > single
+c     comments.  To make a double precision version interchange
+c     the append and delete operations in these instructions.
+c
+c     **********
+c     Subprograms called
+c        Modified Linpack: dot
+c        Local suite:      qbpax,qbpmx,qbpsx
+c     **********
+c
+c     Authors:		Paul H. Calamai and Luis N. Vicente
+c     Date Written:	October 26, 1991
+c     Date Modified:	September 18, 1992
+c
+c     **********
+
+c declarations for passed parameters
+
+c*****precision > double
+      double precision v(*)
+      double precision upper,lower
+      double precision res(*)
+c*****end precision > double
+c*****precision > single
+c      real v(*)
+c      real upper,lower
+c      real res(*)
+c*****end precision > single
+
+c declarations for local parameters
+
+c*****precision > double
+      double precision mv(maxn),smv(maxn)
+c*****end precision > double
+c*****precision > single
+c      real mv(maxn),smv(maxn)
+c*****end precision > single
+      integer i,mm
+
+c function declarations
+
+c*****precision > double
+      double precision dot
+c*****end precision > double
+c*****precision > single
+c      real dot
+c*****end precision > single
+
+c parameter declarations
+
+c*****precision > double
+      double precision two
+      parameter (two=2.d0)
+c*****end precision > double
+c*****precision > single
+c      real two
+c      parameter (two=2.0)
+c*****end precision > single
+
+c declarations for named common /m/
+
+c*****precision > double
+      double precision d(maxn),z(maxn)
+c*****end precision > double
+c*****precision > single
+c      real d(maxn),z(maxn)
+c*****end precision > single
+      integer num0
+      integer pz(maxn)
+      common/m/d,z,pz,num0
+
+c declarations for named common /obj/
+
+c*****precision > double
+      double precision c(maxn),b(3*maxn/2)
+c*****end precision > double
+c*****precision > single
+c      real c(maxn),b(3*maxn/2)
+c*****end precision > single
+      common/obj/c,b
+
+c declarations for named common /dim/
+
+      integer nx,ny,m1,m2,m3,m4,m,n
+      common/dim/nx,ny,m1,m2,m3,m4,m,n
+
+c store Mv in mv
+
+      call qbpmx(v,mv,.false.)
+
+c compute the upper-level objective
+
+      upper=nx/two
+      do 10 i=1,n
+        upper = upper + mv(i)*(mv(i)/two + c(i))
+   10 continue
+
+c store S(Mv) in smv
+
+      call qbpsx(mv,smv)
+
+c compute the lower-level objective
+
+c*****precision > double
+      lower=dot(n,mv,1,smv,1)/two
+c*****end precision > double
+c*****precision > single
+c      lower=dot(n,mv,1,smv,1)/two
+c*****end precision > single
+
+c compute the residuals
+
+      call qbpax(mv,res)
+      mm=m+m
+      do 30 i=1,m
+        res(i)     = b(i)     - res(i)
+        res(m+i)   = b(m+i)   - res(m+i)
+        res(mm+i)  = b(mm+i)  - res(mm+i)
+   30 continue
+      return
+
+c last card of subroutine qbpfun
+
+      end
+      subroutine qbpchk(v,mr,errl2,type)
+      integer maxn
+      parameter (maxn=2000)
+
+c     **********
+c
+c     This subroutine checks Wv (the point corresponding to v
+c     in the untransformed space) and finds the closest (local
+c     or global) solution r (in the untransformed space) to
+c     the problem generated by subroutine qbpgen and returns:
+c
+c      errl2 - The l2 distance from Wv to r (and an upper-bound
+c              on the distance from v to Mr)
+c      mr    - The point corresponding to r in the transformed
+c              space (ie. Mr)
+c      type  - A classifier for the point mr
+c
+c        value  classification
+c
+c          1     mr is the unique global minimizer of the
+c                untransformed problem
+c          2     mr is a nonunique global minimizer of the
+c                untransformed problem
+c          3     mr is a local minimizer of the untransformed
+c                problem
+c
+c     To change the precision of this program, run the change
+c     program on qbpchk.f
+c     Alternatively, to make a single precision version append a
+c     comment character to the start of all lines between sequential
+c        precision > double
+c     and
+c        end precision > double
+c     comments and delete the comment character at the start of all
+c     lines between sequential
+c        precision > single
+c     and
+c        end precision > single
+c     comments.  To make a double precision version interchange
+c     the append and delete operations in these instructions.
+c
+c ********************
+c Subprograms called
+c   Fortran supplied: abs, sqrt
+c   Local suite:      qbpmx
+c ********************
+c
+c    Authors:		Paul H. Calamai and Luis N. Vicente
+c    Date Written:	October 26, 1991
+c    Date Modified:	September 18, 1992
+c
+c ********************
+
+c declarations for passed parameters
+
+      integer type
+c*****precision > double
+      double precision v(*),mr(*)
+      double precision errl2
+c*****end precision > double
+c*****precision > single
+c      real v(*),mr(*)
+c      real errl2
+c*****end precision > single
+
+c declarations for local parameters
+
+      integer i,istart,iend
+c*****precision > double
+      double precision xtog,ytog,errtog,xtol,ytol,errtol
+      double precision rhok,temp
+      double precision wv(maxn)
+c*****end precision > double
+c*****precision > single
+c      real xtog,ytog,errtog,xtol,ytol,errtol
+c      real rhok,temp
+c      real wv(maxn)
+c*****end precision > single
+
+c function declarations
+
+      intrinsic abs,sqrt
+
+c parameter declarations
+
+c*****precision > double
+      double precision zero,half,one,trehlf,two
+      parameter (zero=0.d0,half=0.5d0,one=1.d0,trehlf=1.5d0,two=2.d0)
+c*****end precision > double
+c*****precision > single
+c      real zero,half,one,trehlf,two
+c      parameter (zero=0.0,half=0.50,one=1.0,trehlf=1.50,two=2.0)
+c*****end precision > single
+
+c declarations for named common /obj/
+
+c*****precision > double
+      double precision c(maxn),b(3*maxn/2)
+c*****end precision > double
+c*****precision > single
+c      real c(maxn),b(3*maxn/2)
+c*****end precision > single
+      common/obj/c,b
+
+c declarations for named common /dim/
+
+      integer nx,ny,m1,m2,m3,m4,m,n
+      common/dim/nx,ny,m1,m2,m3,m4,m,n
+
+c obtain Wv
+
+      call qbpmx(v,wv,.true.)
+
+c find the closest solution (in the untransformed space)
+c to Wv (ie. find r)
+
+      type=1
+      errl2=zero
+
+c check the components in M3 first
+
+      if (m3.gt.0) then
+        type=2
+        istart=m1+m2+1
+        iend=istart+m3-1
+        do 10 i=istart,iend
+          xtol=abs(wv(i)-half)
+          xtog=abs(wv(i)-trehlf)
+          mr(i)=trehlf
+          if (xtog.gt.xtol) then
+            xtog=xtol
+            mr(i)=half
+          endif
+          ytog=abs(wv(nx+i)-half)
+          mr(nx+i)=half
+          errl2=errl2+xtog**2+ytog**2
+   10   continue
+      endif
+
+c check the components in M1 second
+
+      if (m1.gt.0) then
+        istart=1
+        iend=m1
+        do 20 i=istart,iend
+          xtog=abs(wv(i)-one)
+          ytog=abs(wv(nx+i))
+          mr(i)    = one
+          mr(nx+i) = zero
+          errl2   = errl2+xtog**2+ytog**2
+   20   continue
+      endif
+
+c check the components in M2 third
+
+      if (m2.gt.0) then
+        istart=m1+1
+        iend=istart+m2-1
+        do 30 i=istart,iend
+          rhok=b(m+i)
+          temp=(one+rhok)/two
+          xtol   = abs(wv(i)-half)
+          ytol   = abs(wv(nx+i)-half)
+          errtol = xtol**2+ytol**2
+          xtog   = abs(wv(i)-temp)
+          ytog   = abs(wv(nx+i)-temp+one)
+          errtog = xtog**2+ytog**2
+          if (errtog.lt.errtol) then
+            errl2    = errl2+errtog
+            mr(i)    = temp
+            mr(nx+i) = temp-one
+          else
+            type     = 3
+            errl2    = errl2+errtol
+            mr(i)    = half
+            mr(nx+i) = half
+          endif
+   30   continue
+      endif
+
+c check the components in M4 fourth
+
+      if (m4.gt.0) then
+        istart=m1+m2+m3+1
+        iend=istart+m4-1
+        do 40 i=istart,iend
+          rhok=b(m+i)
+          temp=(one+rhok)/two
+          xtog   = abs(wv(i)-half)
+          ytog   = abs(wv(nx+i)-half)
+          errtog = xtog**2+ytog**2
+          xtol   = abs(wv(i)-temp)
+          ytol   = abs(wv(nx+i)-temp+one)
+          errtol = xtol**2+ytol**2
+          if (errtog.lt.errtol) then
+            errl2    = errl2+errtog
+            mr(i)    = half
+            mr(nx+i) = half
+          else
+            type     = 3
+            errl2    = errl2+errtol
+            mr(i)    = temp
+            mr(nx+i) = temp-one
+          endif
+   40   continue
+      endif
+
+c check the components of x with index greater than m
+
+      if (nx.gt.m) then
+        istart=m1+m2+m3+m4+1
+        iend=istart+nx-m-1
+        do 50 i=istart,iend
+          xtog  = abs(wv(i)-one)
+          errl2 = errl2+xtog**2
+          mr(i) = one
+   50   continue
+      endif
+
+c check the components of y with index greater than m
+
+      if (ny.gt.m) then
+        istart=nx+m1+m2+m3+m4+1
+        iend=istart+ny-m-1
+        do 60 i=istart,iend
+          ytog  = abs(wv(i))
+          errl2 = errl2+ytog**2
+          mr(i) = zero
+   60   continue
+      endif
+
+      errl2=sqrt(errl2)
+
+c transform mr to get point Mr in transformed space
+
+      call qbpmx(mr,mr,.false.)
+
+c end of subroutine qbpchk
+
+      end
+      subroutine qbpax(x,y)
+
+c     **********
+c     This subroutine forms the product Ax where A is defined as:
+c
+c     A = [ Ax Ay ] and
+c
+c          (  Px )       ( -Py )                    { 1  1 <= i=j <= m
+c     Ax = (  Px ), Ay = (  Py ), (Px)   = (Py)   = {
+c          ( -Px )       ( -Py )      ij       ij   { 0  otherwise
+c
+c     See comments in subroutine qbpgen
+c
+c     To change the precision of this program, run the change
+c     program on qbpax.f
+c     Alternatively, to make a single precision version append a
+c     comment character to the start of all lines between sequential
+c        precision > double
+c     and
+c        end precision > double
+c     comments and delete the comment character at the start of all
+c     lines between sequential
+c        precision > single
+c     and
+c        end precision > single
+c     comments.  To make a double precision version interchange
+c     the append and delete operations in these instructions.
+c
+c     **********
+c     Subprograms called
+c     **********
+c
+c     Authors:		Paul H. Calamai and Luis N. Vicente
+c     Date Written:	October 26, 1991
+c     Date Modified:	September 18, 1992
+c
+c     **********
+
+c declarations for passed parameters
+
+c*****precision > double
+      double precision x(*),y(*)
+c*****end precision > double
+c*****precision > single
+c      real x(*),y(*)
+c*****end precision > single
+
+c declarations for local parameters
+
+      integer i,mm
+
+c declarations for named common /dim/
+
+      integer nx,ny,m1,m2,m3,m4,m,n
+      common/dim/nx,ny,m1,m2,m3,m4,m,n
+
+      mm=m+m
+      do 10 i=1,m
+        y(i)     =  x(i) - x(nx+i)
+        y(m+i)   =  x(i) + x(nx+i)
+        y(mm+i)  = -y(m+i)
+   10 continue
+      return
+
+c last card of subroutine qbpax
+
+      end
+      subroutine qbpmx(x,y,invert)
+      integer maxn
+      parameter (maxn=2000)
+
+c     **********
+c
+c     This subroutine forms the product Mx (or M**(-1)x when invert
+c     is true), where M is the transformation constructed in
+c     subroutine qbpmkm (see comments in subroutine qbpmkm and in
+c     subroutine qbpgen).
+c
+c     To change the precision of this program, run the change
+c     program on qbpmx.f
+c     Alternatively, to make a single precision version append a
+c     comment character to the start of all lines between sequential
+c        precision > double
+c     and
+c        end precision > double
+c     comments and delete the comment character at the start of all
+c     lines between sequential
+c        precision > single
+c     and
+c        end precision > single
+c     comments.  To make a double precision version interchange
+c     the append and delete operations in these instructions.
+c
+c     **********
+c     Subprograms called
+c       Modified Linpack: copy
+c       Local suite:      qbpdot
+c     **********
+c
+c     Authors:		Paul H. Calamai and Luis N. Vicente
+c     Date Written:	October 26, 1991
+c     Dates Modified:   July 7, 1992
+c                       September 18, 1992
+c
+c     **********
+
+c declarations for passed parameters
+
+      logical invert
+c*****precision > double
+      double precision x(*),y(*)
+c*****end precision > double
+c*****precision > single
+c      real x(*),y(*)
+c*****end precision > single
+
+c declarations for local parameters
+
+      integer indx,k
+c*****precision > double
+      double precision produ,prodl
+c*****end precision > double
+c*****precision > single
+c      real produ,prodl
+c*****end precision > single
+
+c parameter declarations
+
+c*****precision > double
+      double precision two
+      parameter (two=2.d0)
+c*****end precision > double
+c*****precision > single
+c      real two
+c      parameter (two=2.0)
+c*****end precision > single
+
+c declarations for named common /m/
+
+c*****precision > double
+      double precision d(maxn),z(maxn)
+c*****end precision > double
+c*****precision > single
+c      real d(maxn),z(maxn)
+c*****end precision > single
+      integer pz(maxn)
+      integer num0
+      common/m/d,z,pz,num0
+
+c declarations for named common /dim/
+
+      integer nx,ny,m1,m2,m3,m4,m,n
+      common/dim/nx,ny,m1,m2,m3,m4,m,n
+
+c store Householder inner-products in produ and prodl
+
+      call qbpdot(num0,z,x,pz,produ,prodl)
+      produ=two*produ
+      prodl=two*prodl
+
+c store Householder reflections in y
+
+      call copy(n,x,1,y,1)
+      call qbpflp(num0,produ,prodl,z,y,indx)
+
+c store Dy (or D**(-1)y when invert) in y
+
+      if (invert) then
+        do 30 k=1,n
+          y(k)=y(k)/d(k)
+   30   continue
+      else
+        do 40 k=1,n
+          y(k)=y(k)*d(k)
+   40   continue
+      endif
+
+c store Householder inner-products in produ and prodl
+
+      call qbpdot(num0,z,y,pz,produ,prodl)
+      produ=two*produ
+      prodl=two*prodl
+
+c store Householder reflections in y
+
+      call qbpflp(num0,produ,prodl,z,y,indx)
+      return
+
+c last card of subroutine qbpmx
+
+      end
+      subroutine qbpsx(x,y)
+
+c     **********
+c
+c     This subroutine forms the product Sx where S is defined as:
+c
+c          ( Sxx  Sxy )                { -1  1 <= i=j <= m
+c      S = (          ) with (Sxy)   = {                      and
+c          ( Sxy' Syy )           ij   {  0  otherwise
+c
+c      Sxx = order-nx zero matrix and Syy = order-ny identity matrix.
+c
+c     To change the precision of this program, run the change
+c     program on qbpsx.f
+c     Alternatively, to make a single precision version append a
+c     comment character to the start of all lines between sequential
+c        precision > double
+c     and
+c        end precision > double
+c     comments and delete the comment character at the start of all
+c     lines between sequential
+c        precision > single
+c     and
+c        end precision > single
+c     comments.  To make a double precision version interchange
+c     the append and delete operations in these instructions.
+c
+c     **********
+c     Subprograms called
+c        Modified Linpack: axpy,copy,scal
+c        Local suite:      dload
+c     **********
+c
+c     Authors:		Paul H. Calamai and Luis N. Vicente
+c     Date Written:	October 26, 1991
+c     Date Modified:	September 18, 1992
+c
+c     **********
+
+c declarations for passed parameters
+
+c*****precision > double
+      double precision x(*),y(*)
+c*****end precision > double
+c*****precision > single
+c      real x(*),y(*)
+c*****end precision > single
+
+c parameter declarations
+
+c*****precision > double
+      double precision minus1,zero
+      parameter (minus1=-1.d0,zero=0.d0)
+c*****end precision > double
+c*****precision > single
+c      real minus1,zero
+c      parameter (minus1=-1.0,zero=0.0)
+c*****end precision > single
+
+c declarations for named common /dim/
+
+      integer nx,ny,m1,m2,m3,m4,m,n
+      common/dim/nx,ny,m1,m2,m3,m4,m,n
+
+      call dload(n,zero,y,1)
+      call copy(m,x(nx+1),1,y,1)
+      call scal(m,minus1,y,1)
+      call copy(ny,x(nx+1),1,y(nx+1),1)
+      call axpy(m,minus1,x,1,y(nx+1),1)
+      return
+
+c last card of subroutine qbpsx
+
+      end
+      subroutine qbpmkm(condm,iseed)
+      integer maxn
+      parameter (maxn=2000)
+
+c     **********
+c
+c     This subroutine defines the n by n matrices M = HDH,
+c     where H is a block-diagonal matrix defined by H=diag(Hx,Hy),
+c     Hx and Hy are order nx and ny Householder matrices generated
+c     by the (Householder) unit 2-norm vectors zx and zy
+c     respectively, z'=[zx' zy'] has non0 components from (-1,1)
+c     in rows pz(1) through pz(non0), and D=diag(d(1) ,..., d(n))
+c     is a positive definite diagonal matrix with 2-norm condition
+c     10**lcondm
+c
+c     To change the precision of this program, run the change
+c     program on qbpmkm.f
+c     Alternatively, to make a single precision version append a
+c     comment character to the start of all lines between sequential
+c        precision > double
+c     and
+c        end precision > double
+c     comments and delete the comment character at the start of all
+c     lines between sequential
+c        precision > single
+c     and
+c        end precision > single
+c     comments.  To make a double precision version interchange
+c     the append and delete operations in these instructions.
+c
+c     **********
+c     Subprograms called
+c        Modified Linpack:                nrm2,scal
+c        TOMS (MINPACK project) supplied: rand
+c        Fortran supplied:                int,dble
+c        Local suite:                     dload
+c     **********
+c
+c     Authors:		Paul H. Calamai and Luis N. Vicente
+c     Date Written:	October 26, 1991
+c     Dates Modified:   July 7, 1992
+c                       September 18, 1992
+c
+c     **********
+
+c declarations for passed parameters
+
+      integer condm,iseed
+
+c declarations for local parameters
+
+      integer indx,k
+c*****precision > double
+      double precision znorm,tempz,factor
+c*****end precision > double
+c*****precision > single
+c      real znorm,tempz,factor
+c*****end precision > single
+
+c function declarations
+
+c*****precision > double
+      double precision nrm2
+c*****end precision > double
+c*****precision > single
+c      real nrm2
+c*****end precision > single
+      real rand
+      intrinsic int
+
+c parameter declarations
+
+c*****precision > double
+      double precision zero,one
+      parameter (zero=0.d0,one=1.d0)
+c*****end precision > double
+c*****precision > single
+c      real zero,one
+c      parameter (zero=0.0,one=1.0)
+c*****end precision > single
+
+c declarations for common /m/
+
+c*****precision > double
+      double precision d(maxn),z(maxn)
+c*****end precision > double
+c*****precision > single
+c      real d(maxn),z(maxn)
+c*****end precision > single
+      integer pz(maxn)
+      integer num0
+      common/m/d,z,pz,num0
+
+c declarations for common /dim/
+
+      integer nx,ny,m1,m2,m3,m4,m,n
+      common/dim/nx,ny,m1,m2,m3,m4,m,n
+
+c put num0 random elements in (-1,1) into random locations
+c of z and store locations in pz(1) through pz(num0)
+
+      call dload(n,zero,z,1)
+      do 20 k = 1, num0
+        tempz = 2*rand(iseed) - one
+   10   continue
+        indx=int(n*rand(iseed)+1)
+        if (indx.gt.n) go to 10
+        if (z(indx).ne.zero) go to 10
+        z(indx)=tempz
+        pz(k)=indx
+   20 continue
+
+c make zx and zy unit 2-norm vectors
+
+      znorm = nrm2(nx,z,1)
+      if (znorm.ne.zero) then
+        call scal(nx,one/znorm,z,1)
+      endif
+      znorm = nrm2(ny,z(nx+1),1)
+      if (znorm.ne.zero) then
+        call scal(ny,one/znorm,z(nx+1),1)
+      endif
+
+c store diagonal of D
+
+      do 30 k = 1,n
+c*****precision > double
+        factor = (dble(k-1)/dble(n-1))
+c*****end precision > double
+c*****precision > single
+c        factor = (real(k-1)/real(n-1))
+c*****end precision > single
+        d(k) = 10**(-condm*factor)
+   30 continue
+      return
+
+c     Last card of subroutine qbpmkm
+
+      end
+      subroutine dload(n,da,dx,incx)
+
+c     copies a scalar, a, to a vector, x.
+c     uses unrolled loops when incx equals one.
+
+c     To change the precision of this program, run the change
+c     program on dload.f
+c     Alternatively, to make a single precision version append a
+c     comment character to the start of all lines between sequential
+c        precision > double
+c     and
+c        end precision > double
+c     comments and delete the comment character at the start of all
+c     lines between sequential
+c        precision > single
+c     and
+c        end precision > single
+c     comments.  To make a double precision version interchange
+c     the append and delete operations in these instructions.
+
+c*****precision > double
+      double precision da,dx(*)
+c*****end precision > double
+c*****precision > single
+c      real da,dx(*)
+c*****end precision > single
+      integer i,incx,ix,m,mp1,n
+
+      if(n.le.0)return
+      if(incx.eq.1)go to 20
+
+c     code for incx not equal to 1
+
+      ix = 1
+      if(incx.lt.0)ix = (-n+1)*incx + 1
+      do 10 i = 1,n
+        dx(ix) = da
+        ix = ix + incx
+   10 continue
+      return
+
+c     code for incx equal to 1 and clean-up loop
+
+   20 m = mod(n,7)
+      if( m .eq. 0 ) go to 40
+      do 30 i = 1,m
+        dx(i) = da
+   30 continue
+      if( n .lt. 7 ) return
+   40 mp1 = m + 1
+      do 50 i = mp1,n,7
+        dx(i) = da
+        dx(i + 1) = da
+        dx(i + 2) = da
+        dx(i + 3) = da
+        dx(i + 4) = da
+        dx(i + 5) = da
+        dx(i + 6) = da
+   50 continue
+      return
+      end
+      subroutine qbpdot(non0,x,y,ind,produ,prodl)
+c
+c     splits the sparse dot product of x and y between
+c     produ and prodl
+c
+c     To change the precision of this program, run the change
+c     program on qbpdot.f
+c     Alternatively, to make a single precision version append a
+c     comment character to the start of all lines between sequential
+c        precision > double
+c     and
+c        end precision > double
+c     comments and delete the comment character at the start of all
+c     lines between sequential
+c        precision > single
+c     and
+c        end precision > single
+c     comments.  To make a double precision version interchange
+c     the append and delete operations in these instructions.
+c
+c ********************
+c
+c     Authors:		Paul H. Calamai and Luis N. Vicente
+c     Date Written:	July 7, 1992
+c     Date Modified:	September 18, 1992
+c
+c ********************
+
+c*****precision > double
+      double precision x(*),y(*),produ,prodl,zero
+c*****end precision > double
+c*****precision > single
+c      real x(*),y(*),produ,prodl,zero
+c*****end precision > single
+      integer i,ind(*),ixy,non0
+
+      integer nx,ny,m1,m2,m3,m4,m,n
+      common/dim/nx,ny,m1,m2,m3,m4,m,n
+
+c*****precision > double
+      parameter (zero=0.d0)
+c*****end precision > double
+c*****precision > single
+c      parameter (zero=0.0)
+c*****end precision > single
+
+      produ = zero
+      prodl = zero
+      if(n.le.0)return
+      do 10 i = 1,non0
+        ixy = ind(i)
+        if (ixy.le.nx) then
+          produ=produ + x(ixy)*y(ixy)
+        else
+          prodl=prodl + x(ixy)*y(ixy)
+        endif
+   10 continue
+      return
+
+c     Last card of subroutine qbpdot
+
+      end
+      subroutine qbpflp(non0,da,db,dx,dy,inc)
+
+c     vector minus constant times a vector.
+
+c     To change the precision of this program, run the change
+c     program on qbpflp.f
+c     Alternatively, to make a single precision version append a
+c     comment character to the start of all lines between sequential
+c        precision > double
+c     and
+c        end precision > double
+c     comments and delete the comment character at the start of all
+c     lines between sequential
+c        precision > single
+c     and
+c        end precision > single
+c     comments.  To make a double precision version interchange
+c     the append and delete operations in these instructions.
+
+c*****precision > double
+      double precision dx(*),dy(*),da,db
+c*****end precision > double
+c*****precision > single
+c      real dx(*),dy(*),da,db
+c*****end precision > single
+      integer i,inc(*),ixy,non0
+
+      integer nx,ny,m1,m2,m3,m4,m,n
+      common/dim/nx,ny,m1,m2,m3,m4,m,n
+
+c*****precision > double
+      double precision zero
+      parameter (zero=0.d0)
+c*****end precision > double
+c*****precision > single
+c      real zero
+c      parameter (zero=0.0)
+c*****end precision > single
+
+      if(non0.le.0)return
+      if (da .eq. zero .and. db .eq. zero) return
+
+      do 10 i = 1,non0
+        ixy=inc(i)
+        if (ixy.le.nx) then
+          dy(ixy) = dy(ixy) - da*dx(ixy)
+        else
+          dy(ixy) = dy(ixy) - db*dx(ixy)
+        endif
+   10 continue
+      return
+
+c last card of subroutine qbpflp
+
+      end
+      real function rand(iseed)
+      integer iseed
+c     **********
+c
+c     function rand
+c
+c     Rand is the portable random number generator of L. Schrage.
+c
+c     The generator is full cycle, that is, every integer from
+c     1 to 2**31 - 2 is generated exactly once in the cycle.
+c     It is completely described in TOMS 5(1979),132-138.
+c
+c     The function statement is
+c
+c       real function rand(iseed)
+c
+c     where
+c
+c       iseed is a positive integer variable which specifies
+c         the seed to the random number generator. Given the
+c         input seed, rand returns a random number in the
+c         open interval (0,1). On output the seed is updated.
+c
+c     Argonne National Laboratory. MINPACK Project. March 1981.
+c
+c     **********
+      integer a,b15,b16,fhi,k,leftlo,p,xhi,xalo
+      real c
+c
+c     Set a = 7**5, b15 = 2**15, b16 = 2**16, p = 2**31-1, c = 1/p.
+c
+      data a/16807/, b15/32768/, b16/65536/, p/2147483647/
+      data c/4.656612875e-10/
+c
+c     There are 8 steps in rand.
+c
+c     1. Get 15 hi order bits of iseed.
+c     2. Get 16 lo bits of iseed and form lo product.
+c     3. Get 15 hi order bits of lo product.
+c     4. Form the 31 highest bits of full product.
+c     5. Get overflo past 31st bit of full product.
+c     6. Assemble all the parts and pre-substract p.
+c        The parentheses are essential.
+c     7. Add p back if necessary.
+c     8. Multiply by 1/(2**31-1).
+c
+      xhi = iseed/b16
+      xalo = (iseed - xhi*b16)*a
+      leftlo = xalo/b16
+      fhi = xhi*a + leftlo
+      k = fhi/b15
+      iseed = (((xalo-leftlo*b16)-p) + (fhi-k*b15)*b16) + k
+      if (iseed .lt. 0) iseed = iseed + p
+      rand = c*float(iseed)
+      return
+c
+c     Last card of function rand.
+c
+      end
+      subroutine axpy(n,a,x,incx,y,incy)
+
+c     constant times a vector plus a vector.
+c     uses unrolled loops for increments equal to one.
+c     jack dongarra, linpack, 3/11/78.
+c     modified, paul calamai, 20/10/92.
+
+c     To change the precision of this program, run the change
+c     program on axpy.f
+c     Alternatively, to make a single precision version append a
+c     comment character to the start of all lines between sequential
+c        precision > double
+c     and
+c        end precision > double
+c     comments and delete the comment character at the start of all
+c     lines between sequential
+c        precision > single
+c     and
+c        end precision > single
+c     comments.  To make a double precision version interchange
+c     the append and delete operations in these instructions.
+
+c*****precision > double
+      double precision x(*),y(*),a
+      double precision zero
+      parameter (zero=0.d0)
+c*****end precision > double
+c*****precision > single
+c      real x(*),y(*),a
+c      real zero
+c      parameter (zero=0.0)
+c*****end precision > single
+      integer i,incx,incy,ix,iy,m,mp1,n
+
+      if(n.le.0)return
+      if (a .eq. zero) return
+      if(incx.eq.1.and.incy.eq.1)go to 20
+
+c        code for unequal increments or equal increments
+c          not equal to 1
+
+      ix = 1
+      iy = 1
+      if(incx.lt.0)ix = (-n+1)*incx + 1
+      if(incy.lt.0)iy = (-n+1)*incy + 1
+      do 10 i = 1,n
+        y(iy) = y(iy) + a*x(ix)
+        ix = ix + incx
+        iy = iy + incy
+   10 continue
+      return
+
+c        code for both increments equal to 1
+
+
+c        clean-up loop
+
+   20 m = mod(n,4)
+      if( m .eq. 0 ) go to 40
+      do 30 i = 1,m
+        y(i) = y(i) + a*x(i)
+   30 continue
+      if( n .lt. 4 ) return
+   40 mp1 = m + 1
+      do 50 i = mp1,n,4
+        y(i) = y(i) + a*x(i)
+        y(i + 1) = y(i + 1) + a*x(i + 1)
+        y(i + 2) = y(i + 2) + a*x(i + 2)
+        y(i + 3) = y(i + 3) + a*x(i + 3)
+   50 continue
+      return
+      end
+      subroutine copy(n,x,incx,y,incy)
+
+c     copies a vector, x, to a vector, y.
+c     uses unrolled loops for increments equal to 1.
+c     jack dongarra, linpack, 3/11/78.
+c     modified, paul calamai, 20/10/92.
+
+c     To change the precision of this program, run the change
+c     program on copy.f
+c     Alternatively, to make a single precision version append a
+c     comment character to the start of all lines between sequential
+c        precision > double
+c     and
+c        end precision > double
+c     comments and delete the comment character at the start of all
+c     lines between sequential
+c        precision > single
+c     and
+c        end precision > single
+c     comments.  To make a double precision version interchange
+c     the append and delete operations in these instructions.
+
+c*****precision > double
+      double precision x(*),y(*)
+c*****end precision > double
+c*****precision > single
+c      real x(*),y(*)
+c*****end precision > single
+      integer i,incx,incy,ix,iy,m,mp1,n
+
+      if(n.le.0)return
+      if(incx.eq.1.and.incy.eq.1)go to 20
+
+c        code for unequal increments or equal increments
+c          not equal to 1
+
+      ix = 1
+      iy = 1
+      if(incx.lt.0)ix = (-n+1)*incx + 1
+      if(incy.lt.0)iy = (-n+1)*incy + 1
+      do 10 i = 1,n
+        y(iy) = x(ix)
+        ix = ix + incx
+        iy = iy + incy
+   10 continue
+      return
+
+c        code for both increments equal to 1
+
+
+c        clean-up loop
+
+   20 m = mod(n,7)
+      if( m .eq. 0 ) go to 40
+      do 30 i = 1,m
+        y(i) = x(i)
+   30 continue
+      if( n .lt. 7 ) return
+   40 mp1 = m + 1
+      do 50 i = mp1,n,7
+        y(i) = x(i)
+        y(i + 1) = x(i + 1)
+        y(i + 2) = x(i + 2)
+        y(i + 3) = x(i + 3)
+        y(i + 4) = x(i + 4)
+        y(i + 5) = x(i + 5)
+        y(i + 6) = x(i + 6)
+   50 continue
+      return
+      end
+c*****precision > double
+      double precision function dot(n,x,incx,y,incy)
+c*****end precision > double
+c*****precision > single
+c      real function dot(n,x,incx,y,incy)
+c*****end precision > single
+
+c     forms the dot product of two vectors.
+c     uses unrolled loops for increments equal to one.
+c     jack dongarra, linpack, 3/11/78.
+c     modified, paul calamai, 20/10/92.
+
+c     To change the precision of this program, run the change
+c     program on dot.f
+c     Alternatively, to make a single precision version append a
+c     comment character to the start of all lines between sequential
+c        precision > double
+c     and
+c        end precision > double
+c     comments and delete the comment character at the start of all
+c     lines between sequential
+c        precision > single
+c     and
+c        end precision > single
+c     comments.  To make a double precision version interchange
+c     the append and delete operations in these instructions.
+
+c*****precision > double
+      double precision x(*),y(*),temp
+      double precision zero
+      parameter (zero=0.d0)
+c*****end precision > double
+c*****precision > single
+c      real x(*),y(*),temp
+c      real zero
+c      parameter (zero=0.0)
+c*****end precision > single
+      integer i,incx,incy,ix,iy,m,mp1,n
+
+      temp = zero
+      dot = zero
+      if(n.le.0)return
+      if(incx.eq.1.and.incy.eq.1)go to 20
+
+c        code for unequal increments or equal increments
+c          not equal to 1
+
+      ix = 1
+      iy = 1
+      if(incx.lt.0)ix = (-n+1)*incx + 1
+      if(incy.lt.0)iy = (-n+1)*incy + 1
+      do 10 i = 1,n
+        temp = temp + x(ix)*y(iy)
+        ix = ix + incx
+        iy = iy + incy
+   10 continue
+      dot = temp
+      return
+
+c        code for both increments equal to 1
+
+
+c        clean-up loop
+
+   20 m = mod(n,5)
+      if( m .eq. 0 ) go to 40
+      do 30 i = 1,m
+        temp = temp + x(i)*y(i)
+   30 continue
+      if( n .lt. 5 ) go to 60
+   40 mp1 = m + 1
+      do 50 i = mp1,n,5
+        temp = temp + x(i)*y(i) + x(i + 1)*y(i + 1) +
+     *   x(i + 2)*y(i + 2) + x(i + 3)*y(i + 3) + x(i + 4)*y(i + 4)
+   50 continue
+   60 dot = temp
+      return
+      end
+c*****precision > double
+      double precision function nrm2 ( n, x, incx)
+c*****end precision > double
+c*****precision > single
+c      real function nrm2 ( n, x, incx)
+c*****end precision > single
+
+c     To change the precision of this program, run the change
+c     program on nrm2.f
+c     Alternatively, to make a single precision version append a
+c     comment character to the start of all lines between sequential
+c        precision > double
+c     and
+c        end precision > double
+c     comments and delete the comment character at the start of all
+c     lines between sequential
+c        precision > single
+c     and
+c        end precision > single
+c     comments.  To make a double precision version interchange
+c     the append and delete operations in these instructions.
+
+      integer          next
+c*****precision > double
+      double precision x(*),cutlo,cuthi,hitest,sum,xmax,zero,one
+      parameter (zero=0.d0,one=1.d0)
+c*****end precision > double
+c*****precision > single
+c      real x(*),cutlo,cuthi,hitest,sum,xmax,zero,one
+c      parameter (zero=0.0e0,one=1.0e0)
+c*****end precision > single
+      intrinsic abs,sqrt
+
+c     euclidean norm of the n-vector stored in x() with storage
+c     increment incx .
+c     if    n .le. 0 return with result = 0.
+c     if n .ge. 1 then incx must be .ge. 1
+c
+c           c.l.lawson, 1978 jan 08
+c           modified, paul calamai, 20/10/92.
+c
+c     four phase method     using two built-in constants that are
+c     hopefully applicable to all machines.
+c         cutlo = maximum of  sqrt(u/eps)  over all known machines.
+c         cuthi = minimum of  sqrt(v)      over all known machines.
+c     where
+c         eps = smallest no. such that eps + 1. .gt. 1.
+c         u   = smallest positive no.   (underflow limit)
+c         v   = largest  no.            (overflow  limit)
+c
+c     brief outline of algorithm..
+c
+c     phase 1    scans zero components.
+c     move to phase 2 when a component is nonzero and .le. cutlo
+c     move to phase 3 when a component is .gt. cutlo
+c     move to phase 4 when a component is .ge. cuthi/m
+c     where m = n for x() real and m = 2*n for complex.
+c
+c     values for cutlo and cuthi..
+c     from the environmental parameters listed in the imsl converter
+c     document the limiting values are as follows..
+c     cutlo, s.p.   u/eps = 2**(-102) for  honeywell.  close seconds are
+c                   univac and dec at 2**(-103)
+c                   thus cutlo = 2**(-51) = 4.44089e-16
+c     cuthi, s.p.   v = 2**127 for univac, honeywell, and dec.
+c                   thus cuthi = 2**(63.5) = 1.30438e19
+c     cutlo, d.p.   u/eps = 2**(-67) for honeywell and dec.
+c                   thus cutlo = 2**(-33.5) = 8.23181d-11
+c     cuthi, d.p.   same as s.p.  cuthi = 1.30438d19
+c*****precision > double
+      parameter (cutlo=8.232d-11,cuthi=1.304d19)
+c*****end precision > double
+c*****precision > single
+c      parameter (cutlo=4.441e-16,cuthi=1.304e19)
+c*****end precision > single
+
+      if(n .gt. 0) go to 10
+         nrm2  = zero
+         go to 300
+
+   10 assign 30 to next
+      sum = zero
+      nn = n * incx
+c                                                 begin main loop
+      i = 1
+   20    go to next,(30, 50, 70, 110)
+   30 if( abs(x(i)) .gt. cutlo) go to 85
+      assign 50 to next
+      xmax = zero
+
+c                        phase 1.  sum is zero
+
+   50 if( x(i) .eq. zero) go to 200
+      if( abs(x(i)) .gt. cutlo) go to 85
+
+c                                prepare for phase 2.
+      assign 70 to next
+      go to 105
+
+c                                prepare for phase 4.
+
+  100 i = j
+      assign 110 to next
+      sum = (sum / x(i)) / x(i)
+  105 xmax = abs(x(i))
+      go to 115
+
+c                   phase 2.  sum is small.
+c                             scale to avoid destructive underflow.
+
+   70 if( abs(x(i)) .gt. cutlo ) go to 75
+
+c                     common code for phases 2 and 4.
+c                     in phase 4 sum is large.  scale to avoid overflow.
+
+  110 if( abs(x(i)) .le. xmax ) go to 115
+         sum = one + sum * (xmax / x(i))**2
+         xmax = abs(x(i))
+         go to 200
+
+  115 sum = sum + (x(i)/xmax)**2
+      go to 200
+
+
+c                  prepare for phase 3.
+
+   75 sum = (sum * xmax) * xmax
+
+
+c     for real or d.p. set hitest = cuthi/n
+c     for complex      set hitest = cuthi/(2*n)
+
+   85 hitest = cuthi/float( n )
+
+c                   phase 3.  sum is mid-range.  no scaling.
+
+      do 95 j =i,nn,incx
+      if(abs(x(j)) .ge. hitest) go to 100
+   95    sum = sum + x(j)**2
+      nrm2 = sqrt( sum )
+      go to 300
+
+  200 continue
+      i = i + incx
+      if ( i .le. nn ) go to 20
+
+c              end of main loop.
+
+c              compute square root and adjust for scaling.
+
+      nrm2 = xmax * sqrt(sum)
+  300 continue
+      return
+      end
+      subroutine scal(n,a,x,incx)
+
+c     scales a vector by a constant.
+c     uses unrolled loops for increment equal to 1.
+c     jack dongarra, linpack, 3/11/78.
+c     modified, paul calamai, 20/10/92.
+
+c     To change the precision of this program, run the change
+c     program on scal.f
+c     Alternatively, to make a single precision version append a
+c     comment character to the start of all lines between sequential
+c        precision > double
+c     and
+c        end precision > double
+c     comments and delete the comment character at the start of all
+c     lines between sequential
+c        precision > single
+c     and
+c        end precision > single
+c     comments.  To make a double precision version interchange
+c     the append and delete operations in these instructions.
+
+c*****precision > double
+      double precision a,x(*)
+c*****end precision > double
+c*****precision > single
+c      real a,x(*)
+c*****end precision > single
+      integer i,incx,m,mp1,n,nincx
+
+      if(n.le.0)return
+      if(incx.eq.1)go to 20
+
+c        code for increment not equal to 1
+
+      nincx = n*incx
+      do 10 i = 1,nincx,incx
+        x(i) = a*x(i)
+   10 continue
+      return
+
+c        code for increment equal to 1
+
+
+c        clean-up loop
+
+   20 m = mod(n,5)
+      if( m .eq. 0 ) go to 40
+      do 30 i = 1,m
+        x(i) = a*x(i)
+   30 continue
+      if( n .lt. 5 ) return
+   40 mp1 = m + 1
+      do 50 i = mp1,n,5
+        x(i) = a*x(i)
+        x(i + 1) = a*x(i + 1)
+        x(i + 2) = a*x(i + 2)
+        x(i + 3) = a*x(i + 3)
+        x(i + 4) = a*x(i + 4)
+   50 continue
+      return
+      end
+*****************END SOURCE CODE**************************
+*****************BEGIN USAGE CODE*************************
+      program usage
+
+c     The purpose of this program is to demonstrate the use
+c     of a suite of routines for generating quadratic
+c     bilevel programming problems.
+c
+c     The comments in subroutine qbpgen describe the form
+c     of the problems generated.
+c
+c     The user is referred to the article "Generating quadratic
+c     bilevel programming test problems", ACM TOMS, 1993 for
+c     further details.
+c
+c     To change the precision of this program, run the change
+c     program on usage.f
+c     Alternatively, to make a single precision version append a
+c     comment character to the start of all lines between sequential
+c        precision > double
+c     and
+c        end precision > double
+c     comments and delete the comment character at the start of all
+c     lines between sequential
+c        precision > single
+c     and
+c        end precision > single
+c     comments.  To make a double precision version interchange
+c     the append and delete operations in these instructions.
+c
+c ********************
+c Subprograms called
+c   Local suite: qbpchk, qbpgen, qbpfun
+c ********************
+c
+c     Authors:		Paul H. Calamai and Luis N. Vicente
+c     Date Written:	November 26, 1991
+c     Date Modified:	September 18, 1992
+c
+c ********************
+
+c declarations for parameters to be passed to subroutine qbpgen
+c (ie. rhom2,rhom4,nx,ny,m1,m2,m3,m4,lcondm,non0,info and iseed)
+c see comments in subroutine qbpgen for details
+
+c Note: the dimension of rhom2 and rhom4 need be no greater
+c       than min(nx,ny)
+
+      integer nx,ny,m1,m2,m3,m4,lcondm,non0,info,iseed
+c*****precision > double
+      double precision rhom2(4),rhom4(4)
+c*****end precision > double
+c*****precision > single
+c      real rhom2(4),rhom4(4)
+c*****end precision > single
+
+c declarations for parameters to be passed to subroutines
+c qbpchk and qbpfun
+
+c Note: this would typically be the current solution produced
+c       by whatever solver was being tested by the user.
+
+c*****precision > double
+      double precision soln(10)
+c*****end precision > double
+c*****precision > single
+c      real soln(10)
+c*****end precision > single
+
+c declarations for parameters returned by subroutine qbpchk
+c (ie. mr,errl2,type)
+
+c Note: the dimension of mr need be no greater than
+c       nx+ny
+
+      integer type
+c*****precision > double
+      double precision mr(10),errl2
+c*****end precision > double
+c*****precision > single
+c      real mr(10),errl2
+c*****end precision > single
+
+c declarations for parameters returned by subroutine qbpfun
+c (ie. upper,lower,res)
+
+c Note: the dimension of res need be no greater than
+c       3*min(nx,ny)
+
+c*****precision > double
+      double precision upper,lower,res(12)
+c*****end precision > double
+c*****precision > single
+c      real upper,lower,res(12)
+c*****end precision > single
+
+c parameter declarations
+
+c*****precision > double
+      double precision minus4,trehlf,three
+      parameter (minus4=-4.d0,trehlf=1.5d0,three=3.d0)
+c*****end precision > double
+c*****precision > single
+c      real minus4,trehlf,three
+c      parameter (minus4=-4.0,trehlf=1.5,three=3.0)
+c*****end precision > single
+
+c To generate quadratic bilevel programming problems with
+c 4 upper-level variables and 6 lower-level variables we
+c need to set nx=4 and ny=6
+
+      nx=4
+      ny=6
+
+c We will demonstrate the usage of the suite of routines
+c using three different versions of this 10 dimensional
+c problem.  Subroutines qbpchk and qbpfun will only be called
+c in the first version of this problem.
+
+c *********
+c VERSION 1
+c *********
+
+c For this version we want to generate a problem with 2
+c global solutions.  To accomplish this we must set m3=1.
+
+      m3=1
+
+c We also want an additional 6 local solutions (requiring
+c abs(m2)+m3+abs(m4)=3 --> abs(m2)+abs(m4)=2).
+c More specifically we want one pair of solution components
+c to correspond to Case 2 and another pair to correspond
+c to Case 4 (see the ACM TOMS article).
+c Thus abs(m2)=abs(m4)=1.
+
+c Finally, we want to select our own values for rhom2 and
+c rhom4 for these two cases. Thus m2=m4=1.
+
+      m2=1
+      m4=1
+
+c Since m2=1 we must provide a value for rhom2(1) in
+c the open interval (1,2).  Similarily, since m4=1
+c we must provide a value for rhom4(1) in the open
+c interval (2,+infinity).
+c We choose rhom2(1)=1.5 and rhom4(1)=3.0 to
+c coincide with the diagrams corresponding to Case 2
+c and Case 4 in the ACM TOMS article.
+
+      rhom2(1)=trehlf
+      rhom4(1)=three
+
+c Since the sum of m1+abs(m2)+m3+abs(m4) must equal
+c min(nx,ny) we must set m1=1.
+
+      m1=1
+
+c Finally, to obtain a sparse (but ideally conditioned)
+c transformation matrix (see comments in subroutines
+c qbpgen and qbpmkm) we set non0=1 and lcondm=0.
+
+c NOTE: when lcondm=0 the transformation matrix should
+c       (with exact arithmetic) be the identity matrix
+c       (We do not, however, use this fact explicitly
+c       in the code.)
+
+      non0=1
+      lcondm=0
+
+c We now need simply to initialize the seed for the
+c random number generator (see subroutine rand) and
+c then call subroutine qbpgen.
+
+      iseed=1
+      call qbpgen(rhom2,rhom4,nx,ny,m1,m2,m3,m4,lcondm,
+     1            non0,info,iseed)
+
+c The value of info returned by subroutine qbpgen
+c should be checked to make sure that termination
+c was normal (ie. info=0)
+
+      if (info.ne.0) then
+        print *,'** Something is wrong (info=',info,')'
+        print *,'** VERSION 1 run abandoned **'
+      else
+
+c Much of the data defining the problem generated by
+c subroutine qbpgen is stored in named common blocks
+c (see comments in subroutine qbpgen).  However, the
+c user may only need to call subroutine qbpchk and
+c subroutine qbpfun in order to access this information.
+
+c To demonstrate this concept suppose that the user
+c wishes to evaluate the functions and constraints
+c of the generated bilevel problem.  This can easily
+c be accomplished by calling subroutine qbpfun.
+
+c Suppose, for example, that the user wishes to evaluate
+c the bilevel problem at the point stored in vector soln.
+c Here we set soln to a feasible point of the problem we
+c have just generated.
+
+        soln(1) = 0.75d0
+        soln(2) = 0.75d0
+        soln(3) = 0.75d0
+        soln(4) = 0.75d0
+        soln(5) = 0.25d0
+        soln(6) = 0.25d0
+        soln(7) = 0.25d0
+        soln(8) = 0.25d0
+        soln(9) = 0.00d0
+        soln(10)= 0.00d0
+
+c The following call to subroutine qbpfun
+
+        call qbpfun(soln,upper,lower,res)
+        print *, 'upper = ',upper
+        print *, 'lower = ',lower
+        print *, 'res   = '
+        print 10, res
+
+c would return the value of the upper-level objective
+c evaluated at soln in upper, the lower-level objective
+c evaluated at soln in lower and the residuals of the
+c constraints (ie. their slacks) in the vector res.
+c In this particular case the values returned should
+c (approximately) be:
+
+c upper =    0.25000000000000
+c lower =   -0.62500000000000
+c res   =
+c             0.50000000000000   0.50000000000000
+c             0.50000000000000   0.50000000000000
+c             0.00000000000000   0.50000000000000
+c             1.00000000000000   2.00000000000000
+c             0.00000000000000   0.00000000000000
+c             0.00000000000000   0.00000000000000
+
+c Suppose, in addition, that the user wishes to see
+c if the point (in soln) is a minimizer of the generated
+c problem. To some extent this question can be answered
+c using the following call to subroutine qbpchk
+
+        call qbpchk(soln,mr,errl2,type)
+        print *,'errl2 = ',errl2
+        print *,'type  = ',type
+        print *,'mr    = '
+        print 10, mr
+
+c As described in the comments of subroutine qbpchk
+c this call actually results in a comparison against
+c all minimizers in the untransformed space.  If the value
+c returned in errl2 is "small" then the point stored in
+c soln is "close" to a minimizer of the type specified by
+c the value returned in type (see comments in subroutine
+c qbpchk). The point returned in vector mr corresponds to
+c the closest minimizer (in the untransformed space).
+c In this particular case the values returned should
+c (approximately) be:
+
+c errl2 =    0.70710678118655
+c type  =   3
+c mr    =
+c             1.00000000000000   0.50000000000000
+c             0.50000000000000   0.50000000000000
+c             0.00000000000000   0.50000000000000
+c             0.50000000000000   0.50000000000000
+c             0.00000000000000   0.00000000000000
+
+        print *,'** VERSION 1 **'
+        print *,'   Check output above against values in'
+        print *,'   program usage.'
+      endif
+
+c *********
+c VERSION 2
+c *********
+
+c For this version we want to generate a problem with a
+c unique global solution.  To accomplish this we set m3=0.
+
+      m3=0
+
+c We also want an additional 15 local solutions (requiring
+c abs(m2)+m3+abs(m4)=4 --> abs(m2)+abs(m4)=4).
+c More specifically we want two pair of solution components
+c to correspond to Case 2 and two pair to correspond
+c to Case 4 (see the ACM TOMS article).
+c Thus abs(m2)=abs(m4)=2.
+
+c Finally, we want subroutine qbpgen to set both components
+c of rhom2 to 1.5 and both components of rhom4 to 4.0
+c We therefore set m2=m4=2, rhom2(1)=-1.5 and rhom4(1)=-4.0
+c as per the instructions in subroutine qbpgen.
+
+      m2=2
+      m4=2
+      rhom2(1)=-trehlf
+      rhom4(1)=minus4
+
+c Since the sum of m1+abs(m2)+m3+abs(m4) must equal
+c min(nx,ny) we must set m1=0.
+
+      m1=0
+
+c Finally, to obtain a (relatively) dense transformation matrix
+c with two-norm condition 10 we set non0=6 and lcondm=1
+
+      non0=6
+      lcondm=1
+
+c We now need simply to call subroutine qbpgen (iseed has
+c already been initialized).
+
+      call qbpgen(rhom2,rhom4,nx,ny,m1,m2,m3,m4,lcondm,
+     1            non0,info,iseed)
+      if (info.ne.0) then
+        print *,'** Something is wrong (info=',info,')'
+        print *,'** VERSION 2 **'
+      endif
+
+c *********
+c VERSION 3
+c *********
+
+c For this version we also want to generate a problem with a
+c unique global solution.  To accomplish this we set m3=0.
+
+      m3=0
+
+c We also want an additional 7 local solutions (requiring
+c abs(m2)+m3+abs(m4)=3 --> abs(m2)+abs(m4)=3).
+c More specifically we want two pair of solution components
+c to correspond to Case 2 and one pair to correspond
+c to Case 4 (see the ACM TOMS article).
+c Thus abs(m2)=2 and abs(m4)=1.
+
+c Finally, we want subroutine qbpgen to select both components
+c of rhom2 and we want rhom4=3.0.
+c We therefore set m2=-2, m4=1 and rhom4(1)=3.0 as per the
+c instructions in subroutine qbpgen.
+
+      m2=-2
+      m4=1
+      rhom4(1)=three
+
+c Since the sum of m1+abs(m2)+m3+abs(m4) must equal
+c min(nx,ny) we must set m1=1.
+
+      m1=1
+
+c Finally, to obtain a (relatively) sparse transformation matrix
+c with two-norm condition 100 we set non0=2 and lcondm=2
+
+      non0=2
+      lcondm=2
+
+c We now need simply to call subroutine qbpgen (iseed has
+c already been initialized).
+
+      call qbpgen(rhom2,rhom4,nx,ny,m1,m2,m3,m4,lcondm,
+     1            non0,info,iseed)
+      if (info.ne.0) then
+        print *,'** Something is wrong (info=',info,')'
+        print *,'** VERSION 3 **'
+      endif
+
+c format specifications
+
+   10 format(9x,2f19.14)
+      stop
+c last card of usage
+      end
+*****************END USAGE CODE**************************
+*****************BEGIN VERIFY CODE*************************
+      program verify
+      integer maxn
+      parameter (maxn=2000)
+
+c     The purpose of this program is to test (albeit minimally) the
+c     integrity of the routines in this suite after they are
+c     installed. It is by no means a thorough test. For usage
+c     examples see program usage.
+c
+c     The user is referred to the article "Generating quadratic
+c     bilevel programming test problems", ACM TOMS, 1993 for
+c     details about the suite, and to the comments in
+c     subroutines qbpgen, qbpchk and qbpfun for details about
+c     the parameters.
+c
+c     To change the precision of this program, run the change
+c     program on verify.f
+c     Alternatively, to make a single precision version append a
+c     comment character to the start of all lines between sequential
+c        precision > double
+c     and
+c        end precision > double
+c     comments and delete the comment character at the start of all
+c     lines between sequential
+c        precision > single
+c     and
+c        end precision > single
+c     comments.  To make a double precision version interchange
+c     the append and delete operations in these instructions.
+c
+c ********************
+c Subprograms called
+c   Local suite: qbpax,qbpchk,qbpgen,qbpmkm,qbpmx,qbpfun,qbpsx,dload
+c   Modified Linpack: axpy,dot,nrm2
+c   Fortran supplied: min
+c ********************
+c
+c     Authors:		Paul H. Calamai and Luis N. Vicente
+c     Date Written:	November 26, 1991
+c     Date Modified:	September 18, 1992
+c
+c ********************
+
+c declarations for parameters to be passed to subroutine qbpgen
+c (ie. rhom2,rhom4,lcondm,non0,info and iseed)
+c see comments in subroutine qbpgen for details
+
+c Note: the dimension of rhom2 and rhom4 need be no greater
+c       than maxn/2
+
+      integer lcondm,non0,info,iseed
+c*****precision > double
+      double precision rhom2(maxn/2),rhom4(maxn/2)
+c*****end precision > double
+c*****precision > single
+c      real rhom2(maxn/2),rhom4(maxn/2)
+c*****end precision > single
+
+c declarations for parameters returned by subroutine qbpchk
+c (ie. mr,errl2,type)
+
+c Note: the dimension of mr need be no greater than
+c       maxn
+
+      integer type
+c*****precision > double
+      double precision mr(maxn),errl2
+c*****end precision > double
+c*****precision > single
+c      real mr(maxn),errl2
+c*****end precision > single
+
+c declarations for parameters returned by subroutine qbpfun
+c (ie. upper,lower,res)
+
+c Note: the dimension of res need be no greater than
+c       3*maxn/2
+
+c*****precision > double
+      double precision upper,lower,res(3*maxn/2)
+c*****end precision > double
+c*****precision > single
+c      real upper,lower,res(3*maxn/2)
+c*****end precision > single
+
+c declarations for local parameters
+
+      integer i
+c*****precision > double
+      double precision error,x(maxn),y(maxn)
+c*****end precision > double
+c*****precision > single
+c      real error,x(maxn),y(maxn)
+c*****end precision > single
+
+c function declarations
+
+c*****precision > double
+      double precision dot,nrm2
+c*****end precision > double
+c*****precision > single
+c      real dot,nrm2
+c*****end precision > single
+      intrinsic min
+
+c parameter declarations
+
+c*****precision > double
+      double precision minus1,one,trehlf,three
+      parameter (minus1=-1.d0,one=1.d0,trehlf=1.5d0,three=3.d0)
+c*****end precision > double
+c*****precision > single
+c      real minus1,one,trehlf,three
+c      parameter (minus1=-1.0,one=1.0,trehlf=1.5,three=3.0)
+c*****end precision > single
+
+c declarations for named common /m/
+
+      integer num0
+      integer pz(maxn)
+c*****precision > double
+      double precision d(maxn),z(maxn)
+c*****end precision > double
+c*****precision > single
+c      real d(maxn),z(maxn)
+c*****end precision > single
+      common/m/d,z,pz,num0
+
+c declarations for named common /dim/
+
+      integer nx,ny,m1,m2,m3,m4,m,n
+      common/dim/nx,ny,m1,m2,m3,m4,m,n
+
+c *******************
+c VERIFICATION TEST 1
+c *******************
+
+c Subroutines tested:
+c  qbpchk, qbpgen, qbpfun
+c *******************
+
+c The first test will be conducted using VERSION 1 of the
+c problem described in program usage.  See the comments
+c in program usage for details.
+
+      rhom2(1)=trehlf
+      rhom4(1)=three
+      nx=4
+      ny=6
+      m1=1
+      m2=1
+      m3=1
+      m4=1
+      lcondm=0
+      non0=1
+      iseed=1
+
+c To conduct a test of subroutines qbpfun and qbpchk we begin
+c by calling the problem generator (ie. subroutine qbpgen)
+c using the above data.  The fact that lcondm=0 is essential
+c since this yields an identity transformation.
+
+      call qbpgen(rhom2,rhom4,nx,ny,m1,m2,m3,m4,lcondm,
+     1            non0,info,iseed)
+
+c The value of info returned by subroutine qbpgen should
+c be checked to make sure that termination was normal
+c (ie. info=0)
+
+      if (info.ne.0) then
+        print *,'** Something is wrong (info=',info,')'
+        print *,'** VERIFICATION TEST 1 abandoned **'
+      else
+
+c Since the transformed and untransformed problem are identical
+c we have complete knowledge of all minimizers of the generated
+c problem.  To test these subroutines we will pass them one of
+c the known global solutions using vector parameter x.
+
+        x(1)  = 1.00d0
+        x(2)  = 1.25d0
+        x(3)  = 1.50d0
+        x(4)  = 0.50d0
+        x(5)  = 0.00d0
+        x(6)  = 0.25d0
+        x(7)  = 0.50d0
+        x(8)  = 0.50d0
+        x(9)  = 0.00d0
+        x(10) = 0.00d0
+
+c The following call to subroutine qbpfun
+
+        call qbpfun(x,upper,lower,res)
+        print *, 'upper = ',upper
+        print *, 'lower = ',lower
+        print *, 'res   = '
+        print 10, (res(i),i=1,3*m)
+
+c should return the value of the upper-level objective
+c evaluated at x in upper, the lower-level objective
+c evaluated at x in lower and the residuals of the
+c constraints (ie. their slacks) in the vector res.
+c In this particular case the values returned should
+c (approximately) be:
+
+c upper =    0.56250000000000
+c lower =    -1.0312500000000
+c res   =
+c             0.00000000000000   0.00000000000000
+c             0.00000000000000   1.00000000000000
+c             0.00000000000000   0.00000000000000
+c             0.00000000000000   2.00000000000000
+c             0.00000000000000   0.50000000000000
+c             1.00000000000000   0.00000000000000
+
+c Similarly, the following call to subroutine qbpchk
+
+        call qbpchk(x,mr,errl2,type)
+        print *,'errl2 = ',errl2
+        print *,'type  = ',type
+        print *,'mr    = '
+        print 10, (mr(i),i=1,n)
+
+c should yield the following values for the returned parameters:
+
+c errl2 =   0.
+c type  =   2
+c mr    =
+c             1.00000000000000   1.25000000000000
+c             1.50000000000000   0.50000000000000
+c             0.00000000000000   0.25000000000000
+c             0.50000000000000   0.50000000000000
+c             0.00000000000000   0.00000000000000
+
+        print *,'** VERIFICATION TEST 1 completed **'
+        print *,'   Check output above against values in'
+        print *,'   program verify.'
+      endif
+
+c *******************
+c VERIFICATION TEST 2
+c *******************
+
+c Subroutines tested:
+c  qbpmkm, qbpmx
+c *******************
+
+c Note: the typical user will never need to call these
+c       routines directly
+
+c Since the transformation matrix M is defined by the
+c product H*D*H, where H is a Householder matrix and
+c D is a diagonal matrix, we can easily check subroutine
+c qbpmkm (which constructs M) and qbpmx (that forms the
+c product of M and a vector x).  We do this by forcing
+c D to be the identity matrix (by setting lcondm=0) and
+c setting x to the ones vector.  In this case, M should
+c be the identity matrix and y=M*x should equal x.
+c We then set y=y-x and form y'y which should equal 0.
+
+c Note: n can be set to any integer in the range [1,maxn]
+c       and non0 can be set to any integer in the range
+c       [1,n]
+
+      n=10
+      non0=10
+      lcondm=0
+      call dload(n,one,x,1)
+      call qbpmkm(lcondm,iseed)
+      call qbpmx(x,y,.false.)
+      call axpy(n,minus1,x,1,y,1)
+      error=nrm2(n,y,1)
+      print *,'** VERIFICATION TEST 2 completed **'
+      print *,'   error = ',error
+      print *,'   error should (approximately) equal 0.'
+
+c *******************
+c VERIFICATION TEST 3
+c
+c Subroutine tested:
+c  qbpsx
+c *******************
+
+c Note: the typical user will never need to call this
+c       routine directly
+
+c Because of the special form of the matrix S we can
+c easily check subroutine qbpsx (that forms the product
+c of S and a vector x).  We do this by setting x to
+c the ones vector and computing x=S*S*x.  We then
+c set x=x-w, where the first nx components of w are
+c zero and the last ny components are one, and form
+c x'x which should equal 0.
+
+c Note: nx can be set to any integer in the range
+c       [1,maxn-ny] and ny can be set to any integer
+c       in the range [1,maxn-nx]
+
+      nx=6
+      ny=4
+      n=nx+ny
+      m=min(nx,ny)
+      call dload(n,one,x,1)
+      call qbpsx(x,y)
+      call qbpsx(y,x)
+      call axpy(ny,minus1,one,0,x(nx+1),1)
+      error=nrm2(n,x,1)
+      print *,'** VERIFICATION TEST 3 completed **'
+      print *,'   error = ',error
+      print *,'   error should (approximately) equal 0.'
+
+c *******************
+c VERIFICATION TEST 4
+c
+c Subroutine tested:
+c  qbpax
+c *******************
+
+c Note: the typical user will never need to call this
+c       routine directly
+
+c Because of the special form of the matrix A we can
+c easily check subroutine qbpax (that forms the product
+c of A and a vector x).  We do this by setting x to
+c the ones vector and computing y=A*x.  The sum of the
+c components of y should equal 0.
+
+c Note: nx can be set to any integer in the range
+c       [1,maxn-ny] and ny can be set to any integer
+c       in the range [1,maxn-nx]
+
+      nx=6
+      ny=4
+      n=nx+ny
+      m=min(nx,ny)
+      call dload(n,one,x,1)
+      call qbpax(x,y)
+      call dload(3*m,one,x,1)
+c*****precision > double
+      error=dot(3*m,x,1,y,1)
+c*****end precision > double
+c*****precision > single
+c      error=dot(3*m,x,1,y,1)
+c*****end precision > single
+      print *,'** VERIFICATION TEST 4 completed **'
+      print *,'   error = ',error
+      print *,'   error should (approximately) equal 0.'
+
+c format specifications
+
+   10 format(9x,2f19.14)
+      stop
+c last card of program verify
+      end
+******************************************************

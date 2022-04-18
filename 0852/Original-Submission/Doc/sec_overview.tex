@@ -1,0 +1,1603 @@
+\Softname{} is a modeling language for numerical constraint solving.  In
+this section, we will describe how problems are modeled using \Softname{} and
+how models are solved.
+
+%------------------------------------------------------------------------------------------
+\unnumberedpar{Constraint Programming}
+
+\addcontentsline{toc}{subsubsection}{Constraint Programming}
+
+\index{Constraint Programming}
+\index{constraint}
+\index{variable}
+\index{feasible solution}
+\index{consistent value}
+\index{inconsistent value}
+\index{search}
+\index{solver}
+\index{variable!domain}
+\index{domain}
+\index{consistency technique}
+\index{model}
+\index{reduction}
+
+A \emph{constraint} is a relation between the unknowns of a problem,
+\emph{i.e.}, the \emph{variables}. For instance, in geometric modeling, one wants
+to determine a point $(x,y)$ in $\R^2$, which distance to the origin is
+greater than $2$. The corresponding mathematical formula,
+%
+$$
+  \sqrt{x^2 + y^2} \geq 2,
+$$
+%
+is just what we call a constraint. The problem is to find values of
+the variables that satisfy the constraint, or more generally all the
+constraints of a model. The point $(1,2)$ is a feasible solution since
+$\sqrt{1^2 + 2^2} \geq 2$. This value is declared
+\emph{consistent} with respect to the constraint.
+
+In Constraint Programming, the search of solutions, which is done by
+\emph{solvers}, consists in eliminating inconsistent values.
+Initially, a \emph{domain} is associated to each variable,
+\emph{i.e.}, the set of possible values \emph{a priori}.
+The solvers implement domain reductions by means of consistency
+techniques and domain splitting in order to separate the solutions.
+
+Constraint programming allows the user to design models with
+constraints in a very natural way, as the scientist does. The
+constraint programming system is responsible for the search of
+solutions.
+
+
+%------------------------------------------------------------------------------------------
+\unnumberedpar{Numerical Constraints}
+
+\addcontentsline{toc}{subsubsection}{Numerical Constraints}
+
+\Softname{} is able to solve \emph{numerical constraints}, \emph{i.e.},
+nonlinear equations or inequations over the real numbers.  Each
+constraint is defined by an analytic expression
+%
+$$
+  f(x_1,\dots,x_n)\diamond 0
+$$
+%
+where $\diamond\in\{=,\leq,\geq\}$ and $f:\ \R^n\to\R$ is a function.
+
+\index{interval}
+\index{IEEE floating-point number}
+
+Each domain is represented by a \emph{closed interval} whose bounds
+belong to the set of IEEE floating-point numbers
+(see~\cite{IEEE754}). Four kinds of intervals are manipulated:
+%
+$$
+\begin{array}{rcl}
+  \Ibounds{r_1}{r_2} & = & \{r\in\R\mid r_1\leq r\leq r_2\}\\
+  \IboundsCO{r_1}{+\infty} & = & \{r\in\R\mid r_1\leq r\}\\
+  \IboundsOC{-\infty}{r_2} & = & \{r\in\R\mid r\leq r_2\}\\
+  \IboundsOO{-\infty}{+\infty} & = & \R
+\end{array}
+$$
+%
+
+\index{model}
+\index{CSP}
+
+The notion of model used in \Softname{} is quite simple: a model is a
+\emph{constraint satisfaction problem} (CSP) that is
+composed of:
+%
+\begin{itemize}
+\item A set of real-valued variables, \emph{e.g.}, $\{x_1,\dots,x_n\}$;
+
+\item A set of interval domains, \emph{e.g.}, $\{\Ibold{x_1},\dots,\Ibold{x_n}\}$;
+
+\item A set of numerical constraints, \emph{e.g.}, $\{c_1,\dots,c_m\}$
+   over the given set of variables.
+\end{itemize}
+
+The problem is to find in the initial \emph{box}
+$\Ibold{x_1}\times\cdots\times\Ibold{x_n}$ all the consistent values
+with respect to all constraints.
+
+\index{box}
+\index{variable}
+\index{domain}
+\index{constraint}
+
+%------------------------------------------------------------------------------------------
+%------------------------------------------------------------------------------------------
+\subsection{Modeling with Constraints}
+
+In this section, we present the basic features of \Softname{}.
+
+%------------------------------------------------------------------------------------------
+\unnumberedpar{Example: Intersection of Circles}
+
+\addcontentsline{toc}{subsubsection}{Example: Intersection of Circles}
+
+\noindent Consider the following problem: given a real number $d\geq 0$
+and a circle with center $(x_0,y_0)$ and radius $r$, find all the
+points on the circle whose distance to the origin is $d$. As shown in
+Fig.~\ref{fig:overview:circle}, this is a problem of intersection of circles.
+
+\begin{figure}[htbp]
+\hspace*{54mm}\includegraphics[bb=130 610 420 750]{figures/circle-problem.ps}
+\caption{Intersection of Circles.}
+\label{fig:overview:circle}
+\end{figure}
+
+In this problem, we may identify the following data:
+%
+\begin{itemize}
+\item $4$ constants: $d$, $x_0$, $y_0$, $r$. Depending on their values,
+the problem has $0$, $1$ or $2$ solutions.
+
+\item $2$ variables: the coordinates $(x,y)$ of the point.
+  Since these  variables lie \emph{a priori} in $\R$,
+  the variable domains are defined as the set $\R$.
+
+\item $2$ constraints:
+  \begin{itemize}
+  \item  $(x,y)$ is required to be on the given circle, \emph{i.e.},
+  %
+  $$
+    r^2 = (x-x_0)^2 + (y-y_0)^2.
+  $$
+  %
+
+  \item the distance of $(x,y)$ to the origin is $d$, \emph{i.e.},
+  %
+  $$
+    d^2 = x^2 + y^2.
+  $$
+  %
+  \end{itemize}
+\end{itemize}
+
+Given a particular set of constants, the complete program follows.
+%
+\begin{envcode}
+\begin{verbatim}
+Constants
+  x0 = 2, y0 = 1 ,               /* center of the given circle */
+  r  = 1.25      ,               /* radius */
+  d  = 2.75      ;               /* distance to origin */
+
+Variables
+  x in ]-oo, +oo[ ,              /* definition of variables */
+  y in ]-oo, +oo[ ;              /* and domains (the set R) */
+
+Constraints
+  r^2 = (x-x0)^2 + (y-y0)^2 ,    /* the point (x,y) is on the circle */
+  d^2 = x^2 + y^2           ;    /* the distance from the origin is d */
+\end{verbatim}
+\end{envcode}
+
+\medskip
+
+\noindent The output is:
+%
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX 1
+  x in [2.75 , 2.75]
+  y in [-2.119516683375301e-16 , +0]
+
+  precision: 4.44e-16, elapsed time: 0 ms
+
+OUTER BOX 2
+  x in [1.649999999999999 , 1.650000000000001]
+  y in [2.199999999999999 , 2.200000000000001]
+
+  precision: 2.44e-15, elapsed time: 10 ms
+
+END OF SOLVING
+  Property:     reliable process (no solution is lost)
+  Elapsed time: 10 ms
+\end{verbatim}
+\end{envresult}
+
+\medskip
+
+
+The interpretation of the result is the following:
+%
+\begin{itemize}
+\item The solving process is \emph{reliable}: this is the essential property of
+\Softname{} (Prop.~\ref{property:overview:complete}), which guarantees
+that the union of all the computed boxes contain all the solutions of
+the CSP.
+
+\item An \emph{outer box} is a box which may contain some solutions
+  of the CSP. Here, the result is the union of two boxes, each solution
+  being contained in one box.
+\end{itemize}
+
+Suppose now that for another set of constants, the CSP has no solution,
+for instance given $x_0=y_0=1$, $r=10$ and $d=1$.
+What is the result? In this case, \Softname{} guarantees
+that the problem has no solution.
+%
+\begin{envresult}
+\begin{verbatim}
+END OF SOLVING
+  Property:     no solution in the initial box
+  Elapsed time: 0 ms
+\end{verbatim}
+\end{envresult}
+
+\index{reliability}
+\index{satisfiability}
+
+\begin{property}[Reliability]\label{property:overview:complete}
+Given a CSP, \Softname{} computes a union of boxes that contains all the
+solutions of the CSP.
+\end{property}
+%
+
+In the literature, this property is often called completeness
+property. However we believe that there may be a confusion with
+respect to the notion of completeness in Constraint Logic Programming,
+where a complete solver is able to decide for the satisfiability of a
+CSP (it always answers \textit{no} if the CSP has no solution, and
+\textit{yes} otherwise). Actually, we just use the terminology
+of the interval framework.
+
+Property~\ref{property:overview:complete} has a very important
+corollary that allows one to detect the unsatisfiability of a CSP.
+
+\begin{corollary}[Property~\ref{property:overview:complete}]
+Given a CSP, if no box is computed by \Softname{}, then the CSP has no
+solution.
+\end{corollary}
+
+%\vspace*{-2mm}
+
+%------------------------------------------------------------------------------------------
+\unnumberedpar{Constants}
+
+\addcontentsline{toc}{subsubsection}{Constants}
+
+\index{constant}
+\index{expression}
+
+A constant is a symbol defined by a numerical value or more generally
+a constant expression involving real numbers, operations and already
+defined constants.
+
+For instance consider the following piece of program.
+%
+\begin{envcode}
+\begin{verbatim}
+Constants  a = 4           ,
+           b = 1 - sqrt(a) ,
+           c = log(2)      ,
+           d = 1.1         ;
+\end{verbatim}
+\end{envcode}
+
+\Softname{} just computes an interval for each constant. Moreover, it guarantees
+that the real number defined by the right-hand expression is contained
+in the computed interval,  as follows.
+%
+\begin{envresult}
+\begin{verbatim}
+a = 4
+b = -1
+c in [0.69314718055994506418215905796387 , 0.69314718055994550827136890802649]
+d in [1.0999999999999998667732370449812 , 1.1000000000000000888178419700125]
+\end{verbatim}
+\end{envresult}
+
+
+\index{constant!predefined}
+
+There are several predefined constants in the language,
+each one being prefixed by the symbol \texttt{@}, as shown
+in this table:
+
+$$
+\begin{array}{|lc|lc|lc|lc|}
+\hline
+\hbox{constant} & \hbox{value} &
+\hbox{constant} & \hbox{value} &
+\hbox{constant} & \hbox{value} &
+\hbox{constant} & \hbox{value}\\
+\hline
+\texttt{@pi}        & \pi            &
+\texttt{@2\_pi}     & 2\pi           &
+\texttt{@3\_pi}     & 3\pi           &
+\texttt{@4\_pi}     & 4\pi           \\[2mm]
+\texttt{@pi\_2}     & \frac{\pi}{2}  &
+\texttt{@3\_pi\_2}  & \frac{3\pi}{2} &
+\texttt{@5\_pi\_2}  & \frac{5\pi}{2} &
+\texttt{@7\_pi\_2}  & \frac{7\pi}{2} \\[2mm]
+\texttt{@inv\_pi}   & \frac{1}{\pi}  &
+\texttt{@sqrt2}     & \sqrt{2}       &
+\texttt{@e}         & \exp(1)        &
+\texttt{@log2}      & \log_e(2)      \\[1mm]
+\hline
+\end{array}
+$$
+
+\medskip
+
+\newpage
+
+%------------------------------------------------------------------------------------------
+\unnumberedpar{Variables and Domains}
+
+\addcontentsline{toc}{subsubsection}{Variables and Domains}
+
+\index{variable!integer}
+\index{variable!real}
+\index{type}
+
+\Softname{} is able to represent two types of variables: integer and real
+variables. The default type is real. However, a type may be specified
+at the declaration, as follows.
+%
+\begin{envcode}
+\begin{verbatim}
+Variables
+  real    x in ... ,
+  integer n in ... ;
+\end{verbatim}
+\end{envcode}
+
+There is no specific solver for integer variables and constraints in
+\Softname{}. There is just an additionnal constraint for each integer variable
+that allows one to reduce the domain bounds to integer values as soon as
+possible. Note that \Softname{} is necessarily slower for integer constraints
+than specific solvers.
+
+\index{integer constraints}
+
+As for constants, each domain bound can be defined by a constant
+expression.
+%
+\begin{envcode}
+\begin{verbatim}
+Variables  x in [1.1, 1 + @log2], ...
+\end{verbatim}
+\end{envcode}
+
+\index{expression}
+\index{rounding error}
+
+
+The result below shows that each expression is evaluated by interval
+computations, using the outward rounding mode of floating-point
+computations. The left bound corresponds to an evaluation of $1.1$
+rounded towards $(-\infty)$ while the right bound corresponds to an
+evaluation of $(1 + \log(2))$ rounded towards $(+\infty)$. As a
+consequence, \Softname{} guarantees that the input domain
+(the one in the user's mind) is included in the computed domain.
+%
+\begin{envresult}
+\begin{verbatim}
+x in [1.0999999999999998667732370449812 , 1.6931471805599453972490664455108]
+\end{verbatim}
+\end{envresult}
+
+\index{infinities}
+\index{IEEE floating-point number}
+
+In the IEEE standard, the infinities are completely specified so as to
+define infinite projective values for the set of floating-point
+numbers. Their use as interval bounds is allowed in
+\Softname{}. However, note that rounding errors are non negligible near the infinities,
+and it may be difficult to remove these values from domains. Should we
+use the infinities or not? Yes, but only if no more information is
+known about the variables. For instance, given a variable that
+represents a distance between two places on Earth, the domain
+$\Ibounds{0}{5e4}$ is preferred to $\R$ since $5e4$ is an upper bound
+of Earth's circumference.
+
+In many situations the definition of arrays of variables is required.
+This is done as follows.
+%
+\begin{envcode}
+\begin{verbatim}
+Variables  x[1..3] in [-1, 1] ;
+\end{verbatim}
+\end{envcode}
+%
+
+This just declares $3$ different variables
+\verb#x[1]#, \verb#x[2]#, \verb#x[3]# having the same initial domain.
+
+\index{variable!array}
+
+Finally, there is often a motivation to share complex expressions
+between constraints. This can be done by using a new variable lying in
+$\R$, defining a new equation between the variable and the expression
+and replacing the expression by the variable in the constraints.
+However, the value of this variable has generally no sense for the
+user.  In \Softname{} there exists a mechanism for hidding such
+variables, just adding the \texttt{\$} symbol in the definition of the
+variable as follows.
+%
+\begin{envcode}
+\begin{verbatim}
+Variables  $z in ]-oo, +oo[, ...     /* hidden variable */
+\end{verbatim}
+\end{envcode}
+%
+
+\index{variable!hidden}
+
+%------------------------------------------------------------------------------------------
+\unnumberedpar{Example: Disjunctive Constraints}
+
+\addcontentsline{toc}{subsubsection}{Example: Disjunctive Constraints}
+
+A second problem is considered now: given a point $(x_0,y_0)$ and a
+real $d\geq 0$, find all the points $(x,y)$ such that $x$ is an
+integer in $[-5,7]$, $d$ is the distance between $(x,y)$ and
+$(x_0,y_0)$, and either $y\leq 0$ or $y\geq x$.
+
+The disjunction of constraints $(y\leq 0$ or $y\geq x)$ is implemented
+by the minimum operation. Rewrite it as
+%
+$$
+  y\leq 0\ \lor\ x-y\leq 0.
+$$
+
+In other words, at least one of both expressions must be negative, \emph{i.e.},
+their minimum must be negative. The corresponding constraint is
+%
+$$
+  \min(y,x-y)\leq 0.
+$$
+%
+
+The complete program follows.
+%
+\begin{envcode}
+\begin{verbatim}
+Constants
+  d  = 1.25          ,
+  x0 = 1.5, y0 = 0.5 ;
+
+Variables
+  int  x in [-5,  +7 ] ,        /* x is an integer variable */
+  real y in ]-oo, +oo[ ;        /* y is a real variable (default type) */
+
+Constraints
+  d^2 = (x-x0)^2 + (y-y0)^2 ,   /* distance between (x,y) and (x0,y0) */
+  min(y, x-y) <= 0          ;   /* y<=0 or y>=x */
+\end{verbatim}
+\end{envcode}
+
+For this problem, \Softname{} computes three boxes:
+%
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX 1
+  x = 2
+  y in [-0.6456439237389602 , -0.64564392373896]
+  precision: 2.22e-16, elapsed time: 0 ms
+
+OUTER BOX 2
+  x = 1
+  y in [1.64564392373896 , 1.64564392373896]
+  precision: 2.22e-16, elapsed time: 0 ms
+
+OUTER BOX 3
+  x = 1
+  y in [-0.6456439237389602 , -0.64564392373896]
+  precision: 2.22e-16, elapsed time: 0 ms
+
+END OF SOLVING
+  Property:     reliable process (no solution is lost)
+  Elapsed time: 0 ms
+\end{verbatim}
+\end{envresult}
+
+
+\index{minimum}
+\index{constraint!disjunction}
+
+
+%------------------------------------------------------------------------------------------
+\unnumberedpar{Grammar of Constraints}
+
+\addcontentsline{toc}{subsubsection}{Grammar of Constraints}
+
+\index{constraint!Grammar}
+\index{expression}
+
+A constraint is a nonlinear equation or inequation involving numbers,
+constants, variables and function symbols. The complete grammar is as
+follows:
+%
+$$
+\left[
+\begin{array}{rcl}
+  \textit{Constraint} & \textsf{::=} & f\,=\, f\mid f\,>=\, f\mid f\,<=\, f\\[2mm]
+
+  f & \textsf{::=} & f+f \mid f-f \mid f*f\mid f\, /\, f\mid\\
+    &              & \min(f,f)\mid\max(f,f)\mid\\
+    &              &  f\mathop{^\wedge}\textit{natural}\mid\\
+    &              & (f)\mid -f\mid +f\mid\\
+    &              & \textit{Number}\mid\textit{Constant}\mid\textit{Variable}\mid\\
+    &              & \mathop{\textrm{sqrt}(f)}\mid\\
+    &              & \log(f)\mid\exp(f)\mid\\
+    &              & \cos(f)\mid\sin(f)\mid\tan(f)\mid\\
+    &              & \mathrm{acos}(f)\mid\mathrm{asin}(f)\mid\mathrm{atan}(f)\mid\\
+    &              & \mathrm{cosh}(f)\mid\mathrm{sinh}(f)\mid\mathrm{tanh}(f)\mid\\
+    &              & \mathrm{acosh}(f)\mid\mathrm{asinh}(f)\mid\mathrm{atanh}(f)
+\end{array}
+\right]
+$$
+%
+
+
+%------------------------------------------------------------------------------------------
+%------------------------------------------------------------------------------------------
+\subsection{Branch-and-Prune Algorithms}
+The constraint solving engine of \Softname{} implements a
+\emph{branch-and-prune} algorithm. Given a CSP, a set of
+boxes that contains all the solutions of the CSP is computed.
+
+\index{branch-and-prune algorithm}
+\index{bisection}
+\index{splitting}
+
+Each box is reduced and then split. The reduction eliminates
+inconsistent values from domains by means of consistency techniques
+(see Section~\ref{sec:overview:consistency}). The splitting step
+generates sub-boxes in order to separate the solutions.
+
+%------------------------------------------------------------------------------------------
+\unnumberedpar{Example: Intersection of Circles}
+
+\addcontentsline{toc}{subsubsection}{Example: Intersection of Circles}
+
+Fig.~\ref{fig:overview:circlesolver} illustrates a branch-and-prune
+computation over the aforementioned problem of intersection of
+circles. The initial box is $\Ibounds{0}{6}\times\Ibounds{-3}{3}$.
+
+\begin{figure}[htbp]
+\hspace*{45mm}\includegraphics[bb=130 610 420 750]{figures/circle-problem-solve.ps}
+\caption{Branch-and-Prune Computation.}
+\label{fig:overview:circlesolver}
+\end{figure}
+
+First, a reduction technique may remove the hashed surface of the
+box. The new box is $\Ibounds{0}{3}\times\Ibounds{-3}{3}$.  Suppose
+that no more reduction is possible (this depends on reduction
+techniques).
+
+Second, the domain of $y$ can be bisected into two parts.  Two sub-boxes
+are generated: $\Ibounds{0}{3}\times\Ibounds{-3}{0}$ (box $2$) and
+$\Ibounds{0}{3}\times\Ibounds{0}{3}$ (box $3$). Then each sub-box is
+reduced, and so on.  The result is the union of both small gray boxes.
+
+Note that a box is bisected only if it is too large with respect to a
+desired precision fixed \emph{a priori}. The precision of a box is the
+maximum precision componentwise and the precision of an interval
+$\Ibounds{a}{b}$ is the quantity $(b-a)$.
+
+
+%------------------------------------------------------------------------------------------
+\unnumberedpar{Paving or Not}
+
+\addcontentsline{toc}{subsubsection}{Paving or Not}
+
+\Softname{} is able to tackle the following problems, given
+a natural $n$:
+%
+\begin{enumerate}
+\item Compute at most $n$ boxes that contain all the
+   solutions of the CSP.
+
+\item Compute at most $n$ boxes at the desired precision.
+\end{enumerate}
+%
+
+\index{paving}
+\index{continuum of solutions}
+\index{discrete solution set}
+
+The \textbf{first problem} deals with the computation of a
+\emph{paving} of the solution space.  This mode is useful for
+representing continui of solutions by a finite number of boxes. The
+maximum number of boxes $n$ is a parameter. The following figure
+illustrates a paving of $10$ boxes for the constraint $y\leq x^2-0.8$
+on the box $\Ibounds{-1}{1}^2$. The hashed surface represents the set
+of solutions.
+
+\begin{figure}[htbp]
+\hspace*{55mm}\includegraphics[width=.5\textwidth,bb=130 560 420 750]{figures/bisection-parabola.ps}
+\caption{Paving of a continuous set of solutions.}
+\label{fig:overview:circlesolve}
+\end{figure}
+
+Note that the number of boxes in the paving is also bounded by the
+number of boxes of the desired precision that are contained in the
+initial box, since the sufficiently tight boxes are not bisected.
+
+The \textbf{second problem} deals with the computation of boxes at the desired
+precision. This is typically used for representing discrete sets of
+solutions. Note that such a process may not be reliable since some
+solutions may be lost due to the maximum number
+of computed boxes fixed \emph{a priori}. For instance, for the problem of intersection of circles,
+if this number is $1$, \Softname{} returns one box:
+%
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX 1
+  x in [2.75 , 2.75]
+  y in [-2.119516683375301e-16 , +0]
+
+  precision: 4.44e-16, elapsed time: 0 ms
+
+END OF SOLVING
+  Property:     non reliable process (some solutions may be lost)
+  Elapsed time: 0 ms
+\end{verbatim}
+\end{envresult}
+
+Is there a difference between both problems when $n=+\infty$?
+In both cases, the result is necessarily a paving
+composed of boxes at the desired precision. Nevertheless,
+the splitting (search) strategy is different:
+%
+\begin{itemize}
+\item A paving must be composed of boxes that have approximatively
+   the same precision. To do so, boxes are processed in Breadth-First
+   order (BFS), \emph{i.e.}, a First-In First-Out strategy for
+   managing the list of boxes.
+
+\item For the second problem, the aim is to compute boxes at the given
+  precision as fast as possible. Then boxes are processed in
+  Depth-First order (DFS), \emph{i.e.}, a Last-In First-Out strategy.
+\end{itemize}
+%
+
+
+
+%------------------------------------------------------------------------------------------
+\unnumberedpar{Programming the Search}
+
+\addcontentsline{toc}{subsubsection}{Programming the Search}
+
+\index{Programming!search}
+\index{round-robin}
+\index{largest-first}
+
+Optional flags can be added in programs. The first possible action is to
+disconnect the splitting process.  In this case, only a reduction
+phase is performed.
+%
+\begin{envcode}
+\begin{verbatim}
+Split none;
+\end{verbatim}
+\end{envcode}
+
+
+Otherwise, if the splitting process is enabled, 
+several components of the strategy can be parameterized.
+%
+\begin{envcode}
+\begin{verbatim}
+Split  choice    = rr | lf | mn    ,
+       parts     = 2 | 3           ,
+       precision = p               ,    /* real number */
+       mode      = paving | points ,
+       number    = n | +oo         ;    /* natural number or +oo */
+\end{verbatim}
+\end{envcode}
+%
+There are $3$ choice strategies of bisected domains implemented in the system:
+%
+\begin{itemize}
+\item \texttt{rr} or \texttt{round\_robin}: the variables are chosen according
+   to a lexicographic order fixed \emph{a priori}. This is the default
+   value.
+
+\item \texttt{lf} or \texttt{largest\_first}: the variable whose domain is the
+  largest one (the less precise) is chosen.
+
+\item \texttt{mn} or \texttt{max\_narrow}: the variable associated to the
+   maximum absolute column sum norm of the Jacobian matrix is
+   chosen. If the Jacobian matrix cannot be computed, then the
+   round-robin strategy is used.
+\end{itemize}
+%
+The \texttt{parts} option defines the number of sub-boxes generated at
+each splitting step. Only subdivisions in $2$ or $3$ parts are currently
+supported.
+
+The \texttt{precision} option corresponds to the precision under which
+boxes are not bisected. The default value is set to $10^{-8}$.
+
+The two last options \texttt{mode} and \texttt{number} permit
+implementing the two problems handled by \Softname{}: computation of a
+paving or not.  In the \texttt{paving} mode, the \texttt{choice}
+strategy is necessarily \texttt{largest\_first}.  Note that the default
+mode is \texttt{points} (not \texttt{paving}), and the default number
+of computed boxes is $1024$.
+
+Finally, it is also possible to stop the search if the computation is
+too long. It suffices to add the following flag in programs:
+%
+\begin{envcode}
+\begin{verbatim}
+Time = t ;          /* maximum computation time in milliseconds */
+\end{verbatim}
+\end{envcode}
+%
+
+Note that this option may invalidate
+Property~\ref{property:overview:complete}: if the resolution is
+prematurely stopped, then some solutions may be lost.
+
+
+%------------------------------------------------------------------------------------------
+\unnumberedpar{Example: Brown's problem}
+
+\addcontentsline{toc}{subsubsection}{Example: Brown's problem}
+
+Brown's system is a square quasi-linear system of $n$ equations.
+%
+$$
+\left\lbrace
+\begin{array}{rcl}
+  n+1 & = & \sum_{i=1}^{n} (x_i) + x_j,\ \ \ j\in\{1,\dots,n-1\}\\[2mm]
+  1   & = & \Pi_{i=1}^{n} (x_i)\\[2mm]
+  x_i & \in &\Ibounds{-2}{2},\ \ \ i \in\{1,\dots,n\}\\
+\end{array}
+\right.
+$$
+%
+
+For $n=5$, \Softname{} with the default mode generates two boxes
+(there are $2$ solutions).
+%
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX 1
+  x[1] in [0.9999999996337671 , 1.000000000366426]
+  x[2] in [0.9999999998326983 , 1.000000000153915]
+  x[3] in [0.9999999999576185 , 1.000000000035721]
+  x[4] in [0.9999999999999982 , 1.000000000000002]
+  x[5] in [0.9999999999999919 , 1.000000000000008]
+
+  precision: 7.33e-10, elapsed time: 180 ms
+\end{verbatim}
+\end{envresult}
+
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX 2
+  x[1] in [0.9163545825338459 , 0.9163545825338514]
+  x[2] in [0.9163545825338464 , 0.9163545825338519]
+  x[3] in [0.9163545825338466 , 0.9163545825338516]
+  x[4] in [0.9163545825338462 , 0.9163545825338518]
+  x[5] in [1.418227087330746 , 1.418227087330764]
+
+  precision: 1.82e-14, elapsed time: 460 ms
+
+END OF SOLVING
+  Property:     reliable process (no solution is lost)
+  Elapsed time: 580 ms
+\end{verbatim}
+\end{envresult}
+%
+
+If the output is required to be the hull of the computed boxes (see
+Sec.~\ref{sec:overview:output}), we obtain only one box at the end of
+the splitting process.
+
+%
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX: HULL of 2 boxes
+  x[1] in [0.9163545825338459 , 1.000000000366426]
+  x[2] in [0.9163545825338464 , 1.000000000153915]
+  x[3] in [0.9163545825338466 , 1.000000000035721]
+  x[4] in [0.9163545825338462 , 1.000000000000002]
+  x[5] in [0.9999999999999919 , 1.418227087330764]
+  precision: 0.976, elapsed time: 570 ms
+
+END OF SOLVING
+  Property:     reliable process (no solution is lost)
+  Elapsed time: 570 ms
+\end{verbatim}
+\end{envresult}
+%
+
+If an upper bound for the computation time is set to $300$ms, only one
+box is computed, and the property of reliability is no more
+guaranteed.
+%
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX 1
+  x[1] in [0.9999999996337671 , 1.000000000366426]
+  x[2] in [0.9999999998326983 , 1.000000000153915]
+  x[3] in [0.9999999999576185 , 1.000000000035721]
+  x[4] in [0.9999999999999982 , 1.000000000000002]
+  x[5] in [0.9999999999999919 , 1.000000000000008]
+  precision: 7.33e-10, elapsed time: 180 ms
+
+END OF SOLVING
+  Property:     non reliable process (some solutions may be lost)
+  Elapsed time: 310 ms
+\end{verbatim}
+\end{envresult}
+%
+
+Using the paving mode, two boxes are computed near the end of the
+solving process since a BFS strategy is implemented.
+%
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX 1
+  x[1] in [0.9999999999974312 , 1.000000000002585]
+  x[2] in [0.9999999999985194 , 1.000000000001401]
+  x[3] in [0.9999999999994048 , 1.000000000000503]
+  x[4] in [0.9999999999999981 , 1.000000000000002]
+  x[5] in [0.9999999999999946 , 1.000000000000007]
+  precision: 5.15e-12, elapsed time: 550 ms
+
+OUTER BOX 2
+  x[1] in [0.9163545825330509 , 0.916354582534548]
+  x[2] in [0.9163545825334893 , 0.9163545825341433]
+  x[3] in [0.9163545825337194 , 0.9163545825339365]
+  x[4] in [0.9163545825338468 , 0.9163545825338524]
+  x[5] in [1.41822708733075 , 1.418227087330761]
+  precision: 1.5e-12, elapsed time: 550 ms
+
+END OF SOLVING
+  Property:     reliable process (no solution is lost)
+  Elapsed time: 550 ms
+\end{verbatim}
+\end{envresult}
+%
+
+
+Combining the paving mode with a maximum computation time of
+$300$ms is dangerous for problems having a discrete solution set. In
+this case, a paving composed of about $140$ boxes is computed,
+though they can be efficiently reduced in about $200$ms.
+
+Is there an ideal strategy? Should we use the paving mode or the
+default mode? These aspects are discussed in
+Section~\ref{sec:overview:strategy}.
+
+
+%------------------------------------------------------------------------------------------
+%------------------------------------------------------------------------------------------
+\subsection{Output of \Softname{}}\label{sec:overview:output}
+
+\index{Programming!output}
+
+The output of \Softname{} can be parameterized by means of optional flags
+in programs, as follows.
+%
+\begin{envcode}
+\begin{verbatim}
+Output  digits = n                ,      /* natural number */
+        mode   = union | hull     ,
+        style  = bound | midpoint ;
+\end{verbatim}
+\end{envcode}
+%
+
+The first option corresponds to the number of digits for printing
+interval bounds. The default value is set to $16$.
+
+\index{union of boxes}
+\index{hull of boxes}
+
+The \texttt{union} mode specifies that the result is presented as the
+list of all computed boxes. The \texttt{hull} mode is such that the
+result is presented as the hull of all computed boxes, \emph{i.e.},
+the smallest box containing all computed boxes.
+
+The \texttt{bound} style is such that every interval domain
+$\Ibounds{a}{b}$ is written $\Ibounds{a}{b}$.  In the
+\texttt{midpoint} mode, it is written $m + \Ibounds{-e}{e}$ where $m$
+is the center of $\Ibounds{a}{b}$ and $e$ is the distance from the
+center to each bound.
+
+For instance, let us add the following lines in the program
+modeling the intersection of circles.
+%
+\begin{envcode}
+\begin{verbatim}
+Output  digits = 32       ,
+        mode   = hull     ,
+        style  = midpoint ;
+\end{verbatim}
+\end{envcode}
+%
+
+The result follows.
+%
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX: HULL of 2 boxes
+  x = 2.1999999999999992894572642398998 + [-0.55,+0.55]
+  y = 1.1000000000000000888178419700125 + [-1.1,+1.1]
+
+  precision: 2.44e-15, elapsed time: 10 ms
+
+END OF SOLVING
+  Property:     reliable process (no solution is lost)
+  Elapsed time: 0 ms
+\end{verbatim}
+\end{envresult}
+%
+
+
+
+%------------------------------------------------------------------------------------------
+%------------------------------------------------------------------------------------------
+\subsection{Consistency Techniques}\label{sec:overview:consistency}
+
+\index{consistency technique!local}
+
+A precise descrition of consistency techniques is out of scope of this
+manual. However, one may give the user some ideas of the capabilities
+of the different algorithms implemented in \Softname{}.
+
+A consistency property determines which values from domains are
+consistent or not with respect to the constraints of a CSP.  If the
+property is ``reliable'', the inconsistent values do not participate
+in any solution. Given a consistency property, a consistency or
+reduction technique just eliminates some inconsistent values from domains.
+
+%------------------------------------------------------------------------------------------
+\unnumberedpar{Example: Circle}
+
+\addcontentsline{toc}{subsubsection}{Example: Circle}
+
+Consider a circle defined by $x^2 + y^2 = 2$ and the box
+$\Ibounds{-2}{4}\times\Ibounds{-1}{1}$. The solution space is the
+infinite set of points on the circle that belong to the box (see
+Fig.~\ref{fig:overview:circleconsistency}).
+
+\begin{figure}[htbp]
+\hspace*{62mm}\includegraphics[bb=130 610 420 700]{figures/circle-consistency.ps}
+\caption{Solution Space and Consistency.}
+\label{fig:overview:circleconsistency}
+\end{figure}
+
+On the one hand, the domain of $y$ cannot be reduced since all the
+values in $\Ibounds{-1}{1}$ are consistent, \emph{i.e.}, these values
+participate in a solution.
+
+On the other hand, the domain of $x$ can be reduced:
+$\IboundsCO{-2}{-\sqrt{2}}\ \cup\ \IboundsOO{-1}{1}\ \cup\ \IboundsOC{\sqrt{2}}{4}$
+is the set of inconsistent values. In Fig.~\ref{fig:overview:circleconsistency},
+the hashed surfaces represent the corresponding sub-boxes.
+
+\index{arc consistency}
+
+Removing all the inconsistent values from the domain of $x$
+can be done by the \emph{arc consistency} technique. However, this is
+not reachable over the floating-point numbers since
+$\sqrt{2}$ is not exactly represented.
+Moreover, it is often more efficient to reduce domains at bounds,
+\emph{i.e.}, to keep interval domains. This is done
+by \emph{bound consistency} techniques.
+
+\index{bound consistency}
+
+The approximation of bound consistency over interval domains is called
+\emph{hull consistency}, and it is implemented in \Softname{} (HC3 and HC4 algorithms).
+A reduction step over this problem computes the following box.
+%
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX
+  x   in [-1.414213562373095 , +1.414213562373095]
+  y   in [-1 , +1]
+\end{verbatim}
+\end{envresult}
+%
+
+\index{hull consistency}
+
+For this constraint, hull consistency is perfect: no more reduction at
+domain bounds is possible while preserving the solution set. However,
+it is very sensitive to the multiple occurrences of variables.
+For instance, rewrite the equation as $x\times x + y^2 = 2$.
+In this case, \Softname{} with hull consistency does not reduce the initial box.
+
+
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX
+  x   in [-2 , +4]
+  y   in [-1 , +1]
+\end{verbatim}
+\end{envresult}
+%
+
+This problem is handled by \emph{box consistency}, which is also
+implemented in \Softname{} (BC3 algorithm). For the circle problem
+with $x\times x + y^2 = 2$, box consistency is perfect, as shown below.
+%
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX
+  x in [-1.414213562373095 , +1.414213562373095]
+  y in [-1 , +1]
+\end{verbatim}
+\end{envresult}
+%
+
+\index{box consistency}
+
+The implementation of box consistency is just a search process over
+$\Ibold{x}$ that removes the inconsistent values from its bounds. The
+depth of the search can be parameterized by the width $\varphi$ of
+boxes that are examined: $\varphi=0$ is the best precision. For
+instance, the computation for $\varphi=0.05$ is the following. The
+resulting box is larger but the computation is faster.
+%
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX
+  x in [-1.453703703703703 , +1.415020576131686]
+  y in [-1 , +1]
+\end{verbatim}
+\end{envresult}
+%
+
+In practice, the combination of hull consistency and box consistency
+is efficient. This is automatically done in \Softname{} by Algorithm
+BC4.
+
+Given a set of constraints, the domain reductions are iterated until
+no domain can be sufficiently reduced. This process, called
+\emph{constraint propagation}, can be parameterized by an improvement
+factor $q$ interpreted as follows: if the width of a domain is reduced
+by a factor less than $q\%$ then it is declared unchanged. If all
+domains are declared unchanged then the propagation terminates.
+
+\index{improvement factor}
+
+The factor $q=0$ corresponds to the tightest algorithm. How may $q$ be
+tuned? For example, consider the following program that has no
+solution.
+\begin{envcode}
+\begin{verbatim}
+Consistency  improve = 0;         /* improvement factor */
+
+Variables    x[1..2] in [-1,1] ;
+
+Constraints  x[2] = x[1]          ,
+             x[2] = x[1] + 1.0e-5 ;
+\end{verbatim}
+\end{envcode}
+%
+The result follows. \Softname{} detects the unsatisfiability in half a
+second using a factor of $0\%$. The solving time is rather long
+since this problem is ill-conditionned.
+%
+\begin{envresult}
+\begin{verbatim}
+END OF SOLVING
+  Property:     no solution in the initial box
+  Elapsed time: 500 ms
+\end{verbatim}
+\end{envresult}
+
+In this case, the reduction must be as tight as possible in order to
+limit the combinatorial explosion of search algorithms. For
+example, let us try another value, $q=30$.
+The computation time is much greater.
+%
+\begin{envresult}
+\begin{verbatim}
+END OF SOLVING
+  Property:     no solution in the initial box
+  Elapsed time: 1,080 ms
+\end{verbatim}
+\end{envresult}
+%
+Finally, a factor of $q=50$ leads to the generation of $144$
+boxes with a precision of $10^{-8}$ in $1600$ms.
+%
+\begin{envresult}
+\begin{verbatim}
+END OF SOLVING
+  Property:     reliable process (no solution is lost)
+  Elapsed time: 1,600 ms
+\end{verbatim}
+\end{envresult}
+%
+
+However, in practice, it is often desired to slightly weaken the
+propagation process. To this end, the default value of the improvement
+factor is $10\%$.
+
+
+%--------------------------------------------------------------------------
+\unnumberedpar{Strong Consistency Techniques}
+
+\addcontentsline{toc}{subsubsection}{Strong Consistency Techniques}
+
+\index{consistency technique!strong}
+
+The aforementionned consistency techniques are said to be
+\emph{local}. In particular, each reduction is applied
+over one domain with respect to one constraint.  Such an approach may be
+weak. For example, consider the intersection of two parabolas (see
+Fig.~\ref{fig:overview:strongconsistency}).
+
+\begin{figure}[htbp]
+\hspace*{54mm}\includegraphics[width=0.5\textwidth,bb=130 650 420 755]{figures/strong-consistency.ps}
+\caption{Conjunction of Constraints.}
+\label{fig:overview:strongconsistency}
+\end{figure}
+
+The aim is to compute a tight box enclosing the solution. However, the
+initial box cannot be reduced while removing solutions of $c_1$.
+Moreover, it cannot be reduced while removing solutions of $c_2$.  As
+a consequence, it cannot be reduced. The problem is that the
+conjunction of constraints is not taken as a whole.
+
+The locality problem is handled by strong consistency techniques.
+Roughly speaking, local consistency techniques are just combined
+with a search algorithm. For the problem of intersection of parabolas,
+the domain of $x$ is first bisected (see Fig.~\ref{fig:overview:strongconsistencysolve}).
+
+\begin{figure}[htbp]
+\hspace*{54mm}\includegraphics[width=0.6\textwidth,bb=130 630 420 755]{figures/strong-consistency-solve.ps}
+\caption{Strong Consistency.}
+\label{fig:overview:strongconsistencysolve}
+\end{figure}
+
+Then the left-hand box is rejected: it is first reduced with respect
+to $c_1$, and the resulting (topmost) gray box contains no solution of
+$c_2$.  Moreover, the right-hand box is reduced: the topmost hashed
+box contains no solution of $c_1$ and the bottommost hashed box
+contains no solution of $c_2$.
+
+
+\index{3B consistency}
+
+An iteration of such a splitting step permits the computation of a
+tight box around the solution. The complete program follows. \Softname{}
+implements the so-called 3B consistency technique.
+%
+\begin{envcode}
+\begin{verbatim}
+Consistency strong = 3B;
+
+Variables
+  x   in [0,2] ,
+  y   in [0,2] ;
+
+Constraints
+  y = x^2     ,
+  y = 2 - x^2 ;
+\end{verbatim}
+\end{envcode}
+%
+
+The result is just the expected box.
+%
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX
+  x in [0.9999999999999997 , 1]
+  y in [0.9999999999999996 , 1]
+\end{verbatim}
+\end{envresult}
+%
+
+The splitting process of 3B consistency iteratively reduces each facet
+of a box. In Fig.~\ref{fig:overview:strongconsistencysolve}, the
+reduced facet corresponds to the left bound of $x$.  The width $w$ of
+the domain of $x$ in the rejected box can be parameterized. The
+default value is set to $10^{-3}$. A small value of $w$ leads to a
+slow consistency algorithm that computes a tight box.
+
+In \Softname{}, there is another strong consistency technique that we
+call weak 3B consistency. It is stronger than local consistencies but
+weaker than 3B consistency. Only one reduction of each facet is
+performed.
+
+\index{weak 3B consistency}
+
+In practice, should we use a local or a strong consistency technique?
+In general, implementing a local consistency is efficient. This is the
+default mode of \Softname{}. If the resolution is too long, one may
+try another technique (see Section~\ref{sec:overview:strategy}).
+
+There are also some situations where the user aims at computing only
+one box enclosing the solution set. A first method is to use the
+\texttt{hull} option of \Softname{}. A second method consists in
+disabling the splitting process and using a strong consistency.
+
+For example, consider Reimer's system with $3$ variables. This
+problem is difficult. Constraint solvers are sensitive to
+the width of the initial box.
+%
+\begin{envcode}
+\begin{verbatim}
+Variables    x[1..3] in [-100,100] ;
+
+Constraints  x[1]^2 - x[2]^2 + x[3]^2  = 0.5,
+             x[1]^3 - x[2]^3 + x[3]^3  = 0.5,
+             x[1]^4 - x[2]^4 + x[3]^4  = 0.5 ;
+\end{verbatim}
+\end{envcode}
+%
+\Softname{} computes $3$ boxes at $10^{-8}$ in $18,630$ms.
+If weak 3B consistency is applied, only $2$ boxes are computed in
+$14,670$ms.
+%
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX 1
+  x[1] in [0.3082486435333776 , 0.308248643533384]
+  x[2] in [0.6353521306033765 , 0.6353521306033828]
+  x[3] in [0.8992525249461816 , 0.8992525249461838]
+  precision: 6.49e-15, elapsed time: 8,710 ms
+
+OUTER BOX 2
+  x[1] in [0.8992525249461806 , 0.8992525249461845]
+  x[2] in [0.6353521306033739 , 0.6353521306033856]
+  x[3] in [0.3082486435333729 , 0.308248643533387]
+  precision: 1.42e-14, elapsed time: 8,730 ms
+
+END OF SOLVING
+  Property:     reliable process (no solution is lost)
+  Elapsed time: 14,670 ms
+\end{verbatim}
+\end{envresult}
+%
+
+%--------------------------------------------------------------------------
+\unnumberedpar{Interval Newton}
+
+\addcontentsline{toc}{subsubsection}{Interval Newton}
+
+\index{Interval Newton}
+\index{linear relaxation}
+\index{preconditionning}
+\index{combination}
+
+
+Given a box, the interval Newton method approximates a square system
+of equations with functions from $C^1$ by a first-order Taylor
+expansion around the center of the box. A preconditionning of the
+computed linear relaxation performs a linear combination of the rows
+of the system, which may be very efficient.  Combining the interval
+Newton method with consistency techniques leads to powerful
+solvers.
+
+The following system is hard for local consistency techniques.
+%
+$$
+\left\lbrace
+\begin{array}{l}
+x + 2y = 0,\\
+x - 2y = 0\\
+x, y\in\Ibounds{-1}{1}
+\end{array}
+\right.
+$$
+%
+
+We observe the same behaviour for the aforementioned problem of the
+intersection of parabolas. The reduction that is computed by a local
+consistency technique is weak (if the splitting process is disabled).
+
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX
+  x in [-1 , +1]
+  y in [-0.5 , +0.5]
+
+  precision: 2, elapsed time: 0 ms
+\end{verbatim}
+\end{envresult}
+%
+
+
+The combination of local consistency techniques with the interval
+Newton method that is implemented by Algorithm BC5 is efficient. This
+is the default mode of \Softname{}, where the interval Newton method is
+used only if a square system of equations can be extracted from the
+CSP.
+%
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX
+  x = 0
+  y = 0
+\end{verbatim}
+\end{envresult}
+%
+
+In some cases, a box is declared to be safe, \emph{i.e.}, it
+certainly contains only one solution. For instance,
+let us solve the following problem with BC5.
+%
+\begin{envcode}
+\begin{verbatim}
+Variables    x[1..2] in [-1,1] ;
+
+Constraints  x[1]^2 = x[2]       ,
+             x[1]^2 + x[2]^2 = 2 ;
+\end{verbatim}
+\end{envcode}
+%
+The result follows.
+%
+\begin{envresult}
+\begin{verbatim}
+SAFE OUTER BOX 1
+  x[1] = 1
+  x[2] = 1
+
+SAFE OUTER BOX 2
+  x[1] = -1
+  x[2] = 1
+\end{verbatim}
+\end{envresult}
+%
+
+\index{safe box}
+
+\newpage
+
+%--------------------------------------------------------------------------
+\unnumberedpar{Programming with Consistency Techniques}
+
+\addcontentsline{toc}{subsubsection}{Programming with Consistency Techniques}
+
+\index{Programming!consistency}
+
+In practice, several decisions have to be taken: local or strong consistency?
+Which technique? What values for the improvement factor and the splitting
+parameter $w$ of strong consistencies?
+
+All these methods can be compared with respect to their
+tightness. Roughly speaking, hull consistency is weaker than box
+consistency, \emph{etc}.
+%
+$$
+\underbrace{\hbox{hc3}=\hbox{hc4}}_{hull} \leq
+\underbrace{\hbox{\ \ bc3\ \ }}_{box} =
+\underbrace{\hbox{\ \ bc4\ \ }}_{hull/box} \leq
+\underbrace{\hbox{\ \ \ \ \ \ bc5\ \ \ \ \ \ }}_{hull/box/Newton} \leq 
+   \hbox{weak3B} \leq \hbox{3B}
+$$
+%
+
+But the weaker, the faster.
+
+Many local consistency algorithms are implemented in \Softname{}.
+There are two reasons: that allows experts in constraint programming
+to compare the different techniques, and the best average method in
+precision and time for each problem is dynamically chosen by the
+hard-coded strategy.
+
+
+The following piece of code may be added in programs.
+%
+\begin{envcode}
+\begin{verbatim}
+Consistency 
+     local   = hc3 | hc4 |       /* hull consistency */
+               hc4_newton |      /* hull consistency + interval Newton */
+               bc3 |             /* box consistency */
+               bc3_newton |      /* box consistency + interval Newton */
+               bc4 |             /* hull consistency + box consistency */
+               bc5         ,     /* hull + box consistency + interval Newton */
+     phi     = value       ,     /* precision of box consistency */
+     improve = n           ,     /* improvement factor for local consistencies */
+     strong  = weak3B | 3B ,     /* weak 3B and 3B consistency */
+     width   = w           ;     /* splitting factor for strong consistencies */
+\end{verbatim}
+\end{envcode}
+%
+
+%--------------------------------------------------------------------------
+%--------------------------------------------------------------------------
+\subsection{Programming the Strategy}\label{sec:overview:strategy}
+
+\index{Strategy}
+\index{consistency technique!weakness}
+\index{ill-conditionned}
+
+The default solving strategy of \Softname{} applies a local
+consistency algorithm to compute at most \texttt{number} boxes at the
+given \texttt{precision}: the best average strategy for problems
+having discrete sets of solutions. The choice of the local
+consistency algorithm is done by the system.
+
+In this mode, two main problems can be encountered:
+%
+\begin{itemize}
+\item Nothing happens! There are two possible reasons:
+
+  \begin{itemize}
+  \item The model is ill-conditionned, for example
+  $(x^2+y^2=2,\ (x+10^{-8})^2+y^2=2)$. The current version of
+  \Softname{} fails. In the future, we plan to implement
+  a symbolic module in order to preprocess such systems.
+
+  \item The local consistency technique is too weak (locality
+  problem).  A strong consistency like weak 3B consistency or 3B
+  consistency may be used. The tuning of the \texttt{width} is very
+  important. If the width is too large then no reduction is
+  computed. If the width is too small then the solving time is too
+  long. We suggest to progressively decrease its value in order to
+  detect a threshold for reductions.
+
+  \end{itemize}
+
+\item A huge number of boxes is computed.  There are two possible reasons:
+
+  \begin{itemize}
+  \item The model is ill-conditionned\,\dots
+
+  \item A continuum of solutions is bisected. In this case, the
+  \texttt{paving} mode should be used.
+  \end{itemize}
+
+\end{itemize}
+
+In the \texttt{paving} mode, two parameters have to be tuned: the
+precision and the number of computed boxes. However, the tuning may be
+hard if the user has no idea of the geometry of the solution set. In
+the future, we plan to combine \Softname{} with a graphical interface
+in order to represent pavings.
+
+In many situations, the aim is to compute only one box enclosing the
+solution set. We propose two different methods.
+%
+\begin{itemize}
+\item The splitting process is disabled, \emph{i.e.},
+  the initial box is reduced and the algorithm terminates.  In this
+  case, there is often the need for applying a strong consistency
+  technique in order to reduce the box the most possible.
+
+\item The paving mode is on and the \texttt{hull} of all the computed
+  boxes is returned.
+\end{itemize}
+
+For example, consider the following program.
+
+\begin{envcode}
+\begin{verbatim}
+Variables    x[1..3] in [-10,10];
+
+Constraints  x[1]*x[2]*x[3] = 1,
+             x[1]+x[2]+x[3] = 0,
+             max(x[1]+x[2],x[2]-x[3]) <= 0;
+\end{verbatim}
+\end{envcode}
+
+If the splitting process is disabled, the initial box is not reduced.
+If weak 3B consistency is applied given a width of $10^{-3}$,
+we immediately obtain a small reduction.
+
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX 1
+  x[1] in [-10 , +10]
+  x[2] in [-10 , +6]
+  x[3] in [-6 , +10]
+  Elapsed time: 0 ms
+\end{verbatim}
+\end{envresult}
+
+If 3B consistency is used  given a width of $10^{-3}$, the reduction
+is better but the solving is longer.
+
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX 1
+  x[1] in [-9.989989979949861 , -0.01001002005014042]
+  x[2] in [-9.989989979949861 , -0.01001002005014042]
+  x[3] in [1.580680000001182 , 10]
+  Elapsed time: 2,010 ms
+\end{verbatim}
+\end{envresult}
+
+If 3B consistency is used  given a width of $10^{-4}$, the solving process
+becomes much longer and the reduction is quasi equivalent.
+
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX 1
+  x[1] in [-9.989989979949861 , -0.01001002005014042]
+  x[2] in [-9.989989979949861 , -0.01001002005014042]
+  x[3] in [1.580936000015381 , 10]
+  Elapsed time: 20,520 ms
+\end{verbatim}
+\end{envresult}
+
+In this case, 3B consistency given a width of $10^{-3}$ seems to be a
+good choice. Let us try to compute a paving in the hull mode.
+The result follows.
+
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX: HULL of 1024 boxes
+  x[1] in [-9.989989979949861 , -0.01001002005014042]
+  x[2] in [-9.989989979949861 , -0.01001002005014042]
+  x[3] in [1.372542666573572 , 10]
+  Elapsed time: 20 ms
+\end{verbatim}
+\end{envresult}
+
+The computed box is tight and the solving time is small.  However, the
+left bound of $x_3$ is not precise with respect to the results
+obtained with a strong consistency technique. We may increase the
+number of computed boxes ($1024$ is the default value).
+
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX: HULL of 99999 boxes
+  x[1] in [-9.989989979949861 , -0.01001002005014042]
+  x[2] in [-9.989989979949861 , -0.01001002005014042]
+  x[3] in [1.569623278118378 , 10]
+  Elapsed time: 1,920 ms
+\end{verbatim}
+\end{envresult}
+
+A number of $10^5$ boxes is not enough. Let us try $10^6$.  In this
+case, the result is tight. Note that it is very similar to the one
+obtained with 3B consistency.
+
+\begin{envresult}
+\begin{verbatim}
+OUTER BOX: HULL of 1000000 boxes
+  x[1] in [-9.989989979949861 , -0.01001002005014042]
+  x[2] in [-9.989989979949861 , -0.01001002005014042]
+  x[3] in [1.582747308958421 , 10]
+  Elapsed time: 19,100 ms
+\end{verbatim}
+\end{envresult}
+
+
+%--------------------------------------------------------------------------
+%--------------------------------------------------------------------------
+\subsection{Related Work}
+
+Interval analysis has been devised by
+Ramon~E.~Moore~\cite{MooreBook1966}. Some interval methods implemented
+in \Softname{} have been introduced by
+Eldon~R. Hansen~\cite{HansenBook1992}, R.~Baker
+Kearfott~\cite{KearfottBook1996} or Arnold
+Neumaier~\cite{NeumaierBook1990}.
+
+The framework of continuous CSPs originates from the works of
+John~G. Cleary~\cite{ClearyFCS1987} and Ernest
+Davis~\cite{DavisAI1987}. These ideas have been developped by many
+researchers such as Fr{\'e}d{\'e}ric Benhamou~\cite{BenhamouILPS94},
+Alain Colmerauer~\cite{Colmerauer1995}, Boi
+Faltings~\cite{FaltingsAI1994}, Timothy
+Hickey~\cite{HickeyJFLP2001}, Eero
+Hyv{\"{o}}nen~\cite{HyvonenAI1992}, Olivier
+Lhomme~\cite{LhommeIJCAI1993}, William Older and Andr{\'e}
+Vellino~\cite{OlderVellino1993}, Jean-François Puget~\cite{BenhamouICLP99}, Michel
+Rueher~\cite{CollavizzaReliable1999}, Maarten Van
+Emden~\cite{VanEmdenCO1997} and Pascal Van Hentenryck~\cite{VanHentenryckSIAM1997}.
+
+The main achievement was Numerica~\cite{NumericaBook1997} developed by
+Pascal Van Hentenryck
+\emph{et al.}, which is a modeling language for global optimization
+implementing interval computations and consistency techniques.
+
+Many algorithms implemented in \Softname{} can be found in these early
+works on continuous CSPs or in the author's
+publications~\cite{BenhamouICLP99,GranvilliersICTAI99,GranvilliersGO2001,GranvilliersRC2001}.

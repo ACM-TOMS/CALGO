@@ -1,0 +1,2910 @@
+C     ALGORITHM 610, COLLECTED ALGORITHMS FROM ACM.
+C     ALGORITHM APPEARED IN ACM-TRANS. MATH. SOFTWARE, VOL.9, NO. 4,
+C     DEC., 1983, P. 494-502.
+C     PROGRAM QCPSI(INPUT,OUTPUT,TAPE6=OUTPUT)                          MAN   10
+C                                                                       MAN   20
+C     ABSTRACT                                                          MAN   30
+C     PROGRAM QCPSI IS A QUICK CHECK DRIVER WHICH EXERCISES THE MAJOR   MAN   40
+C     LOOPS IN SUBROUTINE PSIFN(X,N,KODE,M,ANS) FOR SCALED DERIVATIVES  MAN   50
+C     OF THE PSI FUNCTION.  FOR N=0, THE PSI FUNCTIONS ARE CALCULATED   MAN   60
+C     EXPLICITLY AND CHECKED AGAINST EVALUATIONS FROM PSIFN. FOR        MAN   70
+C     N.GT.0, CONSISTENCY CHECKS ARE MADE BY COMPARING A SEQUENCE       MAN   80
+C     AGAINST SINGLE EVALUATIONS OF PSIFN, ONE AT A TIME.               MAN   90
+C     IF THE RELATIVE ERROR IS LESS THAN 1000 TIMES UNIT ROUNDOFF,      MAN  100
+C     THEN THE TEST IS PASSED--IF NOT,                                  MAN  110
+C     THEN X, THE VALUES TO BE COMPARED, THE RELATIVE ERROR AND         MAN  120
+C     PARAMETERS KODE AND N ARE WRITTEN ON LOGICAL UNIT 6 WHERE N IS    MAN  130
+C     THE ORDER OF THE DERIVATIVE AND KODE IS A SELECTION PARAMETER     MAN  140
+C     DEFINED IN THE PROLOGUE TO PSIFN.  UNDERFLOW AND OVERFLOW TESTS   MAN  150
+C     ARE MADE AND ERROR CONDITIONS ARE TRIGGERED.                      MAN  160
+C                                                                       MAN  170
+C     FUNCTIONS I1MACH AND R1MACH MUST BE INITIALIZED ACCORDING TO THE  MAN  180
+C     PROLOGUE IN EACH FUNCTION FOR THE MACHINE ENVIRONMENT BEFORE      MAN  190
+C     QCPSI OR PSIFN CAN BE EXECUTED.                                   MAN  200
+C                                                                       MAN  210
+      INTEGER I, IFLG, IX, KODE, LUN, M, N, NM, NN                      MAN  220
+      REAL ER, EULER, PSI1, PSI2, R1M4, S, TOL, X                       MAN  230
+      REAL R1MACH                                                       MAN  240
+      DIMENSION PSI1(3), PSI2(20)                                       MAN  250
+      DATA LUN /6/                                                      MAN  260
+      DATA EULER /0.5772156649015328606E0/                              MAN  270
+C-----------------------------------------------------------------------MAN  280
+C     CALLS TO SLATEC ERROR PACKAGE TO OVERRIDE FATAL ERRORS AND PRINT  MAN  290
+C     ON UNIT LUN                                                       MAN  300
+C     CALL XSETF(-1)                                                    MAN  310
+C     CALL XSETUN(LUN)                                                  MAN  320
+C-----------------------------------------------------------------------MAN  330
+      CALL XSETF(-1)                                                    MAN  340
+      CALL XSETUN(LUN)                                                  MAN  350
+      R1M4 = R1MACH(4)                                                  MAN  360
+      TOL = 1000.0E0*AMAX1(R1M4,1.0E-18)                                MAN  370
+      WRITE (LUN,99999)                                                 MAN  380
+99999 FORMAT (1H1//34H QUICK CHECK DIAGNOSTICS FOR PSIFN//)             MAN  390
+C-----------------------------------------------------------------------MAN  400
+C     CHECK PSI(I) AND PSI(I-0.5), I=1,2,...                            MAN  410
+C-----------------------------------------------------------------------MAN  420
+      IFLG = 0                                                          MAN  430
+      N = 0                                                             MAN  440
+      DO 50 KODE=1,2                                                    MAN  450
+        DO 40 M=1,2                                                     MAN  460
+          S = -EULER + FLOAT(M-1)*(-2.0E0*ALOG(2.0E0))                  MAN  470
+          X = 1.0E0 - FLOAT(M-1)*0.5E0                                  MAN  480
+          DO 30 I=1,20                                                  MAN  490
+            CALL PSIFN(X, N, KODE, 1, PSI2)                             MAN  500
+            PSI1(1) = -S + FLOAT(KODE-1)*ALOG(X)                        MAN  510
+            ER = ABS((PSI1(1)-PSI2(1))/PSI1(1))                         MAN  520
+            IF (ER.LE.TOL) GO TO 20                                     MAN  530
+            IF (IFLG.NE.0) GO TO 10                                     MAN  540
+            WRITE (LUN,99998)                                           MAN  550
+99998       FORMAT (8X, 1HX, 13X, 4HPSI1, 11X, 4HPSI2, 9X, 7HREL ERR,   MAN  560
+     *       5X, 4HKODE, 3X, 1HN)                                       MAN  570
+   10       CONTINUE                                                    MAN  580
+            IFLG = IFLG + 1                                             MAN  590
+            WRITE (LUN,99997) X, PSI1(1), PSI2(I), ER, KODE, N          MAN  600
+99997       FORMAT (4E15.6, 2I5)                                        MAN  610
+            IF (IFLG.GT.200) GO TO 150                                  MAN  620
+   20       CONTINUE                                                    MAN  630
+            S = S + 1.0E0/X                                             MAN  640
+            X = X + 1.0E0                                               MAN  650
+   30     CONTINUE                                                      MAN  660
+   40   CONTINUE                                                        MAN  670
+   50 CONTINUE                                                          MAN  680
+C-----------------------------------------------------------------------MAN  690
+C     CHECK SMALL X.LT.UNIT ROUNDOFF                                    MAN  700
+C-----------------------------------------------------------------------MAN  710
+      KODE = 1                                                          MAN  720
+      X = TOL/10000.0E0                                                 MAN  730
+      N = 1                                                             MAN  740
+      CALL PSIFN(X, N, KODE, 1, PSI2)                                   MAN  750
+      PSI1(1) = X**(-N-1)                                               MAN  760
+      ER = ABS((PSI1(1)-PSI2(1))/PSI1(1))                               MAN  770
+      IF (ER.LE.TOL) GO TO 70                                           MAN  780
+      IF (IFLG.NE.0) GO TO 60                                           MAN  790
+      WRITE (LUN,99998)                                                 MAN  800
+   60 CONTINUE                                                          MAN  810
+      IFLG = IFLG + 1                                                   MAN  820
+      WRITE (LUN,99997) X, PSI1(1), PSI2(1), ER, KODE, N                MAN  830
+   70 CONTINUE                                                          MAN  840
+C-----------------------------------------------------------------------MAN  850
+C     CONSISTENCY TESTS FOR N.GE.0                                      MAN  860
+C-----------------------------------------------------------------------MAN  870
+      DO 130 KODE=1,2                                                   MAN  880
+        DO 120 M=1,5                                                    MAN  890
+          DO 110 N=1,16,5                                               MAN  900
+            NN = N - 1                                                  MAN  910
+            X = 0.1E0                                                   MAN  920
+            DO 100 IX=1,25,2                                            MAN  930
+              X = X + 1.0E0                                             MAN  940
+              CALL PSIFN(X, NN, KODE, M, PSI2)                          MAN  950
+              DO 90 I=1,M                                               MAN  960
+                NM = NN + I - 1                                         MAN  970
+                CALL PSIFN(X, NM, KODE, 1, PSI1)                        MAN  980
+                ER = ABS((PSI2(I)-PSI1(1))/PSI1(1))                     MAN  990
+                IF (ER.LT.TOL) GO TO 90                                 MAN 1000
+                IF (IFLG.NE.0) GO TO 80                                 MAN 1010
+                WRITE (LUN,99998)                                       MAN 1020
+   80           CONTINUE                                                MAN 1030
+                IFLG = IFLG + 1                                         MAN 1040
+                WRITE (LUN,99997) X, PSI1(1), PSI2(I), ER, KODE, NM     MAN 1050
+   90         CONTINUE                                                  MAN 1060
+  100       CONTINUE                                                    MAN 1070
+  110     CONTINUE                                                      MAN 1080
+  120   CONTINUE                                                        MAN 1090
+  130 CONTINUE                                                          MAN 1100
+      IF (IFLG.NE.0) GO TO 140                                          MAN 1110
+      WRITE (LUN,99996)                                                 MAN 1120
+99996 FORMAT (//16H QUICK CHECKS OK//)                                  MAN 1130
+  140 CONTINUE                                                          MAN 1140
+C-----------------------------------------------------------------------MAN 1150
+C     TRIGGER ERROR DIAGNOSTICS                                         MAN 1160
+C-----------------------------------------------------------------------MAN 1170
+      WRITE (LUN,99995)                                                 MAN 1180
+99995 FORMAT (//27H TRIGGER 6 ERROR CONDITIONS//)                       MAN 1190
+      X = -1.0E0                                                        MAN 1200
+      N = -1                                                            MAN 1210
+      KODE = -1                                                         MAN 1220
+      M = -1                                                            MAN 1230
+      CALL PSIFN(X, N, KODE, M, PSI1)                                   MAN 1240
+C-----------------------------------------------------------------------MAN 1250
+C     UNDERFLOW AND OVERFLOW TESTS                                      MAN 1260
+C-----------------------------------------------------------------------MAN 1270
+      X = R1MACH(1)                                                     MAN 1280
+      N = 10                                                            MAN 1290
+      KODE = 1                                                          MAN 1300
+      CALL PSIFN(X, N, KODE, 1, PSI1)                                   MAN 1310
+      X = R1MACH(2)                                                     MAN 1320
+      CALL PSIFN(X, N, KODE, 1, PSI1)                                   MAN 1330
+      STOP                                                              MAN 1340
+  150 CONTINUE                                                          MAN 1350
+      WRITE (LUN,99994)                                                 MAN 1360
+99994 FORMAT (//52H PROCESSING OF MAIN LOOPS TERMINATED BECAUSE THE NUM,MAN 1370
+     * 36HBER OF DIAGNOSTIC PRINTS EXCEEDS 200//)                       MAN 1380
+      GO TO 140                                                         MAN 1390
+      END                                                               MAN 1400
+      SUBROUTINE PSIFN(X, N, KODE, M, ANS)                              PSI   10
+C
+C     WRITTEN BY D.E. AMOS, JUNE, 1982.
+C
+C     REFERENCES
+C         HANDBOOK OF MATHEMATICAL FUNCTIONS, AMS 55, NATIONAL BUREAU
+C         OF STANDARDS BY M. ABRAMOWITZ AND I.A. STEGUN, 1964, PP.
+C         258-260, EQTNS. 6.3.5, 6.3.18, 6.4.6, 6.4.9, 6.4.10
+C
+C         ACM TRANS. MATH SOFTWARE, 1983.
+C
+C     ABSTRACT
+C         PSIFN COMPUTES M MEMBER SEQUENCES OF SCALED DERIVATIVES OF THE
+C         PSI FUNCTION
+C
+C              W(K,X)=(-1)**(K+1)*PSI(K,X)/GAMMA(K+1)
+C
+C         K=N,...,N+M-1 WHERE PSI(K,X) IS THE K-TH DERIVATIVE OF THE PSI
+C         FUNCTION.  ON KODE=1, PSIFN RETURNS THE SCALED DERIVATIVES
+C         AS DESCRIBED.  KODE=2 IS OPERATIVE ONLY WHEN K=0 AND PSIFN
+C         RETURNS -PSI(X) + LN(X).  THAT IS, THE LOGARITHMIC BEHAVIOR
+C         FOR LARGE X IS REMOVED WHEN KODE=2 AND K=0. WHEN SUMS OR
+C         DIFFERENCES OF PSI FUNCTIONS ARE COMPUTED, THE LOGARITHMIC
+C         TERMS CAN BE COMBINED ANALYTICALLY AND COMPUTED SEFARATELY
+C         TO HELP RETAIN SIGNIFICANT DIGITS.
+C
+C         THE BASIC METHOD OF EVALUATION IS THE ASYMPTOTIC EXPANSION
+C         FOR LARGE X.GE.XMIN FOLLOWED BY BACKWARD RECURSION ON A TWO
+C         TERM RECURSION RELATION
+C
+C                  W(X+1) + X**(-N-1) = W(X).
+C
+C         THIS IS SUPPLEMENTED BY A SERIES
+C
+C                  SUM( (X+K)**(-N-1) , K=0,1,2,... )
+C
+C         WHICH CONVERGES RAPIDLY FOR LARGE N. BOTH XMIN AND THE
+C         NUMBER OF TERMS OF THE SERIES ARE CALCULATED FROM THE UNIT
+C         ROUND OFF OF THE MACHINE ENVIRONMENT.
+C
+C         FUNCTIONS I1MACH AND R1MACH MUST BE INITIALIZED ACCORDING
+C         TO  PROLOGUE INSTRUCTIONS. FIFTEEN MACHINE ENVIRONMENTS
+C         CAN BE DEFINED BY MAKING APPROPRIATE COMMENT CARDS ACTIVE
+C         IN I1MACH AND R1MACH.
+C
+C         THE NOMINAL COMPUTATIONAL ACCURACY IS THE MAXIMUM OF UNIT
+C         ROUNDOFF (=R1MACH(4)) AND 1.0E-18 SINCE CRITICAL CONSTANTS
+C         ARE GIVEN TO ONLY 18 DIGITS.
+C
+C         PSIFN CALLS I1MACH, R1MACH, XERROR PACKAGE(18 ROUTINES)
+C
+C         DPSIFN IS THE DOUBLE PRECISION VERSION OF PSIFN.
+C
+C     DESCRIPTION OF ARGUMENTS
+C
+C         INPUT
+C           X      - ARGUMENT, X.GT.0.0E0
+C           N      - FIRST MEMBER OF THE SEQUENCE, 0.LE.N.LE.100
+C                    N=0 GIVES ANS(1) = -PSI(X)       ON KODE=1
+C                                       -PSI(X)+LN(X) ON KODE=2
+C           KODE   - SELECTION PARAMETER
+C                    KODE=1 RETURNS SCALED DERIVATIVES OF THE PSI
+C                    FUNCTION
+C                    KODE=2 RETURNS SCALED DERIVATIVES OF THE PSI
+C                    FUNCTION EXCEPT WHEN N=0. IN THIS CASE,
+C                    ANS(1) = -PSI(X) + LN(X) IS RETURNED.
+C           M      - NUMBER OF MEMBERS OF THE SEQUENCE, M.GE.1
+C
+C         OUTPUT
+C           ANS    - A VECTOR OF LENGTH AT LEAST M WHOSE FIRST M
+C                    COMPONENTS CONTAIN THE SEQUENCE OF  DERIVATIVES
+C                    SCALED ACCORDING TO KODE
+C
+C         ERROR CONDITIONS
+C           AN IMPROPER INPUT IS A FATAL ERROR
+C           AN OVERFLOW IS A FATAL ERROR
+C***END PROLOGUE
+      INTEGER I, IFLAG, ISET, J, K, KODE, KONTR, M, MX, N, NMAX, NN,
+     * NP, NX
+      INTEGER I1MACH
+      REAL ANS, ARG, B, DEN, ELIM, EPS, FLN, FN, FNP, FNS, FX, RLN,
+     * RXSQ, R1M4, R1M5, S, SLOPE, T, TA, TK, TOL, TOLS, TRM, TRMR,
+     * TSS, TST, TT, T1, T2, WDTOL, X, XDMLN, XDMY, XINC, XLN, XM,
+     * XMIN, XQ, YINT
+      REAL R1MACH
+      DIMENSION B(22), TRM(22), TRMR(100), ANS(1)
+      DATA NMAX /100/
+C-----------------------------------------------------------------------
+C             BERNOULLI NUMBERS
+C-----------------------------------------------------------------------
+      DATA B(1), B(2), B(3), B(4), B(5), B(6), B(7), B(8), B(9), B(10),
+     * B(11), B(12), B(13), B(14), B(15), B(16), B(17), B(18), B(19),
+     * B(20), B(21), B(22) /1.00000000000000000E+00,
+     * -5.00000000000000000E-01,1.66666666666666667E-01,
+     * -3.33333333333333333E-02,2.38095238095238095E-02,
+     * -3.33333333333333333E-02,7.57575757575757576E-02,
+     * -2.53113553113553114E-01,1.16666666666666667E+00,
+     * -7.09215686274509804E+00,5.49711779448621554E+01,
+     * -5.29124242424242424E+02,6.19212318840579710E+03,
+     * -8.65802531135531136E+04,1.42551716666666667E+06,
+     * -2.72982310678160920E+07,6.01580873900642368E+08,
+     * -1.51163157670921569E+10,4.29614643061166667E+11,
+     * -1.37116552050883328E+13,4.88332318973593167E+14,
+     * -1.92965793419400681E+16/
+C
+C
+      IFLAG = 0
+      ISET = 1
+      IF (X.LE.0.0E0) GO TO 300
+   10 CONTINUE
+      ISET = 2
+      IF (N.LT.0) GO TO 300
+   20 CONTINUE
+      ISET = 3
+      IF (KODE.LT.1 .OR. KODE.GT.2) GO TO 300
+   30 CONTINUE
+      ISET = 4
+      IF (M.LT.1) GO TO 300
+   40 CONTINUE
+      IF (IFLAG.NE.0) GO TO 360
+      NN = N + M - 1
+      FN = FLOAT(NN)
+      FNP = FN + 1.0E0
+      NX = MIN0(-I1MACH(12),I1MACH(13))
+      R1M5 = R1MACH(5)
+      R1M4 = R1MACH(4)*0.5E0
+      WDTOL = AMAX1(R1M4,0.5E-18)
+C-----------------------------------------------------------------------
+C     ELIM = APPROXIMATE EXPONENTIAL OVER AND UNDERFLOW LIMIT
+C-----------------------------------------------------------------------
+      ELIM = 2.302E0*(FLOAT(NX)*R1M5-3.0E0)
+      XLN = ALOG(X)
+      T = FNP*XLN
+C-----------------------------------------------------------------------
+C     OVERFLOW AND UNDERFLOW TEST FOR SMALL AND LARGE X
+C-----------------------------------------------------------------------
+      IF (ABS(T).GT.ELIM) GO TO 290
+      IF (X.LT.WDTOL) GO TO 260
+C-----------------------------------------------------------------------
+C     COMPUTE XMIN AND THE NUMBER OF TERMS OF THE SERIES, FLN+1
+C-----------------------------------------------------------------------
+      RLN = R1M5*FLOAT(I1MACH(11))
+      RLN = AMIN1(RLN,18.06E0)
+      FLN = AMAX1(RLN,3.0E0) - 3.0E0
+      YINT = 3.50E0 + 0.40E0*FLN
+      SLOPE = 0.21E0 + FLN*(0.0006038E0*FLN+0.008677E0)
+      XM = YINT + SLOPE*FN
+      MX = INT(XM) + 1
+      XMIN = FLOAT(MX)
+      IF (N.EQ.0) GO TO 50
+      XM = -2.302E0*RLN - AMIN1(0.0E0,XLN)
+      FNS = FLOAT(N)
+      ARG = XM/FNS
+      ARG = AMIN1(0.0E0,ARG)
+      EPS = EXP(ARG)
+      XM = 1.0E0 - EPS
+      IF (ABS(ARG).LT.1.0E-3) XM = -ARG
+      FLN = X*XM/EPS
+      XM = XMIN - X
+      IF (XM.GT.7.0E0 .AND. FLN.LT.15.0E0) GO TO 200
+   50 CONTINUE
+      XDMY = X
+      XDMLN = XLN
+      XINC = 0.0E0
+      IF (X.GE.XMIN) GO TO 60
+      NX = INT(X)
+      XINC = XMIN - FLOAT(NX)
+      XDMY = X + XINC
+      XDMLN = ALOG(XDMY)
+   60 CONTINUE
+C-----------------------------------------------------------------------
+C     GENERATE W(N+M-1,X) BY THE ASYMPTOTIC EXPANSION
+C-----------------------------------------------------------------------
+      T = FN*XDMLN
+      T1 = XDMLN + XDMLN
+      T2 = T + XDMLN
+      TK = AMAX1(ABS(T),ABS(T1),ABS(T2))
+      IF (TK.GT.ELIM) GO TO 380
+      TSS = EXP(-T)
+      TT = 0.5E0/XDMY
+      T1 = TT
+      TST = WDTOL*TT
+      IF (NN.NE.0) T1 = TT + 1.0E0/FN
+      RXSQ = 1.0E0/(XDMY*XDMY)
+      TA = 0.5E0*RXSQ
+      T = FNP*TA
+      S = T*B(3)
+      IF (ABS(S).LT.TST) GO TO 80
+      TK = 2.0E0
+      DO 70 K=4,22
+        T = T*((TK+FN+1.0E0)/(TK+1.0E0))*((TK+FN)/(TK+2.0E0))*RXSQ
+        TRM(K) = T*B(K)
+        IF (ABS(TRM(K)).LT.TST) GO TO 80
+        S = S + TRM(K)
+        TK = TK + 2.0E0
+   70 CONTINUE
+   80 CONTINUE
+      S = (S+T1)*TSS
+      IF (XINC.EQ.0.0E0) GO TO 100
+C-----------------------------------------------------------------------
+C     BACKWARD RECUR FROM XDMY TO X
+C-----------------------------------------------------------------------
+      NX = INT(XINC)
+      NP = NN + 1
+      IF (NX.GT.NMAX) GO TO 390
+      IF (NN.EQ.0) GO TO 160
+      XM = XINC - 1.0E0
+      FX = X + XM
+C-----------------------------------------------------------------------
+C     THIS LOOP SHOULD NOT BE CHANGED. FX IS ACCURATE WHEN X IS SMALL
+C-----------------------------------------------------------------------
+      DO 90 I=1,NX
+        TRMR(I) = FX**(-NP)
+        S = S + TRMR(I)
+        XM = XM - 1.0E0
+        FX = X + XM
+   90 CONTINUE
+  100 CONTINUE
+      ANS(M) = S
+      IF (FN.EQ.0.0E0) GO TO 180
+C-----------------------------------------------------------------------
+C     GENERATE LOWER DERIVATIVES, J.LT.N+M-1
+C-----------------------------------------------------------------------
+      IF (M.EQ.1) RETURN
+      DO 150 J=2,M
+        FNP = FN
+        FN = FN - 1.0E0
+        TSS = TSS*XDMY
+        T1 = TT
+        IF (FN.NE.0.0E0) T1 = TT + 1.0E0/FN
+        T = FNP*TA
+        S = T*B(3)
+        IF (ABS(S).LT.TST) GO TO 120
+        TK = 3.0E0 + FNP
+        DO 110 K=4,22
+          TRM(K) = TRM(K)*FNP/TK
+          IF (ABS(TRM(K)).LT.TST) GO TO 120
+          S = S + TRM(K)
+          TK = TK + 2.0E0
+  110   CONTINUE
+  120   CONTINUE
+        S = (S+T1)*TSS
+        IF (XINC.EQ.0.0E0) GO TO 140
+        IF (FN.EQ.0.0E0) GO TO 160
+        XM = XINC - 1.0E0
+        FX = X + XM
+        DO 130 I=1,NX
+          TRMR(I) = TRMR(I)*FX
+          S = S + TRMR(I)
+          XM = XM - 1.0E0
+          FX = X + XM
+  130   CONTINUE
+  140   CONTINUE
+        MX = M - J + 1
+        ANS(MX) = S
+        IF (FN.EQ.0.0E0) GO TO 180
+  150 CONTINUE
+      RETURN
+C-----------------------------------------------------------------------
+C     RECURSION FOR N = 0
+C-----------------------------------------------------------------------
+  160 CONTINUE
+      DO 170 I=1,NX
+        S = S + 1.0E0/(X+FLOAT(NX-I))
+  170 CONTINUE
+  180 CONTINUE
+      IF (KODE.EQ.2) GO TO 190
+      ANS(1) = S - XDMLN
+      RETURN
+  190 CONTINUE
+      IF (XDMY.EQ.X) RETURN
+      XQ = XDMY/X
+      ANS(1) = S - ALOG(XQ)
+      RETURN
+C-----------------------------------------------------------------------
+C     COMPUTE BY SERIES (X+K)**(-(N+1)) , K=0,1,2,...
+C-----------------------------------------------------------------------
+  200 CONTINUE
+      NN = INT(FLN) + 1
+      NP = N + 1
+      T1 = (FNS+1.0E0)*XLN
+      T = EXP(-T1)
+      S = T
+      DEN = X
+      DO 210 I=1,NN
+        DEN = DEN + 1.0E0
+        TRM(I) = DEN**(-NP)
+        S = S + TRM(I)
+  210 CONTINUE
+      ANS(1) = S
+      IF (N.NE.0) GO TO 220
+      IF (KODE.EQ.2) ANS(1) = S + XLN
+  220 CONTINUE
+      IF (M.EQ.1) RETURN
+C-----------------------------------------------------------------------
+C     GENERATE HIGHER DERIVATIVES, J.GT.N
+C-----------------------------------------------------------------------
+      TOL = WDTOL/5.0E0
+      DO 250 J=2,M
+        T = T/X
+        S = T
+        TOLS = T*TOL
+        DEN = X
+        DO 230 I=1,NN
+          DEN = DEN + 1.0E0
+          TRM(I) = TRM(I)/DEN
+          S = S + TRM(I)
+          IF (TRM(I).LT.TOLS) GO TO 240
+  230   CONTINUE
+  240   CONTINUE
+        ANS(J) = S
+  250 CONTINUE
+      RETURN
+C-----------------------------------------------------------------------
+C     SMALL X.LT.UNIT ROUND OFF
+C-----------------------------------------------------------------------
+  260 CONTINUE
+      ANS(1) = X**(-N-1)
+      IF (M.EQ.1) GO TO 280
+      K = 1
+      DO 270 I=2,M
+        ANS(K+1) = ANS(K)/X
+        K = K + 1
+  270 CONTINUE
+  280 CONTINUE
+      IF (N.NE.0) RETURN
+      IF (KODE.EQ.2) ANS(1) = ANS(1) + XLN
+      RETURN
+  290 CONTINUE
+      IF (T.GT.0.0E0) GO TO 380
+      GO TO 370
+C-----------------------------------------------------------------------
+C     ERROR MESSAGES
+C-----------------------------------------------------------------------
+  300 IF (IFLAG.NE.0) GO TO 310
+      CALL XGETF(KONTR)
+      CALL XSETF(-1)
+  310 GO TO (320, 330, 340, 350), ISET
+  320 CALL XERROR(25H PSIFN, X IS NOT POSITIVE, 25, 2, 1)
+      IFLAG = 1
+      GO TO 10
+  330 CALL XERROR(46H PSIFN, N IS NOT GREATER THAN OR EQUAL TO ZERO,
+     * 46, 2, 1)
+      IFLAG = 1
+      GO TO 20
+  340 CALL XERROR(26H PSIFN, KODE IS NOT 1 OR 2, 26, 2, 1)
+      IFLAG = 1
+      GO TO 30
+  350 CALL XERROR(34H PSIFN, M IS NOT GREATER THAN ZERO, 34, 2, 1)
+      IFLAG = 1
+      GO TO 40
+  360 CALL XSETF(KONTR)
+      CALL XERROR(34H PSIFN, END INPUT ERRORS FOR PSIFN, 34, 2, 1)
+      RETURN
+  370 CALL XERROR(48H PSIFN, OVERFLOW, X TOO SMALL OR N+M-1 TOO LARGE,
+     * 48, 4, 1)
+      RETURN
+  380 CALL XERROR(49H PSIFN, UNDERFLOW, X TOO LARGE OR N+M-1 TOO LARGE,
+     * 49, 3, 1)
+      RETURN
+  390 CALL XERROR(44H PSIFN, INCREASE THE DIMENSION OF TRMR(NMAX), 44,
+     * 2, 1)
+      RETURN
+      END
+C     PROGRAM DQCPSI(INPUT,OUTPUT,TAPE6=OUTPUT)                         MAN   10
+C                                                                       MAN   20
+C     ABSTRACT  *** A DOUBLE PRECISION ROUTINE ***                      MAN   30
+C     PROGRAM DQCPSI IS A QUICK CHECK DRIVER WHICH EXERCISES THE MAJOR  MAN   40
+C     LOOPS IN SUBROUTINE DPSIFN(X,N,KODE,M,ANS) FOR SCALED DERIVATIVES MAN   50
+C     OF THE PSI FUNCTION.  FOR N=0, THE PSI FUNCTIONS ARE CALCULATED   MAN   60
+C     EXPLICITLY AND CHECKED AGAINST EVALUATIONS FROM DPSIFN. FOR       MAN   70
+C     N.GT.0, CONSISTENCY CHECKS ARE MADE BY COMPARING A SEQUENCE       MAN   80
+C     AGAINST SINGLE EVALUATIONS OF DPSIFN, ONE AT A TIME.              MAN   90
+C     IF THE RELATIVE ERROR IS LESS THAN 1000 TIMES THE MAXIMUM OF      MAN  100
+C     UNIT ROUNDOFF AND 1.0D-18, THEN THE TEST IS PASSED--IF NOT,       MAN  110
+C     THEN X, THE VALUES TO BE COMPARED, THE RELATIVE ERROR AND         MAN  120
+C     PARAMETERS KODE AND N ARE WRITTEN ON LOGICAL UNIT 6 WHERE N IS    MAN  130
+C     THE ORDER OF THE DERIVATIVE AND KODE IS A SELECTION PARAMETER     MAN  140
+C     DEFINED IN THE PROLOGUE TO DPSIFN.  UNDERFLOW AND OVERFLOW TESTS  MAN  150
+C     ARE MADE AND ERROR CONDITIONS ARE TRIGGERED.                      MAN  160
+C                                                                       MAN  170
+C     FUNCTIONS I1MACH AND D1MACH MUST BE INITIALIZED ACCORDING TO THE  MAN  180
+C     PROLOGUE IN EACH FUNCTION FOR THE MACHINE ENVIRONMENT BEFORE      MAN  190
+C     DQCPSI OR DPSIFN CAN BE EXECUTED.                                 MAN  200
+C                                                                       MAN  210
+      INTEGER I, IFLG, IX, KODE, LUN, M, N, NM, NN                      MAN  220
+      DOUBLE PRECISION ER, EULER, PSI1, PSI2, R1M4, S, TOL, X           MAN  230
+      DOUBLE PRECISION D1MACH                                           MAN  240
+      DIMENSION PSI1(3), PSI2(20)                                       MAN  250
+      DATA LUN /6/                                                      MAN  260
+      DATA EULER /0.5772156649015328606D0/                              MAN  270
+C-----------------------------------------------------------------------MAN  280
+C     CALLS TO SLATEC ERROR PACKAGE TO OVERRIDE FATAL ERRORS AND PRINT  MAN  290
+C     ON UNIT LUN                                                       MAN  300
+C     CALL XSETF(-1)                                                    MAN  310
+C     CALL XSETUN(LUN)                                                  MAN  320
+C-----------------------------------------------------------------------MAN  330
+      CALL XSETF(-1)                                                    MAN  340
+      CALL XSETUN(LUN)                                                  MAN  350
+      R1M4 = D1MACH(4)                                                  MAN  360
+      TOL = 1000.0D0*DMAX1(R1M4,1.0D-18)                                MAN  370
+      WRITE (LUN,99999)                                                 MAN  380
+99999 FORMAT (1H1//35H QUICK CHECK DIAGNOSTICS FOR DPSIFN//)            MAN  390
+C-----------------------------------------------------------------------MAN  400
+C     CHECK PSI(I) AND PSI(I-0.5), I=1,2,...                            MAN  410
+C-----------------------------------------------------------------------MAN  420
+      IFLG = 0                                                          MAN  430
+      N = 0                                                             MAN  440
+      DO 50 KODE=1,2                                                    MAN  450
+        DO 40 M=1,2                                                     MAN  460
+          S = -EULER + DBLE(FLOAT(M-1))*(-2.0D0*DLOG(2.0D0))            MAN  470
+          X = 1.0D0 - DBLE(FLOAT(M-1))*0.5D0                            MAN  480
+          DO 30 I=1,20                                                  MAN  490
+            CALL DPSIFN(X, N, KODE, 1, PSI2)                            MAN  500
+            PSI1(1) = -S + DBLE(FLOAT(KODE-1))*DLOG(X)                  MAN  510
+            ER = DABS((PSI1(1)-PSI2(1))/PSI1(1))                        MAN  520
+            IF (ER.LE.TOL) GO TO 20                                     MAN  530
+            IF (IFLG.NE.0) GO TO 10                                     MAN  540
+            WRITE (LUN,99998)                                           MAN  550
+99998       FORMAT (8X, 1HX, 13X, 4HPSI1, 11X, 4HPSI2, 9X, 7HREL ERR,   MAN  560
+     *       5X, 4HKODE, 3X, 1HN)                                       MAN  570
+   10       CONTINUE                                                    MAN  580
+            IFLG = IFLG + 1                                             MAN  590
+            WRITE (LUN,99997) X, PSI1(1), PSI2(I), ER, KODE, N          MAN  600
+99997       FORMAT (4E15.6, 2I5)                                        MAN  610
+            IF (IFLG.GT.200) GO TO 150                                  MAN  620
+   20       CONTINUE                                                    MAN  630
+            S = S + 1.0D0/X                                             MAN  640
+            X = X + 1.0D0                                               MAN  650
+   30     CONTINUE                                                      MAN  660
+   40   CONTINUE                                                        MAN  670
+   50 CONTINUE                                                          MAN  680
+C-----------------------------------------------------------------------MAN  690
+C     CHECK SMALL X.LT.UNIT ROUNDOFF                                    MAN  700
+C-----------------------------------------------------------------------MAN  710
+      KODE = 1                                                          MAN  720
+      X = TOL/10000.0D0                                                 MAN  730
+      N = 1                                                             MAN  740
+      CALL DPSIFN(X, N, KODE, 1, PSI2)                                  MAN  750
+      PSI1(1) = X**(-N-1)                                               MAN  760
+      ER = DABS((PSI1(1)-PSI2(1))/PSI1(1))                              MAN  770
+      IF (ER.LE.TOL) GO TO 70                                           MAN  780
+      IF (IFLG.NE.0) GO TO 60                                           MAN  790
+      WRITE (LUN,99998)                                                 MAN  800
+   60 CONTINUE                                                          MAN  810
+      IFLG = IFLG + 1                                                   MAN  820
+      WRITE (LUN,99997) X, PSI1(1), PSI2(1), ER, KODE, N                MAN  830
+   70 CONTINUE                                                          MAN  840
+C-----------------------------------------------------------------------MAN  850
+C     CONSISTENCY TESTS FOR N.GE.0                                      MAN  860
+C-----------------------------------------------------------------------MAN  870
+      DO 130 KODE=1,2                                                   MAN  880
+        DO 120 M=1,5                                                    MAN  890
+          DO 110 N=1,16,5                                               MAN  900
+            NN = N - 1                                                  MAN  910
+            X = 0.1D0                                                   MAN  920
+            DO 100 IX=1,25,2                                            MAN  930
+              X = X + 1.0D0                                             MAN  940
+              CALL DPSIFN(X, NN, KODE, M, PSI2)                         MAN  950
+              DO 90 I=1,M                                               MAN  960
+                NM = NN + I - 1                                         MAN  970
+                CALL DPSIFN(X, NM, KODE, 1, PSI1)                       MAN  980
+                ER = DABS((PSI2(I)-PSI1(1))/PSI1(1))                    MAN  990
+                IF (ER.LT.TOL) GO TO 90                                 MAN 1000
+                IF (IFLG.NE.0) GO TO 80                                 MAN 1010
+                WRITE (LUN,99998)                                       MAN 1020
+   80           CONTINUE                                                MAN 1030
+                IFLG = IFLG + 1                                         MAN 1040
+                WRITE (LUN,99997) X, PSI1(1), PSI2(I), ER, KODE, NM     MAN 1050
+   90         CONTINUE                                                  MAN 1060
+  100       CONTINUE                                                    MAN 1070
+  110     CONTINUE                                                      MAN 1080
+  120   CONTINUE                                                        MAN 1090
+  130 CONTINUE                                                          MAN 1100
+      IF (IFLG.NE.0) GO TO 140                                          MAN 1110
+      WRITE (LUN,99996)                                                 MAN 1120
+99996 FORMAT (//16H QUICK CHECKS OK//)                                  MAN 1130
+  140 CONTINUE                                                          MAN 1140
+C-----------------------------------------------------------------------MAN 1150
+C     TRIGGER ERROR DIAGNOSTICS                                         MAN 1160
+C-----------------------------------------------------------------------MAN 1170
+      WRITE (LUN,99995)                                                 MAN 1180
+99995 FORMAT (//27H TRIGGER 6 ERROR CONDITIONS//)                       MAN 1190
+      X = -1.0D0                                                        MAN 1200
+      N = -1                                                            MAN 1210
+      KODE = -1                                                         MAN 1220
+      M = -1                                                            MAN 1230
+      CALL DPSIFN(X, N, KODE, M, PSI1)                                  MAN 1240
+C-----------------------------------------------------------------------MAN 1250
+C     UNDERFLOW AND OVERFLOW TESTS                                      MAN 1260
+C-----------------------------------------------------------------------MAN 1270
+      X = D1MACH(1)                                                     MAN 1280
+      N = 10                                                            MAN 1290
+      KODE = 1                                                          MAN 1300
+      CALL DPSIFN(X, N, KODE, 1, PSI1)                                  MAN 1310
+      X = D1MACH(2)                                                     MAN 1320
+      CALL DPSIFN(X, N, KODE, 1, PSI1)                                  MAN 1330
+      STOP                                                              MAN 1340
+  150 CONTINUE                                                          MAN 1350
+      WRITE (LUN,99994)                                                 MAN 1360
+99994 FORMAT (//52H PROCESSING OF MAIN LOOPS TERMINATED BECAUSE THE NUM,MAN 1370
+     * 36HBER OF DIAGNOSTIC PRINTS EXCEEDS 200//)                       MAN 1380
+      GO TO 140                                                         MAN 1390
+      END                                                               MAN 1400
+      SUBROUTINE DPSIFN(X, N, KODE, M, ANS)                             DPS   10
+C
+C     WRITTEN BY D.E. AMOS, JUNE, 1982.
+C
+C     REFERENCES
+C         HANDBOOK OF MATHEMATICAL FUNCTIONS, AMS 55, NATIONAL BUREAU
+C         OF STANDARDS BY M. ABRAMOWITZ AND I.A. STEGUN, 1964, PP.
+C         258-260, EQTNS. 6.3.5, 6.3.18, 6.4.6, 6.4.9, 6.4.10
+C
+C         ACM TRANS. MATH SOFTWARE, 1983.
+C
+C     ABSTRACT     *** A DOUBLE PRECISION ROUTINE ***
+C         DPSIFN COMPUTES M MEMBER SEQUENCES OF SCALED DERIVATIVES OF
+C         THE PSI FUNCTION
+C
+C              W(K,X)=(-1)**(K+1)*PSI(K,X)/GAMMA(K+1)
+C
+C         K=N,...,N+M-1 WHERE PSI(K,X) IS THE K-TH DERIVATIVE OF THE PSI
+C         FUNCTION.  ON KODE=1, DPSIFN RETURNS THE SCALED DERIVATIVES
+C         AS DESCRIBED.  KODE=2 IS OPERATIVE ONLY WHEN K=0 AND DPSIFN
+C         RETURNS -PSI(X) + LN(X).  THAT IS, THE LOGARITHMIC BEHAVIOR
+C         FOR LARGE X IS REMOVED WHEN KODE=2 AND K=0. WHEN SUMS OR
+C         DIFFERENCES OF PSI FUNCTIONS ARE COMPUTED, THE LOGARITHMIC
+C         TERMS CAN BE COMBINED ANALYTICALLY AND COMPUTED SEFARATELY
+C         TO HELP RETAIN SIGNIFICANT DIGITS.
+C
+C         THE BASIC METHOD OF EVALUATION IS THE ASYMPTOTIC EXPANSION
+C         FOR LARGE X.GE.XMIN FOLLOWED BY BACKWARD RECURSION ON A TWO
+C         TERM RECURSION RELATION
+C
+C                  W(X+1) + X**(-N-1) = W(X).
+C
+C         THIS IS SUPPLEMENTED BY A SERIES
+C
+C                  SUM( (X+K)**(-N-1) , K=0,1,2,... )
+C
+C         WHICH CONVERGES RAPIDLY FOR LARGE N. BOTH XMIN AND THE
+C         NUMBER OF TERMS OF THE SERIES ARE CALCULATED FROM THE UNIT
+C         ROUND OFF OF THE MACHINE ENVIRONMENT.
+C
+C         FUNCTIONS I1MACH AND D1MACH MUST BE INITIALIZED ACCORDING
+C         TO  PROLOGUE INSTRUCTIONS. FIFTEEN MACHINE ENVIRONMENTS
+C         CAN BE DEFINED BY MAKING APPROPRIATE COMMENT CARDS ACTIVE
+C         IN I1MACH AND D1MACH.
+C
+C         THE NOMINAL COMPUTATIONAL ACCURACY IS THE MAXIMUM OF UNIT
+C         ROUNDOFF (=D1MACH(4)) AND 1.0D-18 SINCE CRITICAL CONSTANTS
+C         ARE GIVEN TO ONLY 18 DIGITS.
+C
+C         DPSIFN CALLS I1MACH, D1MACH, XERROR PACKAGE(18 ROUTINES)
+C
+C         PSIFN IS THE SINGLE PRECISION VERSION OF DPSIFN.
+C
+C     DESCRIPTION OF ARGUMENTS
+C
+C         INPUT      X IS DOUBLE PRECISION
+C           X      - ARGUMENT, X.GT.0.0D0
+C           N      - FIRST MEMBER OF THE SEQUENCE, 0.LE.N.LE.100
+C                    N=0 GIVES ANS(1) = -PSI(X)       ON KODE=1
+C                                       -PSI(X)+LN(X) ON KODE=2
+C           KODE   - SELECTION PARAMETER
+C                    KODE=1 RETURNS SCALED DERIVATIVES OF THE PSI
+C                    FUNCTION
+C                    KODE=2 RETURNS SCALED DERIVATIVES OF THE PSI
+C                    FUNCTION EXCEPT WHEN N=0. IN THIS CASE,
+C                    ANS(1) = -PSI(X) + LN(X) IS RETURNED.
+C           M      - NUMBER OF MEMBERS OF THE SEQUENCE, M.GE.1
+C
+C         OUTPUT     ANS IS DOUBLE PRECISION
+C           ANS    - A VECTOR OF LENGTH AT LEAST M WHOSE FIRST M
+C                    COMPONENTS CONTAIN THE SEQUENCE OF  DERIVATIVES
+C                    SCALED ACCORDING TO KODE
+C
+C         ERROR CONDITIONS
+C           AN IMPROPER INPUT IS A FATAL ERROR
+C           AN OVERFLOW IS A FATAL ERROR
+C***END PROLOGUE
+      INTEGER I, IFLAG, ISET, J, K, KODE, KONTR, M, MX, N, NMAX, NN,
+     * NP, NX
+      INTEGER I1MACH
+      DOUBLE PRECISION ANS, ARG, B, DEN, ELIM, EPS, FLN, FN, FNP, FNS,
+     * FX, RLN, RXSQ, R1M4, R1M5, S, SLOPE, T, TA, TK, TOL, TOLS, TRM,
+     * TRMR, TSS, TST, TT, T1, T2, WDTOL, X, XDMLN, XDMY, XINC, XLN,
+     * XM, XMIN, XQ, YINT
+      DOUBLE PRECISION D1MACH
+      DIMENSION B(22), TRM(22), TRMR(100), ANS(1)
+      DATA NMAX /100/
+C-----------------------------------------------------------------------
+C             BERNOULLI NUMBERS
+C-----------------------------------------------------------------------
+      DATA B(1), B(2), B(3), B(4), B(5), B(6), B(7), B(8), B(9), B(10),
+     * B(11), B(12), B(13), B(14), B(15), B(16), B(17), B(18), B(19),
+     * B(20), B(21), B(22) /1.00000000000000000D+00,
+     * -5.00000000000000000D-01,1.66666666666666667D-01,
+     * -3.33333333333333333D-02,2.38095238095238095D-02,
+     * -3.33333333333333333D-02,7.57575757575757576D-02,
+     * -2.53113553113553114D-01,1.16666666666666667D+00,
+     * -7.09215686274509804D+00,5.49711779448621554D+01,
+     * -5.29124242424242424D+02,6.19212318840579710D+03,
+     * -8.65802531135531136D+04,1.42551716666666667D+06,
+     * -2.72982310678160920D+07,6.01580873900642368D+08,
+     * -1.51163157670921569D+10,4.29614643061166667D+11,
+     * -1.37116552050883328D+13,4.88332318973593167D+14,
+     * -1.92965793419400681D+16/
+C
+C
+      IFLAG = 0
+      ISET = 1
+      IF (X.LE.0.0D0) GO TO 300
+   10 CONTINUE
+      ISET = 2
+      IF (N.LT.0) GO TO 300
+   20 CONTINUE
+      ISET = 3
+      IF (KODE.LT.1 .OR. KODE.GT.2) GO TO 300
+   30 CONTINUE
+      ISET = 4
+      IF (M.LT.1) GO TO 300
+   40 CONTINUE
+      IF (IFLAG.NE.0) GO TO 360
+      NN = N + M - 1
+      FN = DBLE(FLOAT(NN))
+      FNP = FN + 1.0D0
+      NX = MIN0(-I1MACH(15),I1MACH(16))
+      R1M5 = D1MACH(5)
+      R1M4 = D1MACH(4)*0.5D0
+      WDTOL = DMAX1(R1M4,0.5D-18)
+C-----------------------------------------------------------------------
+C     ELIM = APPROXIMATE EXPONENTIAL OVER AND UNDERFLOW LIMIT
+C-----------------------------------------------------------------------
+      ELIM = 2.302D0*(DBLE(FLOAT(NX))*R1M5-3.0D0)
+      XLN = DLOG(X)
+      T = FNP*XLN
+C-----------------------------------------------------------------------
+C     OVERFLOW AND UNDERFLOW TEST FOR SMALL AND LARGE X
+C-----------------------------------------------------------------------
+      IF (DABS(T).GT.ELIM) GO TO 290
+      IF (X.LT.WDTOL) GO TO 260
+C-----------------------------------------------------------------------
+C     COMPUTE XMIN AND THE NUMBER OF TERMS OF THE SERIES, FLN+1
+C-----------------------------------------------------------------------
+      RLN = R1M5*DBLE(FLOAT(I1MACH(14)))
+      RLN = DMIN1(RLN,18.06D0)
+      FLN = DMAX1(RLN,3.0D0) - 3.0D0
+      YINT = 3.50D0 + 0.40D0*FLN
+      SLOPE = 0.21D0 + FLN*(0.0006038D0*FLN+0.008677D0)
+      XM = YINT + SLOPE*FN
+      MX = INT(SNGL(XM)) + 1
+      XMIN = DBLE(FLOAT(MX))
+      IF (N.EQ.0) GO TO 50
+      XM = -2.302D0*RLN - DMIN1(0.0D0,XLN)
+      FNS = DBLE(FLOAT(N))
+      ARG = XM/FNS
+      ARG = DMIN1(0.0D0,ARG)
+      EPS = DEXP(ARG)
+      XM = 1.0D0 - EPS
+      IF (DABS(ARG).LT.1.0D-3) XM = -ARG
+      FLN = X*XM/EPS
+      XM = XMIN - X
+      IF (XM.GT.7.0D0 .AND. FLN.LT.15.0D0) GO TO 200
+   50 CONTINUE
+      XDMY = X
+      XDMLN = XLN
+      XINC = 0.0D0
+      IF (X.GE.XMIN) GO TO 60
+      NX = INT(SNGL(X))
+      XINC = XMIN - DBLE(FLOAT(NX))
+      XDMY = X + XINC
+      XDMLN = DLOG(XDMY)
+   60 CONTINUE
+C-----------------------------------------------------------------------
+C     GENERATE W(N+M-1,X) BY THE ASYMPTOTIC EXPANSION
+C-----------------------------------------------------------------------
+      T = FN*XDMLN
+      T1 = XDMLN + XDMLN
+      T2 = T + XDMLN
+      TK = DMAX1(DABS(T),DABS(T1),DABS(T2))
+      IF (TK.GT.ELIM) GO TO 380
+      TSS = DEXP(-T)
+      TT = 0.5D0/XDMY
+      T1 = TT
+      TST = WDTOL*TT
+      IF (NN.NE.0) T1 = TT + 1.0D0/FN
+      RXSQ = 1.0D0/(XDMY*XDMY)
+      TA = 0.5D0*RXSQ
+      T = FNP*TA
+      S = T*B(3)
+      IF (DABS(S).LT.TST) GO TO 80
+      TK = 2.0D0
+      DO 70 K=4,22
+        T = T*((TK+FN+1.0D0)/(TK+1.0D0))*((TK+FN)/(TK+2.0D0))*RXSQ
+        TRM(K) = T*B(K)
+        IF (DABS(TRM(K)).LT.TST) GO TO 80
+        S = S + TRM(K)
+        TK = TK + 2.0D0
+   70 CONTINUE
+   80 CONTINUE
+      S = (S+T1)*TSS
+      IF (XINC.EQ.0.0D0) GO TO 100
+C-----------------------------------------------------------------------
+C     BACKWARD RECUR FROM XDMY TO X
+C-----------------------------------------------------------------------
+      NX = INT(SNGL(XINC))
+      NP = NN + 1
+      IF (NX.GT.NMAX) GO TO 390
+      IF (NN.EQ.0) GO TO 160
+      XM = XINC - 1.0D0
+      FX = X + XM
+C-----------------------------------------------------------------------
+C     THIS LOOP SHOULD NOT BE CHANGED. FX IS ACCURATE WHEN X IS SMALL
+C-----------------------------------------------------------------------
+      DO 90 I=1,NX
+        TRMR(I) = FX**(-NP)
+        S = S + TRMR(I)
+        XM = XM - 1.0D0
+        FX = X + XM
+   90 CONTINUE
+  100 CONTINUE
+      ANS(M) = S
+      IF (FN.EQ.0.0D0) GO TO 180
+C-----------------------------------------------------------------------
+C     GENERATE LOWER DERIVATIVES, J.LT.N+M-1
+C-----------------------------------------------------------------------
+      IF (M.EQ.1) RETURN
+      DO 150 J=2,M
+        FNP = FN
+        FN = FN - 1.0D0
+        TSS = TSS*XDMY
+        T1 = TT
+        IF (FN.NE.0.0D0) T1 = TT + 1.0D0/FN
+        T = FNP*TA
+        S = T*B(3)
+        IF (DABS(S).LT.TST) GO TO 120
+        TK = 3.0D0 + FNP
+        DO 110 K=4,22
+          TRM(K) = TRM(K)*FNP/TK
+          IF (DABS(TRM(K)).LT.TST) GO TO 120
+          S = S + TRM(K)
+          TK = TK + 2.0D0
+  110   CONTINUE
+  120   CONTINUE
+        S = (S+T1)*TSS
+        IF (XINC.EQ.0.0D0) GO TO 140
+        IF (FN.EQ.0.0D0) GO TO 160
+        XM = XINC - 1.0D0
+        FX = X + XM
+        DO 130 I=1,NX
+          TRMR(I) = TRMR(I)*FX
+          S = S + TRMR(I)
+          XM = XM - 1.0D0
+          FX = X + XM
+  130   CONTINUE
+  140   CONTINUE
+        MX = M - J + 1
+        ANS(MX) = S
+        IF (FN.EQ.0.0D0) GO TO 180
+  150 CONTINUE
+      RETURN
+C-----------------------------------------------------------------------
+C     RECURSION FOR N = 0
+C-----------------------------------------------------------------------
+  160 CONTINUE
+      DO 170 I=1,NX
+        S = S + 1.0D0/(X+DBLE(FLOAT(NX-I)))
+  170 CONTINUE
+  180 CONTINUE
+      IF (KODE.EQ.2) GO TO 190
+      ANS(1) = S - XDMLN
+      RETURN
+  190 CONTINUE
+      IF (XDMY.EQ.X) RETURN
+      XQ = XDMY/X
+      ANS(1) = S - DLOG(XQ)
+      RETURN
+C-----------------------------------------------------------------------
+C     COMPUTE BY SERIES (X+K)**(-(N+1)) , K=0,1,2,...
+C-----------------------------------------------------------------------
+  200 CONTINUE
+      NN = INT(SNGL(FLN)) + 1
+      NP = N + 1
+      T1 = (FNS+1.0D0)*XLN
+      T = DEXP(-T1)
+      S = T
+      DEN = X
+      DO 210 I=1,NN
+        DEN = DEN + 1.0D0
+        TRM(I) = DEN**(-NP)
+        S = S + TRM(I)
+  210 CONTINUE
+      ANS(1) = S
+      IF (N.NE.0) GO TO 220
+      IF (KODE.EQ.2) ANS(1) = S + XLN
+  220 CONTINUE
+      IF (M.EQ.1) RETURN
+C-----------------------------------------------------------------------
+C     GENERATE HIGHER DERIVATIVES, J.GT.N
+C-----------------------------------------------------------------------
+      TOL = WDTOL/5.0D0
+      DO 250 J=2,M
+        T = T/X
+        S = T
+        TOLS = T*TOL
+        DEN = X
+        DO 230 I=1,NN
+          DEN = DEN + 1.0D0
+          TRM(I) = TRM(I)/DEN
+          S = S + TRM(I)
+          IF (TRM(I).LT.TOLS) GO TO 240
+  230   CONTINUE
+  240   CONTINUE
+        ANS(J) = S
+  250 CONTINUE
+      RETURN
+C-----------------------------------------------------------------------
+C     SMALL X.LT.UNIT ROUND OFF
+C-----------------------------------------------------------------------
+  260 CONTINUE
+      ANS(1) = X**(-N-1)
+      IF (M.EQ.1) GO TO 280
+      K = 1
+      DO 270 I=2,M
+        ANS(K+1) = ANS(K)/X
+        K = K + 1
+  270 CONTINUE
+  280 CONTINUE
+      IF (N.NE.0) RETURN
+      IF (KODE.EQ.2) ANS(1) = ANS(1) + XLN
+      RETURN
+  290 CONTINUE
+      IF (T.GT.0.0D0) GO TO 380
+      GO TO 370
+C-----------------------------------------------------------------------
+C     ERROR MESSAGES
+C-----------------------------------------------------------------------
+  300 IF (IFLAG.NE.0) GO TO 310
+      CALL XGETF(KONTR)
+      CALL XSETF(-1)
+  310 GO TO (320, 330, 340, 350), ISET
+  320 CALL XERROR(26H DPSIFN, X IS NOT POSITIVE, 26, 2, 1)
+      IFLAG = 1
+      GO TO 10
+  330 CALL XERROR(47H DPSIFN, N IS NOT GREATER THAN OR EQUAL TO ZERO,
+     * 47, 2, 1)
+      IFLAG = 1
+      GO TO 20
+  340 CALL XERROR(27H DPSIFN, KODE IS NOT 1 OR 2, 27, 2, 1)
+      IFLAG = 1
+      GO TO 30
+  350 CALL XERROR(35H DPSIFN, M IS NOT GREATER THAN ZERO, 35, 2, 1)
+      IFLAG = 1
+      GO TO 40
+  360 CALL XSETF(KONTR)
+      CALL XERROR(36H DPSIFN, END INPUT ERRORS FOR DPSIFN, 36, 2, 1)
+      RETURN
+  370 CALL XERROR(49H DPSIFN, OVERFLOW, X TOO SMALL OR N+M-1 TOO LARGE,
+     * 49, 4, 1)
+      RETURN
+  380 CALL XERROR(50H DPSIFN, UNDERFLOW, X TOO LARGE OR N+M-1 TOO LARGE,
+     * 50, 3, 1)
+      RETURN
+  390 CALL XERROR(45H DPSIFN, INCREASE THE DIMENSION OF TRMR(NMAX), 45,
+     * 2, 1)
+      RETURN
+      END
+      SUBROUTINE FDUMP                                                  FDUMP  2
+C***BEGIN PROLOGUE  FDUMP
+C***REVISION DATE  811015   (YYMMDD)
+C***CATEGORY NO.  Q2,N2
+C***KEYWORDS  SYMBOLIC DUMP,DUMP
+C***DATE WRITTEN  8/79
+C***AUTHOR  JONES R.E. (SLA)
+C***PURPOSE
+C  SYMBOLIC DUMP (SHOULD BE LOCALLY WRITTEN)
+C***DESCRIPTION
+C        ***NOTE*** MACHINE DEPENDENT ROUTINE
+C        FDUMP IS INTENDED TO BE REPLACED BY A LOCALLY WRITTEN
+C        VERSION WHICH PRODUCES A SYMBOLIC DUMP.  FAILING THIS,
+C        IT SHOULD BE REPLACED BY A VERSION WHICH PRINTS THE
+C        SUBPROGRAM NESTING LIST.  NOTE THAT THIS DUMP MUST BE
+C        PRINTED ON EACH OF UP TO FIVE FILES, AS INDICATED BY THE
+C        XGETUA ROUTINE.  SEE XSETUA AND XGETUA FOR DETAILS.
+C
+C     WRITTEN BY RON JONES, WITH SLATEC COMMON MATH LIBRARY SUBCOMMITTEE
+C     LATEST REVISION ---  23 MAY 1979
+C
+C***REFERENCES
+C   JONES R.E., *SLATEC COMMON MATHEMATICAL LIBRARY ERROR HANDLING
+C    PACKAGE*, SAND78-1189, SANDIA LABORATORIES, 1978.
+C***ROUTINES CALLED  (NONE)
+C***END PROLOGUE  FDUMP
+C
+C***FIRST EXECUTABLE STATEMENT  FDUMP
+      RETURN
+      END
+      FUNCTION J4SAVE(IWHICH,IVALUE,ISET)                               J4SAVE 2
+C***BEGIN PROLOGUE  J4SAVE
+C***REFER TO  XERROR
+C     ABSTRACT
+C        J4SAVE SAVES AND RECALLS SEVERAL GLOBAL VARIABLES NEEDED
+C        BY THE LIBRARY ERROR HANDLING ROUTINES.
+C
+C     DESCRIPTION OF PARAMETERS
+C      --INPUT--
+C        IWHICH - INDEX OF ITEM DESIRED.
+C                 = 1 REFERS TO CURRENT ERROR NUMBER.
+C                 = 2 REFERS TO CURRENT ERROR CONTROL FLAG.
+C                 = 3 REFERS TO CURRENT UNIT NUMBER TO WHICH ERROR
+C                     MESSAGES ARE TO BE SENT.  (0 MEANS USE STANDARD.)
+C                 = 4 REFERS TO THE MAXIMUM NUMBER OF TIMES ANY
+C                     MESSAGE IS TO BE PRINTED (AS SET BY XERMAX).
+C                 = 5 REFERS TO THE TOTAL NUMBER OF UNITS TO WHICH
+C                     EACH ERROR MESSAGE IS TO BE WRITTEN.
+C                 = 6 REFERS TO THE 2ND UNIT FOR ERROR MESSAGES
+C                 = 7 REFERS TO THE 3RD UNIT FOR ERROR MESSAGES
+C                 = 8 REFERS TO THE 4TH UNIT FOR ERROR MESSAGES
+C                 = 9 REFERS TO THE 5TH UNIT FOR ERROR MESSAGES
+C        IVALUE - THE VALUE TO BE SET FOR THE IWHICH-TH PARAMETER,
+C                 IF ISET IS .TRUE. .
+C        ISET   - IF ISET=.TRUE., THE IWHICH-TH PARAMETER WILL BE
+C                 GIVEN THE VALUE, IVALUE.  IF ISET=.FALSE., THE
+C                 IWHICH-TH PARAMETER WILL BE UNCHANGED, AND IVALUE
+C                 IS A DUMMY PARAMETER.
+C      --OUTPUT--
+C        THE (OLD) VALUE OF THE IWHICH-TH PARAMETER WILL BE RETURNED
+C        IN THE FUNCTION VALUE, J4SAVE.
+C
+C     WRITTEN BY RON JONES, WITH SLATEC COMMON MATH LIBRARY SUBCOMMITTEE
+C     ADAPTED FROM BELL LABORATORIES PORT LIBRARY ERROR HANDLER
+C     LATEST REVISION ---  23 MAY 1979
+C
+C***REFERENCES
+C   JONES R.E., *SLATEC COMMON MATHEMATICAL LIBRARY ERROR HANDLING
+C    PACKAGE*, SAND78-1189, SANDIA LABORATORIES, 1978.
+C***ROUTINES CALLED  (NONE)
+C***END PROLOGUE  J4SAVE
+C
+      LOGICAL ISET
+      INTEGER IPARAM(9)
+      DATA IPARAM(1),IPARAM(2),IPARAM(3),IPARAM(4)/0,2,0,10/
+      DATA IPARAM(5)/1/
+      DATA IPARAM(6),IPARAM(7),IPARAM(8),IPARAM(9)/0,0,0,0/
+C***FIRST EXECUTABLE STATEMENT  J4SAVE
+      J4SAVE = IPARAM(IWHICH)
+      IF (ISET) IPARAM(IWHICH) = IVALUE
+      RETURN
+      END
+      SUBROUTINE S88FMT(N,IVALUE,IFMT)                                  S88FMT 2
+C***BEGIN PROLOGUE  S88FMT
+C***REFER TO  XERROR
+C     ABSTRACT
+C        S88FMT REPLACES IFMT(1), ... ,IFMT(N) WITH THE
+C        CHARACTERS CORRESPONDING TO THE N LEAST SIGNIFICANT
+C        DIGITS OF IVALUE.
+C
+C     TAKEN FROM THE BELL LABORATORIES PORT LIBRARY ERROR HANDLER
+C     LATEST REVISION ---  7 JUNE 1978
+C
+C***REFERENCES
+C   JONES R.E., *SLATEC COMMON MATHEMATICAL LIBRARY ERROR HANDLING
+C    PACKAGE*, SAND78-1189, SANDIA LABORATORIES, 1978.
+C***ROUTINES CALLED  (NONE)
+C***END PROLOGUE  S88FMT
+C
+      DIMENSION IFMT(N),IDIGIT(10)
+      DATA IDIGIT(1),IDIGIT(2),IDIGIT(3),IDIGIT(4),IDIGIT(5),
+     1     IDIGIT(6),IDIGIT(7),IDIGIT(8),IDIGIT(9),IDIGIT(10)
+     2     /1H0,1H1,1H2,1H3,1H4,1H5,1H6,1H7,1H8,1H9/
+C***FIRST EXECUTABLE STATEMENT  S88FMT
+      NT = N
+      IT = IVALUE
+   10    IF (NT .EQ. 0) RETURN
+         INDEX = MOD(IT,10)
+         IFMT(NT) = IDIGIT(INDEX+1)
+         IT = IT/10
+         NT = NT - 1
+         GO TO 10
+      END
+      SUBROUTINE XERABT(MESSG,NMESSG)                                   XERABT 2
+C***BEGIN PROLOGUE  XERABT
+C***REVISION DATE  811015   (YYMMDD)
+C***CATEGORY NO.  Q
+C***KEYWORDS  XERROR,ERROR,ABORT
+C***DATE WRITTEN  AUGUST 1979
+C***AUTHOR  JONES R.E. (SLA)
+C***PURPOSE
+C ABORTS PROGRAM EXECUTION AND PRINTS ERROR MESSAGE
+C***DESCRIPTION
+C     ABSTRACT
+C        ***NOTE*** MACHINE DEPENDENT ROUTINE
+C        XERABT ABORTS THE EXECUTION OF THE PROGRAM.
+C        THE ERROR MESSAGE CAUSING THE ABORT IS GIVEN IN THE CALLING
+C        SEQUENCE IN CASE ONE NEEDS IT FOR PRINTING ON A DAYFILE,
+C        FOR EXAMPLE.
+C
+C     DESCRIPTION OF PARAMETERS
+C        MESSG AND NMESSG ARE AS IN XERROR, EXCEPT THAT NMESSG MAY
+C        BE ZERO, IN WHICH CASE NO MESSAGE IS BEING SUPPLIED.
+C
+C     WRITTEN BY RON JONES, WITH SLATEC COMMON MATH LIBRARY SUBCOMMITTEE
+C     LATEST REVISION ---  7 JUNE 1978
+C
+C***REFERENCES
+C   JONES R.E., *SLATEC COMMON MATHEMATICAL LIBRARY ERROR HANDLING
+C    PACKAGE*, SAND78-1189, SANDIA LABORATORIES, 1978.
+C***ROUTINES CALLED  (NONE)
+C***END PROLOGUE  XERABT
+C
+      DIMENSION MESSG(NMESSG)
+C***FIRST EXECUTABLE STATEMENT  XERABT
+      STOP
+C     RETURN
+      END
+      SUBROUTINE XERCLR                                                 XERCLR 2
+C***BEGIN PROLOGUE  XERCLR
+C***REVISION DATE  811015   (YYMMDD)
+C***CATEGORY NO.  Q
+C***KEYWORDS  XERROR,ERROR,CLEAR
+C***DATE WRITTEN  AUGUST 1979
+C***AUTHOR  JONES R.E. (SLA)
+C***PURPOSE
+C RESETS CURRENT ERROR NUMBER TO ZERO
+C***DESCRIPTION
+C     ABSTRACT
+C        THIS ROUTINE SIMPLY RESETS THE CURRENT ERROR NUMBER TO ZERO.
+C        THIS MAY BE NECESSARY TO DO IN ORDER TO DETERMINE THAT
+C        A CERTAIN ERROR HAS OCCURRED AGAIN SINCE THE LAST TIME
+C        NUMXER WAS REFERENCED.
+C
+C     WRITTEN BY RON JONES, WITH SLATEC COMMON MATH LIBRARY SUBCOMMITTEE
+C     LATEST REVISION ---  7 JUNE 1978
+C
+C***REFERENCES
+C   JONES R.E., *SLATEC COMMON MATHEMATICAL LIBRARY ERROR HANDLING
+C    PACKAGE*, SAND78-1189, SANDIA LABORATORIES, 1978.
+C***ROUTINES CALLED   J4SAVE
+C***END PROLOGUE  XERCLR
+C
+C***FIRST EXECUTABLE STATEMENT  XERCLR
+      JUNK = J4SAVE(1,0,.TRUE.)
+      RETURN
+      END
+      SUBROUTINE XERCTL(MESSG1,NMESSG,NERR,LEVEL,KONTRL)                XERCTL 2
+C***BEGIN PROLOGUE  XERCTL
+C***REVISION DATE  811015   (YYMMDD)
+C***CATEGORY NO.  Q
+C***KEYWORDS  XERROR,ERROR,CONTROL
+C***DATE WRITTEN  AUGUST 1979
+C***AUTHOR  JONES R.E. (SLA)
+C***PURPOSE
+C ALLOWS USER CONTROL OVER HANDLING OF INDIVIDUAL ERRORS
+C***DESCRIPTION
+C     ABSTRACT
+C        ALLOWS USER CONTROL OVER HANDLING OF INDIVIDUAL ERRORS.
+C        JUST AFTER EACH MESSAGE IS RECORDED, BUT BEFORE IT IS
+C        PROCESSED ANY FURTHER (I.E., BEFORE IT IS PRINTED OR
+C        A DECISION TO ABORT IS MADE) A CALL IS MADE TO XERCTL.
+C        IF THE USER HAS PROVIDED HIS OWN VERSION OF XERCTL, HE
+C        CAN THEN OVERRIDE THE VALUE OF KONTROL USED IN PROCESSING
+C        THIS MESSAGE BY REDEFINING ITS VALUE.
+C        KONTRL MAY BE SET TO ANY VALUE FROM -2 TO 2.
+C        THE MEANINGS FOR KONTRL ARE THE SAME AS IN XSETF, EXCEPT
+C        THAT THE VALUE OF KONTRL CHANGES ONLY FOR THIS MESSAGE.
+C        IF KONTRL IS SET TO A VALUE OUTSIDE THE RANGE FROM -2 TO 2,
+C        IT WILL BE MOVED BACK INTO THAT RANGE.
+C
+C     DESCRIPTION OF PARAMETERS
+C
+C      --INPUT--
+C        MESSG1 - THE FIRST WORD (ONLY) OF THE ERROR MESSAGE.
+C        NMESSG - SAME AS IN THE CALL TO XERROR OR XERRWV.
+C        NERR   - SAME AS IN THE CALL TO XERROR OR XERRWV.
+C        LEVEL  - SAME AS IN THE CALL TO XERROR OR XERRWV.
+C        KONTRL - THE CURRENT VALUE OF THE CONTROL FLAG AS SET
+C                 BY A CALL TO XSETF.
+C
+C      --OUTPUT--
+C        KONTRL - THE NEW VALUE OF KONTRL.  IF KONTRL IS NOT
+C                 DEFINED, IT WILL REMAIN AT ITS ORIGINAL VALUE.
+C                 THIS CHANGED VALUE OF CONTROL AFFECTS ONLY
+C                 THE CURRENT OCCURRENCE OF THE CURRENT MESSAGE.
+C
+C***REFERENCES
+C   JONES R.E., *SLATEC COMMON MATHEMATICAL LIBRARY ERROR HANDLING
+C    PACKAGE*, SAND78-1189, SANDIA LABORATORIES, 1978.
+C***ROUTINES CALLED  (NONE)
+C***END PROLOGUE  XERCTL
+C
+C***FIRST EXECUTABLE STATEMENT  XERCTL
+      RETURN
+      END
+      SUBROUTINE XERDMP                                                 XERDMP 2
+C***BEGIN PROLOGUE  XERDMP
+C***REVISION DATE  811015   (YYMMDD)
+C***CATEGORY NO.  Q
+C***KEYWORDS  XERROR,ERROR,TABLES
+C***DATE WRITTEN  AUGUST 1979
+C***AUTHOR  JONES R.E. (SLA)
+C***PURPOSE
+C PRINTS THE ERROR TABLES AND THEN CLEARS THEM
+C***DESCRIPTION
+C     ABSTRACT
+C        XERDMP PRINTS THE ERROR TABLES, THEN CLEARS THEM.
+C
+C     WRITTEN BY RON JONES, WITH SLATEC COMMON MATH LIBRARY SUBCOMMITTEE
+C     LATEST REVISION ---  7 JUNE 1978
+C
+C***REFERENCES
+C   JONES R.E., *SLATEC COMMON MATHEMATICAL LIBRARY ERROR HANDLING
+C    PACKAGE*, SAND78-1189, SANDIA LABORATORIES, 1978.
+C***ROUTINES CALLED XERSAV
+C***END PROLOGUE  XERDMP
+C
+C***FIRST EXECUTABLE STATEMENT  XERDMP
+      CALL XERSAV(1H ,0,0,0,KOUNT)
+      RETURN
+      END
+      SUBROUTINE XERMAX(MAX)                                            XERMAX 2
+C***BEGIN PROLOGUE  XERMAX
+C***REVISION DATE  811015   (YYMMDD)
+C***CATEGORY NO.  Q
+C***KEYWORDS  XERROR,ERROR,MAXIMUM ERROR COUNT
+C***DATE WRITTEN  AUGUST 1979
+C***AUTHOR  JONES R.E. (SLA)
+C***PURPOSE
+C SETS MAXIMUM NUMBER OF TIMES ANY ERROR MESSAGE IS TO BE PRINTED
+C***DESCRIPTION
+C     ABSTRACT
+C        XERMAX SETS THE MAXIMUM NUMBER OF TIMES ANY MESSAGE
+C        IS TO BE PRINTED.  THAT IS, NON-FATAL MESSAGES ARE
+C        NOT TO BE PRINTED AFTER THEY HAVE OCCURED MAX TIMES.
+C        SUCH NON-FATAL MESSAGES MAY BE PRINTED LESS THAN
+C        MAX TIMES EVEN IF THEY OCCUR MAX TIMES, IF ERROR
+C        SUPPRESSION MODE (KONTRL=0) IS EVER IN EFFECT.
+C
+C     DESCRIPTION OF PARAMETER
+C      --INPUT--
+C        MAX - THE MAXIMUM NUMBER OF TIMES ANY ONE MESSAGE
+C              IS TO BE PRINTED.
+C
+C     WRITTEN BY RON JONES, WITH SLATEC COMMON MATH LIBRARY SUBCOMMITTEE
+C     LATEST REVISION ---  7 JUNE 1978
+C
+C***REFERENCES
+C   JONES R.E., *SLATEC COMMON MATHEMATICAL LIBRARY ERROR HANDLING
+C    PACKAGE*, SAND78-1189, SANDIA LABORATORIES, 1978.
+C***ROUTINES CALLED  J4SAVE
+C***END PROLOGUE  XERMAX
+C
+C***FIRST EXECUTABLE STATEMENT  XERMAX
+      JUNK = J4SAVE(4,MAX,.TRUE.)
+      RETURN
+      END
+      SUBROUTINE XERPRT(MESSG,NMESSG)                                   XERPRT 2
+C***BEGIN PROLOGUE  XERPRT
+C***REVISION DATE  811015   (YYMMDD)
+C***CATEGORY NO.  Q
+C***KEYWORDS  XERROR,ERROR,PRINT
+C***DATE WRITTEN  AUGUST 1979
+C***AUTHOR  JONES R.E. (SLA)
+C***PURPOSE
+C PRINTS ERROR MESSAGES
+C***DESCRIPTION
+C     ABSTRACT
+C        PRINT THE HOLLERITH MESSAGE IN MESSG, OF LENGTH NMESSG,
+C        ON EACH FILE INDICATED BY XGETUA.
+C
+C     PREPARE FORMAT
+C***REFERENCES
+C   JONES R.E., *SLATEC COMMON MATHEMATICAL LIBRARY ERROR HANDLING
+C    PACKAGE*, SAND78-1189, SANDIA LABORATORIES, 1978.
+C***ROUTINES CALLED  XGETUA,S88FMT,I1MACH
+C***END PROLOGUE  XERPRT
+C
+      INTEGER F(10),G(14),LUN(5)
+      DIMENSION MESSG(NMESSG)
+      DATA F(1),F(2),F(3),F(4),F(5),F(6),F(7),F(8),F(9),F(10)
+     1   / 1H( ,1H1 ,1HX ,1H, ,1H  ,1H  ,1HA ,1H  ,1H  ,1H) /
+      DATA G(1),G(2),G(3),G(4),G(5),G(6),G(7),G(8),G(9),G(10)
+     1   / 1H( ,1H1 ,1HX ,1H  ,1H  ,1H  ,1H  ,1H  ,1H  ,1H  /
+      DATA G(11),G(12),G(13),G(14)
+     1   / 1H   ,1H   ,1H   ,1H)  /
+      DATA LA/1HA/,LCOM/1H,/,LBLANK/1H /
+C    PREPARE FORMAT FOR WHOLE LINES
+C***FIRST EXECUTABLE STATEMENT  XERPRT
+      NCHAR = I1MACH(6)
+      NFIELD = 72/NCHAR
+      CALL S88FMT(2,NFIELD,F(5))
+      CALL S88FMT(2,NCHAR,F(8))
+C     PREPARE FORMAT FOR LAST, PARTIAL LINE, IF NEEDED
+      NCHARL = NFIELD*NCHAR
+      NLINES = NMESSG/NCHARL
+      NWORD  = NLINES*NFIELD
+      NCHREM = NMESSG - NLINES*NCHARL
+      IF (NCHREM.LE.0) GO TO 40
+         DO 10 I=4,13
+10          G(I) = LBLANK
+         NFIELD = NCHREM/NCHAR
+         IF (NFIELD.LE.0) GO TO 20
+C        PREPARE WHOLE WORD FIELDS
+            G(4) = LCOM
+            CALL S88FMT(2,NFIELD,G(5))
+            G(7) = LA
+            CALL S88FMT(2,NCHAR,G(8))
+20       CONTINUE
+         NCHLST = MOD(NCHREM,NCHAR)
+         IF (NCHLST.LE.0) GO TO 30
+C        PREPARE PARTIAL WORD FIELD
+            G(10) = LCOM
+            G(11) = LA
+            CALL S88FMT(2,NCHLST,G(12))
+30       CONTINUE
+40    CONTINUE
+C     PRINT THE MESSAGE
+      NWORD1 = NWORD+1
+      NWORD2 = (NMESSG+NCHAR-1)/NCHAR
+      CALL XGETUA(LUN,NUNIT)
+      DO 50 KUNIT = 1,NUNIT
+         IUNIT = LUN(KUNIT)
+         IF (IUNIT.EQ.0) IUNIT = I1MACH(4)
+         IF (NWORD.GT.0) WRITE (IUNIT,F) (MESSG(I),I=1,NWORD)
+         IF (NCHREM.GT.0) WRITE (IUNIT,G) (MESSG(I),I=NWORD1,NWORD2)
+50    CONTINUE
+      RETURN
+      END
+      SUBROUTINE XERROR(MESSG,NMESSG,NERR,LEVEL)                        XERROR 2
+C***BEGIN PROLOGUE  XERROR
+C***REVISION DATE  811015   (YYMMDD)
+C***CATEGORY NO.  Q
+C***KEYWORDS  XERROR,ERROR
+C***DATE WRITTEN  AUGUST 1979
+C***AUTHOR  JONES R.E. (SLA)
+C***PURPOSE
+C PROCESSES AN ERROR (DIAGNOSTIC) MESSAGE
+C***DESCRIPTION
+C     ABSTRACT
+C        XERROR PROCESSES A DIAGNOSTIC MESSAGE, IN A MANNER
+C        DETERMINED BY THE VALUE OF LEVEL AND THE CURRENT VALUE
+C        OF THE LIBRARY ERROR CONTROL FLAG, KONTRL.
+C        (SEE SUBROUTINE XSETF FOR DETAILS.)
+C
+C     DESCRIPTION OF PARAMETERS
+C      --INPUT--
+C        MESSG - THE HOLLERITH MESSAGE TO BE PROCESSED, CONTAINING
+C                NO MORE THAN 72 CHARACTERS.
+C        NMESSG- THE ACTUAL NUMBER OF CHARACTERS IN MESSG.
+C        NERR  - THE ERROR NUMBER ASSOCIATED WITH THIS MESSAGE.
+C                NERR MUST NOT BE ZERO.
+C        LEVEL - ERROR CATEGORY.
+C                =2 MEANS THIS IS AN UNCONDITIONALLY FATAL ERROR.
+C                =1 MEANS THIS IS A RECOVERABLE ERROR.  (I.E., IT IS
+C                   NON-FATAL IF XSETF HAS BEEN APPROPRIATELY CALLED.)
+C                =0 MEANS THIS IS A WARNING MESSAGE ONLY.
+C                =-1 MEANS THIS IS A WARNING MESSAGE WHICH IS TO BE
+C                   PRINTED AT MOST ONCE, REGARDLESS OF HOW MANY
+C                   TIMES THIS CALL IS EXECUTED.
+C
+C     EXAMPLES
+C        CALL XERROR(23HSMOOTH -- NUM WAS ZERO.,23,1,2)
+C        CALL XERROR(43HINTEG  -- LESS THAN FULL ACCURACY ACHIEVED.,
+C                    43,2,1)
+C        CALL XERROR(65HROOTER -- ACTUAL ZERO OF F FOUND BEFORE INTERVAL
+C    1 FULLY COLLAPSED.,65,3,0)
+C        CALL XERROR(39HEXP    -- UNDERFLOWS BEING SET TO ZERO.,39,1,-1)
+C
+C     WRITTEN BY RON JONES, WITH SLATEC COMMON MATH LIBRARY SUBCOMMITTEE
+C     LATEST REVISION ---  7 FEB 1979
+C
+C***REFERENCES
+C   JONES R.E., *SLATEC COMMON MATHEMATICAL LIBRARY ERROR HANDLING
+C    PACKAGE*, SAND78-1189, SANDIA LABORATORIES, 1978.
+C***ROUTINES CALLED  XERRWV
+C***END PROLOGUE  XERROR
+C
+      DIMENSION MESSG(NMESSG)
+C***FIRST EXECUTABLE STATEMENT  XERROR
+      CALL XERRWV(MESSG,NMESSG,NERR,LEVEL,0,0,0,0,0.,0.)
+      RETURN
+      END
+      SUBROUTINE XERRWV(MESSG,NMESSG,NERR,LEVEL,NI,I1,I2,NR,R1,R2)      XERRWV 2
+C***BEGIN PROLOGUE  XERRWV
+C***REVISION DATE  811015   (YYMMDD)
+C***CATEGORY NO.  Q
+C***KEYWORDS  XERROR,ERROR,PRINT WITH VALUES
+C***DATE WRITTEN  MARCH 19, 1980
+C***AUTHOR  JONES R.E. (SLA)
+C***PURPOSE
+C PROCESSES ERROR MESSAGE ALLOWING 2 INTEGER AND TWO REAL VALUES
+C  TO BE INCLUDED IN THE MESSAGE.
+C***DESCRIPTION
+C     ABSTRACT
+C        XERRWV PROCESSES A DIAGNOSTIC MESSAGE, IN A MANNER
+C        DETERMINED BY THE VALUE OF LEVEL AND THE CURRENT VALUE
+C        OF THE LIBRARY ERROR CONTROL FLAG, KONTRL.
+C        (SEE SUBROUTINE XSETF FOR DETAILS.)
+C        IN ADDITION, UP TO TWO INTEGER VALUES AND TWO REAL
+C        VALUES MAY BE PRINTED ALONG WITH THE MESSAGE.
+C
+C     DESCRIPTION OF PARAMETERS
+C      --INPUT--
+C        MESSG - THE HOLLERITH MESSAGE TO BE PROCESSED.
+C        NMESSG- THE ACTUAL NUMBER OF CHARACTERS IN MESSG.
+C        NERR  - THE ERROR NUMBER ASSOCIATED WITH THIS MESSAGE.
+C                NERR MUST NOT BE ZERO.
+C        LEVEL - ERROR CATEGORY.
+C                =2 MEANS THIS IS AN UNCONDITIONALLY FATAL ERROR.
+C                =1 MEANS THIS IS A RECOVERABLE ERROR.  (I.E., IT IS
+C                   NON-FATAL IF XSETF HAS BEEN APPROPRIATELY CALLED.)
+C                =0 MEANS THIS IS A WARNING MESSAGE ONLY.
+C                =-1 MEANS THIS IS A WARNING MESSAGE WHICH IS TO BE
+C                   PRINTED AT MOST ONCE, REGARDLESS OF HOW MANY
+C                   TIMES THIS CALL IS EXECUTED.
+C        NI    - NUMBER OF INTEGER VALUES TO BE PRINTED. (O TO 2)
+C        I1    - FIRST INTEGER VALUE.
+C        I2    - SECOND INTEGER VALUE.
+C        NR    - NUMBER OF REAL VALUES TO BE PRINTED. (0 TO 2)
+C        R1    - FIRST REAL VALUE.
+C        R2    - SECOND REAL VALUE.
+C
+C     EXAMPLES
+C        CALL XERROR(29HSMOOTH -- NUM (=I1) WAS ZERO.,29,1,2,
+C    1   1,NUM,0,0,0.,0.)
+C        CALL XERRWV(54HQUADXY -- REQUESTED ERROR (R1) LESS THAN MINIMUM
+C    1 (R2).,54,77,1,0,0,0,2,ERRREQ,ERRMIN)
+C
+C     WRITTEN BY RON JONES, WITH SLATEC COMMON MATH LIBRARY SUBCOMMITTEE
+C     LATEST REVISION ---  19 MAR 1980
+C
+C***REFERENCES
+C   JONES R.E., *SLATEC COMMON MATHEMATICAL LIBRARY ERROR HANDLING
+C    PACKAGE*, SAND78-1189, SANDIA LABORATORIES, 1978.
+C***ROUTINES CALLED  FDUMP,I1MACH,J4SAVE,XERABT,XERCTL,XERPRT
+C                      J4SAVE
+C***END PROLOGUE  XERRWV
+C
+      DIMENSION MESSG(NMESSG),LUN(5)
+C***FIRST EXECUTABLE STATEMENT  XERRWV
+      LKNTRL = J4SAVE(2,0,.FALSE.)
+      MAXMES = J4SAVE(4,0,.FALSE.)
+C     CHECK FOR VALID INPUT
+      IF ((NMESSG.GT.0).AND.(NERR.NE.0).AND.
+     1    (LEVEL.GE.(-1)).AND.(LEVEL.LE.2)) GO TO 10
+         IF (LKNTRL.GT.0) CALL XERPRT(17HFATAL ERROR IN...,17)
+         CALL XERPRT(23HXERROR -- INVALID INPUT,23)
+         IF (LKNTRL.GT.0) CALL FDUMP
+         IF (LKNTRL.GT.0) CALL XERPRT(29HJOB ABORT DUE TO FATAL ERROR.,
+     1   29)
+         IF (LKNTRL.GT.0) CALL XERSAV(1H ,0,0,0,KDUMMY)
+         CALL XERABT(23HXERROR -- INVALID INPUT,23)
+         RETURN
+   10 CONTINUE
+C     RECORD MESSAGE
+      JUNK = J4SAVE(1,NERR,.TRUE.)
+      CALL XERSAV(MESSG,NMESSG,NERR,LEVEL,KOUNT)
+C     LET USER OVERRIDE
+      LFIRST = MESSG(1)
+      LMESSG = NMESSG
+      LERR = NERR
+      LLEVEL = LEVEL
+      CALL XERCTL(LFIRST,LMESSG,LERR,LLEVEL,LKNTRL)
+C     RESET TO ORIGINAL VALUES
+      LMESSG = NMESSG
+      LERR = NERR
+      LLEVEL = LEVEL
+      LKNTRL = MAX0(-2,MIN0(2,LKNTRL))
+      MKNTRL = IABS(LKNTRL)
+C     DECIDE WHETHER TO PRINT MESSAGE
+      IF ((LLEVEL.LT.2).AND.(LKNTRL.EQ.0)) GO TO 100
+      IF (((LLEVEL.EQ.(-1)).AND.(KOUNT.GT.MIN0(1,MAXMES)))
+     1.OR.((LLEVEL.EQ.0)   .AND.(KOUNT.GT.MAXMES))
+     2.OR.((LLEVEL.EQ.1)   .AND.(KOUNT.GT.MAXMES).AND.(MKNTRL.EQ.1))
+     3.OR.((LLEVEL.EQ.2)   .AND.(KOUNT.GT.MAX0(1,MAXMES)))) GO TO 100
+         IF (LKNTRL.LE.0) GO TO 20
+            CALL XERPRT(1H ,1)
+C           INTRODUCTION
+            IF (LLEVEL.EQ.(-1)) CALL XERPRT
+     1(57HWARNING MESSAGE...THIS MESSAGE WILL ONLY BE PRINTED ONCE.,57)
+            IF (LLEVEL.EQ.0) CALL XERPRT(13HWARNING IN...,13)
+            IF (LLEVEL.EQ.1) CALL XERPRT
+     1      (23HRECOVERABLE ERROR IN...,23)
+            IF (LLEVEL.EQ.2) CALL XERPRT(17HFATAL ERROR IN...,17)
+   20    CONTINUE
+C        MESSAGE
+         CALL XERPRT(MESSG,LMESSG)
+         CALL XGETUA(LUN,NUNIT)
+         DO 50 KUNIT=1,NUNIT
+            IUNIT = LUN(KUNIT)
+            IF (IUNIT.EQ.0) IUNIT = I1MACH(4)
+            IF (NI.GE.1) WRITE (IUNIT,22) I1
+            IF (NI.GE.2) WRITE (IUNIT,23) I2
+            IF (NR.GE.1) WRITE (IUNIT,24) R1
+            IF (NR.GE.2) WRITE (IUNIT,25) R2
+   22       FORMAT (11X,21HIN ABOVE MESSAGE, I1=,I10)
+   23       FORMAT (11X,21HIN ABOVE MESSAGE, I2=,I10)
+   24       FORMAT (11X,21HIN ABOVE MESSAGE, R1=,E20.10)
+   25       FORMAT (11X,21HIN ABOVE MESSAGE, R2=,E20.10)
+            IF (LKNTRL.LE.0) GO TO 40
+C              ERROR NUMBER
+               WRITE (IUNIT,30) LERR
+   30          FORMAT (15H ERROR NUMBER =,I10)
+   40       CONTINUE
+   50    CONTINUE
+C        TRACE-BACK
+         CALL FDUMP
+  100 CONTINUE
+      IFATAL = 0
+      IF ((LLEVEL.EQ.2).OR.((LLEVEL.EQ.1).AND.(MKNTRL.EQ.2)))
+     1IFATAL = 1
+C     QUIT HERE IF MESSAGE IS NOT FATAL
+      IF (IFATAL.LE.0) RETURN
+      IF ((LKNTRL.LE.0).OR.(KOUNT.GT.MAX0(1,MAXMES))) GO TO 120
+C        PRINT REASON FOR ABORT
+         IF (LLEVEL.EQ.1) CALL XERPRT
+     1   (35HJOB ABORT DUE TO UNRECOVERED ERROR.,35)
+         IF (LLEVEL.EQ.2) CALL XERPRT
+     1   (29HJOB ABORT DUE TO FATAL ERROR.,29)
+C        PRINT ERROR SUMMARY
+         CALL XERSAV(1H ,-1,0,0,KDUMMY)
+  120 CONTINUE
+C     ABORT
+      IF ((LLEVEL.EQ.2).AND.(KOUNT.GT.MAX0(1,MAXMES))) LMESSG = 0
+      CALL XERABT(MESSG,LMESSG)
+      RETURN
+      END
+      SUBROUTINE XERSAV(MESSG,NMESSG,NERR,LEVEL,ICOUNT)                 XERSAV 2
+C***BEGIN PROLOGUE  XERSAV
+C***REVISION DATE  811015   (YYMMDD)
+C***CATEGORY NO.  Q
+C***KEYWORDS  XERROR,ERROR,RECORD
+C***DATE WRITTEN  MARCH 19, 1980
+C***AUTHOR  JONES R.E. (SLA)
+C***PURPOSE
+C RECORDS THAT AN ERROR OCCURRED.
+C***DESCRIPTION
+C     ABSTRACT
+C        RECORD THAT THIS ERROR OCCURRED.
+C
+C     DESCRIPTION OF PARAMETERS
+C     --INPUT--
+C       MESSG, NMESSG, NERR, LEVEL ARE AS IN XERROR,
+C       EXCEPT THAT WHEN NMESSG=0 THE TABLES WILL BE
+C       DUMPED AND CLEARED, AND WHEN NMESSG IS LESS THAN ZERO THE
+C       TABLES WILL BE DUMPED AND NOT CLEARED.
+C     --OUTPUT--
+C       ICOUNT WILL BE THE NUMBER OF TIMES THIS MESSAGE HAS
+C       BEEN SEEN, OR ZERO IF THE TABLE HAS OVERFLOWED AND
+C       DOES NOT CONTAIN THIS MESSAGE SPECIFICALLY.
+C       WHEN NMESSG=0, ICOUNT WILL NOT BE ALTERED.
+C
+C     WRITTEN BY RON JONES, WITH SLATEC COMMON MATH LIBRARY SUBCOMMITTEE
+C     LATEST REVISION ---  19 MAR 1980
+C
+C***REFERENCES
+C   JONES R.E., *SLATEC COMMON MATHEMATICAL LIBRARY ERROR HANDLING
+C    PACKAGE*, SAND78-1189, SANDIA LABORATORIES, 1978.
+C***ROUTINES CALLED  XGETUA,S88FMT,I1MACH
+C***END PROLOGUE  XERSAV
+C
+      INTEGER F(17),LUN(5)
+      DIMENSION MESSG(1)
+      DIMENSION MESTAB(10),NERTAB(10),LEVTAB(10),KOUNT(10)
+      DATA MESTAB(1),MESTAB(2),MESTAB(3),MESTAB(4),MESTAB(5),
+     1     MESTAB(6),MESTAB(7),MESTAB(8),MESTAB(9),MESTAB(10)
+     2     /0,0,0,0,0,0,0,0,0,0/
+      DATA NERTAB(1),NERTAB(2),NERTAB(3),NERTAB(4),NERTAB(5),
+     1     NERTAB(6),NERTAB(7),NERTAB(8),NERTAB(9),NERTAB(10)
+     2     /0,0,0,0,0,0,0,0,0,0/
+      DATA LEVTAB(1),LEVTAB(2),LEVTAB(3),LEVTAB(4),LEVTAB(5),
+     1     LEVTAB(6),LEVTAB(7),LEVTAB(8),LEVTAB(9),LEVTAB(10)
+     2     /0,0,0,0,0,0,0,0,0,0/
+      DATA KOUNT(1),KOUNT(2),KOUNT(3),KOUNT(4),KOUNT(5),
+     1     KOUNT(6),KOUNT(7),KOUNT(8),KOUNT(9),KOUNT(10)
+     2     /0,0,0,0,0,0,0,0,0,0/
+      DATA KOUNTX/0/
+      DATA F(1),F(2),F(3),F(4),F(5),F(6),F(7),F(8),F(9),F(10),
+     1     F(11),F(12),F(13),F(14),F(15),F(16),F(17)
+     2     /1H( ,1H1 ,1HX ,1H, ,1HA ,1H  ,1H  ,1H, ,1HI ,1H  ,
+     3      1H  ,1H, ,1H2 ,1HI ,1H1 ,1H0 ,1H) /
+C***FIRST EXECUTABLE STATEMENT  XERSAV
+      IF (NMESSG.GT.0) GO TO 80
+C     DUMP THE TABLE
+         IF (KOUNT(1).EQ.0) RETURN
+C        PREPARE FORMAT
+         NCHAR = I1MACH(6)
+         CALL S88FMT(2,NCHAR,F(6))
+         NCOL = 20 - NCHAR
+         CALL S88FMT(2,NCOL,F(10))
+C        PRINT TO EACH UNIT
+         CALL XGETUA(LUN,NUNIT)
+         DO 60 KUNIT=1,NUNIT
+            IUNIT = LUN(KUNIT)
+            IF (IUNIT.EQ.0) IUNIT = I1MACH(4)
+C           PRINT TABLE HEADER
+            WRITE (IUNIT,10)
+   10       FORMAT (32H0          ERROR MESSAGE SUMMARY/
+     1              41H FIRST WORD      NERR     LEVEL     COUNT)
+C           PRINT BODY OF TABLE
+            DO 20 I=1,10
+               IF (KOUNT(I).EQ.0) GO TO 30
+               WRITE (IUNIT,F) MESTAB(I),NERTAB(I),LEVTAB(I),KOUNT(I)
+   20       CONTINUE
+   30       CONTINUE
+C           PRINT NUMBER OF OTHER ERRORS
+            IF (KOUNTX.NE.0) WRITE (IUNIT,40) KOUNTX
+   40       FORMAT (41H0OTHER ERRORS NOT INDIVIDUALLY TABULATED=,I10)
+            WRITE (IUNIT,50)
+   50       FORMAT (1X)
+   60    CONTINUE
+         IF (NMESSG.LT.0) RETURN
+C        CLEAR THE ERROR TABLES
+         DO 70 I=1,10
+   70       KOUNT(I) = 0
+         KOUNTX = 0
+         RETURN
+   80 CONTINUE
+C     PROCESS A MESSAGE...
+C     SEARCH FOR THIS MESSG, OR ELSE AN EMPTY SLOT FOR THIS MESSG,
+C     OR ELSE DETERMINE THAT THE ERROR TABLE IS FULL.
+      DO 90 I=1,10
+         II = I
+         IF (KOUNT(I).EQ.0) GO TO 110
+         IF (MESSG(1).NE.MESTAB(I)) GO TO 90
+         IF (NERR.NE.NERTAB(I)) GO TO 90
+         IF (LEVEL.NE.LEVTAB(I)) GO TO 90
+         GO TO 100
+   90 CONTINUE
+C     THREE POSSIBLE CASES...
+C     TABLE IS FULL
+         KOUNTX = KOUNTX+1
+         ICOUNT = 1
+         RETURN
+C     MESSAGE FOUND IN TABLE
+  100    KOUNT(II) = KOUNT(II) + 1
+         ICOUNT = KOUNT(II)
+         RETURN
+C     EMPTY SLOT FOUND FOR NEW MESSAGE
+  110    MESTAB(II) = MESSG(1)
+         NERTAB(II) = NERR
+         LEVTAB(II) = LEVEL
+         KOUNT(II)  = 1
+         ICOUNT = 1
+         RETURN
+      END
+      SUBROUTINE XGETF(KONTRL)                                          XGETF  2
+C***BEGIN PROLOGUE  XGETF
+C***REVISION DATE  811015   (YYMMDD)
+C***CATEGORY NO.  Q
+C***KEYWORDS  XERROR,ERROR,FLAG
+C***DATE WRITTEN  AUGUST 1979
+C***AUTHOR  JONES R.E. (SLA)
+C***PURPOSE
+C RETURNS CURRENT VALUE OF ERROR CONTROL FLAG
+C***DESCRIPTION
+C   ABSTRACT
+C        XGETF RETURNS THE CURRENT VALUE OF THE ERROR CONTROL FLAG
+C        IN KONTRL.  SEE SUBROUTINE XSETF FOR FLAG VALUE MEANINGS.
+C        (KONTRL IS AN OUTPUT PARAMETER ONLY.)
+C
+C     WRITTEN BY RON JONES, WITH SLATEC COMMON MATH LIBRARY SUBCOMMITTEE
+C     LATEST REVISION ---  7 JUNE 1978
+C
+C***REFERENCES
+C   JONES R.E., *SLATEC COMMON MATHEMATICAL LIBRARY ERROR HANDLING
+C    PACKAGE*, SAND78-1189, SANDIA LABORATORIES, 1978.
+C***ROUTINES CALLED   J4SAVE
+C***END PROLOGUE  XGETF
+C
+C***FIRST EXECUTABLE STATEMENT  XGETF
+      KONTRL = J4SAVE(2,0,.FALSE.)
+      RETURN
+      END
+      SUBROUTINE XGETUA(IUNIT,N)                                        XGETUA 2
+C***BEGIN PROLOGUE  XGETUA
+C***REVISION DATE  811015   (YYMMDD)
+C***CATEGORY NO.  Q
+C***KEYWORDS  XERROR,ERROR,UNIT NUMBER
+C***DATE WRITTEN  AUGUST 1979
+C***AUTHOR  JONES R.E. (SLA)
+C***PURPOSE
+C RETURNS UNIT NUMBER(S) TO WHICH ERROR MESSAGES ARE BEING SENT
+C***DESCRIPTION
+C     ABSTRACT
+C        XGETUA MAY BE CALLED TO DETERMINE THE UNIT NUMBER OR NUMBERS
+C        TO WHICH ERROR MESSAGES ARE BEING SENT.
+C        THESE UNIT NUMBERS MAY HAVE BEEN SET BY A CALL TO XSETUN,
+C        OR A CALL TO XSETUA, OR MAY BE A DEFAULT VALUE.
+C
+C     DESCRIPTION OF PARAMETERS
+C      --OUTPUT--
+C        IUNIT - AN ARRAY OF ONE TO FIVE UNIT NUMBERS, DEPENDING
+C                ON THE VALUE OF N.  A VALUE OF ZERO REFERS TO THE
+C                DEFAULT UNIT, AS DEFINED BY THE I1MACH MACHINE
+C                CONSTANT ROUTINE.  ONLY IUNIT(1),...,IUNIT(N) ARE
+C                DEFINED BY XGETUA.  THE VALUES OF IUNIT(N+1),...,
+C                IUNIT(5) ARE NOT DEFINED (FOR N.LT.5) OR ALTERED
+C                IN ANY WAY BY XGETUA.
+C        N     - THE NUMBER OF UNITS TO WHICH COPIES OF THE
+C                ERROR MESSAGES ARE BEING SENT.  N WILL BE IN THE
+C                RANGE FROM 1 TO 5.
+C
+C     WRITTEN BY RON JONES, WITH SLATEC COMMON MATH LIBRARY SUBCOMMITTEE
+C
+C***REFERENCES
+C   JONES R.E., *SLATEC COMMON MATHEMATICAL LIBRARY ERROR HANDLING
+C    PACKAGE*, SAND78-1189, SANDIA LABORATORIES, 1978.
+C***ROUTINES CALLED   J4SAVE
+C***END PROLOGUE  XGETUA
+C
+      DIMENSION IUNIT(5)
+C***FIRST EXECUTABLE STATEMENT  XGETUA
+      N = J4SAVE(5,0,.FALSE.)
+      DO 30 I=1,N
+         INDEX = I+4
+         IF (I.EQ.1) INDEX = 3
+         IUNIT(I) = J4SAVE(INDEX,0,.FALSE.)
+   30 CONTINUE
+      RETURN
+      END
+      SUBROUTINE XGETUN(IUNIT)                                          XGETUN 2
+C***BEGIN PROLOGUE  XGETUN
+C***REVISION DATE  811015   (YYMMDD)
+C***CATEGORY NO.  Q
+C***KEYWORDS  XERROR,ERROR,OUTPUT UNIT
+C***DATE WRITTEN  AUGUST 1979
+C***AUTHOR  JONES R.E. (SLA)
+C***PURPOSE
+C RETURNS THE (FIRST) OUTPUT FILE TO WHICH MESSAGES ARE BEING SENT
+C***DESCRIPTION
+C     ABSTRACT
+C        XGETUN GETS THE (FIRST) OUTPUT FILE TO WHICH ERROR MESSAGES
+C        ARE BEING SENT.  TO FIND OUT IF MORE THAN ONE FILE IS BEING
+C        USED, ONE MUST USE THE XGETUA ROUTINE.
+C
+C     DESCRIPTION OF PARAMETER
+C      --OUTPUT--
+C        IUNIT - THE LOGICAL UNIT NUMBER OF THE  (FIRST) UNIT TO
+C                WHICH ERROR MESSAGES ARE BEING SENT.
+C                A VALUE OF ZERO MEANS THAT THE DEFAULT FILE, AS
+C                DEFINED BY THE I1MACH ROUTINE, IS BEING USED.
+C
+C     WRITTEN BY RON JONES, WITH SLATEC COMMON MATH LIBRARY SUBCOMMITTEE
+C     LATEST REVISION --- 23 MAY 1979
+C
+C***REFERENCES
+C   JONES R.E., *SLATEC COMMON MATHEMATICAL LIBRARY ERROR HANDLING
+C    PACKAGE*, SAND78-1189, SANDIA LABORATORIES, 1978.
+C***ROUTINES CALLED  J4SAVE
+C***END PROLOGUE  XGETUN
+C
+C***FIRST EXECUTABLE STATEMENT  XGETUN
+      IUNIT = J4SAVE(3,0,.FALSE.)
+      RETURN
+      END
+      SUBROUTINE XSETF(KONTRL)                                          XSETF  2
+C***BEGIN PROLOGUE  XSETF
+C***REVISION DATE  811015   (YYMMDD)
+C***CATEGORY NO.  Q
+C***KEYWORDS  XERROR,EROR,SET FLAG
+C***DATE WRITTEN  AUGUST 1979
+C***AUTHOR  JONES R.E. (SLA)
+C***PURPOSE
+C SETS THE ERROR CONTROL FLAG
+C***DESCRIPTION
+C     ABSTRACT
+C        XSETF SETS THE ERROR CONTROL FLAG VALUE TO KONTRL.
+C        (KONTRL IS AN INPUT PARAMETER ONLY.)
+C        THE FOLLOWING TABLE SHOWS HOW EACH MESSAGE IS TREATED,
+C        DEPENDING ON THE VALUES OF KONTRL AND LEVEL.  (SEE XERROR
+C        FOR DESCRIPTION OF LEVEL.)
+C
+C        IF KONTRL IS ZERO OR NEGATIVE, NO INFORMATION OTHER THAN THE
+C        MESSAGE ITSELF (INCLUDING NUMERIC VALUES, IF ANY) WILL BE
+C        PRINTED.  IF KONTRL IS POSITIVE, INTRODUCTORY MESSAGES,
+C        TRACE-BACKS, ETC., WILL BE PRINTED IN ADDITION TO THE MESSAGE.
+C
+C              IABS(KONTRL)
+C        LEVEL        0              1              2
+C        VALUE
+C          2        FATAL          FATAL          FATAL
+C
+C          1     NOT PRINTED      PRINTED         FATAL
+C
+C          0     NOT PRINTED      PRINTED        PRINTED
+C
+C         -1     NOT PRINTED      PRINTED        PRINTED
+C                                  ONLY           ONLY
+C                                  ONCE           ONCE
+C
+C     WRITTEN BY RON JONES, WITH SLATEC COMMON MATH LIBRARY SUBCOMMITTEE
+C     LATEST REVISION ---  23 MAY 1979
+C
+C***REFERENCES
+C   JONES R.E., *SLATEC COMMON MATHEMATICAL LIBRARY ERROR HANDLING
+C    PACKAGE*, SAND78-1189, SANDIA LABORATORIES, 1978.
+C***ROUTINES CALLED  J4SAVE,XERRWV
+C***END PROLOGUE  XSETF
+C
+C***FIRST EXECUTABLE STATEMENT  XSETF
+      IF ((KONTRL.GE.(-2)).AND.(KONTRL.LE.2)) GO TO 10
+         CALL XERRWV(39HXSETF  -- INVALID VALUE OF KONTRL (I1).,33,1,2,
+     1   1,KONTRL,0,0,0.,0.)
+         RETURN
+   10 JUNK = J4SAVE(2,KONTRL,.TRUE.)
+      RETURN
+      END
+      SUBROUTINE XSETUA(IUNIT,N)                                        XSETUA 2
+C***BEGIN PROLOGUE  XSETUA
+C***REVISION DATE  811015   (YYMMDD)
+C***CATEGORY NO.  Q
+C***KEYWORDS  XERROR,ERROR,UNIT NUMBERS
+C***DATE WRITTEN  AUGUST 1979
+C***AUTHOR  JONES R.E. (SLA)
+C***PURPOSE
+C SETS UP TO 5 UNIT NUMBERS TO WHICH MESSAGES ARE TO BE SENT
+C***DESCRIPTION
+C     ABSTRACT
+C        XSETUA MAY BE CALLED TO DECLARE A LIST OF UP TO FIVE
+C        LOGICAL UNITS, EACH OF WHICH IS TO RECEIVE A COPY OF
+C        EACH ERROR MESSAGE PROCESSED BY THIS PACKAGE.
+C        THE PURPOSE OF XSETUA IS TO ALLOW SIMULTANEOUS PRINTING
+C        OF EACH ERROR MESSAGE ON, SAY, A MAIN OUTPUT FILE,
+C        AN INTERACTIVE TERMINAL, AND OTHER FILES SUCH AS GRAPHICS
+C        COMMUNICATION FILES.
+C
+C     DESCRIPTION OF PARAMETERS
+C      --INPUT--
+C        IUNIT - AN ARRAY OF UP TO FIVE UNIT NUMBERS.
+C                NORMALLY THESE NUMBERS SHOULD ALL BE DIFFERENT.
+C                (BUT DUPLICATES ARE NOT PROHIBITED.)
+C        N     - THE NUMBER OF UNIT NUMBERS PROVIDED IN IUNIT.
+C                MUST HAVE 1 .LE. N .LE. 5.
+C
+C     WRITTEN BY RON JONES, WITH SLATEC COMMON MATH LIBRARY SUBCOMMITTEE
+C     LATEST REVISION --- 23 MAY 1979
+C
+C***REFERENCES
+C   JONES R.E., *SLATEC COMMON MATHEMATICAL LIBRARY ERROR HANDLING
+C    PACKAGE*, SAND78-1189, SANDIA LABORATORIES, 1978.
+C***ROUTINES CALLED  J4SAVE,XERRWV
+C***END PROLOGUE  XSETUA
+C
+      DIMENSION IUNIT(5)
+C***FIRST EXECUTABLE STATEMENT  XSETUA
+      IF ((N.GE.1).AND.(N.LE.5)) GO TO 10
+         CALL XERRWV(34HXSETUA -- INVALID VALUE OF N (I1).,34,1,2,
+     1   1,N,0,0,0.,0.)
+         RETURN
+   10 CONTINUE
+      DO 20 I=1,N
+         INDEX = I+4
+         IF (I.EQ.1) INDEX = 3
+         JUNK = J4SAVE(INDEX,IUNIT(I),.TRUE.)
+   20 CONTINUE
+      JUNK = J4SAVE(5,N,.TRUE.)
+      RETURN
+      END
+      SUBROUTINE XSETUN(IUNIT)                                          XSETUN 2
+C***BEGIN PROLOGUE  XSETUN
+C***REVISION DATE  811015   (YYMMDD)
+C***CATEGORY NO.  Q
+C***KEYWORDS  XERROR,ERROR,OUTPUT UNIT
+C***DATE WRITTEN  AUGUST 1979
+C***AUTHOR  JONES R.E. (SLA)
+C***PURPOSE
+C SETS OUTPUT FILE TO WHICH ERROR MESSAGES ARE TO BE SENT
+C***DESCRIPTION
+C     ABSTRACT
+C        XSETUN SETS THE OUTPUT FILE TO WHICH ERROR MESSAGES ARE TO
+C        BE SENT.  ONLY ONE FILE WILL BE USED.  SEE XSETUA FOR
+C        HOW TO DECLARE MORE THAN ONE FILE.
+C
+C     DESCRIPTION OF PARAMETER
+C      --INPUT--
+C        IUNIT - AN INPUT PARAMETER GIVING THE LOGICAL UNIT NUMBER
+C                TO WHICH ERROR MESSAGES ARE TO BE SENT.
+C
+C     WRITTEN BY RON JONES, WITH SLATEC COMMON MATH LIBRARY SUBCOMMITTEE
+C     LATEST REVISION ---  7 JUNE 1978
+C
+C***REFERENCES
+C   JONES R.E., *SLATEC COMMON MATHEMATICAL LIBRARY ERROR HANDLING
+C    PACKAGE*, SAND78-1189, SANDIA LABORATORIES, 1978.
+C***ROUTINES CALLED   J4SAVE
+C***END PROLOGUE  XSETUN
+C
+C***FIRST EXECUTABLE STATEMENT  XSETUN
+      JUNK = J4SAVE(3,IUNIT,.TRUE.)
+      JUNK = J4SAVE(5,1,.TRUE.)
+      RETURN
+      END
+      DOUBLE PRECISION FUNCTION D1MACH(I)
+C***BEGIN PROLOGUE  D1MACH
+C***REVISION DATE  820701   (YYMMDD)
+C***CATEGORY NO.  Q
+C***KEYWORDS  MACHINE CONSTANTS,DOUBLE PRECISION
+C***DATE WRITTEN  1975
+C***AUTHOR  FOX P.A., HALL A.D., SCHRYER N.L. (BELL LABS)
+C***PURPOSE
+C RETURNS DOUBLE PRECISION MACHINE DEPENDENT CONSTANTS
+C***DESCRIPTION
+C
+C     D1MACH CAN BE USED TO OBTAIN MACHINE-DEPENDENT PARAMETERS
+C     FOR THE LOCAL MACHINE ENVIRONMENT.  IT IS A FUNCTION
+C     SUBROUTINE WITH ONE (INPUT) ARGUMENT, AND CAN BE CALLED
+C     AS FOLLOWS, FOR EXAMPLE
+C
+C          D = D1MACH(I)
+C
+C     WHERE I=1,...,5.  THE (OUTPUT) VALUE OF D ABOVE IS
+C     DETERMINED BY THE (INPUT) VALUE OF I.  THE RESULTS FOR
+C     VARIOUS VALUES OF I ARE DISCUSSED BELOW.
+C
+C  DOUBLE-PRECISION MACHINE CONSTANTS
+C  D1MACH( 1) = B**(EMIN-1), THE SMALLEST POSITIVE MAGNITUDE.
+C  D1MACH( 2) = B**EMAX*(1 - B**(-T)), THE LARGEST MAGNITUDE.
+C  D1MACH( 3) = B**(-T), THE SMALLEST RELATIVE SPACING.
+C  D1MACH( 4) = B**(1-T), THE LARGEST RELATIVE SPACING.
+C  D1MACH( 5) = LOG10(B)
+C
+C  TO ALTER THIS FUNCTION FOR A PARTICULAR ENVIRONMENT,
+C  THE DESIRED SET OF DATA STATEMENTS SHOULD BE ACTIVATED BY
+C  REMOVING THE C FROM COLUMN 1.
+C
+C  WHERE POSSIBLE, OCTAL OR HEXADECIMAL CONSTANTS HAVE BEEN USED
+C  TO SPECIFY THE CONSTANTS EXACTLY WHICH HAS IN SOME CASES
+C  REQUIRED THE USE OF EQUIVALENT INTEGER ARRAYS.
+C
+C***REFERENCES
+C  FOX P.A., HALL A.D., SCHRYER N.L.,*FRAMEWORK FOR A PORTABLE LIBRARY*,
+C  ACM TRANSACTION ON MATHEMATICAL SOFTWARE, VOL. 4, NO. 2,
+C  JUNE 1978, PP. 177-188.
+C***ROUTINES CALLED  XERROR
+C***END PROLOGUE  D1MACH
+C
+      INTEGER SMALL(4)
+      INTEGER LARGE(4)
+      INTEGER RIGHT(4)
+      INTEGER DIVER(4)
+      INTEGER LOG10(4)
+C
+      DOUBLE PRECISION DMACH(5)
+C
+      EQUIVALENCE (DMACH(1),SMALL(1))
+      EQUIVALENCE (DMACH(2),LARGE(1))
+      EQUIVALENCE (DMACH(3),RIGHT(1))
+      EQUIVALENCE (DMACH(4),DIVER(1))
+      EQUIVALENCE (DMACH(5),LOG10(1))
+C
+C     MACHINE CONSTANTS FOR THE BURROUGHS 1700 SYSTEM.
+C
+C     DATA SMALL(1) / ZC00800000 /
+C     DATA SMALL(2) / Z000000000 /
+C
+C     DATA LARGE(1) / ZDFFFFFFFF /
+C     DATA LARGE(2) / ZFFFFFFFFF /
+C
+C     DATA RIGHT(1) / ZCC5800000 /
+C     DATA RIGHT(2) / Z000000000 /
+C
+C     DATA DIVER(1) / ZCC6800000 /
+C     DATA DIVER(2) / Z000000000 /
+C
+C     DATA LOG10(1) / ZD00E730E7 /
+C     DATA LOG10(2) / ZC77800DC0 /
+C
+C     MACHINE CONSTANTS FOR THE BURROUGHS 5700 SYSTEM.
+C
+C     DATA SMALL(1) / O1771000000000000 /
+C     DATA SMALL(2) / O0000000000000000 /
+C
+C     DATA LARGE(1) / O0777777777777777 /
+C     DATA LARGE(2) / O0007777777777777 /
+C
+C     DATA RIGHT(1) / O1461000000000000 /
+C     DATA RIGHT(2) / O0000000000000000 /
+C
+C     DATA DIVER(1) / O1451000000000000 /
+C     DATA DIVER(2) / O0000000000000000 /
+C
+C     DATA LOG10(1) / O1157163034761674 /
+C     DATA LOG10(2) / O0006677466732724 /
+C
+C     MACHINE CONSTANTS FOR THE BURROUGHS 6700/7700 SYSTEMS.
+C
+C     DATA SMALL(1) / O1771000000000000 /
+C     DATA SMALL(2) / O7770000000000000 /
+C
+C     DATA LARGE(1) / O0777777777777777 /
+C     DATA LARGE(2) / O7777777777777777 /
+C
+C     DATA RIGHT(1) / O1461000000000000 /
+C     DATA RIGHT(2) / O0000000000000000 /
+C
+C     DATA DIVER(1) / O1451000000000000 /
+C     DATA DIVER(2) / O0000000000000000 /
+C
+C     DATA LOG10(1) / O1157163034761674 /
+C     DATA LOG10(2) / O0006677466732724 /
+C
+C     MACHINE CONSTANTS FOR THE CDC 6000/7000 SERIES.
+C
+C     DATA SMALL(1) / 00604000000000000000B /
+C     DATA SMALL(2) / 00000000000000000000B /
+C
+C     DATA LARGE(1) / 37767777777777777777B /
+C     DATA LARGE(2) / 37167777777777777777B /
+C
+C     DATA RIGHT(1) / 15604000000000000000B /
+C     DATA RIGHT(2) / 15000000000000000000B /
+C
+C     DATA DIVER(1) / 15614000000000000000B /
+C     DATA DIVER(2) / 15010000000000000000B /
+C
+C     DATA LOG10(1) / 17164642023241175717B /
+C     DATA LOG10(2) / 16367571421742254654B /
+C
+C     MACHINE CONSTANTS FOR THE CRAY 1
+C
+C     DATA SMALL(1) / 200004000000000000000B /
+C     DATA SMALL(2) / 00000000000000000000B /
+C
+C     DATA LARGE(1) / 577777777777777777777B /
+C     DATA LARGE(2) / 000007777777777777777B /
+C
+C     DATA RIGHT(1) / 376414000000000000000B /
+C     DATA RIGHT(2) / 000000000000000000000B /
+C
+C     DATA DIVER(1) / 376424000000000000000B /
+C     DATA DIVER(2) / 000000000000000000000B /
+C
+C     DATA LOG10(1) / 377774642023241175717B /
+C     DATA LOG10(2) / 000007571421742254654B /
+C
+C     MACHINE CONSTANTS FOR THE DATA GENERAL ECLIPSE S/200
+C
+C     NOTE - IT MAY BE APPROPRIATE TO INCLUDE THE FOLLOWING CARD -
+C     STATIC DMACH(5)
+C
+C     DATA SMALL/20K,3*0/,LARGE/77777K,3*177777K/
+C     DATA RIGHT/31420K,3*0/,DIVER/32020K,3*0/
+C     DATA LOG10/40423K,42023K,50237K,74776K/
+C
+C     MACHINE CONSTANTS FOR THE HARRIS 220
+C
+C     DATA SMALL(1),SMALL(2) / 20000000, 00000201 /
+C     DATA LARGE(1),LARGE(2) / 37777777, 37777577 /
+C     DATA RIGHT(1),RIGHT(2) / 20000000, 00000333 /
+C     DATA DIVER(1),DIVER(2) / 20000000, 00000334 /
+C     DATA LOG10(1),LOG10(2) / 23210115, 10237777 /
+C
+C     MACHINE CONSTANTS FOR THE HONEYWELL 600/6000 SERIES.
+C
+C     DATA SMALL(1),SMALL(2) / O402400000000, O000000000000 /
+C     DATA LARGE(1),LARGE(2) / O376777777777, O777777777777 /
+C     DATA RIGHT(1),RIGHT(2) / O604400000000, O000000000000 /
+C     DATA DIVER(1),DIVER(2) / O606400000000, O000000000000 /
+C     DATA LOG10(1),LOG10(2) / O776464202324, O117571775714 /
+C
+C      MACHINE CONSTANTS FOR THE HP 2100
+C      THREE WORD DOUBLE PRECISION OPTION WITH FTN4
+C
+C      DATA SMALL(1), SMALL(2), SMALL(3) / 40000B,       0,       1 /
+C      DATA LARGE(1), LARGE(2), LARGE(3) / 77777B, 177777B, 177776B /
+C      DATA RIGHT(1), RIGHT(2), RIGHT(3) / 40000B,       0,    265B /
+C      DATA DIVER(1), DIVER(2), DIVER(3) / 40000B,       0,    276B /
+C      DATA LOG10(1), LOG10(2), LOG10(3) / 46420B,  46502B,  77777B /
+C
+C
+C      MACHINE CONSTANTS FOR THE HP 2100
+C      FOUR WORD DOUBLE PRECISION OPTION WITH FTN4
+C
+C      DATA SMALL(1), SMALL(2) /  40000B,       0 /
+C      DATA SMALL(3), SMALL(4) /       0,       1 /
+C      DATA LARGE(1), LARGE(2) /  77777B, 177777B /
+C      DATA LARGE(3), LARGE(4) / 177777B, 177776B /
+C      DATA RIGHT(1), RIGHT(2) /  40000B,       0 /
+C      DATA RIGHT(3), RIGHT(4) /       0,    225B /
+C      DATA DIVER(1), DIVER(2) /  40000B,       0 /
+C      DATA DIVER(3), DIVER(4) /       0,    227B /
+C      DATA LOG10(1), LOG10(2) /  46420B,  46502B /
+C      DATA LOG10(3), LOG10(4) /  76747B, 176377B /
+C
+C
+C     MACHINE CONSTANTS FOR THE IBM 360/370 SERIES,
+C     THE XEROX SIGMA 5/7/9, THE SEL SYSTEMS 85/86, AND
+C     THE PERKIN ELMER (INTERDATA) 7/32.
+C
+C     DATA SMALL(1),SMALL(2) / Z00100000, Z00000000 /
+C     DATA LARGE(1),LARGE(2) / Z7FFFFFFF, ZFFFFFFFF /
+C     DATA RIGHT(1),RIGHT(2) / Z33100000, Z00000000 /
+C     DATA DIVER(1),DIVER(2) / Z34100000, Z00000000 /
+C     DATA LOG10(1),LOG10(2) / Z41134413, Z509F79FF /
+C
+C     MACHINE CONSTANTS FOR THE PDP-10 (KA PROCESSOR).
+C
+C     DATA SMALL(1),SMALL(2) / "033400000000, "000000000000 /
+C     DATA LARGE(1),LARGE(2) / "377777777777, "344777777777 /
+C     DATA RIGHT(1),RIGHT(2) / "113400000000, "000000000000 /
+C     DATA DIVER(1),DIVER(2) / "114400000000, "000000000000 /
+C     DATA LOG10(1),LOG10(2) / "177464202324, "144117571776 /
+C
+C     MACHINE CONSTANTS FOR THE PDP-10 (KI PROCESSOR).
+C
+C     DATA SMALL(1),SMALL(2) / "000400000000, "000000000000 /
+C     DATA LARGE(1),LARGE(2) / "377777777777, "377777777777 /
+C     DATA RIGHT(1),RIGHT(2) / "103400000000, "000000000000 /
+C     DATA DIVER(1),DIVER(2) / "104400000000, "000000000000 /
+C     DATA LOG10(1),LOG10(2) / "177464202324, "476747767461 /
+C
+C     MACHINE CONSTANTS FOR PDP-11 FORTRANS SUPPORTING
+C     32-BIT INTEGERS (EXPRESSED IN INTEGER AND OCTAL).
+C
+C     DATA SMALL(1),SMALL(2) /    8388608,           0 /
+C     DATA LARGE(1),LARGE(2) / 2147483647,          -1 /
+C     DATA RIGHT(1),RIGHT(2) /  612368384,           0 /
+C     DATA DIVER(1),DIVER(2) /  620756992,           0 /
+C     DATA LOG10(1),LOG10(2) / 1067065498, -2063872008 /
+C
+C     DATA SMALL(1),SMALL(2) / O00040000000, O00000000000 /
+C     DATA LARGE(1),LARGE(2) / O17777777777, O37777777777 /
+C     DATA RIGHT(1),RIGHT(2) / O04440000000, O00000000000 /
+C     DATA DIVER(1),DIVER(2) / O04500000000, O00000000000 /
+C     DATA LOG10(1),LOG10(2) / O07746420232, O20476747770 /
+C
+C     MACHINE CONSTANTS FOR PDP-11 FORTRANS SUPPORTING
+C     16-BIT INTEGERS (EXPRESSED IN INTEGER AND OCTAL).
+C
+C     DATA SMALL(1),SMALL(2) /    128,      0 /
+C     DATA SMALL(3),SMALL(4) /      0,      0 /
+C
+C     DATA LARGE(1),LARGE(2) /  32767,     -1 /
+C     DATA LARGE(3),LARGE(4) /     -1,     -1 /
+C
+C     DATA RIGHT(1),RIGHT(2) /   9344,      0 /
+C     DATA RIGHT(3),RIGHT(4) /      0,      0 /
+C
+C     DATA DIVER(1),DIVER(2) /   9472,      0 /
+C     DATA DIVER(3),DIVER(4) /      0,      0 /
+C
+C     DATA LOG10(1),LOG10(2) /  16282,   8346 /
+C     DATA LOG10(3),LOG10(4) / -31493, -12296 /
+C
+C     DATA SMALL(1),SMALL(2) / O000200, O000000 /
+C     DATA SMALL(3),SMALL(4) / O000000, O000000 /
+C
+C     DATA LARGE(1),LARGE(2) / O077777, O177777 /
+C     DATA LARGE(3),LARGE(4) / O177777, O177777 /
+C
+C     DATA RIGHT(1),RIGHT(2) / O022200, O000000 /
+C     DATA RIGHT(3),RIGHT(4) / O000000, O000000 /
+C
+C     DATA DIVER(1),DIVER(2) / O022400, O000000 /
+C     DATA DIVER(3),DIVER(4) / O000000, O000000 /
+C
+C     DATA LOG10(1),LOG10(2) / O037632, O020232 /
+C     DATA LOG10(3),LOG10(4) / O102373, O147770 /
+C
+C     MACHINE CONSTANTS FOR THE UNIVAC 1100 SERIES. FTN COMPILER
+C
+C     DATA SMALL(1),SMALL(2) / O000040000000, O000000000000 /
+C     DATA LARGE(1),LARGE(2) / O377777777777, O777777777777 /
+C     DATA RIGHT(1),RIGHT(2) / O170540000000, O000000000000 /
+C     DATA DIVER(1),DIVER(2) / O170640000000, O000000000000 /
+C     DATA LOG10(1),LOG10(2) / O177746420232, O411757177572 /
+C
+C     MACHINE CONSTANTS FOR THE UNIVAC 1100 SERIES. FOR COMPILER
+C
+C     DATA SMALL(1), SMALL(2) / O000040000000, O000000000000 /
+C     DATA LARGE(1), LARGE(2) / O377777777777, O777777777777 /
+C     DATA RIGHT(1), RIGHT(2) / O170540000000, O000000000000 /
+C     DATA DIVER(1), DIVER(2) / O170640000000, O000000000000 /
+C     DATA LOG10(1), LOG10(2) / O177746420232, O411757177572/
+C
+C
+C     MACHINE CONSTANTS FOR VAX 11/780
+C     (EXPRESSED IN INTEGER AND HEXADECIMAL)
+C    ***THE HEX FORMAT BELOW MAY NOT BE SUITABLE FOR UNIX SYSYEMS***
+C    *** THE INTEGER FORMAT SHOULD BE OK FOR UNIX SYSTEMS***
+C
+C     DATA SMALL(1), SMALL(2) /        128,           0 /
+C     DATA LARGE(1), LARGE(2) /     -32769,          -1 /
+C     DATA RIGHT(1), RIGHT(2) /       9344,           0 /
+C     DATA DIVER(1), DIVER(2) /       9472,           0 /
+C     DATA LOG10(1), LOG10(2) /  546979738,  -805796613 /
+C
+C     DATA SMALL(1), SMALL(2) / Z00000080, Z00000000 /
+C     DATA LARGE(1), LARGE(2) / ZFFFF7FFF, ZFFFFFFFF /
+C     DATA RIGHT(1), RIGHT(2) / Z00002480, Z00000000 /
+C     DATA DIVER(1), DIVER(2) / Z00002500, Z00000000 /
+C     DATA LOG10(1), LOG10(2) / Z209A3F9A, ZCFF884FB /
+C
+C***FIRST EXECUTABLE STATEMENT  D1MACH
+C
+      IF (I .LT. 1  .OR.  I .GT. 5)
+     1   CALL XERROR(25HD1MACH -- I OUT OF BOUNDS,25,1,2)
+C
+      D1MACH = DMACH(I)
+      RETURN
+C
+      END
+      INTEGER FUNCTION I1MACH(I)
+C***BEGIN PROLOGUE  I1MACH
+C***REVISION DATE  811015   (YYMMDD)
+C***CATEGORY NO.  Q
+C***KEYWORDS  MACHINE CONSTANTS,INTEGER
+C***DATE WRITTEN   1975
+C***AUTHOR FOX P.A.,HALL A.D.,SCHRYER N.L. (BELL LABS)
+C***PURPOSE
+C RETURNS INTEGER MACHINE DEPENDENT CONSTANTS
+C***DESCRIPTION
+C * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+C   THESE MACHINE CONSTANT ROUTINES MUST BE ACTIVATED FOR
+C   A PARTICULAR ENVIRONMENT.
+C * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+C
+C     I1MACH CAN BE USED TO OBTAIN MACHINE-DEPENDENT PARAMETERS
+C     FOR THE LOCAL MACHINE ENVIRONMENT.  IT IS A FUNCTION
+C     SUBROUTINE WITH ONE (INPUT) ARGUMENT, AND CAN BE CALLED
+C     AS FOLLOWS, FOR EXAMPLE
+C
+C          K = I1MACH(I)
+C
+C     WHERE I=1,...,16.  THE (OUTPUT) VALUE OF K ABOVE IS
+C     DETERMINED BY THE (INPUT) VALUE OF I.  THE RESULTS FOR
+C     VARIOUS VALUES OF I ARE DISCUSSED BELOW.
+C
+C  I/O UNIT NUMBERS.
+C    I1MACH( 1) = THE STANDARD INPUT UNIT.
+C    I1MACH( 2) = THE STANDARD OUTPUT UNIT.
+C    I1MACH( 3) = THE STANDARD PUNCH UNIT.
+C    I1MACH( 4) = THE STANDARD ERROR MESSAGE UNIT.
+C
+C  WORDS.
+C    I1MACH( 5) = THE NUMBER OF BITS PER INTEGER STORAGE UNIT.
+C    I1MACH( 6) = THE NUMBER OF CHARACTERS PER INTEGER STORAGE UNIT.
+C
+C  INTEGERS.
+C    ASSUME INTEGERS ARE REPRESENTED IN THE S-DIGIT, BASE-A FORM
+C
+C               SIGN ( X(S-1)*A**(S-1) + ... + X(1)*A + X(0) )
+C
+C               WHERE 0 .LE. X(I) .LT. A FOR I=0,...,S-1.
+C    I1MACH( 7) = A, THE BASE.
+C    I1MACH( 8) = S, THE NUMBER OF BASE-A DIGITS.
+C    I1MACH( 9) = A**S - 1, THE LARGEST MAGNITUDE.
+C
+C  FLOATING-POINT NUMBERS.
+C    ASSUME FLOATING-POINT NUMBERS ARE REPRESENTED IN THE T-DIGIT,
+C    BASE-B FORM
+C               SIGN (B**E)*( (X(1)/B) + ... + (X(T)/B**T) )
+C
+C               WHERE 0 .LE. X(I) .LT. B FOR I=1,...,T,
+C               0 .LT. X(1), AND EMIN .LE. E .LE. EMAX.
+C    I1MACH(10) = B, THE BASE.
+C
+C  SINGLE-PRECISION
+C    I1MACH(11) = T, THE NUMBER OF BASE-B DIGITS.
+C    I1MACH(12) = EMIN, THE SMALLEST EXPONENT E.
+C    I1MACH(13) = EMAX, THE LARGEST EXPONENT E.
+C
+C  DOUBLE-PRECISION
+C    I1MACH(14) = T, THE NUMBER OF BASE-B DIGITS.
+C    I1MACH(15) = EMIN, THE SMALLEST EXPONENT E.
+C    I1MACH(16) = EMAX, THE LARGEST EXPONENT E.
+C
+C  TO ALTER THIS FUNCTION FOR A PARTICULAR ENVIRONMENT,
+C  THE DESIRED SET OF DATA STATEMENTS SHOULD BE ACTIVATED BY
+C  REMOVING THE C FROM COLUMN 1.  ALSO, THE VALUES OF
+C  I1MACH(1) - I1MACH(4) SHOULD BE CHECKED FOR CONSISTENCY
+C  WITH THE LOCAL OPERATING SYSTEM.
+C
+C***REFERENCES
+C  FOX P.A., HALL A.D., SCHRYER N.L.,*FRAMEWORK FOR A PORTABLE LIBRARY*,
+C  ACM TRANSACTION ON MATHEMATICAL SOFTWARE, VOL. 4, NO. 2,
+C  JUNE 1978, PP. 177-188.
+C***ROUTINES CALLED  XERROR
+C***END PROLOGUE  I1MACH
+C
+      INTEGER IMACH(16),OUTPUT
+C
+C     EQUIVALENCE (IMACH(4),OUTPUT)
+C
+C     MACHINE CONSTANTS FOR THE BURROUGHS 1700 SYSTEM.
+C
+C     DATA IMACH( 1) /    7 /
+C     DATA IMACH( 2) /    2 /
+C     DATA IMACH( 3) /    2 /
+C     DATA IMACH( 4) /    2 /
+C     DATA IMACH( 5) /   36 /
+C     DATA IMACH( 6) /    4 /
+C     DATA IMACH( 7) /    2 /
+C     DATA IMACH( 8) /   33 /
+C     DATA IMACH( 9) / Z1FFFFFFFF /
+C     DATA IMACH(10) /    2 /
+C     DATA IMACH(11) /   24 /
+C     DATA IMACH(12) / -256 /
+C     DATA IMACH(13) /  255 /
+C     DATA IMACH(14) /   60 /
+C     DATA IMACH(15) / -256 /
+C     DATA IMACH(16) /  255 /
+C
+C     MACHINE CONSTANTS FOR THE BURROUGHS 5700 SYSTEM.
+C
+C     DATA IMACH( 1) /   5 /
+C     DATA IMACH( 2) /   6 /
+C     DATA IMACH( 3) /   7 /
+C     DATA IMACH( 4) /   6 /
+C     DATA IMACH( 5) /  48 /
+C     DATA IMACH( 6) /   6 /
+C     DATA IMACH( 7) /   2 /
+C     DATA IMACH( 8) /  39 /
+C     DATA IMACH( 9) / O0007777777777777 /
+C     DATA IMACH(10) /   8 /
+C     DATA IMACH(11) /  13 /
+C     DATA IMACH(12) / -50 /
+C     DATA IMACH(13) /  76 /
+C     DATA IMACH(14) /  26 /
+C     DATA IMACH(15) / -50 /
+C     DATA IMACH(16) /  76 /
+C
+C     MACHINE CONSTANTS FOR THE BURROUGHS 6700/7700 SYSTEMS.
+C
+C     DATA IMACH( 1) /   5 /
+C     DATA IMACH( 2) /   6 /
+C     DATA IMACH( 3) /   7 /
+C     DATA IMACH( 4) /   6 /
+C     DATA IMACH( 5) /  48 /
+C     DATA IMACH( 6) /   6 /
+C     DATA IMACH( 7) /   2 /
+C     DATA IMACH( 8) /  39 /
+C     DATA IMACH( 9) / O0007777777777777 /
+C     DATA IMACH(10) /   8 /
+C     DATA IMACH(11) /  13 /
+C     DATA IMACH(12) / -50 /
+C     DATA IMACH(13) /  76 /
+C     DATA IMACH(14) /  26 /
+C     DATA IMACH(15) / -32754 /
+C     DATA IMACH(16) /  32780 /
+C
+C     MACHINE CONSTANTS FOR THE CDC 6000/7000 SERIES.
+C
+C     DATA IMACH( 1) /    5 /
+C     DATA IMACH( 2) /    6 /
+C     DATA IMACH( 3) /    7 /
+C     DATA IMACH( 4) /6LOUTPUT/
+C     DATA IMACH( 5) /   60 /
+C     DATA IMACH( 6) /   10 /
+C     DATA IMACH( 7) /    2 /
+C     DATA IMACH( 8) /   48 /
+C     DATA IMACH( 9) / 00007777777777777777B /
+C     DATA IMACH(10) /    2 /
+C     DATA IMACH(11) /   48 /
+C     DATA IMACH(12) / -974 /
+C     DATA IMACH(13) / 1070 /
+C     DATA IMACH(14) /   96 /
+C     DATA IMACH(15) / -927 /
+C     DATA IMACH(16) / 1070 /
+C
+C     MACHINE CONSTANTS FOR THE CRAY 1
+C
+C     DATA IMACH( 1) /   100 /
+C     DATA IMACH( 2) /   101 /
+C     DATA IMACH( 3) /   102 /
+C     DATA IMACH( 4) /   101 /
+C     DATA IMACH( 5) /    64 /
+C     DATA IMACH( 6) /     8 /
+C     DATA IMACH( 7) /     2 /
+C     DATA IMACH( 8) /    63 /
+C     DATA IMACH( 9) /  777777777777777777777B /
+C     DATA IMACH(10) /     2 /
+C     DATA IMACH(11) /    48 /
+C     DATA IMACH(12) / -8192 /
+C     DATA IMACH(13) /  8191 /
+C     DATA IMACH(14) /    96 /
+C     DATA IMACH(15) / -8192 /
+C     DATA IMACH(16) /  8191 /
+C
+C     MACHINE CONSTANTS FOR THE DATA GENERAL ECLIPSE S/200
+C
+C     DATA IMACH( 1) /   11 /
+C     DATA IMACH( 2) /   12 /
+C     DATA IMACH( 3) /    8 /
+C     DATA IMACH( 4) /   10 /
+C     DATA IMACH( 5) /   16 /
+C     DATA IMACH( 6) /    2 /
+C     DATA IMACH( 7) /    2 /
+C     DATA IMACH( 8) /   15 /
+C     DATA IMACH( 9) /32767 /
+C     DATA IMACH(10) /   16 /
+C     DATA IMACH(11) /    6 /
+C     DATA IMACH(12) /  -64 /
+C     DATA IMACH(13) /   63 /
+C     DATA IMACH(14) /   14 /
+C     DATA IMACH(15) /  -64 /
+C     DATA IMACH(16) /   63 /
+C
+C     MACHINE CONSTANTS FOR THE HARRIS 220
+C
+C     DATA IMACH( 1) /       5 /
+C     DATA IMACH( 2) /       6 /
+C     DATA IMACH( 3) /       0 /
+C     DATA IMACH( 4) /       6 /
+C     DATA IMACH( 5) /      24 /
+C     DATA IMACH( 6) /       3 /
+C     DATA IMACH( 7) /       2 /
+C     DATA IMACH( 8) /      23 /
+C     DATA IMACH( 9) / 8388607 /
+C     DATA IMACH(10) /       2 /
+C     DATA IMACH(11) /      23 /
+C     DATA IMACH(12) /    -127 /
+C     DATA IMACH(13) /     127 /
+C     DATA IMACH(14) /      38 /
+C     DATA IMACH(15) /    -127 /
+C     DATA IMACH(16) /     127 /
+C
+C     MACHINE CONSTANTS FOR THE HONEYWELL 600/6000 SERIES.
+C
+C     DATA IMACH( 1) /    5 /
+C     DATA IMACH( 2) /    6 /
+C     DATA IMACH( 3) /   43 /
+C     DATA IMACH( 4) /    6 /
+C     DATA IMACH( 5) /   36 /
+C     DATA IMACH( 6) /    6 /
+C     DATA IMACH( 7) /    2 /
+C     DATA IMACH( 8) /   35 /
+C     DATA IMACH( 9) / O377777777777 /
+C     DATA IMACH(10) /    2 /
+C     DATA IMACH(11) /   27 /
+C     DATA IMACH(12) / -127 /
+C     DATA IMACH(13) /  127 /
+C     DATA IMACH(14) /   63 /
+C     DATA IMACH(15) / -127 /
+C     DATA IMACH(16) /  127 /
+C
+C     MACHINE CONSTANTS FOR THE HP 2100
+C     3 WORD DOUBLE PRECISION OPTION WITH FTN4
+C
+C     DATA IMACH(1) /      5/
+C     DATA IMACH(2) /      6 /
+C     DATA IMACH(3) /      4 /
+C     DATA IMACH(4) /      1 /
+C     DATA IMACH(5) /     16 /
+C     DATA IMACH(6) /      2 /
+C     DATA IMACH(7) /      2 /
+C     DATA IMACH(8) /     15 /
+C     DATA IMACH(9) /  32767 /
+C     DATA IMACH(10)/      2 /
+C     DATA IMACH(11)/     23 /
+C     DATA IMACH(12)/   -128 /
+C     DATA IMACH(13)/    127 /
+C     DATA IMACH(14)/     39 /
+C     DATA IMACH(15)/   -128 /
+C     DATA IMACH(16)/    127 /
+C
+C     MACHINE CONSTANTS FOR THE HP 2100
+C     4 WORD DOUBLE PRECISION OPTION WITH FTN4
+C
+C     DATA IMACH(1) /      5 /
+C     DATA IMACH(2) /      6 /
+C     DATA IMACH(3) /      4 /
+C     DATA IMACH(4) /      1 /
+C     DATA IMACH(5) /     16 /
+C     DATA IMACH(6) /      2 /
+C     DATA IMACH(7) /      2 /
+C     DATA IMACH(8) /     15 /
+C     DATA IMACH(9) /  32767 /
+C     DATA IMACH(10)/      2 /
+C     DATA IMACH(11)/     23 /
+C     DATA IMACH(12)/   -128 /
+C     DATA IMACH(13)/    127 /
+C     DATA IMACH(14)/     55 /
+C     DATA IMACH(15)/   -128 /
+C     DATA IMACH(16)/    127 /
+C
+C     MACHINE CONSTANTS FOR THE IBM 360/370 SERIES,
+C     THE XEROX SIGMA 5/7/9, THE SEL SYSTEMS 85/86, AND
+C     THE PERKIN ELMER (INTERDATA) 7/32.
+C
+C     DATA IMACH( 1) /   5 /
+C     DATA IMACH( 2) /   6 /
+C     DATA IMACH( 3) /   7 /
+C     DATA IMACH( 4) /   6 /
+C     DATA IMACH( 5) /  32 /
+C     DATA IMACH( 6) /   4 /
+C     DATA IMACH( 7) /   2 /
+C     DATA IMACH( 8) /  31 /
+C     DATA IMACH( 9) / Z7FFFFFFF /
+C     DATA IMACH(10) /  16 /
+C     DATA IMACH(11) /   6 /
+C     DATA IMACH(12) / -64 /
+C     DATA IMACH(13) /  63 /
+C     DATA IMACH(14) /  14 /
+C     DATA IMACH(15) / -64 /
+C     DATA IMACH(16) /  63 /
+C
+C     MACHINE CONSTANTS FOR THE PDP-10 (KA PROCESSOR).
+C
+C     DATA IMACH( 1) /    5 /
+C     DATA IMACH( 2) /    6 /
+C     DATA IMACH( 3) /    5 /
+C     DATA IMACH( 4) /    6 /
+C     DATA IMACH( 5) /   36 /
+C     DATA IMACH( 6) /    5 /
+C     DATA IMACH( 7) /    2 /
+C     DATA IMACH( 8) /   35 /
+C     DATA IMACH( 9) / "377777777777 /
+C     DATA IMACH(10) /    2 /
+C     DATA IMACH(11) /   27 /
+C     DATA IMACH(12) / -128 /
+C     DATA IMACH(13) /  127 /
+C     DATA IMACH(14) /   54 /
+C     DATA IMACH(15) / -101 /
+C     DATA IMACH(16) /  127 /
+C
+C     MACHINE CONSTANTS FOR THE PDP-10 (KI PROCESSOR).
+C
+C     DATA IMACH( 1) /    5 /
+C     DATA IMACH( 2) /    6 /
+C     DATA IMACH( 3) /    5 /
+C     DATA IMACH( 4) /    6 /
+C     DATA IMACH( 5) /   36 /
+C     DATA IMACH( 6) /    5 /
+C     DATA IMACH( 7) /    2 /
+C     DATA IMACH( 8) /   35 /
+C     DATA IMACH( 9) / "377777777777 /
+C     DATA IMACH(10) /    2 /
+C     DATA IMACH(11) /   27 /
+C     DATA IMACH(12) / -128 /
+C     DATA IMACH(13) /  127 /
+C     DATA IMACH(14) /   62 /
+C     DATA IMACH(15) / -128 /
+C     DATA IMACH(16) /  127 /
+C
+C     MACHINE CONSTANTS FOR PDP-11 FORTRANS SUPPORTING
+C     32-BIT INTEGER ARITHMETIC.
+C
+C     DATA IMACH( 1) /    5 /
+C     DATA IMACH( 2) /    6 /
+C     DATA IMACH( 3) /    5 /
+C     DATA IMACH( 4) /    6 /
+C     DATA IMACH( 5) /   32 /
+C     DATA IMACH( 6) /    4 /
+C     DATA IMACH( 7) /    2 /
+C     DATA IMACH( 8) /   31 /
+C     DATA IMACH( 9) / 2147483647 /
+C     DATA IMACH(10) /    2 /
+C     DATA IMACH(11) /   24 /
+C     DATA IMACH(12) / -127 /
+C     DATA IMACH(13) /  127 /
+C     DATA IMACH(14) /   56 /
+C     DATA IMACH(15) / -127 /
+C     DATA IMACH(16) /  127 /
+C
+C     MACHINE CONSTANTS FOR PDP-11 FORTRANS SUPPORTING
+C     16-BIT INTEGER ARITHMETIC.
+C
+C     DATA IMACH( 1) /    5 /
+C     DATA IMACH( 2) /    6 /
+C     DATA IMACH( 3) /    5 /
+C     DATA IMACH( 4) /    6 /
+C     DATA IMACH( 5) /   16 /
+C     DATA IMACH( 6) /    2 /
+C     DATA IMACH( 7) /    2 /
+C     DATA IMACH( 8) /   15 /
+C     DATA IMACH( 9) / 32767 /
+C     DATA IMACH(10) /    2 /
+C     DATA IMACH(11) /   24 /
+C     DATA IMACH(12) / -127 /
+C     DATA IMACH(13) /  127 /
+C     DATA IMACH(14) /   56 /
+C     DATA IMACH(15) / -127 /
+C     DATA IMACH(16) /  127 /
+C
+C     MACHINE CONSTANTS FOR THE UNIVAC 1100 SERIES. FTN COMPILER
+C
+C
+C     DATA IMACH( 1) /    5 /
+C     DATA IMACH( 2) /    6 /
+C     DATA IMACH( 3) /    1 /
+C     DATA IMACH( 4) /    6 /
+C     DATA IMACH( 5) /   36 /
+C     DATA IMACH( 6) /    4 /
+C     DATA IMACH( 7) /    2 /
+C     DATA IMACH( 8) /   35 /
+C     DATA IMACH( 9) / O377777777777 /
+C     DATA IMACH(10) /    2 /
+C     DATA IMACH(11) /   27 /
+C     DATA IMACH(12) / -128 /
+C     DATA IMACH(13) /  127 /
+C     DATA IMACH(14) /   60 /
+C     DATA IMACH(15) /-1024 /
+C     DATA IMACH(16) / 1023 /
+C
+C     MACHINE CONSTANTS FOR THE UNIVAC 1100 SERIES. FOR COMPILER
+C
+C     DATA IMACH( 1) /    5 /
+C     DATA IMACH( 2) /    6 /
+C     DATA IMACH( 3) /    7 /
+C     DATA IMACH( 4) /    6 /
+C     DATA IMACH( 5) /   36 /
+C     DATA IMACH( 6) /    6 /
+C     DATA IMACH( 7) /    2 /
+C     DATA IMACH( 8) /   35 /
+C     DATA IMACH( 9) / O377777777777 /
+C     DATA IMACH(10) /    2 /
+C     DATA IMACH(11) /   27 /
+C     DATA IMACH(12) / -128 /
+C     DATA IMACH(13) /  127 /
+C     DATA IMACH(14) /   60 /
+C     DATA IMACH(15) /-1024/
+C     DATA IMACH(16) / 1023 /
+C
+C
+C     MACHINE CONSTANTS FOR THE VAX 11/780
+C
+C     DATA IMACH(1) /    5 /
+C     DATA IMACH(2) /    6 /
+C     DATA IMACH(3) /    5 /
+C     DATA IMACH(4) /    6 /
+C     DATA IMACH(5) /   32 /
+C     DATA IMACH(6) /    4 /
+C     DATA IMACH(7) /    2 /
+C     DATA IMACH(8) /   31 /
+C     DATA IMACH(9) /2147483647 /
+C     DATA IMACH(10)/    2 /
+C     DATA IMACH(11)/   24 /
+C     DATA IMACH(12)/ -127 /
+C     DATA IMACH(13)/  127 /
+C     DATA IMACH(14)/   56 /
+C     DATA IMACH(15)/ -127 /
+C     DATA IMACH(16)/  127 /
+C
+C***FIRST EXECUTABLE STATEMENT  I1MACH
+C
+      IF (I .LT. 1  .OR.  I .GT. 16) GO TO 10
+C
+      I1MACH=IMACH(I)
+      RETURN
+C
+   10 CONTINUE
+      WRITE(OUTPUT,9000)
+9000  FORMAT(39H1ERROR    1 IN I1MACH - I OUT OF BOUNDS )
+C
+C     CALL FDUMP
+C
+C
+      STOP
+      END
+      REAL FUNCTION R1MACH(I)
+C***BEGIN PROLOGUE  R1MACH
+C***REVISION DATE  820701   (YYMMDD)
+C***CATEGORY NO.  Q
+C***KEYWORDS  MACHINE CONSTANTS
+C***DATE WRITTEN  1979
+C***AUTHOR  FOX P.A.,.HALL A.D., SCHRYER N.L. (BELL LABS)
+C***PURPOSE
+C RETURNS SINGLE PRECISION MACHINE DEPENDENT CONSTANTS
+C***DESCRIPTION
+C
+C     R1MACH CAN BE USED TO OBTAIN MACHINE-DEPENDENT PARAMETERS
+C     FOR THE LOCAL MACHINE ENVIRONMENT.  IT IS A FUNCTION
+C     SUBROUTINE WITH ONE (INPUT) ARGUMENT, AND CAN BE CALLED
+C     AS FOLLOWS, FOR EXAMPLE
+C
+C          A = R1MACH(I)
+C
+C     WHERE I=1,...,5.  THE (OUTPUT) VALUE OF A ABOVE IS
+C     DETERMINED BY THE (INPUT) VALUE OF I.  THE RESULTS FOR
+C     VARIOUS VALUES OF I ARE DISCUSSED BELOW.
+C
+C  SINGLE-PRECISION MACHINE CONSTANTS
+C  R1MACH(1) = B**(EMIN-1), THE SMALLEST POSITIVE MAGNITUDE.
+C  R1MACH(2) = B**EMAX*(1 - B**(-T)), THE LARGEST MAGNITUDE.
+C  R1MACH(3) = B**(-T), THE SMALLEST RELATIVE SPACING.
+C  R1MACH(4) = B**(1-T), THE LARGEST RELATIVE SPACING.
+C  R1MACH(5) = LOG10(B)
+C
+C  TO ALTER THIS FUNCTION FOR A PARTICULAR ENVIRONMENT,
+C  THE DESIRED SET OF DATA STATEMENTS SHOULD BE ACTIVATED BY
+C  REMOVING THE C FROM COLUMN 1.
+C
+C  WHERE POSSIBLE, OCTAL OR HEXADECIMAL CONSTANTS HAVE BEEN USED
+C  TO SPECIFY THE CONSTANTS EXACTLY WHICH HAS IN SOME CASES
+C  REQUIRED THE USE OF EQUIVALENT INTEGER ARRAYS.
+C
+C***REFERENCES
+C  FOX P.A., HALL A.D., SCHRYER N.L.,*FRAMEWORK FOR A PORTABLE LIBRARY*,
+C  ACM TRANSACTION ON MATHEMATICAL SOFTWARE, VOL. 4, NO. 2,
+C  JUNE 1978, PP. 177-188.
+C***ROUTINES CALLED  XERROR
+C***END PROLOGUE  R1MACH
+C
+      INTEGER SMALL(2)
+      INTEGER LARGE(2)
+      INTEGER RIGHT(2)
+      INTEGER DIVER(2)
+      INTEGER LOG10(2)
+C
+      REAL RMACH(5)
+C
+      EQUIVALENCE (RMACH(1),SMALL(1))
+      EQUIVALENCE (RMACH(2),LARGE(1))
+      EQUIVALENCE (RMACH(3),RIGHT(1))
+      EQUIVALENCE (RMACH(4),DIVER(1))
+      EQUIVALENCE (RMACH(5),LOG10(1))
+C
+C     MACHINE CONSTANTS FOR THE BURROUGHS 1700 SYSTEM.
+C
+C     DATA RMACH(1) / Z400800000 /
+C     DATA RMACH(2) / Z5FFFFFFFF /
+C     DATA RMACH(3) / Z4E9800000 /
+C     DATA RMACH(4) / Z4EA800000 /
+C     DATA RMACH(5) / Z500E730E8 /
+C
+C     MACHINE CONSTANTS FOR THE BURROUGHS 5700/6700/7700 SYSTEMS.
+C
+C     DATA RMACH(1) / O1771000000000000 /
+C     DATA RMACH(2) / O0777777777777777 /
+C     DATA RMACH(3) / O1311000000000000 /
+C     DATA RMACH(4) / O1301000000000000 /
+C     DATA RMACH(5) / O1157163034761675 /
+C
+C     MACHINE CONSTANTS FOR THE CDC 6000/7000 SERIES.
+C
+C     DATA RMACH(1) / 00014000000000000000B /
+C     DATA RMACH(2) / 37767777777777777777B /
+C     DATA RMACH(3) / 16404000000000000000B /
+C     DATA RMACH(4) / 16414000000000000000B /
+C     DATA RMACH(5) / 17164642023241175720B /
+C
+C     MACHINE CONSTANTS FOR THE CRAY 1
+C
+C     DATA RMACH(1) / 200004000000000000000B /
+C     DATA RMACH(2) / 577777777777777777777B /
+C     DATA RMACH(3) / 377214000000000000000B /
+C     DATA RMACH(4) / 377224000000000000000B /
+C     DATA RMACH(5) / 377774642023241175720B /
+C
+C     MACHINE CONSTANTS FOR THE DATA GENERAL ECLIPSE S/200
+C
+C     NOTE - IT MAY BE APPROPRIATE TO INCLUDE THE FOLLOWING CARD -
+C     STATIC RMACH(5)
+C
+C     DATA SMALL/20K,0/,LARGE/77777K,177777K/
+C     DATA RIGHT/35420K,0/,DIVER/36020K,0/
+C     DATA LOG10/40423K,42023K/
+C
+C     MACHINE CONSTANTS FOR THE HARRIS 220
+C
+C     DATA SMALL(1),SMALL(2) / 20000000, 00000201 /
+C     DATA LARGE(1),LARGE(2) / 37777777, 00000177 /
+C     DATA RIGHT(1),RIGHT(2) / 20000000, 00000352 /
+C     DATA DIVER(1),DIVER(2) / 20000000, 00000353 /
+C     DATA LOG10(1),LOG10(2) / 23210115, 00000377 /
+C
+C     MACHINE CONSTANTS FOR THE HONEYWELL 600/6000 SERIES.
+C
+C     DATA RMACH(1) / O402400000000 /
+C     DATA RMACH(2) / O376777777777 /
+C     DATA RMACH(3) / O714400000000 /
+C     DATA RMACH(4) / O716400000000 /
+C     DATA RMACH(5) / O776464202324 /
+C
+C     MACHINE CONSTANTS FOR THE HP 2100
+C
+C     3 WORD DOUBLE PRECISION WITH FTN4
+C
+C     DATA SMALL(1), SMALL(2) / 40000B,       1 /
+C     DATA LARGE(1), LARGE(2) / 77777B, 177776B /
+C     DATA RIGHT(1), RIGHT(2) / 40000B,    325B /
+C     DATA DIVER(1), DIVER(2) / 40000B,    327B /
+C     DATA LOG10(1), LOG10(2) / 46420B,  46777B /
+C
+C     MACHINE CONSTANTS FOR THE HP 2100
+C     4 WORD DOUBLE PRECISION WITH FTN4
+C
+C     DATA SMALL(1), SMALL(2) / 40000B,       1 /
+C     DATA LARGE91), LARGE(2) / 77777B, 177776B /
+C     DATA RIGHT(1), RIGHT(2) / 40000B,    325B /
+C     DATA DIVER(1), DIVER(2) / 40000B,    327B /
+C     DATA LOG10(1), LOG10(2) / 46420B,  46777B /
+C
+C     MACHINE CONSTANTS FOR THE IBM 360/370 SERIES,
+C     THE XEROX SIGMA 5/7/9, THE SEL SYSTEMS 85/86  AND
+C     THE PERKIN ELMER (INTERDATA) 7/32.
+C
+C     DATA RMACH(1) / Z00100000 /
+C     DATA RMACH(2) / Z7FFFFFFF /
+C     DATA RMACH(3) / Z3B100000 /
+C     DATA RMACH(4) / Z3C100000 /
+C     DATA RMACH(5) / Z41134413 /
+C
+C     MACHINE CONSTANTS FOR THE PDP-10 (KA OR KI PROCESSOR).
+C
+C     DATA RMACH(1) / "000400000000 /
+C     DATA RMACH(2) / "377777777777 /
+C     DATA RMACH(3) / "146400000000 /
+C     DATA RMACH(4) / "147400000000 /
+C     DATA RMACH(5) / "177464202324 /
+C
+C     MACHINE CONSTANTS FOR PDP-11 FORTRANS SUPPORTING
+C     32-BIT INTEGERS (EXPRESSED IN INTEGER AND OCTAL).
+C
+C     DATA SMALL(1) /    8388608 /
+C     DATA LARGE(1) / 2147483647 /
+C     DATA RIGHT(1) /  880803840 /
+C     DATA DIVER(1) /  889192448 /
+C     DATA LOG10(1) / 1067065499 /
+C
+C     DATA RMACH(1) / O00040000000 /
+C     DATA RMACH(2) / O17777777777 /
+C     DATA RMACH(3) / O06440000000 /
+C     DATA RMACH(4) / O06500000000 /
+C     DATA RMACH(5) / O07746420233 /
+C
+C     MACHINE CONSTANTS FOR PDP-11 FORTRANS SUPPORTING
+C     16-BIT INTEGERS  (EXPRESSED IN INTEGER AND OCTAL).
+C
+C     DATA SMALL(1),SMALL(2) /   128,     0 /
+C     DATA LARGE(1),LARGE(2) / 32767,    -1 /
+C     DATA RIGHT(1),RIGHT(2) / 13440,     0 /
+C     DATA DIVER(1),DIVER(2) / 13568,     0 /
+C     DATA LOG10(1),LOG10(2) / 16282,  8347 /
+C
+C     DATA SMALL(1),SMALL(2) / O000200, O000000 /
+C     DATA LARGE(1),LARGE(2) / O077777, O177777 /
+C     DATA RIGHT(1),RIGHT(2) / O032200, O000000 /
+C     DATA DIVER(1),DIVER(2) / O032400, O000000 /
+C     DATA LOG10(1),LOG10(2) / O037632, O020233 /
+C
+C     MACHINE CONSTANTS FOR THE UNIVAC 1100 SERIES.
+C
+C     DATA RMACH(1) / O000400000000 /
+C     DATA RMACH(2) / O377777777777 /
+C     DATA RMACH(3) / O146400000000 /
+C     DATA RMACH(4) / O147400000000 /
+C     DATA RMACH(5) / O177464202324 /
+C
+C     MACHINE CONSTANTS FOR THE VAX 11/780
+C    (EXPRESSED IN INTEGER AND HEXADECIMAL)
+C  ***THE HEX FORMAT BELOW MAY NOT BE SUITABLE FOR UNIX SYSTEMS***
+C  *** THE INTEGER FORMAT SHOULD BE OK FOR UNIX SYSTEMS***
+C
+C     DATA SMALL(1) /       128 /
+C     DATA LARGE(1) /    -32769 /
+C     DATA RIGHT(1) /     13440 /
+C     DATA DIVER(1) /     13568 /
+C     DATA LOG10(1) / 547045274 /
+C
+C     DATA SMALL(1) / Z00000080 /
+C     DATA LARGE(1) / ZFFFF7FFF /
+C     DATA RIGHT(1) / Z00003480 /
+C     DATA DIVER(1) / Z00003500 /
+C     DATA LOG10(1) / Z209B3F9A /
+C
+C***FIRST EXECUTABLE STATEMENT  R1MACH
+C
+      IF (I .LT. 1  .OR.  I .GT. 5)
+     1   CALL XERROR (25HR1MACH -- I OUT OF BOUNDS,25,1,2)
+C
+      R1MACH = RMACH(I)
+      RETURN
+C
+      END

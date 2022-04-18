@@ -1,0 +1,898 @@
+C      ALGORITHM 735, COLLECTED ALGORITHMS FROM ACM.
+C      THIS WORK PUBLISHED IN TRANSACTIONS ON MATHEMATICAL SOFTWARE,
+C      VOL. 20, NO. 3, SEPTEMBER, 1994, PP. 398-412.
+
+
+% DEMODWT: DEMO Discrete Wavelet Transform.
+% *******************************************************************@
+% Inputs:
+%    
+% Outputs:
+%   
+% Usage: 
+%    demodwt; on infinite pause for graph display, press carriage 
+%    return twice to continue; to use maximum possible transform 
+%    depth J, enter desired transfrom depth Jdes = inf; to turn off 
+%    CHOPSC and CHOPD demos, enter 0 (zero) at the input prompts;
+% Defaults:
+%    press carriage return once to select defaults in brackets [] 
+%    for input prompts;
+% Globals:
+%    
+% Notes:
+%    see "Wavelet Transform Algorithms for Finite-Duration 
+%    Discrete-Time Signals I. Signal-End Effects" by C. Taswell
+%    and K. C. McGill, Numerical Analysis Project Manuscript NA-91-07
+%    Dept of Computer Science, Stanford University, Stanford, CA;
+% Copyright (c) 1991-93 Carl Taswell. 
+% All rights reserved. Created 6/3/91, last modified 10/1/93.
+% *******************************************************************@
+
+clear
+echo off all
+format compact
+format short e
+fn = input('file name for diary output ? ','s');
+tim = input('pause time in seconds [inf] for graph display ? ');
+if isempty(tim); tim = inf; end
+prt = input('do (1) or do not [0] print graphs ? ');
+if isempty(prt); prt = 0; end
+eval(['diary ',fn])
+disp(['results from DEMODWT version 93-09-26 output to ',fn,' on run date-time:'])
+disp(fix(clock))
+
+[l,lnam] = lpdwc(8);                 
+disp(['DWT based on Daubechies scaling function ',lnam])
+vers = str2mat('tmf','cmf','emf','evf1','evf2');
+n = 513; Jdes = 5;
+x = randn(n,1);
+for i = 1:size(vers,1)
+   alt = deblank(vers(i,:));
+   tic
+   [xt,b,J,m] = split(x,l,alt,Jdes);  
+   a = merge(xt,b,l,alt);
+   et = toc;
+   disp(['with computed transform depth J = ', int2str(J)])               
+   ee = plotsee(x,a);
+   fprintf('time = %.2e with error = %.2e for DWT.%s with J = %g, m = %g\n',...
+            et,ee,alt,J,m);
+   prtps(prt,tim);    
+end
+
+ver = input('wavelet transform version tmf (1), cmf (2), emf (3), evf1 [4], or evf2 (5) ? ');
+if isempty(ver); ver = 4; end
+if ver == 1;
+   alt = 'tmf'
+   disp('truncated matrix filter versions (tmf) of SPLIT and MERGE')
+elseif ver == 2;
+   alt = 'cmf'
+   disp('circulant matrix filter versions (cmf) of SPLIT and MERGE')
+elseif ver == 3;
+   alt = 'emf'
+   disp('extended matrix filter versions (emf) of SPLIT and MERGE')
+elseif ver == 4;
+   alt='evf1'
+   disp('extended vector filter versions 1 (evf1) of SPLIT and MERGE')
+   disp('using builtin MATLAB filter function for convolution')
+elseif ver == 5;
+   alt='evf2'
+   disp('extended vector filter versions 2 (evf2) of SPLIT and MERGE')
+   disp('using loop version of routine for convolution')
+end 
+disp('enter minimum, increment, and maximum values of wavelet length N')
+Nmin = input('Nmin [4] ? ');
+if isempty(Nmin); Nmin = 4; end
+Ninc = input('Ninc [2] ? '); 
+if isempty(Ninc); Ninc = 2; end
+Nmax = input('Nmax [20] ? ');
+if isempty(Nmax); Nmax = 20; end 
+Nvec = [Nmin:Ninc:Nmax] 
+sig = input('signal x is normal [1] or sin (0) ? ');
+if isempty(sig); sig = 1; end
+n = input('signal length n [157] ? ');
+if isempty(n); n = 157; end
+if sig
+   x = randn(n,1);
+else                              
+   x = sin(1:n)';
+end
+Jdes = input('for SPLIT and MERGE demo: desired DWT depth Jdes [inf] ? ');
+if isempty(Jdes); Jdes = inf; end
+c = input('for CHOPSC demo: small coefficient cutoff c [0.1] ? ');
+if isempty(c); c = 0.1; end
+Jvec = input('for CHOPD demo: enter vector [min:inc:max] of J values [1:2:5] ? ');
+if isempty(Jvec), Jvec = [1:2:5]; elseif ~Jvec, Jvec = []; end
+
+if c
+   npars = 2 + length(Jvec);
+else
+   npars = 1 + length(Jvec);
+end 
+errors = zeros(Nmax,npars);
+lengths = zeros(Nmax,npars);
+for N = Nvec
+    par = 1;
+    [l,lnam] = lpdwc(N);                 
+    disp(['DWT based on Daubechies scaling function ',lnam])
+    [xt,b,J,m] = split(x,l,alt,Jdes);  
+    disp(['with computed transform depth J = ', int2str(J)])               
+
+    % CHOPSC demo
+    if c
+        [xtc,mc] = chopsc(xt,c);
+    end
+
+    format long e
+    disp('norm of signal')
+    normx = norm(x)
+    disp('norm of DWT')
+    normxt = norm(xt)
+
+    % CHOPSC demo
+    if c
+        disp('norm of DWT after CHOPSC filtering')
+        normxtc = norm(xtc)
+    end
+    format short e
+
+    disp('number of points in signal and details')
+    b
+    disp('number of coefficients in DWT')
+    m 
+    if c
+        disp('number of nonzero coefficients in CHOPSC filtered DWT')
+        mc
+    end
+
+    a = merge(xt,b,l,alt);
+    errors(N,par) = plotsee(x,a);
+    lengths(N,par) = m;
+    fprintf('error = %.2e from %s DWT.%s with J = %g, m = %g\n',...
+            errors(N,par),lnam,alt,J,lengths(N,par));
+    prtps(prt,tim);    
+
+    % CHOPSC demo
+    if c
+        a = merge(xtc,b,l,alt);
+        par = par + 1;                   
+        errors(N,par) = plotsee(x,a);
+        lengths(N,par) = mc;
+        fprintf('error = %.2e from %s DWT.%s with J = %g, m = %g\n',...
+            errors(N,par),lnam,alt,J,lengths(N,par));
+        prtps(prt,tim);    
+    end
+
+    % CHOPD demo
+    for j = Jvec
+        [xt,b,J,m] = split(x,l,alt,j);
+        [xt,md] = chopd(xt,b);
+        a = merge(xt,b,l,alt);
+        par = par + 1; 
+        errors(N,par) = plotsee(x,a);
+        lengths(N,par) = md;
+        fprintf('error = %.2e from %s DWT.%s with J = %g, m = %g\n',...
+            errors(N,par),lnam,alt,J,lengths(N,par));
+        prtps(prt,tim);    
+    end
+
+end % N
+errors = errors(Nvec,:)
+lengths = lengths(Nvec,:)
+diary off
+eval(['save ',fn,'.mat'])
+
+
+function [lims,l,s,r] = axlim(x,c)
+% AXLIM: AXis LIMits.
+% *******************************************************************@
+% Inputs:
+%    x, signal vector;
+%    c, scaling coefficient;
+% Outputs:
+%    lims, lims(1) = lower limit & lims(2) = upper limit; 
+%    l = max(x), largest;
+%    s = min(x), smallest; 
+%    r = l - s, range.
+% Usage: 
+%    [lims,l,s,r] = axlim(x);
+%    [lims,l,s,r] = axlim(x,c);
+%    if nargin == 1, then c defaults to c = 0.025;
+% Notes:
+%    lower/upper limits = the extremes minus/plus c*r;
+%    AXLIM must be called separately for each axis for
+%    which limits are desired.
+% Functions: 
+%
+% Globals:
+%
+% Copyright (c) 1992-93 Carl Taswell. 
+% All rights reserved. Created 8/26/92, last modified 6/16/93.
+% *******************************************************************@
+if nargin<2; c = 0.025; end                 % margin scaling coef
+l = max(x);                                 % largest
+s = min(x);                                 % smallest
+r = l - s;                                  % range
+if r; m = c*r; else; m = c*s; end           % margin
+lims(1) = s - m;                            % lower limit
+lims(2) = l + m;                            % upper limit
+
+
+function [yt,na] = chopd(xt,b)
+% CHOPD : created 91-08-09 last modified 93-09-26
+%    written by Carl Taswell (taswell@sccm.stanford.edu);
+% full name : "CHOP Details";
+% inputs/outputs : wavelet transform xt, bookkeeper b, 
+%    modified wavelet transform yt, approximation length na; 
+% assumptions : xt and b from SPLIT;
+% explanation : CHOPD returns yt as a copy of xt with zeros
+%    in place of all details in xt so that only the final J 
+%    level approximation of length na is retained;          
+q = length(xt);
+na = b(length(b));
+p = q - na + 1;
+yt = zeros(size(xt));
+yt(p:q) = xt(p:q);
+
+
+function [y,n] = chopsc(x,c)
+% CHOPSC : created 91-08-07 last modified 91-08-14
+%    written by Carl Taswell (taswell@sccm.stanford.edu);
+% full name : "CHOP Small Coefficients";
+% inputs/outputs : input vector x, small coefficient cutoff c,
+%    output vector y, number n of nonzero elements of y; 
+% explanation : CHOPSC returns y as a copy of x with zeros
+%    in place of elements of x with absolute values less than c;
+g = abs(x)>c;
+n = sum(g);
+y = g.*x;
+
+
+function y = comp(x)
+% COMP : created 91-05-20 last modified 91-07-29
+%    written by Carl Taswell (taswell@sccm.stanford.edu);
+% full name : "COMPress";
+% inputs/outputs : input vector x, output vector y; 
+% explanation : COMP returns y as the compressed copy of x
+%    obtained by downsampling from even indices of x;
+y = x(2:2:length(x));
+
+
+function [o,A,B,C] = condo(L,H,tol)
+% CONDO : created 91-06-26 last modified 91-08-03
+%    written by Carl Taswell (taswell@sccm.stanford.edu);
+% full name : "CONDition O";
+% inputs/outputs : scaling filter matrix L, wavelet filter matrix H,
+%    error tolerance tol, condition o truth value vector o, truth
+%    value matrices A, B, and C; 
+% assumptions : L and H from FILVEC2MAT;
+% explanation : CONDO tests L and H for orthogonality and inverti-
+%    bility of approximation and detail subspace projections;
+% function calls : EQEYE;
+if nargin ~= 3; tol = 1e-9; end
+[o(1),A] = eqeye(L*L',tol);
+[o(2),B] = eqeye(H*H',tol);
+[o(3),C] = eqeye(L'*L + H'*H,tol);
+
+
+function y = convcomp(f,x)
+% CONVCOMP: CONVolve and COMPress (loop version).
+% *******************************************************************@
+% Inputs:
+%    f, Filter vector;
+%    x, signal vector;
+% Outputs:
+%    y, filtered signal vector;
+% Usage: 
+%    y = convcomp(f,x);
+% Defaults:
+%
+% Globals:
+%    
+% Notes:
+%    zero-padded extensions are used for the convolution;
+%    even parity is used for the downsampling by 2 compression;
+% Copyright (c) 1993 Carl Taswell. 
+% All rights reserved. Created 10/1/93, last modified 10/1/93.
+% *******************************************************************@
+N = length(f); N1 = N-1; n = length(x); 
+i = [2:2:n+N1]; m = length(i);
+x = [zeros(N1,1);x;zeros(N1,1)]; y = zeros(m,1);
+for j = 0:N1
+   y = y + f(N-j)*x(i+j);
+end
+% end CONVCOMP
+
+
+function y = dila(x)
+% DILA : created 91-05-20 last modified 91-07-29
+%    written by Carl Taswell (taswell@sccm.stanford.edu);
+% full name : "DILAte";
+% inputs/outputs : input vector x, output vector y; 
+% explanation : DILA returns y as the dilated copy of x obtained by
+%    upsampling from x to the even indices of y with zero-filling at
+%    the odd indices of y;
+n = 2*length(x);
+y = zeros(n,1);
+y(2:2:n) = x;
+
+
+function y = dilaconv(f,x,k)
+% DILACONV: DILAte and CONVolve (loop version).
+% *******************************************************************@
+% Inputs:
+%    f, Filter vector;
+%    x, signal vector;
+%    k, desired length of filtered signal vector;
+% Outputs:
+%    y, filtered signal vector;
+% Usage: 
+%    y = dilaconv(f,x,k);
+% Defaults:
+%
+% Globals:
+%    
+% Notes:
+%    zero-padded extensions are used for the convolution;
+%    even parity is used for the upsampling by 2 dilation;
+% Copyright (c) 1993 Carl Taswell. 
+% All rights reserved. Created 10/1/93, last modified 10/1/93.
+% *******************************************************************@
+N = length(f); N1 = N-1; n = length(x);
+y = zeros(2*(n+N1),1); y(N1+2*[1:n]) = x;
+m = 2*n+N1; i = [1:m];
+x = y; y = zeros(m,1);
+for j = 0:N1
+   y = y + f(N-j)*x(i+j);
+end
+y = y(N:k+N1);
+% end DILACONV
+
+
+function [y,Y] = eqeye(X,tol)
+% EQEYE : created 91-06-26 last modified 93-09-26
+%    written by Carl Taswell (taswell@sccm.stanford.edu);
+% full name : "EQuals identity matrix (EYE) ?";
+% inputs/outputs : test matrix X, error tolerance tol, truth value
+%    result matrix Y, truth value result scalar y; 
+% assumptions: if tol not provided, MATLAB eps assumed;
+% explanation : EQEYE returns logical matrix Y in which 1's indicate
+%    individual elements of X approximating individual elements of EYE
+%    and logical scalar y = 1 if X approximates EYE;
+if nargin ~=2
+    tol = 10*eps; 
+end
+Y = abs(eye(size(X)) - X) < tol;
+if isempty(Y)
+    y = 0;
+else
+    y = all(all(Y));
+end
+
+
+function err = esterror(tru,est,typ)
+% ESTERROR: ESTimate ERROR.
+% *******************************************************************@
+% Inputs:
+%    tru, true values;
+%    est, estimated values;
+%    typ, type of error;
+% Outputs:
+%    err, error of estimate;
+% Usage: 
+%    err = esterror(tru,est);
+%    err = esterror(tru,est,typ);
+%    if nargin == 2, typ defaults to typ = 'mix';
+%    typ must be 'mix', 'rel', 'abs', 'ssq', or 'msq';
+% Notes:
+%    'mix' is mixed error: norm(tru-est,'fro')/(1+norm(tru,'fro'));
+%    'rel' is relative error: norm(tru-est,'fro')/norm(tru,'fro');
+%    'abs' is absolute error: norm(tru-est,'fro');
+%    'ssq' is sum of squares error: norm(tru-est,'fro')^2;
+%    'msq' is mean squares error: norm(tru-est,'fro')^2/(r*c);
+% Functions:
+%
+% Globals:
+%
+% Copyright (c) 1991-93 Carl Taswell. 
+% All rights reserved. Created 8/15/91, last modified 6/23/93.
+% *******************************************************************@
+ni = nargin;
+if ni==2, 
+   typ = 'mix'; 
+elseif ni~=3,
+   err = []; 
+   fprintf('ERROR: invalid nargin = %g in ESTERROR\n',ni)
+   fprintf('       error set to err = %g\n',err)
+   return
+end
+[rtru,ctru] = size(tru);
+[rest,cest] = size(est);
+if (rtru~=rest)|(ctru~=cest) 
+   err = inf; 
+   fprintf('WARNING: incompatible dimensions of tru and est in ESTERROR\n')
+   fprintf('         size(tru) = %g x %g in ESTERROR\n',rtru,ctru)
+   fprintf('         size(est) = %g x %g in ESTERROR\n',rest,cest)
+   fprintf('         error set to err = %g\n',err)
+   return 
+end
+typ = lower(typ);
+if strcmp(typ,'mix')
+   err = norm(tru-est,'fro')/(1+norm(tru,'fro'));
+elseif strcmp(typ,'rel')
+   err = norm(tru-est,'fro')/norm(tru,'fro');
+elseif strcmp(typ,'abs')
+   err = norm(tru-est,'fro');
+elseif strcmp(typ,'ssq')
+   err = norm(tru-est,'fro')^2;
+elseif strcmp(typ,'msq')
+   [r,c] = size(tru);
+   err = norm(tru-est,'fro')^2/(r*c);
+end
+% end ESTERROR
+
+
+function F = fvecmat(f,N,r,c,cir)
+% FVECMAT : created 91-06-24 last modified 91-07-29
+% written by Carl Taswell (taswell@sccm.stanford.edu);
+% full name : "Filter VECtor to MATrix";
+% inputs/outputs : filter vector f with length N, filter matrix
+%    F with r rows and c cols; logical switch cir;
+% assumptions : f is row vector;
+% explanation : if 4 input arguments, then F is extended filter;
+%    if 5 input arguments, then F is circulant filter for cir = 1
+%    and truncated filter for cir = 0;
+k = N-2;
+F = zeros(r,2*r+k);
+for i = 1:r
+    F(i,2*i-1:2*i+k) = f;
+end
+if nargin==5
+    k = k/2;
+    if cir
+        r = 2*r;
+        F(:,k+1:2*k) = F(:,k+1:2*k) + F(:,r+k+1:r+2*k);
+        F(:,r+1:r+k) = F(:,r+1:r+k) + F(:,1:k);
+    end
+end
+F = F(:,k+1:k+c);
+
+
+function i = jkdci(b,j,k)
+% JKDCI : created 91-07-21 last modified 91-07-21
+%    written by Carl Taswell (taswell@sccm.stanford.edu);
+% full name : "JKth Detail Coefficient Index";
+% inputs/outputs : bookkeeping vector b, dilation index j,
+%    translation index k, transform coefficient index i; 
+% assumptions : b from SPLIT;
+% explanations : JKDCI returns the transform coefficient index
+%    i corresponding to the given detail coefficient indices jk
+%    setting i = 0 if the given detail coefficient indices are
+%    not valid for the given B;
+i = 0;
+J = length(b) - 1;
+if (1<=j) & (j<=J)
+    if (1<=k) & (k<=b(j+1))
+        i = sum(b(2:j)) + k;
+    end
+end
+
+
+function [h,lr,hr,N] = l2h(l)
+% L2H: Lowpass filter vector to Highpass filter vector.
+% *******************************************************************@
+% Inputs:
+%    l, Lowpass scaling filter vector;
+% Outputs:
+%    h, Highpass wavelet filter vector;
+%    lr, time-reversed l;
+%    hr, time-reversed h;
+%    N, length of each filter in set of filters;
+% Usage: 
+%    [h,lr,hr,N] = l2h(l);
+% Defaults:
+%
+% Globals:
+%    
+% Notes:
+%    l is row vector from LPDWC;
+%    l corresponds to scaling function phi;
+%    h corresponds to wavelet function psi;
+% Copyright (c) 1993 Carl Taswell. 
+% All rights reserved. Created 6/10/91, last modified 9/26/93.
+% *******************************************************************@
+N = length(l);
+lr = fliplr(l);
+h = lr;
+for i = 2:2:N
+   h(i) = -h(i);
+end
+hr = fliplr(h);
+% end L2H
+
+
+function [l,lnam] = lpdwc(N)
+% LPDWC : created 91-06-10 last modified 91-08-03
+%    written by Carl Taswell (taswell@sccm.stanford.edu);
+% full name : "Linear Phase Daubechies Wavelet Coefficients";
+% inputs/outputs : row vector filter l with N coefficients
+%    and name lnam; 
+% assumptions : N = 4, 6, 8, 10, 12, 14, 16, 18, or 20;
+% explanation : LPDWC returns the scaling filter l corresponding
+%    to one of the scaling functions phi, selected by N, for the
+%    Daubechies family of closest-to-linear-phase wavelets;
+l = zeros(1,N);
+if N == 4
+    lnam = 'LPD4';
+    rt3 = sqrt(3);
+    l(1) = (1 + rt3);
+    l(2) = (3 + rt3);
+    l(3) = (3 - rt3);
+    l(4) = (1 - rt3);
+    l = l/(2^2);
+elseif N == 6
+    lnam = 'LPD6';
+    rt10 = sqrt(10);
+    c = sqrt(5 + 2*rt10);
+    l(1) = 1 + rt10 + c;
+    l(2) = 5 + rt10 + 3*c;
+    l(3) = 10 - 2*rt10 + 2*c;
+    l(4) = 10 - 2*rt10 - 2*c;
+    l(5) = 5 + rt10 - 3*c;
+    l(6) = 1 + rt10 - c;
+    l = l/(2^4);
+elseif N == 8
+    lnam = 'LPD8';
+    l(1) = -.107148901418;
+    l(2) = -.041910965125;
+    l(3) = 0.703739068656;
+    l(4) = 1.136658243408;
+    l(5) = 0.421234534204;
+    l(6) = -.140317624179;
+    l(7) = -.017824701442;
+    l(8) = 0.045570345896;
+elseif N == 10
+    lnam = 'LPD10';
+    l(1) = 0.038654795955;
+    l(2) = 0.041746864422;
+    l(3) = -.055344186117;
+    l(4) = 0.281990696854;
+    l(5) = 1.023052966894;
+    l(6) = 0.896581648380;
+    l(7) = 0.023478923136;
+    l(8) = -.247951362613;
+    l(9) = -.029842499869;
+   l(10) = 0.027632152958;
+elseif N == 12
+    lnam = 'LPD12';
+    l(1) = 0.021784700327;
+    l(2) = 0.004936612372;
+    l(3) = -.166863215412;
+    l(4) = -.068323121587;
+    l(5) = 0.694457972958;
+    l(6) = 1.113892783926;
+    l(7) = 0.477904371333;
+    l(8) = -.102724969862;
+    l(9) = -.029783751299;
+   l(10) = 0.063250562660;
+   l(11) = 0.002499922093;
+   l(12) = -.011031867509;
+elseif N == 14
+    lnam = 'LPD14';
+    l(1) = 0.003792658534;
+    l(2) = -.001481225915;
+    l(3) = -.017870431651;
+    l(4) = 0.043155452582;
+    l(5) = 0.096014767936;
+    l(6) = -.070078291222;
+    l(7) = 0.024665659489;
+    l(8) = 0.758162601964;
+    l(9) = 1.085782709814;
+   l(10) = 0.408183939725;
+   l(11) = -.198056706807;
+   l(12) = -.152463871896;
+   l(13) = 0.005671342686;
+   l(14) = 0.014521394762;
+elseif N == 16
+    lnam = 'LPD16';
+    l(1) = 0.002672793393;
+    l(2) = -.000428394300;
+    l(3) = -.021145686528;
+    l(4) = 0.005386388754;
+    l(5) = 0.069490465911;
+    l(6) = -.038493521263;
+    l(7) = -.073462508761;
+    l(8) = 0.515398670374;
+    l(9) = 1.099106630537;
+   l(10) = 0.680745347190;
+   l(11) = -.086653615406;
+   l(12) = -.202648655286;
+   l(13) = 0.010758611751;
+   l(14) = 0.044823623042;
+   l(15) = -.000766690896;
+   l(16) = -.004783458512;
+elseif N == 18
+    lnam = 'LPD18';
+    l(1) = 0.001512487309;
+    l(2) = -.000669141509;
+    l(3) = -.014515578553;
+    l(4) = 0.012528896242;
+    l(5) = 0.087791251554;
+    l(6) = -.025786445930;
+    l(7) = -.270893783503;
+    l(8) = 0.049882830959;
+    l(9) = 0.873048407349;
+   l(10) = 1.015259790832;
+   l(11) = 0.337658923602;
+   l(12) = -.077172161097;
+   l(13) = 0.000825140929;
+   l(14) = 0.042744433602;
+   l(15) = -.016303351226;
+   l(16) = -.018769396836;
+   l(17) = 0.000876502539;
+   l(18) = 0.001981193736;
+elseif N == 20
+    lnam = 'LPD20';
+    l(1) = 0.001089170447;
+    l(2) = 0.000135245020;
+    l(3) = -.012220642630;
+    l(4) = -.002072363923;
+    l(5) = 0.064950924579;
+    l(6) = 0.016418869426;
+    l(7) = -.225558972234;
+    l(8) = -.100240215031;
+    l(9) = 0.667071338154;
+   l(10) = 1.088251530500;
+   l(11) = 0.542813011213;
+   l(12) = -.050256540092;
+   l(13) = -.045240772218;
+   l(14) = 0.070703567550;
+   l(15) = 0.008152816799;
+   l(16) = -.028786231926;
+   l(17) = -.001137535314;
+   l(18) = 0.006495728375;
+   l(19) = 0.000080661204;
+   l(20) = -.000649589896;
+end
+l = l/sqrt(2);
+
+
+function a = merge(xt,b,l,alt)
+% MERGE: inverse wavelet transform.
+% *******************************************************************@
+% Inputs:
+%    xt, transform vector;
+%    b, bookkeeping vector;
+%    l, scaling filter vector;
+%    alt, transform version switch;
+% Outputs:
+%    a, inverse transform vector;
+% Usage: 
+%    a = merge(xt,b,l,alt);
+% Defaults:
+%
+% Globals:
+%    
+% Notes:
+%    MERGE inverses the wavelet transform xt produced by SPLIT
+%    and returns the approximation a of the original signal x;
+% Copyright (c) 1991-93 Carl Taswell. 
+% All rights reserved. Created 6/14/91, last modified 10/1/93.
+% *******************************************************************@
+[h,lr,hr,N] = l2h(l); 
+J = length(b) - 1; 
+q = length(xt); p = q - b(J+1) + 1;
+a = xt(p:q);
+for j = J:-1:1
+   q = p - 1; p = q - b(j+1) + 1; 
+   d = xt(p:q);
+   if strcmp(alt,'tmf')                
+      a = fvecmat(lr,N,b(j+1),b(j),0)'*a + fvecmat(hr,N,b(j+1),b(j),0)'*d;
+   elseif strcmp(alt,'cmf')
+      a = fvecmat(lr,N,b(j+1),b(j),1)'*a + fvecmat(hr,N,b(j+1),b(j),1)'*d;
+   elseif strcmp(alt,'emf')
+      a = fvecmat(lr,N,b(j+1),b(j))'*a + fvecmat(hr,N,b(j+1),b(j))'*d;
+   elseif strcmp(alt,'evf1')
+      a = dila(a); d = dila(d); 
+      n = 2*b(j+1)+N-1; a(n) = 0; d(n) = 0;
+      a = filter(lr,1,a) + filter(hr,1,d); 
+      a = a(N:b(j)+N-1);
+   elseif strcmp(alt,'evf2')
+      a = dilaconv(lr,a,b(j)) + dilaconv(hr,d,b(j));  
+   end
+end
+% end MERGE
+
+
+function ee = plotsee(tim,sig,est,nam)
+% PLOTSEE: PLOT Signal and Estimate Error.
+% *******************************************************************@
+% Inputs:
+%    tim, time (abscissa) vector;
+%    sig, signal (ordinate) vector;
+%    est, estimate (ordinate) vector;
+%    nam, name for signal and estimate used in plot title;
+% Outputs:
+%    ee, estimate error scalar;
+% Usage: 
+%    ee = plotsee(sig,est);
+%    ee = plotsee(tim,sig,est);
+%    ee = plotsee(tim,sig,est,nam);
+%    if not input, tim defaults to tim = [1:length(sig)];
+%    if not input, nam defaults to nam = 'Signal and Estimate Error'; 
+% Notes:
+%    ee = esterror(sig,est);
+% Functions:
+%    ESTERROR;
+% Globals: 
+%
+% Copyright (c) 1990-93 Carl Taswell. 
+% All rights reserved. Created 8/8/90, last modified 6/19/93.
+% *******************************************************************@
+nin = nargin;
+if (nin<2)|(nin>4)
+   fprintf('ERROR: invalid nargin = %g in function PLOTSEE',nin)
+   ee = []; return
+else
+   n = length(tim);
+   if nin<4
+      nam = 'Signal and Estimate Error'; 
+      if nin==2
+         est = sig; sig = tim; tim = 1:n; 
+      end
+   end
+end
+t = tim(:); s = sig(:); e = est(:); 
+d = s - e; ee = esterror(s,e);
+cla; 
+set(gca,'NextPlot','add','Box','on',...
+   'XLim',axlim(t),'YLim',axlim([s;d])); 
+plot(t,s,'g'); 
+plot(t,d,'r'); 
+title([nam,sprintf(': total error = %g',ee)]);
+
+
+function prtps(prt,tim)
+% *******************************************************************@
+% prtps: created 92-08-19, last modified 92-10-23. (C) Carl Taswell
+% Name: PRinT and PauSe.
+% Inputs: prt, boolean switch for graph printing;
+%    tim, scalar for graph pause time in seconds. 
+% Functions: print.
+% Outputs: none.
+% Usage: prtps(prt,tim); keying return/enter continues program when 
+%    pause time is infinite.
+% Notes: uses print which is assumed to be an M-file configured for a
+%    local Matlab installation on a specific machine with printer;
+%    for use on Macintosh systems, just replace 'print' with 'prtsc'.
+% *******************************************************************@
+if prt; print; end
+if tim == inf; input(''); else; pause(tim); end
+
+
+function r = rmse(a,x)
+% RMSE : created 91-08-15 last modified 91-08-15
+%    written by Carl Taswell (taswell@sccm.stanford.edu);
+% full name : "Relative Mean Square Error";
+% inputs/outputs : approximation a, signal x, relative mean 
+%    square error r; 
+r = norm(x-a)/norm(x);
+
+
+function [xt,b,J,m] = split(x,l,alt,Jdes)
+% SPLIT: forward wavelet transform.
+% *******************************************************************@
+% Inputs:
+%    x, signal vector;
+%    l, scaling filter vector;
+%    alt, transform version switch;
+%    Jdes, desired transform depth;
+% Outputs:
+%    xt, transform vector;
+%    b, bookkeeping vector;
+%    J, computed transform depth;
+%    m, computed transform length;
+% Usage: 
+%    [xt,b,J,m] = split(x,l,alt,Jdes);
+%    may use alt = 'tmf', 'cmf', 'emf', 'evf1', or 'evf2';
+% Defaults:
+%    Jdes = inf;
+% Globals:
+%    
+% Notes:
+%    SPLIT computes the wavelet transform xt of the signal x to 
+%    J scale levels using filters l and h from LPDWC and L2H and 
+%    stores in b the lengths of x and the details d of which the
+%    latter together with the last approximation a are concatenated
+%    in xt in the order of splitting;
+% Copyright (c) 1991-93 Carl Taswell. 
+% All rights reserved. Created 6/14/91, last modified 10/1/93.
+% *******************************************************************@
+if nargin<4, Jdes = inf; end
+n = length(x); a = x;
+[h,lr,hr,N] = l2h(l); 
+[J,m] = wtdl(n,N,alt,Jdes);
+b = zeros(1,J+1); b(1) = n;
+xt = zeros(m,1); p = 1;
+for j = 1:J
+   if strcmp(alt,'tmf')                                     
+      d = fvecmat(hr,N,ceil(b(j)/2),b(j),0)*a;
+   elseif strcmp(alt,'cmf')
+      d = fvecmat(hr,N,ceil(b(j)/2),b(j),1)*a;
+   elseif strcmp(alt,'emf')
+      d = fvecmat(hr,N,floor((b(j)+N-1)/2),b(j))*a;
+   elseif strcmp(alt,'evf1') 
+      a(b(j)+N-1) = 0;
+      d = comp(filter(h,1,a));             
+   elseif strcmp(alt,'evf2')
+      d = convcomp(h,a);           
+   end
+   b(j+1) = length(d);
+   q = p + b(j+1) - 1;
+   xt(p:q) = d;
+   p = q + 1;
+   if strcmp(alt,'tmf')                                     
+      a = fvecmat(lr,N,ceil(b(j)/2),b(j),0)*a;
+   elseif strcmp(alt,'cmf')
+      a = fvecmat(lr,N,ceil(b(j)/2),b(j),1)*a;
+   elseif strcmp(alt,'emf')
+      a = fvecmat(lr,N,floor((b(j)+N-1)/2),b(j))*a;
+   elseif strcmp(alt,'evf1') 
+      a = comp(filter(l,1,a));             
+   elseif strcmp(alt,'evf2')
+      a = convcomp(l,a);           
+   end
+end
+q = p + b(J+1) - 1;
+xt(p:q) = a;
+% end SPLIT
+
+
+function [J,m] = wtdl(n,N,alt,Jdes)
+% WTDL: Wavelet Transform Depth and Length.
+% *******************************************************************@
+% Inputs:
+%    n, signal length;
+%    N, wavelet filter length;
+%    alt, transform version switch;
+%    Jdes, desired transform depth;
+% Outputs:
+%    J, computed transform depth;
+%    m, computed transform length;
+% Usage: 
+%    [J,m] = wtdl(n,N,alt,Jdes);
+%    may use alt = 'tmf', 'cmf', 'emf', 'evf1', or 'evf2';
+% Defaults:
+%
+% Globals:
+%    
+% Notes:
+%    
+% Copyright (c) 1991-93 Carl Taswell. 
+% All rights reserved. Created 7/1/91, last modified 9/26/93.
+% *******************************************************************@
+J = 0;
+m = 0;
+if strcmp(alt,'tmf') | strcmp(alt,'cmf')
+    N = N/2;
+    if rem(N,2)
+        N = N - 2;
+    else
+        N = N - 1;
+    end
+    if N < 2
+        N = 2;
+    end
+    while (n >= N) & (J < Jdes)
+        J = J + 1;
+        n = ceil(n/2);
+        m = m + n;
+    end
+elseif strcmp(alt,'emf') | strcmp(alt,'evf1') | strcmp(alt,'evf2')
+    while (n >= N) & (J < Jdes)
+        J = J + 1;
+        n = floor((n + N - 1)/2);
+        m = m + n;
+    end
+end
+m = m + n;
+% end WTDL

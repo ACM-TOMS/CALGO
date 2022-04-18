@@ -1,0 +1,1558 @@
+C  QRUP - A SET OF FORTRAN ROUTINES FOR UPDATING QR FACTORIZATIONS
+C
+C BY A. BUCKLEY
+C
+C ACM TRANSACTIONS ON MATHEMATICAL SOFTWARE, DECEMBER 1981
+C
+C.... PROGRAM  DESCRB  (INPUT,OUTPUT, TAPE6)                            QRUP0001
+C                                                                       QRUP0002
+C======================== D E S C R I P T I O N ========================QRUP0003
+C                                                                       QRUP0004
+C     THE PURPOSE OF THIS PROGRAM IS JOINTLY TO DESCRIBE THE ROUTINES   QRUP0005
+C     WHICH FOLLOW, AND TO PROVIDE A NUMBER OF TESTS TO ENSURE THAT     QRUP0006
+C     THE ROUTINES ARE PROPER TRANSLATIONS AND THAT THEY HAVE BEEN      QRUP0007
+C     PROPERLY COMPILED ON A SPECIFIC SYSTEM.                           QRUP0008
+C                                                                       QRUP0009
+C     THESE ROUTINES ARE A TRANSLATION INTO  FORTRAN  OF THE  ALGOL     QRUP0010
+C     ROUTINES  PUBLISHED IN                                            QRUP0011
+C                                                                       QRUP0012
+C        "REORTHOGONALIZATION AND STABLE ALGORITHMS FOR UPDATING        QRUP0013
+C        THE GRAM SCHMIDT  QR  FACTORIZATION"                           QRUP0014
+C                                                                       QRUP0015
+C     PUBLISHED BY  J.W. DANIEL, W.B. GRAGG, L. KAUFMANN AND            QRUP0016
+C     G.W. STEWART IN  MATHEMATICS OF COMPUTATION, VOLUME 30,           QRUP0017
+C     NUMBER 136, OCTOBER 1976, PAGES 772-795.                          QRUP0018
+C                                                                       QRUP0019
+C     IT IS RECOMMENDED THAT THIS ROUTINE BE EXECUTED TO TEST THE       QRUP0020
+C     COMPILED ROUTINES. ALTHOUGH THE OUTPUT FROM THE TESTS IS A BIT    QRUP0021
+C     LONG, ONLY THE LAST FEW LINES NORMALLY NEED TO BE READ.           QRUP0022
+C                                                                       QRUP0023
+C     THE TRANSLATION IS IN MANY (IN FACT, MOST) INSTANCES DIRECT,      QRUP0024
+C     ALTHOUGH THE FOLLOWING POINTS SHOULD BE NOTED.                    QRUP0025
+C                                                                       QRUP0026
+C     1. TO CONFORM TO STANDARD FORTRAN, THE NAMES HAVE BEEN CHANGED SO QRUP0027
+C        AS TO BE AT MOST 6 CHARACTERS IN LENGTH.  (ONE MIGHT ALSO SAY  QRUP0028
+C        THAT THE NAMES HAVE BEEN CHANGED TO PROTECT THE INNOCENTI...   QRUP0029
+C        NAMELY THE AUTHORS OF THE ORIGINAL ALGOL CODES.)  THE          QRUP0030
+C        CORRESPONDING NAMES ARE:                                       QRUP0031
+C                                                                       QRUP0032
+C           ALGOL               FORTRAN                                 QRUP0033
+C           -----               -------                                 QRUP0034
+C           ORTHOGONALIZE       ORTCOL                                  QRUP0035
+C           COMPUTEREFLECTOR    CRFLCT                                  QRUP0036
+C           APPLYREFLECTOR      ARFLCT                                  QRUP0037
+C           RANKONEUPDATE       RANK1                                   QRUP0038
+C           DELETECOLUMN        DELCOL                                  QRUP0039
+C           INSERTCOLUMN        INSCOL                                  QRUP0040
+C           INSERTROW           INSROW                                  QRUP0041
+C           DELETEROW           DELROW                                  QRUP0042
+C           QRFACTOR            QRFACT                                  QRUP0043
+C                                                                       QRUP0044
+C        NOTE THAT THERE IS NO ROUTINE CORRESPONDING TO THE ALGOL       QRUP0045
+C        ROUTINE LENGTH. THE BLAS--SEE 4. BELOW--ARE USED INSTEAD.      QRUP0046
+C                                                                       QRUP0047
+C     2. IN KEEPING WITH THE ORIGINAL ALGOL ROUTINES, NO WARNINGS ARE   QRUP0048
+C        ISSUED IF IFAIL = 1 (SEE ORTCOL, NOTE 5.) OR IF ANY OF THE     QRUP0049
+C        ROUTINES ARE CALLED WITH INVALID PARAMETER LISTS (E.G. WITH    QRUP0050
+C        M<N). SO PLEASE, TAKE                                          QRUP0051
+C                                                                       QRUP0052
+C              W A R N I N G                                            QRUP0053
+C                                                                       QRUP0054
+C        THERE ARE NO OTHER WARNINGS ISSUED.                            QRUP0055
+C                                                                       QRUP0056
+C     3. THE PARAMETER LISTS CORRESPOND AS CLOSELY AS POSSIBLE TO       QRUP0057
+C        THOSE OF THE ALGOL PROCEDURES.  THE MAJOR EXCEPTION TO         QRUP0058
+C        THIS IS THE ROUTINE  "ARFLCT"; THIS ARISES BECAUSE             QRUP0059
+C        FORTRAN  DOES NOT PERMIT EVALUATION OF ACTUAL PARAMETERS       QRUP0060
+C        WHICH ARE EXPRESSIONS WITHIN THE SUBROUTINE. THIS ALSO MEANS   QRUP0061
+C        THAT THE JENSEN DEVICE USED IN THE ALGOL VERSION IS            QRUP0062
+C        NO LONGER APPLICABLE.                                          QRUP0063
+C                                                                       QRUP0064
+C     4. BASIC LINEAR ALGEBRA COMPUTATIONS ARE DONE USING THE BLAS      QRUP0065
+C        OF LINPACK. THESE ROUTINES ARE DESCRIBED IN THE LINPACK        QRUP0066
+C        USER'S GUIDE WRITTEN BY J.R. BUNCH, J.J. DONGARRA, C.B.MOLER   QRUP0067
+C        AND G.W. STEWART AND ARE AVAILABLE THROUGH SIAM.               QRUP0068
+C                                                                       QRUP0069
+C     5. THE MATRIX  R  IS UPPER TRIANGULAR AND IS DECLARED IN THE      QRUP0070
+C        ALGOL PROCEDURES AS AN  N  BY  N  ARRAY.  HOWEVER, FOR STORAGE QRUP0071
+C        PURPOSES, IN THE FORTRAN VERSION ONLY THE UPPER TRIANGULAR     QRUP0072
+C        PART IS STORED.  THUS THE UPPER TRIANGLE OF ELEMENTS OF  R     QRUP0073
+C        IS STORED COLUMN BY COLUMN IN A ONE DIMENSIONAL ARRAY.  HENCE  QRUP0074
+C        THE VECTOR R CONTAINS THE ELEMENTS OF THE CORRESPONDING        QRUP0075
+C        MATRIX R IN THE ORDER R(1,1), R(1,2), R(2,2), R(1,3),          QRUP0076
+C        R(2,3), R(3,3), ... .                                          QRUP0077
+C                                                                       QRUP0078
+C     6. SINCE FORTRAN DOES NOT ALLOW DYNAMIC ALLOCATION OF STORAGE,    QRUP0079
+C        THE USE OF TEMPORARY VECTORS IS DIFFERENT.  THOSE VECTORS      QRUP0080
+C        DECLARED IN THE ALGOL PROCEDURES WHICH DO NOT CORRESPOND TO    QRUP0081
+C        FORMAL PARAMETERS OF THE PROCEDURE MUST, IN THE FORTRAN        QRUP0082
+C        VERSION, BE PASSED TO THE SUBROUTINE AS ADDITIONAL PARAMETERS. QRUP0083
+C        THESE ARE NAMED  WRK1, WRK2,... IN THE PARAMETER LISTS.  THUS  QRUP0084
+C        THE SUBROUTINES CONTAIN NO ARRAY DECLARATIONS WHICH WOULD      QRUP0085
+C        IMPOSE ANY LIMITATIONS ON THE SIZE OF PROBLEMS WHICH CAN BE    QRUP0086
+C        HANDLED.                                                       QRUP0087
+C                                                                       QRUP0088
+C     7. THE ROUTINES HAVE BEEN WRITTEN SIMULTANEOUSLY IN SINGLE AND    QRUP0089
+C        DOUBLE PRECISION.  THE LISTED VERSIONS EXECUTE IN SINGLE       QRUP0090
+C        PRECISION.  TO OBTAIN DOUBLE PRECISION VERSIONS ONE ONLY       QRUP0091
+C        HAS TO SEARCH FOR ALL STATEMENTS BEGINNING WITH                QRUP0092
+C                                                                       QRUP0093
+C           CIIII                                                       QRUP0094
+C                                                                       QRUP0095
+C        AND THEN FOR EACH SUCH OCCURENCE, REPLACE THESE 5 CHARACTERS   QRUP0096
+C        WITH BLANKS, AND PUT THE FIVE CHARACTERS "CIIII" AS THE FIRST  QRUP0097
+C        FIVE CHARACTERS OF THE PRECEDING LINE.  ANY TEXT EDITOR WORTH  QRUP0098
+C        ITS SALT WILL DO THIS EASILY.                                  QRUP0099
+C                                                                       QRUP0100
+C     8. THE ROUTINES ARE ESSENTIALLY MACHINE INDEPENDENT, WITH SOME    QRUP0101
+C        MINOR EXCEPTIONS.                                              QRUP0102
+C                                                                       QRUP0103
+C           A. AS DESCRIBED BY DANIEL ET AL, ONE MUST DEFINE CERTAIN    QRUP0104
+C              CONSTANTS. ONE OF THESE REFLECTS THE RELATIVE ACCURACY   QRUP0105
+C              OF THE MACHINE IN USE. THESE ARE USED AND DEFINED IN     QRUP0106
+C              ORTCOL AND ARE NAMED                                     QRUP0107
+C                                                                       QRUP0108
+C              THETA, OMEGA & SIGMA   .                                 QRUP0109
+C                                                                       QRUP0110
+C              FOR FURTHER INFORMATION ON THESE CONSTANTS SEE THE PAPER QRUP0111
+C              BY DANIEL ET AL.  THE CURRENT VERSIONS CONTAIN VALUES    QRUP0112
+C              SUITABLE FOR THE CDC  6000/7000/CYBER  SERIES IN         QRUP0113
+C              SINGLE PRECISION, AND FOR THE  IBM 360/370 SERIES IN     QRUP0114
+C              DOUBLE PRECISION.                                        QRUP0115
+C                                                                       QRUP0116
+C           B. IT IS POSSIBLE THAT THESE PROGRAMS MIGHT NOT EXECUTE
+C              UNDER A FORTRAN COMPILER SUCH AS WATFIV OR MNF WHEN
+C              SUBSCRIPT CHECKING IS IN EFFECT.  THIS IS BECAUSE OF THE
+C              WAY IN WHICH SUBSCRIPTING IS DONE WITHIN SOME OF THE
+C              SUBROUTINES.  IN FACT, THERE SHOULD BE NO PROBLEMS, AND
+C              THE AUTHOR WOULD LIKE TO THANK THE ASSOCIATE EDITOR,
+C              DR. J.K. REID, FOR HIS SUGGESTIONS WHICH ENSURE THAT IT
+C              WILL RUN WITH CHECKING IN EFFECT AND FOR TESTING IT
+C              UNDER WATFIV.  THE ORIGINAL CODE WAS PREPARED ON A
+C              CDC CYBER SYSTEM.
+C                                                                       QRUP0124
+C           C. THE FIRST STATEMENT OF DESCRB IS THE 'PROGRAM' STATEMENT QRUP0125
+C              REQUIRED BY THE CDC SYSTEM.  IT IS PRECEEDED BY THE      QRUP0126
+C              CHARACTER STRING 'C....' SO THAT IT IS A COMMENT FOR     QRUP0127
+C              MOST SYSTEMS, BUT EASILY INCLUDED FOR CDC SITES.         QRUP0128
+C                                                                       QRUP0129
+C                                                                       QRUP0130
+C                                                                       QRUP0131
+C        NOTICE THAT NO EXTENSIVE TESTING OF THESE ROUTINES HAS         QRUP0132
+C        BEEN DONE, FOR THAT HAS ALREADY BEEN DONE BY THE ORIGINAL      QRUP0133
+C        AUTHORS.  THE TESTING HERE IS FOR THE PURPOSE OF CHECKING      QRUP0134
+C        THE ACCURACY OF THE TRANSLATION.                               QRUP0135
+C                                                                       QRUP0136
+C======================= D E C L A R A T I O N S =======================QRUP0137
+C                                                                       QRUP0138
+      REAL                 A,    ASS, SDOT, COL, GLRMAX, OMEGA          QRUP0139
+CIIII DOUBLE PRECISION     A,    ASS, DDOT, COL, GLRMAX, OMEGA          QRUP0140
+      REAL               ONE,      Q,      R,   RMAX,     ROW           QRUP0141
+CIIII DOUBLE PRECISION   ONE,      Q,      R,   RMAX,     ROW           QRUP0142
+      REAL                RR,     RU,     RV,  SIGMA,      SS           QRUP0143
+CIIII DOUBLE PRECISION    RR,     RU,     RV,  SIGMA,      SS           QRUP0144
+      REAL             THETA,  THREE,      U,      V,   VALUE           QRUP0145
+CIIII DOUBLE PRECISION THETA,  THREE,      U,      V,   VALUE           QRUP0146
+      REAL              WRK1,   WRK2,   WRK3,   WRK4,    ZERO           QRUP0147
+CIIII DOUBLE PRECISION  WRK1,   WRK2,   WRK3,   WRK4,    ZERO           QRUP0148
+      REAL               BPP, GLQMAX,   QMAX,     PP                    QRUP0149
+CIIII DOUBLE PRECISION   BPP, GLQMAX,   QMAX,     PP                    QRUP0150
+C                                                                       QRUP0151
+      INTEGER                                                           QRUP0152
+     -     I,     IC,   ICOL,  IFAIL,                                   QRUP0153
+     -    IJ,  INCOL,  INROW,     IR,    IRA,                           QRUP0154
+     -  IROW,    IRQ,      J,     JC,     JR,                           QRUP0155
+     -     K,     KC,     KK,     KR,     NC,                           QRUP0156
+     -NMFAIL,     NR                                                    QRUP0157
+C                                                                       QRUP0158
+      LOGICAL RANKON                                                    QRUP0159
+C                                                                       QRUP0160
+      DIMENSION A(7,7), Q(7,7), R(28)                                   QRUP0161
+      DIMENSION IR(7), IC(7)                                            QRUP0162
+      DIMENSION WRK1(7), WRK2(7), WRK3(7), WRK4(7), COL(7), ROW(7)      QRUP0163
+      DIMENSION    U(7),    V(7),   RU(7),   RV(7)                      QRUP0164
+C                                                                       QRUP0165
+      COMMON /MGREEK/ THETA, OMEGA, SIGMA
+C
+      DATA  ZERO/0.E0/, ONE/1.E0/, THREE/3.0E0/                         QRUP0166
+CIIII DATA  ZERO/0.D0/, ONE/1.D0/, THREE/3.0D0/                         QRUP0167
+C                                                                       QRUP0168
+C========================= E X E C U T I O N ===========================QRUP0172
+C                                                                       QRUP0173
+      GLRMAX = ZERO                                                     QRUP0174
+      GLQMAX = ZERO                                                     QRUP0175
+      NMFAIL = 0                                                        QRUP0176
+      IRQ = 7                                                           QRUP0177
+      IRA = 7                                                           QRUP0178
+      NR = 7                                                            QRUP0179
+      NC = 7                                                            QRUP0180
+C                                                                       QRUP0181
+C------INITIALIZE A, U AND V.                                           QRUP0182
+C                                                                       QRUP0183
+         DO 1000 I=1,NR                                                 QRUP0184
+         IR(I) = I                                                      QRUP0185
+         IC(I) = I                                                      QRUP0186
+         RR = I + 1                                                     QRUP0187
+         U(I) = THREE / RR                                              QRUP0188
+         RR = I + 2                                                     QRUP0189
+         V(I) = RR / THREE                                              QRUP0190
+            DO 900 J = 1,NC                                             QRUP0191
+            RR = I + J                                                  QRUP0192
+            A(I,J) = ONE / RR                                           QRUP0193
+  900       CONTINUE                                                    QRUP0194
+ 1000    CONTINUE                                                       QRUP0195
+C                                                                       QRUP0196
+C------FACTORIZE ALL OF A FOR OPENERS.                                  QRUP0197
+C                                                                       QRUP0198
+      RANKON = .FALSE.                                                  QRUP0199
+      WRITE(6,99991) NR,NC                                              QRUP0200
+      CALL QRFACT(NR,NC,A,IRA,Q,IRQ,R,WRK1,WRK2,WRK3,WRK4,IFAIL)        QRUP0201
+      K = 1                                                             QRUP0202
+      GOTO 50000                                                        QRUP0203
+C                                                                       QRUP0204
+C------DELETE SOME ROWS AND COLUMNS. INTERSPERSE SOME SQUARE AND        QRUP0205
+C------NONSQUARE RANK ONE UPDATES.  WHEN WE DO A RANK ONE UPDATE,       QRUP0206
+C------WE THEN CHANGE THE SIGN OF THE RANK ONE UPDATE AND DO A          QRUP0207
+C------RANK ONE UPDATE TO THE DECOMPOSITION AGAIN SO THAT IT            QRUP0208
+C------SHOULD RETURN TO ITS INITIAL STATE.                              QRUP0209
+C                                                                       QRUP0210
+ 1020    DO 1030 I = 1,NC                                               QRUP0211
+ 1030    RU(I) = U(I)                                                   QRUP0212
+         DO 1040 I = 1,NR                                               QRUP0213
+ 1040    RV(I) = V(I)                                                   QRUP0214
+      CALL RANK1 (NR,NC,Q,IRQ,R,RU,RV,WRK1,WRK2,WRK3,WRK4,IFAIL)        QRUP0215
+      WRITE(6,99994) NR,NC                                              QRUP0216
+      RANKON = .TRUE.                                                   QRUP0217
+      K = K + 1                                                         QRUP0218
+      GOTO 50000                                                        QRUP0219
+C                                                                       QRUP0220
+ 1050    DO 1060 I = 1,NC                                               QRUP0221
+ 1060    RU(I) = -U(I)                                                  QRUP0222
+         DO 1065 I = 1,NR                                               QRUP0223
+ 1065    RV(I) = V(I)                                                   QRUP0224
+      CALL RANK1 (NR,NC,Q,IRQ,R,RU,RV,WRK1,WRK2,WRK3,WRK4,IFAIL)        QRUP0225
+      WRITE(6,99990)                                                    QRUP0226
+      RANKON = .FALSE.                                                  QRUP0227
+      K = K + 1                                                         QRUP0228
+      GOTO 50000                                                        QRUP0229
+C                                                                       QRUP0230
+ 1100 CALL DELCOL(NR,NC,Q,IRQ,R,3,COL)                                  QRUP0231
+      WRITE(6,99998) (COL(I),I=1,NR)                                    QRUP0232
+      IC(3) = 0                                                         QRUP0233
+      NC = NC -1                                                        QRUP0234
+      K = K + 1                                                         QRUP0235
+      GOTO 50000                                                        QRUP0236
+C                                                                       QRUP0237
+ 1120    DO 1130 I = 1,NC                                               QRUP0238
+ 1130    RU(I) = U(I)                                                   QRUP0239
+         DO 1140 I = 1,NR                                               QRUP0240
+ 1140    RV(I) = V(I)                                                   QRUP0241
+      CALL RANK1 (NR,NC,Q,IRQ,R,RU,RV,WRK1,WRK2,WRK3,WRK4,IFAIL)        QRUP0242
+      WRITE(6,99994) NR,NC                                              QRUP0243
+      RANKON = .TRUE.                                                   QRUP0244
+      K = K + 1                                                         QRUP0245
+      GOTO 50000                                                        QRUP0246
+C                                                                       QRUP0247
+ 1150    DO 1160 I = 1,NC                                               QRUP0248
+ 1160    RU(I) = -U(I)                                                  QRUP0249
+         DO 1165 I = 1,NR                                               QRUP0250
+ 1165    RV(I) = V(I)                                                   QRUP0251
+      CALL RANK1 (NR,NC,Q,IRQ,R,RU,RV,WRK1,WRK2,WRK3,WRK4,IFAIL)        QRUP0252
+      WRITE(6,99990)                                                    QRUP0253
+      RANKON = .FALSE.                                                  QRUP0254
+      K = K + 1                                                         QRUP0255
+      GOTO 50000                                                        QRUP0256
+C                                                                       QRUP0257
+ 1200 CALL DELROW(NR,NC,Q,IRQ,R,5,ROW,WRK1,WRK2,WRK3,IFAIL)             QRUP0258
+      WRITE(6,99997) (ROW(I),I=1,NC)                                    QRUP0259
+      IR(5) = 0                                                         QRUP0260
+      NR = NR - 1                                                       QRUP0261
+      K = K + 1                                                         QRUP0262
+      GOTO 50000                                                        QRUP0263
+C                                                                       QRUP0264
+ 1220    DO 1230 I = 1,NC                                               QRUP0265
+ 1230    RU(I) = U(I)                                                   QRUP0266
+         DO 1240 I = 1,NR                                               QRUP0267
+ 1240    RV(I) = V(I)                                                   QRUP0268
+      CALL RANK1 (NR,NC,Q,IRQ,R,RU,RV,WRK1,WRK2,WRK3,WRK4,IFAIL)        QRUP0269
+      WRITE(6,99994) NR,NC                                              QRUP0270
+      RANKON = .TRUE.                                                   QRUP0271
+      K = K + 1                                                         QRUP0272
+      GOTO 50000                                                        QRUP0273
+C                                                                       QRUP0274
+ 1250    DO 1260 I = 1,NC                                               QRUP0275
+ 1260    RU(I) = -U(I)                                                  QRUP0276
+         DO 1265 I = 1,NR                                               QRUP0277
+ 1265    RV(I) = V(I)                                                   QRUP0278
+      CALL RANK1 (NR,NC,Q,IRQ,R,RU,RV,WRK1,WRK2,WRK3,WRK4,IFAIL)        QRUP0279
+      WRITE(6,99990)                                                    QRUP0280
+      RANKON = .FALSE.                                                  QRUP0281
+      K = K + 1                                                         QRUP0282
+      GOTO 50000                                                        QRUP0283
+C                                                                       QRUP0284
+ 1300 CALL DELCOL(NR,NC,Q,IRQ,R,6,COL)                                  QRUP0285
+      WRITE(6,99998) (COL(I),I=1,NR)                                    QRUP0286
+      IC(7) = 0                                                         QRUP0287
+      NC = NC - 1                                                       QRUP0288
+      K = K + 1                                                         QRUP0289
+      GOTO 50000                                                        QRUP0290
+C                                                                       QRUP0291
+ 1320    DO 1330 I = 1,NC                                               QRUP0292
+ 1330    RU(I) = U(I)                                                   QRUP0293
+         DO 1340 I = 1,NR                                               QRUP0294
+ 1340    RV(I) = V(I)                                                   QRUP0295
+      CALL RANK1 (NR,NC,Q,IRQ,R,RU,RV,WRK1,WRK2,WRK3,WRK4,IFAIL)        QRUP0296
+      WRITE(6,99994) NR,NC                                              QRUP0297
+      RANKON = .TRUE.                                                   QRUP0298
+      K = K + 1                                                         QRUP0299
+      GOTO 50000                                                        QRUP0300
+C                                                                       QRUP0301
+ 1350    DO 1360 I = 1,NC                                               QRUP0302
+ 1360    RU(I) = -U(I)                                                  QRUP0303
+         DO 1365 I = 1,NR                                               QRUP0304
+ 1365    RV(I) = V(I)                                                   QRUP0305
+      CALL RANK1 (NR,NC,Q,IRQ,R,RU,RV,WRK1,WRK2,WRK3,WRK4,IFAIL)        QRUP0306
+      WRITE(6,99990)                                                    QRUP0307
+      RANKON = .FALSE.                                                  QRUP0308
+      K = K + 1                                                         QRUP0309
+      GOTO 50000                                                        QRUP0310
+C                                                                       QRUP0311
+ 1400 CALL DELCOL(NR,NC,Q,IRQ,R,1,COL)                                  QRUP0312
+      WRITE(6,99998) (COL(I),I=1,NR)                                    QRUP0313
+      IC(1) = 0                                                         QRUP0314
+      NC = NC - 1                                                       QRUP0315
+      K = K + 1                                                         QRUP0316
+      GOTO 50000                                                        QRUP0317
+C                                                                       QRUP0318
+ 1420    DO 1430 I = 1,NC                                               QRUP0319
+ 1430    RU(I) = U(I)                                                   QRUP0320
+         DO 1440 I = 1,NR                                               QRUP0321
+ 1440    RV(I) = V(I)                                                   QRUP0322
+      CALL RANK1 (NR,NC,Q,IRQ,R,RU,RV,WRK1,WRK2,WRK3,WRK4,IFAIL)        QRUP0323
+      WRITE(6,99994) NR,NC                                              QRUP0324
+      RANKON = .TRUE.                                                   QRUP0325
+      K = K + 1                                                         QRUP0326
+      GOTO 50000                                                        QRUP0327
+C                                                                       QRUP0328
+ 1450    DO 1460 I = 1,NC                                               QRUP0329
+ 1460    RU(I) = -U(I)                                                  QRUP0330
+         DO 1465 I = 1,NR                                               QRUP0331
+ 1465    RV(I) = V(I)                                                   QRUP0332
+      CALL RANK1 (NR,NC,Q,IRQ,R,RU,RV,WRK1,WRK2,WRK3,WRK4,IFAIL)        QRUP0333
+      WRITE(6,99990)                                                    QRUP0334
+      RANKON = .FALSE.                                                  QRUP0335
+      K = K + 1                                                         QRUP0336
+      GOTO 50000                                                        QRUP0337
+C                                                                       QRUP0338
+ 1500 CALL DELROW(NR,NC,Q,IRQ,R,1,ROW,WRK1,WRK2,WRK3,IFAIL)             QRUP0339
+      WRITE(6,99997) (ROW(I),I=1,NC)                                    QRUP0340
+      IR(1) = 0                                                         QRUP0341
+      NR = NR - 1                                                       QRUP0342
+      K = K + 1                                                         QRUP0343
+      GOTO 50000                                                        QRUP0344
+C                                                                       QRUP0345
+ 1520    DO 1530 I = 1,NC                                               QRUP0346
+ 1530    RU(I) = U(I)                                                   QRUP0347
+         DO 1540 I = 1,NR                                               QRUP0348
+ 1540    RV(I) = V(I)                                                   QRUP0349
+      CALL RANK1 (NR,NC,Q,IRQ,R,RU,RV,WRK1,WRK2,WRK3,WRK4,IFAIL)        QRUP0350
+      WRITE(6,99994) NR,NC                                              QRUP0351
+      RANKON = .TRUE.                                                   QRUP0352
+      K = K + 1                                                         QRUP0353
+      GOTO 50000                                                        QRUP0354
+C                                                                       QRUP0355
+ 1550    DO 1560 I = 1,NC                                               QRUP0356
+ 1560    RU(I) = -U(I)                                                  QRUP0357
+         DO 1565 I = 1,NR                                               QRUP0358
+ 1565    RV(I) = V(I)                                                   QRUP0359
+      CALL RANK1 (NR,NC,Q,IRQ,R,RU,RV,WRK1,WRK2,WRK3,WRK4,IFAIL)        QRUP0360
+      WRITE(6,99990)                                                    QRUP0361
+      RANKON = .FALSE.                                                  QRUP0362
+      K = K + 1                                                         QRUP0363
+      GOTO 50000                                                        QRUP0364
+C                                                                       QRUP0365
+ 1600 CALL DELROW(NR,NC,Q,IRQ,R,5,ROW,WRK1,WRK2,WRK3,IFAIL)             QRUP0366
+      WRITE(6,99997) (ROW(I),I=1,NC)                                    QRUP0367
+      IR(7) = 0                                                         QRUP0368
+      NR = NR - 1                                                       QRUP0369
+      K = K + 1                                                         QRUP0370
+      GOTO 50000                                                        QRUP0371
+C                                                                       QRUP0372
+ 1620    DO 1630 I = 1,NC                                               QRUP0373
+ 1630    RU(I) = U(I)                                                   QRUP0374
+         DO 1640 I = 1,NR                                               QRUP0375
+ 1640    RV(I) = V(I)                                                   QRUP0376
+      CALL RANK1 (NR,NC,Q,IRQ,R,RU,RV,WRK1,WRK2,WRK3,WRK4,IFAIL)        QRUP0377
+      WRITE(6,99994) NR,NC                                              QRUP0378
+      RANKON = .TRUE.                                                   QRUP0379
+      K = K + 1                                                         QRUP0380
+      GOTO 50000                                                        QRUP0381
+C                                                                       QRUP0382
+ 1650    DO 1660 I = 1,NC                                               QRUP0383
+ 1660    RU(I) = -U(I)                                                  QRUP0384
+         DO 1665 I = 1,NR                                               QRUP0385
+ 1665    RV(I) = V(I)                                                   QRUP0386
+      CALL RANK1 (NR,NC,Q,IRQ,R,RU,RV,WRK1,WRK2,WRK3,WRK4,IFAIL)        QRUP0387
+      WRITE(6,99990)                                                    QRUP0388
+      RANKON = .FALSE.                                                  QRUP0389
+      K = K + 1                                                         QRUP0390
+      GOTO 50000                                                        QRUP0391
+C                                                                       QRUP0392
+ 1670 CALL DELCOL(NR,NC,Q,IRQ,R,3,COL)                                  QRUP0393
+      WRITE(6,99998) (COL(I),I=1,NR)                                    QRUP0394
+      NC = NC - 1                                                       QRUP0395
+      IC(5) = 0                                                         QRUP0396
+      CALL DELCOL(NR,NC,Q,IRQ,R,2,COL)                                  QRUP0397
+      WRITE(6,99998) (COL(I),I=1,NR)                                    QRUP0398
+      NC = NC - 1                                                       QRUP0399
+      IC(4) = 0                                                         QRUP0400
+      CALL DELCOL(NR,NC,Q,IRQ,R,1,COL)                                  QRUP0401
+      WRITE(6,99998) (COL(I),I=1,NR)                                    QRUP0402
+      IC(2) = 0                                                         QRUP0403
+      NC = NC - 1                                                       QRUP0404
+      K = K + 1                                                         QRUP0405
+      GOTO 50000                                                        QRUP0406
+C                                                                       QRUP0407
+ 1680    DO 1682 I = 1,NC                                               QRUP0408
+ 1682    RU(I) = U(I)                                                   QRUP0409
+         DO 1684 I = 1,NR                                               QRUP0410
+ 1684    RV(I) = V(I)                                                   QRUP0411
+      CALL RANK1 (NR,NC,Q,IRQ,R,RU,RV,WRK1,WRK2,WRK3,WRK4,IFAIL)        QRUP0412
+      WRITE(6,99994) NR,NC                                              QRUP0413
+      RANKON = .TRUE.                                                   QRUP0414
+      K = K + 1                                                         QRUP0415
+      GOTO 50000                                                        QRUP0416
+C                                                                       QRUP0417
+ 1685    DO 1686 I = 1,NC                                               QRUP0418
+ 1686    RU(I) = -U(I)                                                  QRUP0419
+         DO 1688 I = 1,NR                                               QRUP0420
+ 1688    RV(I) = V(I)                                                   QRUP0421
+      CALL RANK1 (NR,NC,Q,IRQ,R,RU,RV,WRK1,WRK2,WRK3,WRK4,IFAIL)        QRUP0422
+      WRITE(6,99990)                                                    QRUP0423
+      RANKON = .FALSE.                                                  QRUP0424
+      K = K + 1                                                         QRUP0425
+      GOTO 50000                                                        QRUP0426
+C                                                                       QRUP0427
+ 1690 CALL DELROW(NR,NC,Q,IRQ,R,1,ROW,WRK1,WRK2,WRK3,IFAIL)             QRUP0428
+      WRITE(6,99997) (ROW(I),I=1,NC)                                    QRUP0429
+      IR(2) = 0                                                         QRUP0430
+      NR = NR - 1                                                       QRUP0431
+      CALL DELROW(NR,NC,Q,IRQ,R,2,ROW,WRK1,WRK2,WRK3,IFAIL)             QRUP0432
+      WRITE(6,99997) (ROW(I),I=1,NC)                                    QRUP0433
+      IR(4) = 0                                                         QRUP0434
+      NR = NR - 1                                                       QRUP0435
+      CALL DELROW(NR,NC,Q,IRQ,R,2,ROW,WRK1,WRK2,WRK3,IFAIL)             QRUP0436
+      WRITE(6,99997) (ROW(I),I=1,NC)                                    QRUP0437
+      IR(6) = 0                                                         QRUP0438
+      NR = NR - 1                                                       QRUP0439
+      K = K + 1                                                         QRUP0440
+      GOTO 50000                                                        QRUP0441
+C                                                                       QRUP0442
+ 1700    DO 1702 I = 1,NC                                               QRUP0443
+ 1702    RU(I) = U(I)                                                   QRUP0444
+         DO 1704 I = 1,NR                                               QRUP0445
+ 1704    RV(I) = V(I)                                                   QRUP0446
+      CALL RANK1 (NR,NC,Q,IRQ,R,RU,RV,WRK1,WRK2,WRK3,WRK4,IFAIL)        QRUP0447
+      WRITE(6,99994) NR,NC                                              QRUP0448
+      RANKON = .TRUE.                                                   QRUP0449
+      K = K + 1                                                         QRUP0450
+      GOTO 50000                                                        QRUP0451
+C                                                                       QRUP0452
+ 1705    DO 1706 I = 1,NC                                               QRUP0453
+ 1706    RU(I) = -U(I)                                                  QRUP0454
+         DO 1708 I = 1,NR                                               QRUP0455
+ 1708    RV(I) = V(I)                                                   QRUP0456
+      CALL RANK1 (NR,NC,Q,IRQ,R,RU,RV,WRK1,WRK2,WRK3,WRK4,IFAIL)        QRUP0457
+      WRITE(6,99990)                                                    QRUP0458
+      RANKON = .FALSE.                                                  QRUP0459
+      K = K + 1                                                         QRUP0460
+      GOTO 50000                                                        QRUP0461
+C                                                                       QRUP0462
+C------NOW ADD THE ROWS AND COLUMNS BACK INTO A.                        QRUP0463
+C                                                                       QRUP0464
+ 1720 KK = 1                                                            QRUP0465
+      K = K + 1                                                         QRUP0466
+      JC = 0                                                            QRUP0467
+      JR = 1                                                            QRUP0468
+      GOTO 60000                                                        QRUP0469
+ 1750 NR = NR + 1                                                       QRUP0470
+      INROW = 1                                                         QRUP0471
+      WRITE(6,99992) INROW,(ROW(I),I=1,NC)                              QRUP0472
+      CALL INSROW(NR,NC,Q,IRQ,R,INROW,ROW,WRK1)                         QRUP0473
+      IR(1) = 1                                                         QRUP0474
+      GOTO 50000                                                        QRUP0475
+C                                                                       QRUP0476
+ 1800 KK = KK + 1                                                       QRUP0477
+      K = K + 1                                                         QRUP0478
+      JC = 7                                                            QRUP0479
+      JR = 0                                                            QRUP0480
+      GOTO 60000                                                        QRUP0481
+ 1850 NC = NC + 1                                                       QRUP0482
+      INCOL = 2                                                         QRUP0483
+      WRITE(6,99993) INCOL,(COL(I),I=1,NR)                              QRUP0484
+      CALL INSCOL (NR,NC,Q,IRQ,R,INCOL,COL,WRK1,WRK2,WRK3,IFAIL)        QRUP0485
+      IC(7) = 7                                                         QRUP0486
+      GOTO 50000                                                        QRUP0487
+C                                                                       QRUP0488
+ 1900 KK = KK + 1                                                       QRUP0489
+      K = K + 1                                                         QRUP0490
+      JC = 0                                                            QRUP0491
+      JR = 7                                                            QRUP0492
+      GOTO 60000                                                        QRUP0493
+ 1950 NR = NR + 1                                                       QRUP0494
+      INROW = 3                                                         QRUP0495
+      WRITE(6,99992) INROW,(ROW(I),I=1,NC)                              QRUP0496
+      CALL INSROW(NR,NC,Q,IRQ,R,INROW,ROW,WRK1)                         QRUP0497
+      IR(7) = 7                                                         QRUP0498
+      GOTO 50000                                                        QRUP0499
+C                                                                       QRUP0500
+ 2000 KK = KK + 1                                                       QRUP0501
+      K = K + 1                                                         QRUP0502
+      JC = 0                                                            QRUP0503
+      JR = 5                                                            QRUP0504
+      GOTO 60000                                                        QRUP0505
+ 2050 NR = NR + 1                                                       QRUP0506
+      INROW = 3                                                         QRUP0507
+      WRITE(6,99992) INROW,(ROW(I),I=1,NC)                              QRUP0508
+      CALL INSROW(NR,NC,Q,IRQ,R,INROW,ROW,WRK1)                         QRUP0509
+      IR(5) = 5                                                         QRUP0510
+      GOTO 50000                                                        QRUP0511
+C                                                                       QRUP0512
+ 2100 KK = KK + 1                                                       QRUP0513
+      K = K + 1                                                         QRUP0514
+      JC = 3                                                            QRUP0515
+      JR = 0                                                            QRUP0516
+      GOTO 60000                                                        QRUP0517
+ 2150 NC = NC + 1                                                       QRUP0518
+      INCOL = 1                                                         QRUP0519
+      WRITE(6,99993) INCOL,(COL(I),I=1,NR)                              QRUP0520
+      CALL INSCOL (NR,NC,Q,IRQ,R,INCOL,COL,WRK1,WRK2,WRK3,IFAIL)        QRUP0521
+      IC(3) = 3                                                         QRUP0522
+      GOTO 50000                                                        QRUP0523
+C                                                                       QRUP0524
+ 2200 KK = KK + 1                                                       QRUP0525
+      K = K + 1                                                         QRUP0526
+      JC = 1                                                            QRUP0527
+      JR = 0                                                            QRUP0528
+      GOTO 60000                                                        QRUP0529
+ 2250 NC = NC + 1                                                       QRUP0530
+      INCOL = 1                                                         QRUP0531
+      WRITE(6,99993) INCOL,(COL(I),I=1,NR)                              QRUP0532
+      CALL INSCOL (NR,NC,Q,IRQ,R,INCOL,COL,WRK1,WRK2,WRK3,IFAIL)        QRUP0533
+      IC(1) = 1                                                         QRUP0534
+      GOTO 50000                                                        QRUP0535
+C                                                                       QRUP0536
+ 2300 KK = KK + 1                                                       QRUP0537
+      K = K + 1                                                         QRUP0538
+      JC = 0                                                            QRUP0539
+      JR = 2                                                            QRUP0540
+      GOTO 60000                                                        QRUP0541
+ 2350 NR = NR + 1                                                       QRUP0542
+      INROW = 2                                                         QRUP0543
+      WRITE(6,99992) INROW,(ROW(I),I=1,NC)                              QRUP0544
+      CALL INSROW(NR,NC,Q,IRQ,R,INROW,ROW,WRK1)                         QRUP0545
+      IR(2) = 2                                                         QRUP0546
+      GOTO 50000                                                        QRUP0547
+C                                                                       QRUP0548
+ 2400 KK = KK + 1                                                       QRUP0549
+      K = K + 1                                                         QRUP0550
+      JC = 0                                                            QRUP0551
+      JR = 6                                                            QRUP0552
+      GOTO 60000                                                        QRUP0553
+ 2450 NR = NR + 1                                                       QRUP0554
+      INROW = 5                                                         QRUP0555
+      WRITE(6,99992) INROW,(ROW(I),I=1,NC)                              QRUP0556
+      CALL INSROW(NR,NC,Q,IRQ,R,INROW,ROW,WRK1)                         QRUP0557
+      IR(6) = 6                                                         QRUP0558
+      GOTO 50000                                                        QRUP0559
+C                                                                       QRUP0560
+ 2500 KK = KK + 1                                                       QRUP0561
+      K = K + 1                                                         QRUP0562
+      JC = 0                                                            QRUP0563
+      JR = 4                                                            QRUP0564
+      GOTO 60000                                                        QRUP0565
+ 2550 NR = NR + 1                                                       QRUP0566
+      INROW = 4                                                         QRUP0567
+      WRITE(6,99992) INROW,(ROW(I),I=1,NC)                              QRUP0568
+      CALL INSROW(NR,NC,Q,IRQ,R,INROW,ROW,WRK1)                         QRUP0569
+      IR(4) = 4                                                         QRUP0570
+      GOTO 50000                                                        QRUP0571
+C                                                                       QRUP0572
+ 2600 KK = KK + 1                                                       QRUP0573
+      K = K + 1                                                         QRUP0574
+      JC = 2                                                            QRUP0575
+      JR = 0                                                            QRUP0576
+      GOTO 60000                                                        QRUP0577
+ 2650 NC = NC + 1                                                       QRUP0578
+      INCOL = 2                                                         QRUP0579
+      WRITE(6,99993) INCOL,(COL(I),I=1,NR)                              QRUP0580
+      CALL INSCOL (NR,NC,Q,IRQ,R,INCOL,COL,WRK1,WRK2,WRK3,IFAIL)        QRUP0581
+      IC(2) = 2                                                         QRUP0582
+      GOTO 50000                                                        QRUP0583
+C                                                                       QRUP0584
+ 2700 KK = KK + 1                                                       QRUP0585
+      K = K + 1                                                         QRUP0586
+      JC = 5                                                            QRUP0587
+      JR = 0                                                            QRUP0588
+      GOTO 60000                                                        QRUP0589
+ 2750 NC = NC + 1                                                       QRUP0590
+      INCOL = 4                                                         QRUP0591
+      WRITE(6,99993) INCOL,(COL(I),I=1,NR)                              QRUP0592
+      CALL INSCOL (NR,NC,Q,IRQ,R,INCOL,COL,WRK1,WRK2,WRK3,IFAIL)        QRUP0593
+      IC(5) = 5                                                         QRUP0594
+      GOTO 50000                                                        QRUP0595
+C                                                                       QRUP0596
+ 2800 KK = KK + 1                                                       QRUP0597
+      K = K + 1                                                         QRUP0598
+      JC = 4                                                            QRUP0599
+      JR = 0                                                            QRUP0600
+      GOTO 60000                                                        QRUP0601
+ 2850 NC = NC + 1                                                       QRUP0602
+      INCOL = 4                                                         QRUP0603
+      WRITE(6,99993) INCOL,(COL(I),I=1,NR)                              QRUP0604
+      CALL INSCOL (NR,NC,Q,IRQ,R,INCOL,COL,WRK1,WRK2,WRK3,IFAIL)        QRUP0605
+      IC(4) = 4                                                         QRUP0606
+      GOTO 50000                                                        QRUP0607
+C                                                                       QRUP0608
+C-----TEST THE DECOMPOSITION.                                           QRUP0609
+C                                                                       QRUP0610
+50000 IROW = 0                                                          QRUP0611
+      WRITE(6,99996) ((Q(I,J),J=1,7),I=1,7)                             QRUP0612
+      WRITE(6,99995) (R(I),I=1,28)                                      QRUP0613
+      RMAX = ZERO                                                       QRUP0614
+         DO 55000 I = 1,NR                                              QRUP0615
+51000    IROW = IROW + 1                                                QRUP0616
+         KR = IR(IROW)                                                  QRUP0617
+         IF ( KR .EQ. 0) GOTO 51000                                     QRUP0618
+         ICOL = 0                                                       QRUP0619
+            DO 54000 J = 1,NC                                           QRUP0620
+53000       ICOL = ICOL + 1                                             QRUP0621
+            KC = IC(ICOL)                                               QRUP0622
+            IF ( KC .EQ. 0) GOTO 53000                                  QRUP0623
+            VALUE = A(KR,KC)                                            QRUP0624
+            IF (RANKON) VALUE = VALUE + V(I)*U(J)                       QRUP0625
+            IJ = 1 + (  (J*(J-1)) / 2 )                                 QRUP0626
+            SS = VALUE - SDOT(J,Q(I,1),IRQ,R(IJ),1)                     QRUP0627
+CIIII       SS = VALUE - DDOT(J,Q(I,1),IRQ,R(IJ),1)                     QRUP0628
+            ASS =  ABS(SS)                                              QRUP0629
+CIIII       ASS = DABS(SS)                                              QRUP0630
+            IF ( ASS .GT. RMAX) RMAX = ASS                              QRUP0631
+54000       CONTINUE                                                    QRUP0632
+55000    CONTINUE                                                       QRUP0633
+      QMAX = ZERO                                                       QRUP0634
+         DO 57000 I=1,NC                                                QRUP0635
+            DO 56000 J=1,NC                                             QRUP0636
+            PP = SDOT(NR,Q(1,I),1,Q(1,J),1)                             QRUP0637
+CIIII       PP = DDOT(NR,Q(1,I),1,Q(1,J),1)                             QRUP0638
+            IF (I .EQ. J) PP = PP - ONE                                 QRUP0639
+            BPP =  ABS(PP)                                              QRUP0640
+CIIII       BPP = DABS(PP)                                              QRUP0641
+            IF (BPP .GT. QMAX) QMAX = BPP                               QRUP0642
+56000       CONTINUE                                                    QRUP0643
+57000    CONTINUE                                                       QRUP0644
+      WRITE(6,99999) RMAX, QMAX, IFAIL                                  QRUP0645
+      IF (GLQMAX .LT. QMAX)  GLQMAX = QMAX                              QRUP0646
+      IF ( GLRMAX .LT. RMAX ) GLRMAX = RMAX                             QRUP0647
+      IF ( IFAIL .NE. 0 ) NMFAIL = NMFAIL + 1                           QRUP0648
+      GOTO(1020,1050,1100,1120,1150,1200,1220,1250,1300,1320,1350,1400, QRUP0649
+     -     1420,1450,1500,1520,1550,1600,1620,1650,1670,1680,1685,1690, QRUP0650
+     -     1700,1705,1720,1800,1900,2000,2100,2200,2300,2400,2500,2600, QRUP0651
+     -     2700,2800,90000), K                                          QRUP0652
+C                                                                       QRUP0653
+C------RECONSTRUCT ROW/COLUMN TO REINSERT.                              QRUP0654
+C                                                                       QRUP0655
+60000 IF ( JC .EQ. 0) GOTO 70000                                        QRUP0656
+         DO 65000 I = 1,NR                                              QRUP0657
+61000    JR = JR + 1                                                    QRUP0658
+         KR = IR(JR)                                                    QRUP0659
+         IF ( KR .EQ. 0) GOTO 61000                                     QRUP0660
+         COL(I) = A(KR, JC)                                             QRUP0661
+65000    CONTINUE                                                       QRUP0662
+C                                                                       QRUP0663
+66000 GOTO (1750,1850,1950,2050,2150,2250,                              QRUP0664
+     -      2350,2450,2550,2650,2750,2850),KK                           QRUP0665
+C                                                                       QRUP0666
+70000    DO 75000 I = 1,NC                                              QRUP0667
+71000    JC = JC + 1                                                    QRUP0668
+         KC = IC(JC)                                                    QRUP0669
+         IF ( KC .EQ. 0) GOTO 71000                                     QRUP0670
+         ROW(I) = A(JR, KC)                                             QRUP0671
+75000    CONTINUE                                                       QRUP0672
+      GOTO 66000                                                        QRUP0673
+C                                                                       QRUP0674
+C=============================== E X I T ===============================QRUP0675
+C                                                                       QRUP0676
+90000 WRITE(6,99986)                                                    QRUP0677
+      WRITE(6,99984)                                                    QRUP0678
+      WRITE(6,99989) SIGMA, GLRMAX, GLQMAX                              QRUP0679
+      IF ( NMFAIL .EQ. 0 ) GOTO 91000                                   QRUP0680
+      WRITE(6,99987) NMFAIL                                             QRUP0681
+      GOTO 92000                                                        QRUP0682
+91000 WRITE(6,99988)                                                    QRUP0683
+92000 WRITE(6,99984)                                                    QRUP0684
+      WRITE(6,99984)                                                    QRUP0685
+      WRITE(6,99984)                                                    QRUP0686
+      WRITE(6,99983)                                                    QRUP0687
+      WRITE(6,99984)                                                    QRUP0688
+      WRITE(6,99985)                                                    QRUP0689
+C                                                                       QRUP0690
+93000 STOP                                                              QRUP0691
+C                                                                       QRUP0692
+C============================= F O R M A T S ===========================QRUP0693
+C                                                                       QRUP0694
+99999 FORMAT(41H TESTING RESULT, RMAX, QMAX AND IFAIL ARE , 2E16.7, I4/)QRUP0695
+99998 FORMAT(19H DELETED COLUMN IS /  10(1H ,5E14.7/))                  QRUP0696
+99997 FORMAT(16H DELETED ROW IS  /  10(1H ,5E14.7/ ))                   QRUP0697
+99996 FORMAT(5H Q IS/ 6(1H ,7E11.4/),1H , 7E11.4)                       QRUP0698
+99995 FORMAT(5H R IS/ 3(1H ,7E11.4/), 1H , 7E11.4)                      QRUP0699
+99994 FORMAT(39H WE HAVE DONE A RANK ONE CHANGE TO THE ,I2,4H BY ,I2,   QRUP0700
+     -       8H MATRIX.)                                                QRUP0701
+99993 FORMAT(25H INSERTING BEFORE COLUMN ,I4/ 10(1H ,5E14.7/))          QRUP0702
+99992 FORMAT(25H INSERTING BEFORE ROW    ,I4/ 10(1H ,5E14.7/))          QRUP0703
+99991 FORMAT(22H1WE HAVE FACTORED THE ,I2,4H BY ,I2,                    QRUP0704
+     -       33H HILBERT MATRIX A(I,J) = 1/(I+J).)                      QRUP0705
+99990 FORMAT(43H THE RANK ONE UPDATE HAS NOW BEEN REVERSED.)            QRUP0706
+99989 FORMAT(37H . EXECUTION TOOK PLACE WITH SIGMA = ,E8.1,             QRUP0707
+     -       37H(THE APPROXIMATE MACHINE ACCURACY)..                    QRUP0708
+     -       / 45H . THE MAXIMUM ELEMENT OF A - Q R DETECTED IN,        QRUP0709
+     -       22H ANY OF THE TESTS WAS ,E8.1,2H .,3X,1H.                 QRUP0710
+     -       / 45H . THE MAXIMUM ELEMENT OF I - Q'Q DETECTED IN,        QRUP0711
+     -       22H ANY OF THE TESTS WAS ,E8.1,2H .,3X,1H.)                QRUP0712
+99988 FORMAT(3H . ,31HTHE ERROR FLAG WAS ALWAYS ZERO. , 46X,1H.)        QRUP0713
+99987 FORMAT(3H . ,28HTHE ERROR FLAG WAS NON-ZERO ,I2,7H TIMES.,40X,1H.)QRUP0714
+99986 FORMAT(1H1,80(1H-))                                               QRUP0715
+99985 FORMAT(1X, 80(1H-))                                               QRUP0716
+99984 FORMAT(2H .,78X,1H.)                                              QRUP0717
+99983 FORMAT(43H . IF THE ERROR FLAG WAS EVER NON-ZERO, OR ,            QRUP0718
+     -     35HIF THE MAXIMUM ERROR RECORDED IS     , 3H  .              QRUP0719
+     -/54H . VASTLY LARGER THAN THE RELATIVE PRECISION, THEN THE ,      QRUP0720
+     - 26H RESULTS MUST BE CAREFULLY,1H.
+     -/58H . CHECKED. OTHERWISE COMPILATION AND EXECUTION ARE IN ALL  , QRUP0722
+     - 20H LIKELIHOOD CORRECT.  ,2X,1H.)                                QRUP0723
+C                                                                       QRUP0724
+      END                                                               QRUP0725
+      SUBROUTINE ORTCOL(M,N,Q,IRQ,V,SMALLR,RHO,WRK1,WRK2,IFAIL)         QRUP0726
+C
+C======================== D E S C R I P T I O N ========================
+C
+C     ASSUMING THE M BY N MATRIX  Q  HAS (NEARLY) ORTHONORMAL COLUMNS,
+C     THIS SUBROUTINE ORTHOGONALIZES THE M-VECTOR  V  TO THE COLUMNS
+C     OF  Q.  IT NORMALIZES THE RESULT IF  M > N.  THE N-VECTOR
+C     SMALLR  IS THE ARRAY OF "FOURIER COEFFICIENTS", AND RHO
+C     IS THE DISTANCE FROM  V  TO THE RANGE OF Q.  SMALLR  AND
+C     ITS CORRECTIONS ARE COMPUTED IN DOUBLE PRECISION.  FOR
+C     MORE DETAIL, SEE SECTIONS 2 AND 4 OF THE PAPER BY DANIEL ET AL.
+C
+C     NOTES : 1. INNER PRODUCTS ARE DONE USING THE ROUTINE SDOT
+C                FROM THE BLAS (DDOT IN DOUBLE PRECISION) AND ARE
+C                ACCUMULATED IN DOUBLE PRECISION.
+C
+C             2. WE DO NOT CHECK THAT M > 0. THE USER MUST ENSURE THIS.
+C                N MAY BE 0. IF N < 0, IT IS TREATED AS 0.
+C
+C             3. THE VECTORS  U  AND  S  FROM THE ALGOL PROGRAM ARE
+C                PASSED TO THE ROUTINE AS WORK VECTORS WRK1 AND WRK2.
+C
+C             4. THE GLOBAL VARIABLES THETA, OMEGA AND SIGMA ARE
+C                EXPLAINED IN DESCRB. NORMALLY SIGMA SHOULD BE OF THE
+C                ORDER OF ONE TENTH OF THE RELATIVE MACHINE PRECISION,
+C                OMEGA MAY BE SET TO 0 AND THETA MAY BE 1.4.  THESE
+C                SPECIFIC RECOMMENDATIONS ARE BASED ON THE PRESENTATION
+C                OF EXPERIMENT 1 IN THE LAST SECTION OF THE DANIEL
+C                ET AL PAPER.  FOR COMPLETE INFORMATION, SEE THE PAPER.
+C
+C             5. EXIT TO THE GLOBAL EXIT "FAIL" IN ALGOL IS
+C                IMPLEMENTED BY SETTING  IFAIL = 1  ON EXIT.
+C                OTHERWISE,  IFAIL = 0 .
+C
+C             6. SEE "QRFACT" FOR A DESCRIPTION OF  IRQ.
+C
+C======================= D E C L A R A T I O N S =======================
+C
+      REAL              SDOT, SNRM2, OMEGA, ONE, ONENEG, Q, RHO
+CIIII DOUBLE PRECISION  DDOT, DNRM2, OMEGA, ONE, ONENEG, Q, RHO
+      REAL               RHO0,   RHO1,  SIGMA, SMALLR
+CIIII DOUBLE PRECISION   RHO0,   RHO1,  SIGMA, SMALLR
+      REAL                  T,  THETA,    TWO,      V,   WRK1
+CIIII DOUBLE PRECISION      T,  THETA,    TWO,      V,   WRK1
+      REAL               WRK2,   ZERO
+CIIII DOUBLE PRECISION   WRK2,   ZERO
+C
+      INTEGER
+     -      I,  IFAIL,    IRQ,      J,      K,
+     -      M,      N
+C
+      DIMENSION Q(IRQ, 1), V(M), SMALLR(1)
+      DIMENSION WRK1(M), WRK2(1)
+C
+      LOGICAL RESTAR, NULL
+C
+      COMMON /MGREEK/ THETA,OMEGA,SIGMA
+C
+      DATA ZERO /0.E0/, ONE /1.E0/, TWO /2.E0/, ONENEG /-1.E0/
+CIIII DATA ZERO /0.D0/, ONE /1.D0/, TWO /2.D0/, ONENEG /-1.D0/
+C
+C========================= E X E C U T I O N ===========================
+C
+      THETA = 1.4E0
+CIIII THETA = 1.4D0
+C
+      OMEGA = 0.0E0
+CIIII OMEGA = 0.0D0
+C
+      SIGMA = 3.55E-16
+CIIII SIGMA = 1.11D-17
+C
+      RESTAR = .FALSE.
+      NULL   = .FALSE.
+      IFAIL  = 0
+C
+      IF ( N .LE. 0 ) GOTO 2000
+C
+         DO 1000 J = 1, N
+         SMALLR(J)   = ZERO
+ 1000    CONTINUE
+C
+ 2000 CONTINUE
+      RHO    = SNRM2(M,V,1)
+CIIII RHO    = DNRM2(M,V,1)
+      RHO0   = RHO
+      K      = 0
+C
+C=======================================================================
+C-----TAKE A GRAM-SCHMIDT ITERATION, IGNORING R ON LATER STEPS
+C-----IF PREVIOUS V WAS NULL.
+C=======================================================================
+C
+ 3000    DO 3100 I = 1, M
+         WRK1(I)   = ZERO
+ 3100    CONTINUE
+C
+      IF ( N .LE. 0 ) GOTO 3400
+C
+         DO 3300 J = 1, N
+         T = SDOT(M,Q(1,J),1,V,1)
+CIIII    T = DDOT(M,Q(1,J),1,V,1)
+         WRK2(J)   = T
+         CALL SAXPY(M,T,Q(1,J),1,WRK1,1)
+CIIII    CALL DAXPY(M,T,Q(1,J),1,WRK1,1)
+ 3300    CONTINUE
+C
+ 3400 CONTINUE
+      IF (.NOT. NULL .AND. N .GT. 0 ) CALL SAXPY(N,ONE,WRK2,1,SMALLR,1)
+CIIII IF (.NOT. NULL .AND. N .GT. 0 ) CALL DAXPY(N,ONE,WRK2,1,SMALLR,1)
+C
+      CALL SAXPY(M,ONENEG,WRK1,1,V,1)
+CIIII CALL DAXPY(M,ONENEG,WRK1,1,V,1)
+      RHO1   = SNRM2(M,V,1)
+CIIII RHO1   = DNRM2(M,V,1)
+      T      = SNRM2(N,WRK2,1)
+CIIII T      = DNRM2(N,WRK2,1)
+      K      = K + 1
+C
+      IF ( M .NE. N ) GOTO 5000
+C
+C=======================================================================
+C-----A SPECIAL CASE WHEN M = N.
+C=======================================================================
+C
+         DO 4100 I = 1, M
+         V(I)   = ZERO
+ 4100    CONTINUE
+C
+      RHO    = ZERO
+      GOTO 90000
+C
+C=======================================================================
+C----TEST FOR NONTERMINATION.
+C=======================================================================
+C
+ 5000 IF ( RHO0 + OMEGA * T .LT. THETA * RHO1 ) GOTO 6000
+C
+C-----EXIT IF TOO MANY ITERATIONS.
+C
+      IF ( K .LE. 4 ) GOTO 5100
+      IFAIL  = 1
+      GOTO 90000
+C
+C-----RESTART IF NECESSARY.
+C
+ 5100 IF ( RESTAR .OR. RHO1 .GT. RHO * SIGMA ) GOTO 5900
+      RESTAR = .TRUE.
+C
+C-----FIND FIRST ROW OF MINIMAL LENGTH OF Q.
+C
+         DO 5300 I = 1, M
+         WRK1(I) = SDOT(N,Q(I,1),IRQ,Q(I,1),IRQ)
+CIIII    WRK1(I) = DDOT(N,Q(I,1),IRQ,Q(I,1),IRQ)
+ 5300    CONTINUE
+C
+      T   = TWO
+C
+         DO 5500 I = 1, M
+         IF ( WRK1(I) .GE. T ) GOTO 5500
+         K      = I
+         T      = WRK1(K)
+ 5500    CONTINUE
+C
+C-----TAKE CORRECT ACTION IF V IS NULL.
+C
+      IF ( RHO1 .NE. ZERO ) GOTO 5700
+      NULL   = .TRUE.
+      RHO1   = ONE
+C
+C-----REINITIALIZE V AND K.
+C
+ 5700    DO 5800 I = 1, M
+ 5800    V(I)   = ZERO
+C
+      V(K)   = RHO1
+      K      = 0
+C
+C-----TAKE ANOTHER ITERATION.
+C
+ 5900 RHO0   = RHO1
+      GOTO 3000
+C
+C======================================================================
+C-----NORMALIZE V AND TAKE THE STANDARD EXIT
+C======================================================================
+C
+ 6000    DO 6100 I = 1, M
+ 6100    V(I)   = V(I) / RHO1
+C
+      RHO    = ZERO
+      IF ( .NOT. NULL ) RHO = RHO1
+C
+C=============================== E X I T ===============================
+C
+90000 RETURN
+C
+      END
+      SUBROUTINE CRFLCT(X, Y, C, S)                                     QRUP0914
+C
+C======================== D E S C R I P T I O N ========================
+C
+C     THIS SUBROUTINE COMPUTES PARAMETERS FOR THE GIVENS MATRIX G FOR
+C     WHICH (X,Y)G = (Z,0). IT REPLACES (X,Y) BY (Z,0).
+C
+C======================= D E C L A R A T I O N S =======================
+C
+      REAL                ARG,     C,    ONE,      S,      T
+CIIII DOUBLE PRECISION    ARG,     C,    ONE,      S,      T
+      REAL                  U,  UDUM,     UM,      V,   VDUM
+CIIII DOUBLE PRECISION      U,  UDUM,     UM,      V,   VDUM
+      REAL                  X,     Y,   ZERO
+CIIII DOUBLE PRECISION      X,     Y,   ZERO
+C
+      DATA ZERO /0.E0/, ONE /1.E0/
+CIIII DATA ZERO /0.D0/, ONE /1.D0/
+C
+C========================= E X E C U T I O N ===========================
+C
+      U      = X
+      V      = Y
+C
+      IF ( V .NE. ZERO ) GOTO 1000
+      C      = ONE
+      S      = ZERO
+      GOTO 90000
+C
+ 1000 CONTINUE
+      UM     =  AMAX1( ABS(U),  ABS(V))
+CIIII UM     =  DMAX1(DABS(U), DABS(V))
+      UDUM   = U / UM
+      VDUM   = V / UM
+      ARG    = UDUM * UDUM + VDUM * VDUM
+      T      = UM *  SQRT(ARG)
+CIIII T      = UM * DSQRT(ARG)
+C
+      IF ( U .LT. ZERO ) T = -T
+C
+      C      = U / T
+      S      = V / T
+      X      = T
+      Y      = ZERO
+C
+C=============================== E X I T ===============================
+C
+90000 RETURN
+C
+      END
+      SUBROUTINE ARFLCT (C,S,IP,X,INCX,IDISX,Y,INCY,IDISY)              QRUP0964
+C
+C======================== D E S C R I P T I O N ========================
+C
+C     THIS IS A FORTRAN IMPLEMENTATION OF THE ALGOL ROUTINE
+C          "APPLYREFLECTOR" WRITTEN BY DANIEL ET AL.
+C
+C     THE CALLING SEQUENCE IS DIFFERENT, BUT THAT IS UNAVOIDABLE DUE
+C          TO FUNDAMENTAL DIFFERENCES IN THE HANDLING OF PARAMETER
+C          LISTS IN FORTRAN AND ALGOL. (SEE THE FOLLOWING PARAGRAPHS.)
+C
+C     THIS ROUTINE TAKES 2 VECTORS, CALLED X AND Y, AND REPLACES
+C          THEM BY LINEAR COMBINATIONS
+C                      C * X + S * Y
+C                      S * X - C * Y.
+C          THAT IS, IT APPLIES A GIVEN'S REFLECTION TO VECTORS X
+C          AND Y.  C AND S  ARE COMPUTED IN "CRFLCT".  THE NUMBER
+C          OF ELEMENTS IN EACH OF  X  AND  Y  IS  IP.
+C
+C     THE JENSEN DEVICE USED IN THE ALGOL PROCEDURE IS NO LONGER
+C     RELEVANT. INSTEAD IT IS ASSUMED THAT ANY CALL WITH AN ACTUAL
+C     PARAMETER WHICH IS AN ARRAY OR ARRAY ELEMENT WILL BE DONE BY
+C     PASSING THE ADDRESS OF THE FIRST ELEMENT OF THE ARRAY OR
+C     THE ADDRESS OF THE ARRAY ELEMENT.
+C
+C     IN "APPLYREFLECTOR" X AND Y WERE IN EFFECT ROWS OR COLUMNS
+C          OF A SQUARE MATRIX.  THE SAME WILL BE TRUE HERE, BUT THEY
+C          MAY BE FROM THE TRIANGULAR MATRIX  R  AS DISCUSSED
+C          IN THE ROUTINE "DESCRB".
+C
+C     THE PARAMETERS  INCX  AND  IDISX  ARE USED IN THE FOLLOWING WAY
+C        (WITH SIMILAR USAGE FOR INCY AND IDISY):
+C
+C        THE PARAMETER X IS ASSUMED TO BE EQUIVALENT TO X(1).
+C        THE SUBSCRIPT REFERENCE IS INITIALIZED TO I = 1 AND THE FIRST
+C             SUBSCRIPT REFERENCE IS TO X(I) = X(1) .
+C        THE NEXT LOCATION REFERENCED IN THE ARRAY X IS X(I + IDISX).
+C             THUS IDISX IS THE DISTANCE TO THE NEXT SUBSCRIPT NEEDED.
+C             THEN I IS REPLACED BY  I + IDISX.
+C        THEN  IDISX IS INCREMENTED BY  INCX SO THAT THE DISTANCE TO
+C             THE NEXT SUBSCRIPT NEEDED MAY BE DIFFERENT.
+C        THE CYCLE THEN REPEATS, SO THAT  THE CALL "...X,1,1,..." WILL
+C             GET  X(1),X(2),X(4),X(7),X(11),...    AND THE CALL WITH
+C             "...X,0,2,..."  WILL GET X(1),X(3),X(5),...  .
+C        THIS IS EXACTLY WHAT IS NEEDED TO HANDLE THE TRIANGULAR ARRAYS.
+C
+C======================= D E C L A R A T I O N S =======================
+C
+      REAL                  C,    ONE,      S,      T,      U
+CIIII DOUBLE PRECISION      C,    ONE,      S,      T,      U
+      REAL                 UN,      V,      X,      Y
+CIIII DOUBLE PRECISION     UN,      V,      X,      Y
+C
+      INTEGER
+     -  IDISX,  IDISY, INCVXT, INCVYT,   INCX,
+     -   INCY,     IP,     JX,     JY,      K
+C
+      DIMENSION X(1), Y(1)
+C
+      DATA ONE /1.E0/
+CIIII DATA ONE /1.D0/
+C
+C========================= E X E C U T I O N ===========================
+C
+      IF ( IP .LE. 0 ) GOTO 90000
+      UN     = S / ( ONE + C )
+      JX     = 1
+      JY     = 1
+      INCVXT = IDISX
+      INCVYT = IDISY
+C
+        DO 1000 K = 1, IP
+        U      = X(JX)
+        V      = Y(JY)
+        T      = U * C + V * S
+        X(JX)  = T
+        Y(JY)  = ( T + U ) * UN - V
+        JX     = JX + INCVXT
+        JY     = JY + INCVYT
+        INCVXT = INCVXT + INCX
+        INCVYT = INCVYT + INCY
+ 1000   CONTINUE
+C
+C=============================== E X I T ===============================
+C
+90000 RETURN
+C
+      END
+      SUBROUTINE RANK1(M,N,Q,IRQ,R,U,V,WRK1,WRK2,WRK3,WRK4,IFAIL)       QRUP1052
+C
+C======================== D E S C R I P T I O N ========================
+C
+C     THIS SUBROUTINE UPDATES THE FACTORIZATION  A  =  Q R  WHEN THE
+C     OUTER PRODUCT OF THE M-VECTOR  V  AND  THE N-VECTOR  U  IS
+C     ADDED TO A.  ON ENTRY  Q IS  M  BY  N   AND  R  IS  N  BY  N.
+C     THE USER SHOULD ENSURE THAT  M >= N > 0.
+C
+C     IRQ IS DESCRIBED IN "QRFACT".
+C
+C     WRK1 AND WRK2 ARE TEMPORARY VECTORS PASSED AS WORKING STORAGE
+C     TO THE ROUTINE  "ORTCOL".
+C
+C     WRK3 IS A TEMPORARY WORK VECTOR OF LENGTH N CORRESPONDING TO
+C     THE VECTOR  T  DECLARED IN THE ALGOL PROCEDURE.
+C
+C     NOTICE ALSO THAT, AS MENTIONED IN  "DESCRB" , THE TRIANGULAR
+C     MATRIX R IS NOT STORED IN FULL, BUT ONLY ITS NONZERO
+C     UPPER HALF IS AVAILABLE.  THUS THERE IS NO STORAGE AVAILABLE
+C     FOR THE ZERO ELEMENTS IN THE LOWER PART.  HOWEVER, THE ALGOL
+C     PROCEDURE USES THE STORAGE SPACE ALONG THE FIRST SUBDIAGONAL OF
+C     R.  THUS WE NEED TO PROVIDE SOME TEMPORARY STORAGE TO ALLOW
+C     FOR THE INFORMATION STORED THERE.  THIS IS THE USE OF THE
+C     WORKING VECTOR  WRK4.
+C
+C
+C======================= D E C L A R A T I O N S =======================
+C
+      REAL                  C,    ONE,      Q,      R,    RHO
+CIIII DOUBLE PRECISION      C,    ONE,      Q,      R,    RHO
+      REAL               RHOV,      S,     T1,      U,      V
+CIIII DOUBLE PRECISION   RHOV,      S,     T1,      U,      V
+      REAL               WRK1,   WRK2,   WRK3,   WRK4,   ZERO
+CIIII DOUBLE PRECISION   WRK1,   WRK2,   WRK3,   WRK4,   ZERO
+C
+      INTEGER
+     -      I,  IFAIL,    IRQ, ITEMP1,      K,
+     -    KP1,      M,      N,    NM1,    NP1
+C
+      DIMENSION Q(IRQ,N), R(1), U(N), V(M), RHOV(1)
+      DIMENSION WRK1(M), WRK2(N), WRK3(N), WRK4(N)
+C
+      EQUIVALENCE  (RHO,RHOV(1))
+C
+      DATA  ZERO/0.E0/, ONE/1.E0/
+CIIII DATA  ZERO/0.D0/, ONE/1.D0/
+C
+C======================== E X E C U T I O N ============================
+C
+      NM1 = N - 1
+      NP1 = N + 1
+C
+      CALL ORTCOL(M,N,Q,IRQ,V,WRK3,RHO,WRK1,WRK2,IFAIL)
+      IF (IFAIL .EQ. 1) GOTO 90000
+      CALL CRFLCT(WRK3(N),RHO,C,S)
+      ITEMP1 = ( N*NP1) / 2
+      CALL ARFLCT(C,S,1,R(ITEMP1),0,1,RHOV,0,1)
+      CALL ARFLCT(C,S,M,Q(1,N),0,1,V,0,1)
+C
+      IF ( N .LE. 1) GOTO 2000
+         DO 1000 I = 1,NM1
+         K = N-I
+         KP1 = K + 1
+         CALL CRFLCT(WRK3(K),WRK3(KP1), C,S)
+         CALL ARFLCT(C,S,I,R(ITEMP1-1),1,KP1,R(ITEMP1),1,KP1)
+         WRK4(KP1) = ZERO
+         ITEMP1 = ITEMP1 - KP1
+         CALL ARFLCT(C,S,1,R(ITEMP1),0,1,WRK4(KP1),0,1)
+         CALL ARFLCT(C,S,M,Q(1,K),0,1,Q(1,KP1),0,1)
+ 1000    CONTINUE
+C
+ 2000 K = 1
+      T1 = WRK3(1)
+         DO 2500 I = 1,N
+         R(K) = ONE * R(K)  +  T1 * U(I)
+         K = K + I
+ 2500    CONTINUE
+      ITEMP1 = 1
+      IF ( N .LE. 1) GOTO 4000
+         DO 3000 K = 1,NM1
+         KP1 = K + 1
+         CALL CRFLCT(R(ITEMP1), WRK4(KP1), C,S)
+         ITEMP1 = ITEMP1 + KP1
+         CALL ARFLCT(C,S,N-K,R(ITEMP1-1),1,KP1,R(ITEMP1),1,KP1)
+         CALL ARFLCT(C,S,M,Q(1,K),0,1,Q(1,KP1),0,1)
+ 3000    CONTINUE
+C
+ 4000 CALL CRFLCT(R(ITEMP1),RHO,C,S)
+      CALL ARFLCT(C,S,M,Q(1,N),0,1,V,0,1)
+C
+C========================= E X I T =====================================
+C
+90000 RETURN
+C
+      END
+      SUBROUTINE DELCOL(M, N, Q, IRQ, R, K, V )                         QRUP1148
+C
+C======================== D E S C R I P T I O N ========================
+C
+C     THIS SUBROUTINE UPDATES THE FACTORIZATION OF THE  M  BY  N
+C     MATRIX  A  = Q R  WHEN THE K-TH COLUMN OF A IS DELETED.  IT
+C     RETURNS THE DELETED COLUMN OF THE ORIGINAL A IN V.
+C
+C     NOTICE THAT NO  ACTUAL DELETION TAKES PLACE. IN FACT, ON ENTRY,
+C     A IS DEFINED ONLY BY THE DECOMPOSITION A = Q R. THEN, ON EXIT,
+C     Q AND R DEFINE A NEW DECOMPOSITION OF A MATRIX GIVEN BY DELETING
+C     THE COLUMN OF THE ORIGINAL(IMPLICITLY DEFINED) A. NOTE THAT Q AND
+C     R ARE NOT ACTUALLY CHANGED IN DIMENSION, BUT OBSERVE THAT THE
+C     SUBROUTINE WILL COMPUTE IN Q AND R THE DECOMPOSITION OF THE
+C     SMALLER MATRIX A. THE NEW DECOMPOSITION APPEARS IN THE FIRST N-1
+C     COLUMNS OF Q AND IN WHAT IS LOGICALLY THE UPPER LEFT N-1 BY N-1
+C     SUBMATRIX OF R.
+C
+C     SEE "QRFACT" FOR A DESCRIPTION OF IRQ.
+C
+C     THE METHOD OF STORAGE OF  R  IS DESCRIBED IN "DESCRB".
+C
+C     IF K < 1  OR IF  K > N , NO OPERATION IS DONE.
+C     THE USER IS RESPONSIBLE FOR ENSURING THAT  M >= N > 0.
+C
+C======================= D E C L A R A T I O N S =======================
+C
+      REAL                  C,    ONE,      Q,      R,      S
+CIIII DOUBLE PRECISION      C,    ONE,      Q,      R,      S
+      REAL                  T,      V,   ZERO
+CIIII DOUBLE PRECISION      T,      V,   ZERO
+C
+      INTEGER
+     -      I,    IRQ, ITEMP1, ITEMP2,    IT1,
+     -    IT2,      J,      K,      L,    LP1,
+     -    LP2,      M,      N,  NMIS1
+C
+      DIMENSION Q(IRQ,N), R(1), V(M)
+C
+      DATA ZERO /0.E0/, ONE /1.E0/
+CIIII DATA ZERO /0.D0/, ONE /1.D0/
+C
+C========================= E X E C U T I O N ===========================
+C
+      IF ( K .LE. 0   .OR.   K .GT. N ) GOTO 90000
+C
+         DO 1000 I = 1, M
+ 1000    V(I)   = ZERO
+C
+      ITEMP1 = (K*(K-1)) / 2
+C
+         DO 3000 L = 1, K
+         IT2    = ITEMP1 + L
+         T      = R(IT2)
+         CALL SAXPY(M,T,Q(1,L),1,V,1)
+CIIII    CALL DAXPY(M,T,Q(1,L),1,V,1)
+ 3000    CONTINUE
+C
+      NMIS1  = N - 1
+      IF ( K .GT. NMIS1 ) GOTO 7000
+      LP2 = K + 1
+C
+         DO 5000 L = K, NMIS1
+         LP1 = LP2
+         LP2 = L + 2
+         ITEMP1 = (LP1 * L) / 2 + L
+         CALL CRFLCT(R(ITEMP1),R(ITEMP1+1), C, S)
+         ITEMP1 = ITEMP1 + LP1
+         IF (N .GT. LP1 )
+     -   CALL ARFLCT(C, S, N-LP1, R(ITEMP1), 1,LP2, R(ITEMP1+1), 1,LP2)
+         CALL ARFLCT(C, S, M, Q(1,L), 0, 1, Q(1,LP1), 0, 1)
+ 5000    CONTINUE
+C
+         DO 6500 J = K, NMIS1
+         ITEMP1 = (J * (J - 1)) / 2
+         ITEMP2 = ITEMP1 + J
+C
+            DO 6000 I = 1, J
+            IT1  = ITEMP1 + I
+            IT2  = ITEMP2 + I
+ 6000       R(IT1) = R(IT2)
+C
+ 6500    CONTINUE
+C
+ 7000 ITEMP1 = (N*NMIS1) / 2  + 1
+      ITEMP2 = ITEMP1 + NMIS1
+C
+         DO 8000 I = ITEMP1, ITEMP2
+ 8000    R(I)   = ZERO
+C
+         DO 9000 I = 1, M
+ 9000    Q(I,N) = ZERO
+C
+C=============================== E X I T ===============================
+C
+90000 RETURN
+C
+      END
+      SUBROUTINE INSCOL (M,N,Q,IRQ,R,K,V,WRK1,WRK2,WRK3,IFAIL)          QRUP1246
+C
+C======================== D E S C R I P T I O N ========================
+C
+C     THIS SUBROUTINE UPDATES THE FACTORIZATION A = Q R WHEN THE M-
+C     VECTOR V IS INSERTED BETWEEN COLUMNS K - 1 AND K OF A.
+C
+C     IT ASSUMES  Q  IS INITIALLY  M  BY  N-1
+C     AND THAT    R  IS INITIALLY N-1 BY  N-1.
+C
+C     THE USER SHOULD ENSURE THAT  M >= N > 0  AND THAT  0 < K <= N.
+C     NOTICE THAT A CALL WITH  K = N  JUST AMOUNTS TO A CALL
+C     TO "ORTCOL".
+C
+C     WRK1 AND WRK2  ARE TEMPORARY VECTORS PASSED TO "ORTCOL".
+C     WRK3 IS FOR TEMPORARY STORAGE OF THE WORK VECTOR U OF THE
+C     ALGOL ROUTINE.
+C
+C     R IS STORED IN TRIANGULAR FORM, AS DESCRIBED IN "DESCRB".
+C
+C     IRQ IS EXPLAINED IN  "QRFACT".
+C
+C     IFAIL IS EXPLAINED IN "ORTCOL".
+C
+C
+C======================= D E C L A R A T I O N S =======================
+C
+      REAL                  C,      Q,      R,    RHO,      S
+CIIII DOUBLE PRECISION      C,      Q,      R,    RHO,      S
+      REAL                  V,   WRK1,   WRK2,   WRK3,   ZERO
+CIIII DOUBLE PRECISION      V,   WRK1,   WRK2,   WRK3,   ZERO
+C
+      INTEGER
+     -      I,  IFAIL,    IRQ, ITEMP1, ITEMP2,
+     -    IT1,    IT2,      J,     JJ,      K,
+     -      L,     LL,    LP1,      M,      N,
+     -     NK,     N1
+C
+      DIMENSION Q(IRQ,N), R(1),  V(M)
+      DIMENSION WRK1(M), WRK2(N), WRK3(N)
+C
+      DATA ZERO /0.E0/
+CIIII DATA ZERO /0.D0/
+C
+C======================== E X E C U T I O N ============================
+C
+      N1 = N - 1
+      IF ( K .GE. N) GOTO 3500
+      NK = N1 + K
+      ITEMP1 = (N*N1) / 2
+      ITEMP2 = ITEMP1 + N
+         DO 2000 JJ = K,N1
+         R(ITEMP2) = ZERO
+         ITEMP2 = ITEMP1
+         J = NK - JJ
+         ITEMP1 = ITEMP1 - J
+            DO 1000 I = 1, J
+            IT1 = ITEMP1 + I
+            IT2 = ITEMP2 + I
+ 1000       R(IT2) = R(IT1)
+ 2000    CONTINUE
+C
+ 3500 CALL ORTCOL(M,N1,Q,IRQ,V,WRK3,RHO,WRK1,WRK2,IFAIL)
+      IF (IFAIL .EQ. 1) GOTO 90000
+      WRK3(N) = RHO
+C
+         DO 4000 I = 1, M
+ 4000    Q(I,N) = V(I)
+C
+      IF ( K .GE. N) GOTO 5500
+      ITEMP1 = (N*N1) /2 + N1
+         DO 5000 LL = K, N1
+         L = NK - LL
+         LP1 = L + 1
+         CALL CRFLCT(WRK3(L),WRK3(LP1),C,S)
+         CALL ARFLCT(C,S,N-L,R(ITEMP1),1,LP1,R(ITEMP1+1),1,LP1)
+         CALL ARFLCT(C,S,M,Q(1,L),0,1,Q(1,LP1),0,1)
+         ITEMP1 = ITEMP1 - LP1
+ 5000    CONTINUE
+C
+ 5500 ITEMP1 = (K*(K-1))  /  2
+         DO 6000 I = 1, K
+         IT1 = ITEMP1 + I
+ 6000    R(IT1) = WRK3(I)
+C
+C========================= E X I T =====================================
+C
+90000 RETURN
+C
+      END
+      SUBROUTINE INSROW(M,N,Q,IRQ,R,K,U,WRK1)                           QRUP1336
+C
+C======================== D E S C R I P T I O N ========================
+C
+C     THIS SUBROUTINE UPDATES THE FACTORIZATION A = Q R WHEN THE
+C     N-VECTOR U IS INSERTED BETWEEN ROWS K - 1 AND K OF A.
+C
+C     IT ASSUMES THAT  Q  IS INITIALLY  M-1 BY N
+C            AND THAT  R  IS INITIALLY   N  BY N .
+C
+C     WRK1 IS A TEMPORARY VECTOR CORRESPONDING TO  V  IN
+C          THE ALGOL ROUTINE.
+C
+C     R  IS STORED AS DESCRIBED IN  "DESCRB".
+C
+C     IRQ  IS DEFINED IN  "QRFACT".
+C
+C     IT IS ASSUMED THAT  M > N > 0  AND THAT  0 < K <= M.
+C     NO OPERATION TAKES PLACE WHEN  K <=0  OR K > M.
+C
+C
+C======================= D E C L A R A T I O N S =======================
+C
+      REAL                  C,    ONE,      Q,      R,      S
+CIIII DOUBLE PRECISION      C,    ONE,      Q,      R,      S
+      REAL                  U,   WRK1,   ZERO
+CIIII DOUBLE PRECISION      U,   WRK1,   ZERO
+C
+      INTEGER
+     -      I,     II,    IRQ, ITEMP1,    IT1,
+     -      K,      L,    LP1,      M,     MK,
+     -    MM1,      N
+C
+      DIMENSION Q(IRQ,N), R(1), U(N)
+      DIMENSION WRK1(M)
+C
+      DATA ZERO /0.E0/, ONE /1.E0/
+CIIII DATA ZERO /0.D0/, ONE /1.D0/
+C
+C======================== E X E C U T I O N ============================
+C
+      IF ( K .LE. 0   .OR.   K .GT. M ) GOTO 90000
+         DO 1000 I = 1,M
+ 1000    WRK1(I) = ZERO
+      WRK1(K) = ONE
+C
+      MM1 = M - 1
+      MK = MM1 + K
+      ITEMP1 = 1
+         DO 3000 L = 1,N
+         LP1 = L + 1
+         IF (K .GE. M) GOTO 2500
+            DO 2000 II = K,MM1
+            I = MK - II
+ 2000       Q(I+1,L) = Q(I,L)
+ 2500    Q(K,L) = ZERO
+         CALL CRFLCT( R(ITEMP1),U(L),C,S)
+         IT1 = ITEMP1 + L
+         IF (N .GT. L) CALL ARFLCT( C,S,N-L,R(IT1),1,LP1,U(LP1),0,1)
+         CALL ARFLCT(C,S,M,Q(1,L),0,1,WRK1,0,1)
+         ITEMP1 = ITEMP1 + LP1
+ 3000    CONTINUE
+C
+C========================= E X I T =====================================
+C
+90000 RETURN
+C
+      END
+      SUBROUTINE DELROW(M,N,Q,IRQ,R,K,U,WRK1,WRK2,WRK3,IFAIL)           QRUP1404
+C
+C======================== D E S C R I P T I O N ========================
+C
+C     THIS SUBROUTINE UPDATES THE FACTORIZATION A = Q R WHEN THE K-TH
+C     ROW OF A IS DELETED.  IT RETURNS THE DELETED ROW OF A IN U.
+C
+C     NOTE THAT, AS IN THE SUBROUTINE DELCOL, NO ACTUAL DELETION
+C     TAKES PLACE. SEE DELCOL FOR FURTHER COMMENTS. THE REVISED
+C     DECOMPOSITION APPEARS IN THE FIRST M-1 ROWS OF Q AND IN THE
+C     SAME N BY N MATRIX R.
+C
+C     IT ASSUMES THAT  M > N , BUT IT DOES NOT CHECK THIS.
+C     NO OPERATION IS PERFORMED IF  K < 1   OR  K > M.
+C
+C     WRK3 IS THE WORK VECTOR V OF LENGTH M OF THE ALGOL ROUTINE.
+C     WRK1 AND WRK2 ARE TEMPORARY WORK VECTORS WHICH ARE USED
+C     IN A CALL TO "ORTCOL" AND WHICH HAVE LENGTHS  M AND  N
+C     RESPECTIVELY.
+C
+C     IRQ IS DESCRIBED IN "QRFACT".
+C
+C     R IS STORED AS DESCRIBED IN "DESCRB".
+C
+C     IFAIL IS DEFINED IN "ORTCOL".
+C
+C
+C======================= D E C L A R A T I O N S =======================
+C
+      REAL                  C,    ONE,      Q,      R,      S
+CIIII DOUBLE PRECISION      C,    ONE,      Q,      R,      S
+      REAL                  T,      U,   WRK1,   WRK2,   WRK3
+CIIII DOUBLE PRECISION      T,      U,   WRK1,   WRK2,   WRK3
+      REAL               ZERO
+CIIII DOUBLE PRECISION   ZERO
+C
+      INTEGER
+     -      I,  IFAIL,    IRQ, ITEMP1,      J,
+     -      K,      L,     LL,      M,     M1,
+     -      N,     N1
+C
+      DIMENSION Q(IRQ,N), R(1), U(N)
+      DIMENSION WRK1(M), WRK2(N), WRK3(M)
+C
+      DATA ZERO /0.E0/, ONE /1.E0/
+CIIII DATA ZERO /0.D0/, ONE /1.D0/
+C
+C======================== E X E C U T I O N ============================
+C
+      IF ( K .LE. 0   .OR.  K .GT. M ) GOTO 90000
+         DO 1000 I = 1, M
+ 1000    WRK3(I) = ZERO
+      WRK3(K) = ONE
+C
+      CALL ORTCOL(M,N,Q,IRQ,WRK3,U,T,WRK1,WRK2,IFAIL)
+      IF ( IFAIL .EQ. 1) GOTO 90000
+C
+      M1 = M - 1
+      IF ( K .GE. M) GOTO 2500
+         DO 2000 I = K, M1
+ 2000    WRK3(I) = WRK3(I + 1)
+C
+ 2500 N1 = N + 1
+         DO 4000 LL = 1,N
+         L = N1 - LL
+         IF ( K .GE. M) GOTO 3500
+            DO 3000 I = K, M1
+ 3000       Q(I,L) = Q(I + 1,L)
+ 3500    CALL CRFLCT (T, U(L), C, S)
+         ITEMP1 = (L*(L+1)) / 2
+         CALL ARFLCT(C,S,LL,U(L),0,1,R(ITEMP1),1,L)
+         CALL ARFLCT(C,S,M1,WRK3,0,1,Q(1,L),0,1)
+         Q(M,L) = ZERO
+ 4000    CONTINUE
+C
+         DO 5000 J = 1,N
+ 5000    U(J) = T * U(J)
+C
+C========================= E X I T =====================================
+C
+90000 RETURN
+C
+      END
+      SUBROUTINE QRFACT(M,N,A,IRA,Q,IRQ,R,WRK1,WRK2,WRK3,WRK4,IFAIL)    QRUP1487
+C
+C======================== D E S C R I P T I O N ========================
+C
+C     THIS COMPUTES A GRAM-SCHMIDT QR FACTORIZATION OF A.
+C
+C     IT IS ASSUMED THAT  A  IS  M  BY  N  AND THAT  M >= N.
+C     THUS  Q  MUST BE  M  BY  N  AND  R  WILL BE  N BY N,
+C     ALTHOUGH  R  WILL BE STORED ONLY AS THE UPPER TRIANGULAR
+C     HALF, STORED BY COLUMNS, AS DESCRIBED IN THE ROUTINE
+C     "DESCRB".
+C
+C     WRK4 IS A TEMPORARY WORK VECTOR OF LENGTH  M,  NAMELY
+C          V  OF THE ALGOL ROUTINE.
+C     WRK1, WRK2 AND WRK3  ARE USED IN "INSCOL" AND ARE OF LENGTHS
+C          M, N AND N RESPECTIVELY.
+C
+C     IRA AND IRQ ARE THE ACTUAL DECLARED FIRST DIMENSIONS OF THE
+C          ARRAYS  A  AND  Q  RESPECTIVELY.
+C
+C     IFAIL IS DEFINED IN "ORTCOL", WHICH IS INDIRECTLY CALLED BY
+C          "QRFACT".
+C
+C     FOR FURTHER DETAILS, PLEASE SEE THE ALGOL ROUTINE "QRFACTOR"
+C          BY DANIEL ET AL.
+C
+C======================= D E C L A R A T I O N S =======================
+C
+      REAL                  A,      Q,      R,   WRK1,   WRK2
+CIIII DOUBLE PRECISION      A,      Q,      R,   WRK1,   WRK2
+      REAL               WRK3,   WRK4
+CIIII DOUBLE PRECISION   WRK3,   WRK4
+C
+      INTEGER
+     -      I,  IFAIL,    IRA,    IRQ,      K,
+     -      M,      N
+C
+      DIMENSION   A(IRA,N), Q(IRQ,N), R(1)
+      DIMENSION   WRK1(M), WRK2(N), WRK3(N), WRK4(M)
+C
+C======================== E X E C U T I O N ============================
+C
+         DO 2000 K = 1 , N
+            DO 1000 I = 1 , M
+ 1000       WRK4(I) = A( I,K )
+         CALL INSCOL(M,K,Q,IRQ,R,K,WRK4,WRK1,WRK2,WRK3,IFAIL)
+         IF (IFAIL .EQ. 1) GOTO 90000
+ 2000    CONTINUE
+C
+C========================= E X I T =====================================
+C
+90000 RETURN
+C
+      END

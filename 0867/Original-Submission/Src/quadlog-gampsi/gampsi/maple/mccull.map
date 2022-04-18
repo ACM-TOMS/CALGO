@@ -1,0 +1,187 @@
+# -*-maple-*-
+
+interface(quiet=true):
+
+#=======================================================================
+# Investigate the rapidly convergent series for Psi(1+z) given in
+#
+#	@Article{McCullagh:1981:RCS,
+#	  author =       "Peter McCullagh",
+#	  title =        "A rapidly convergent series for computing $\psi (z)$
+#	                 and its derivatives",
+#	  journal =      j-MATH-COMPUT,
+#	  volume =       "36",
+#	  number =       "153",
+#	  pages =        "247--248",
+#	  month =        jan,
+#	  year =         "1981",
+#	  CODEN =        "MCMPAF",
+#	  ISSN =         "0025-5718",
+#	  MRclass =      "65D20 (33A15)",
+#	  MRnumber =     "81m:65028",
+#	  MRreviewer =   "J. Gregor",
+#	  bibdate =      "Tue Oct 13 08:06:19 MDT 1998",
+#	  bibsource =    "JSTOR database",
+#	  acknowledgement = ack-nhfb,
+#	  classcodes =   "C4120 (Functional analysis)",
+#	  corpsource =   "Imperial Coll. of Sci. and Technol., London, UK",
+#	  keywords =     "(mathematics); convergence; function evaluation; log
+#	                 gamma function; poles; poles and zeros; rapidly
+#	                 convergent series; series; series expansion; uniformly
+#	                 convergent",
+#	  treatment =    "T Theoretical or Mathematical",
+#	}
+# [21-Jul-2000]
+#=======================================================================
+
+a := proc(r) r^(-r) end:
+
+c := proc(r)
+    ## c(r) = \sum_{k=r+1}^\infty k^(-r-1)
+    ## This converges far too slowly for r < 10 to be
+    ## useful, but it can be reexpressed in terms of the
+    ## Riemann Zeta function and a short sum, which
+    ## provides a fast way to compute it.  High precision
+    ## is, however, needed for large r (> 20, say).
+
+    local k, sum:
+    sum := 0:
+    for k from 1 to r
+    do
+      sum := sum + k^(-r-1):
+    od:
+    sum := evalf(Zeta(r+1)) - sum:
+    RETURN (sum)
+  end:
+
+check_loss := proc(r,sum,term)
+    local loss, ratio:
+    if (evalb(evalf(sum) <> 0.0)) then
+      ratio := evalf(-term / sum):
+      if (evalb(0.5 < ratio) and evalb(ratio < 2)) then
+        if (evalb(ratio < 1)) then
+          loss := round(evalf(-log[2](1-ratio))):
+        elif (evalb(ratio > 1)) then
+          loss := round(evalf(1 - log[2](ratio - 1))):
+        else
+          loss := 999:
+        fi:
+        printf("WARNING: %d-bit loss at r = %3d\tsum := %15.10f\tterm := %15.10f\tratio := %10.5f\n",
+          loss, r, sum, term, ratio):
+      fi:
+    fi:
+  end:
+
+# Now test it for the computation of Psi(x)
+altpsi := proc(x)
+      local r, sum, term, z:
+      global naltpsi, NMAX, error_altpsi:
+      sum := 0:
+      naltpsi := 0:
+      z  := evalf(x - 1):
+      if (evalb(z <> 0)) then
+	for r from 1 to NMAX
+	do
+	  term := evalf(z^r * (C[r] + A[r]/(z + r))):
+	  if (type(r,even)) then
+	    term := -term:
+	  fi:
+	  check_loss(r,evalf(sum),evalf(term)):
+	  sum := sum + term:
+	  if (evalb(evalf(abs(term/sum)) < MACHEPS)) then
+	    naltpsi := r:
+	    break:
+	  fi:
+	od:
+      fi:
+      sum := -gamma + sum:
+
+      error_altpsi := 0:
+      for r from naltpsi + 1 to NMAX
+      do
+	error_altpsi := error_altpsi + evalf(z^r * (C[r] + A[r]/(z + r)))
+      od:
+      error_altpsi := evalf(error_altpsi / MACHEPS):
+      RETURN(evalf(sum))
+    end:
+
+testpsi := proc(a,b,step)
+    local approx, exact, x:
+    global naltpsi:
+    printf("%7s\t%7s\t%47s\t%47s\t%15s\t%s\n",
+      "terms", "x", "approx psi(x)", "exact psi(x)",
+      "rel error", "rest (ulps)"):
+    for x from a to b by step
+    do
+      approx := altpsi(x):
+      exact := evalf(Psi(x)):
+      printf("%7d\t%7.4f\t%47.40f\t%47.40f\t%15.2e\t%10.4f\n",
+        trunc(naltpsi), evalf(x), evalf(approx), evalf(exact),
+        evalf((approx - exact)/exact), evalf(error_altpsi)):
+    od
+  end:
+
+rho := proc(z,r) evalf(z * (C[r+1] + A[r+1]/(z + r + 1))/ (C[r] + A[r]/(z + r))) end:
+
+testit := proc(title, digits, macheps, nmax)
+  local k, r:
+  global A, C, Digits, MACHEPS, NMAX:
+
+  # Set global environment to simplify function calls
+  Digits := digits:
+  MACHEPS := evalf(macheps):
+  NMAX := nmax:
+
+  printf("\f\n%s\n", title):
+  printf("Digits  = %d\n", Digits):
+  printf("MACHEPS = %.2e = 2^(%d)\n", MACHEPS, round(log[2](MACHEPS))):
+  printf("NMAX    = %d\n", NMAX):
+
+  printf("--------------------\n"):
+  printf("Coefficients k, a(k)\n"):
+  printf("--------------------\n"):
+  A := array(1..NMAX):
+  for k from 1 to NMAX
+  do
+    A[k] := a(k):
+    printf("%7d\t%.50e\n", k, A[k])
+  od:
+
+  printf("\n\n\n"):
+  printf("--------------------\n"):
+  printf("Coefficients k, c(k)\n"):
+  printf("--------------------\n"):
+  C := array(1..NMAX):
+  for k from 1 to NMAX
+  do
+    C[k] := c(k):
+    printf("%7d\t%.50e\n", k, C[k])
+  od:
+
+  testpsi(1,3,0.01):
+
+  # The bitloss ratio falls almost linearly for increasing z, so it is useful
+  # to simply print a table:
+  printf("\n\n\n"):
+  printf("%7s  R(%d,z)  R(%d,z)  R(%d,z)  R(%d,z)  R(%d,z)  R(%d,z)  R(%d,z)  R(%d,z)  R(%d,z)  R(%d,z)\n",
+    "r", 1, 2, 3, 4, 5, 6, 7, 8, 9, 10):
+
+  for r from 1 to 49
+  do
+    printf("%7d%8.4f%8.4f%8.4f%8.4f%8.4f%8.4f%8.4f%8.4f%8.4f%8.4f\n",
+      r, rho(1,r), rho(2,r), rho(3,r), rho(4,r), rho(5,r),
+      rho(6,r), rho(7,r), rho(8,r), rho(9,r), rho(10,r))
+  od:
+end:
+
+# Ensure gamma is accurate:
+Digits := 1000: 
+gamma:
+
+testit("IEEE 754 single-precision arithmetic",    150, 2^(-24), 50):
+testit("IEEE 754 double-precision arithmetic",    150, 2^(-52), 50):
+testit("IEEE 754 quadruple-precision arithmetic", 150, 2^(-112), 50):
+testit("50D arithmetic",  150, 10^( -50),  50):
+testit("100D arithmetic", 200, 10^(-100),  50):
+testit("200D arithmetic", 400, 10^(-200), 150):
+testit("500D arithmetic", 700, 10^(-500), 450):

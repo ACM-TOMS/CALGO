@@ -1,0 +1,504 @@
+C SAMPLE DRIVER PROGRAM FOR SUBROUTINE CL1.
+C                                                                       MAN   20
+C THIS PROGRAM SOLVES A K BY N OVERDETERMINED SYSTEM                    MAN   30
+C                                                                       MAN   40
+C    AX=B                                                               MAN   50
+C                                                                       MAN   60
+C IN THE L1 SENSE SUBJECT TO L EQUALITY CONSTRAINTS                     MAN   70
+C                                                                       MAN   80
+C    CX=D                                                               MAN   90
+C                                                                       MAN  100
+C AND M INEQUALITY CONSTRAINTS                                          MAN  110
+C                                                                       MAN  120
+C    EX.LE.F.                                                           MAN  130
+C                                                                       MAN  140
+C COMPLETE DETAILS OF THE PARAMETERS MAY BE                             MAN  150
+C FOUND IN THE DOCUMENTATION OF THE SUBROUTINE.                         MAN  160
+C                                                                       MAN  170
+C THE ARRAYS ARE CURRENTLY DIMENSIONED TO ALLOW PROBLEMS                MAN  180
+C FOR WHICH K+L+M .LE. 100, N .LE. 10.                                  MAN  190
+C                                                                       MAN  200
+C THE PROGRAM MAY BE TESTED ON THE FOLLOWING DATA.                      MAN  210
+C                                                                       MAN  220
+C     K = 8                                                             MAN  230
+C     L = 3                                                             MAN  240
+C     M = 2                                                             MAN  250
+C     N = 5                                                             MAN  260
+C                                                                       MAN  270
+C      Q = 2  0  1  3  1  7                                             MAN  280
+C          7  4  4 15  7  4                                             MAN  290
+C          9  4  7 20  6  7                                             MAN  300
+C          2  2  1  5  3  4                                             MAN  310
+C          9  3  2 14 10  0                                             MAN  320
+C          4  5  0  9  9  4                                             MAN  330
+C          4  4  9 17 -1  9                                             MAN  340
+C          1  6  2  9  5  6                                             MAN  350
+C          0  4  5  9 -1  5                                             MAN  360
+C          3  2  7 12 -2  1                                             MAN  370
+C          3  6 12 21 -3  6                                             MAN  380
+C          0  3  6  9 -3  5                                             MAN  390
+C          6  2  4 12  4  6                                             MAN  400
+C                                                                       MAN  410
+C     KODE = 0                                                          MAN  420
+C     TOLER = 1.E-5                                                     MAN  430
+C     ITER = 130                                                        MAN  440
+C                                                                       MAN  450
+C                                                                       MAN  460
+      DIMENSION Q(102,12), X(12), RES(100), CU(2,110)                   MAN  470
+      INTEGER IU(2,110), S(100)                                         MAN  480
+      DATA KLMD, KLM2D, NKLMD, N2D /100,102,110,12/                     MAN  490
+C INPUT DATA.                                                           MAN  500
+      READ (5,99999) K, L, M, N, KODE, TOLER, ITER                      MAN  510
+      KLM = K + L + M                                                   MAN  520
+      N1 = N + 1                                                        MAN  530
+      DO 10 I=1,KLM                                                     MAN  540
+         READ (5,99998) (Q(I,J),J=1,N1)                                 MAN  550
+         WRITE (6,99994) (Q(I,J),J=1,N1)                                MAN  560
+   10 CONTINUE                                                          MAN  570
+      CALL CL1(K, L, M, N, KLMD, KLM2D, NKLMD, N2D, Q,                  MAN  580
+     * KODE, TOLER, ITER, X, RES, ERROR, CU, IU, S)                     MAN  590
+C OUTPUT KODE, ITERATION COUNT AND ERROR NORM.                          MAN  600
+      WRITE (6,99997) KODE, ITER, ERROR                                 MAN  610
+C OUTPUT SOLUTION VECTOR.                                               MAN  620
+      WRITE (6,99996) (I,X(I),I=1,N)                                    MAN  630
+C OUTPUT RESIDUAL ERROR AT EACH POINT.                                  MAN  640
+      WRITE (6,99995) (I,RES(I),I=1,KLM)                                MAN  650
+      STOP                                                              MAN  660
+99999 FORMAT (5I3, E10.0, I3)                                           MAN  670
+99998 FORMAT (8F3.0)                                                    MAN  680
+99997 FORMAT (16H KODE,ITER,ERROR, 2I10, E18.7)                         MAN  690
+99996 FORMAT (4H SOL, I5, E18.7)                                        MAN  700
+99995 FORMAT (6H ERROR, I5, E18.7)                                      MAN  710
+99994 FORMAT (2H  , 8F5.0)                                              MAN  720
+      END                                                               MAN  730
+      SUBROUTINE CL1(K, L, M, N, KLMD, KLM2D, NKLMD, N2D,               CL1   10
+     * Q, KODE, TOLER, ITER, X, RES, ERROR, CU, IU, S)
+C THIS SUBROUTINE USES A MODIFICATION OF THE SIMPLEX
+C METHOD OF LINEAR PROGRAMMING TO CALCULATE AN L1 SOLUTION
+C TO A K BY N SYSTEM OF LINEAR EQUATIONS
+C             AX=B
+C SUBJECT TO L LINEAR EQUALITY CONSTRAINTS
+C             CX=D
+C AND M LINEAR INEQUALITY CONSTRAINTS
+C             EX.LE.F.
+C DESCRIPTION OF PARAMETERS
+C K      NUMBER OF ROWS OF THE MATRIX A (K.GE.1).
+C L      NUMBER OF ROWS OF THE MATRIX C (L.GE.0).
+C M      NUMBER OF ROWS OF THE MATRIX E (M.GE.0).
+C N      NUMBER OF COLUMNS OF THE MATRICES A,C,E (N.GE.1).
+C KLMD   SET TO AT LEAST K+L+M FOR ADJUSTABLE DIMENSIONS.
+C KLM2D  SET TO AT LEAST K+L+M+2 FOR ADJUSTABLE DIMENSIONS.
+C NKLMD  SET TO AT LEAST N+K+L+M FOR ADJUSTABLE DIMENSIONS.
+C N2D    SET TO AT LEAST N+2 FOR ADJUSTABLE DIMENSIONS
+C Q      TWO DIMENSIONAL REAL ARRAY WITH KLM2D ROWS AND
+C        AT LEAST N2D COLUMNS.
+C        ON ENTRY THE MATRICES A,C AND E, AND THE VECTORS
+C        B,D AND F MUST BE STORED IN THE FIRST K+L+M ROWS
+C        AND N+1 COLUMNS OF Q AS FOLLOWS
+C             A B
+C         Q = C D
+C             E F
+C        THESE VALUES ARE DESTROYED BY THE SUBROUTINE.
+C KODE   A CODE USED ON ENTRY TO, AND EXIT
+C        FROM, THE SUBROUTINE.
+C        ON ENTRY, THIS SHOULD NORMALLY BE SET TO 0.
+C        HOWEVER, IF CERTAIN NONNEGATIVITY CONSTRAINTS
+C        ARE TO BE INCLUDED IMPLICITLY, RATHER THAN
+C        EXPLICITLY IN THE CONSTRAINTS EX.LE.F, THEN KODE
+C        SHOULD BE SET TO 1, AND THE NONNEGATIVITY
+C        CONSTRAINTS INCLUDED IN THE ARRAYS X AND
+C        RES (SEE BELOW).
+C        ON EXIT, KODE HAS ONE OF THE
+C        FOLLOWING VALUES
+C             0- OPTIMAL SOLUTION FOUND,
+C             1- NO FEASIBLE SOLUTION TO THE
+C                CONSTRAINTS,
+C             2- CALCULATIONS TERMINATED
+C                PREMATURELY DUE TO ROUNDING ERRORS,
+C             3- MAXIMUM NUMBER OF ITERATIONS REACHED.
+C TOLER  A SMALL POSITIVE TOLERANCE. EMPIRICAL
+C        EVIDENCE SUGGESTS TOLER = 10**(-D*2/3),
+C        WHERE D REPRESENTS THE NUMBER OF DECIMAL
+C        DIGITS OF ACCURACY AVAILABLE. ESSENTIALLY,
+C        THE SUBROUTINE CANNOT DISTINGUISH BETWEEN ZERO
+C        AND ANY QUANTITY WHOSE MAGNITUDE DOES NOT EXCEED
+C        TOLER. IN PARTICULAR, IT WILL NOT PIVOT ON ANY
+C        NUMBER WHOSE MAGNITUDE DOES NOT EXCEED TOLER.
+C ITER   ON ENTRY ITER MUST CONTAIN AN UPPER BOUND ON
+C        THE MAXIMUM NUMBER OF ITERATIONS ALLOWED.
+C        A SUGGESTED VALUE IS 10*(K+L+M). ON EXIT ITER
+C        GIVES THE NUMBER OF SIMPLEX ITERATIONS.
+C X      ONE DIMENSIONAL REAL ARRAY OF SIZE AT LEAST N2D.
+C        ON EXIT THIS ARRAY CONTAINS A
+C        SOLUTION TO THE L1 PROBLEM. IF KODE=1
+C        ON ENTRY, THIS ARRAY IS ALSO USED TO INCLUDE
+C        SIMPLE NONNEGATIVITY CONSTRAINTS ON THE
+C        VARIABLES. THE VALUES -1, 0, OR 1
+C        FOR X(J) INDICATE THAT THE J-TH VARIABLE
+C        IS RESTRICTED TO BE .LE.0, UNRESTRICTED,
+C        OR .GE.0 RESPECTIVELY.
+C RES    ONE DIMENSIONAL REAL ARRAY OF SIZE AT LEAST KLMD.
+C        ON EXIT THIS CONTAINS THE RESIDUALS B-AX
+C        IN THE FIRST K COMPONENTS, D-CX IN THE
+C        NEXT L COMPONENTS (THESE WILL BE =0),AND
+C        F-EX IN THE NEXT M COMPONENTS. IF KODE=1 ON
+C        ENTRY, THIS ARRAY IS ALSO USED TO INCLUDE SIMPLE
+C        NONNEGATIVITY CONSTRAINTS ON THE RESIDUALS
+C        B-AX. THE VALUES -1, 0, OR 1 FOR RES(I)
+C        INDICATE THAT THE I-TH RESIDUAL (1.LE.I.LE.K) IS
+C        RESTRICTED TO BE .LE.0, UNRESTRICTED, OR .GE.0
+C        RESPECTIVELY.
+C ERROR  ON EXIT, THIS GIVES THE MINIMUM SUM OF
+C        ABSOLUTE VALUES OF THE RESIDUALS.
+C CU     A TWO DIMENSIONAL REAL ARRAY WITH TWO ROWS AND
+C        AT LEAST NKLMD COLUMNS USED FOR WORKSPACE.
+C IU     A TWO DIMENSIONAL INTEGER ARRAY WITH TWO ROWS AND
+C        AT LEAST NKLMD COLUMNS USED FOR WORKSPACE.
+C S      INTEGER ARRAY OF SIZE AT LEAST KLMD, USED FOR
+C        WORKSPACE.
+C IF YOUR FORTRAN COMPILER PERMITS A SINGLE COLUMN OF A TWO
+C DIMENSIONAL ARRAY TO BE PASSED TO A ONE DIMENSIONAL ARRAY
+C THROUGH A SUBROUTINE CALL, CONSIDERABLE SAVINGS IN
+C EXECUTION TIME MAY BE ACHIEVED THROUGH THE USE OF THE
+C FOLLOWING SUBROUTINE, WHICH OPERATES ON COLUMN VECTORS.
+C     SUBROUTINE COL(V1, V2, XMLT, NOTROW, K)
+C THIS SUBROUTINE ADDS TO THE VECTOR V1 A MULTIPLE OF THE
+C VECTOR V2 (ELEMENTS 1 THROUGH K EXCLUDING NOTROW).
+C     DIMENSION V1(K), V2(K)
+C     KEND = NOTROW - 1
+C     KSTART = NOTROW + 1
+C     IF (KEND .LT. 1) GO TO 20
+C     DO 10 I=1,KEND
+C        V1(I) = V1(I) + XMLT*V2(I)
+C  10 CONTINUE
+C     IF(KSTART .GT. K) GO TO 40
+C  20 DO 30 I=KSTART,K
+C       V1(I) = V1(I) + XMLT*V2(I)
+C  30 CONTINUE
+C  40 RETURN
+C     END
+C SEE COMMENTS FOLLOWING STATEMENT LABELLED 440 FOR
+C INSTRUCTIONS ON THE IMPLEMENTATION OF THIS MODIFICATION.
+      DOUBLE PRECISION SUM
+      DOUBLE PRECISION DBLE
+      REAL Q, X, Z, CU, SN, ZU, ZV, CUV, RES, XMAX, XMIN,
+     * ERROR, PIVOT, TOLER, TPIVOT
+      REAL ABS
+      INTEGER I, J, K, L, M, N, S, IA, II, IN, IU, JS, KK,
+     * NK, N1, N2, JMN, JPN, KLM, NKL, NK1, N2D, IIMN,
+     * IOUT, ITER, KLMD, KLM1, KLM2, KODE, NKLM, NKL1,
+     * KLM2D, MAXIT, NKLMD, IPHASE, KFORCE, IINEG
+      INTEGER IABS
+      DIMENSION Q(KLM2D,N2D), X(N2D), RES(KLMD),
+     * CU(2,NKLMD), IU(2,NKLMD), S(KLMD)
+C
+C INITIALIZATION.
+C
+      MAXIT = ITER
+      N1 = N + 1
+      N2 = N + 2
+      NK = N + K
+      NK1 = NK + 1
+      NKL = NK + L
+      NKL1 = NKL + 1
+      KLM = K + L + M
+      KLM1 = KLM + 1
+      KLM2 = KLM + 2
+      NKLM = N + KLM
+      KFORCE = 1
+      ITER = 0
+      JS = 1
+      IA = 0
+C SET UP LABELS IN Q.
+      DO 10 J=1,N
+         Q(KLM2,J) = J
+   10 CONTINUE
+      DO 30 I=1,KLM
+         Q(I,N2) = N + I
+         IF (Q(I,N1).GE.0.) GO TO 30
+         DO 20 J=1,N2
+            Q(I,J) = -Q(I,J)
+   20    CONTINUE
+   30 CONTINUE
+C SET UP PHASE 1 COSTS.
+      IPHASE = 2
+      DO 40 J=1,NKLM
+         CU(1,J) = 0.
+         CU(2,J) = 0.
+         IU(1,J) = 0
+         IU(2,J) = 0
+   40 CONTINUE
+      IF (L.EQ.0) GO TO 60
+      DO 50 J=NK1,NKL
+         CU(1,J) = 1.
+         CU(2,J) = 1.
+         IU(1,J) = 1
+         IU(2,J) = 1
+   50 CONTINUE
+      IPHASE = 1
+   60 IF (M.EQ.0) GO TO 80
+      DO 70 J=NKL1,NKLM
+         CU(2,J) = 1.
+         IU(2,J) = 1
+         JMN = J - N
+         IF (Q(JMN,N2).LT.0.) IPHASE = 1
+   70 CONTINUE
+   80 IF (KODE.EQ.0) GO TO 150
+      DO 110 J=1,N
+         IF (X(J)) 90, 110, 100
+   90    CU(1,J) = 1.
+         IU(1,J) = 1
+         GO TO 110
+  100    CU(2,J) = 1.
+         IU(2,J) = 1
+  110 CONTINUE
+      DO 140 J=1,K
+         JPN = J + N
+         IF (RES(J)) 120, 140, 130
+  120    CU(1,JPN) = 1.
+         IU(1,JPN) = 1
+         IF (Q(J,N2).GT.0.0) IPHASE = 1
+         GO TO 140
+  130    CU(2,JPN) = 1.
+         IU(2,JPN) = 1
+         IF (Q(J,N2).LT.0.0) IPHASE = 1
+  140 CONTINUE
+  150 IF (IPHASE.EQ.2) GO TO 500
+C COMPUTE THE MARGINAL COSTS.
+  160 DO 200 J=JS,N1
+         SUM = 0.D0
+         DO 190 I=1,KLM
+            II = Q(I,N2)
+            IF (II.LT.0) GO TO 170
+            Z = CU(1,II)
+            GO TO 180
+  170       IINEG = -II
+            Z = CU(2,IINEG)
+  180       SUM = SUM + DBLE(Q(I,J))*DBLE(Z)
+  190    CONTINUE
+         Q(KLM1,J) = SUM
+  200 CONTINUE
+      DO 230 J=JS,N
+         II = Q(KLM2,J)
+         IF (II.LT.0) GO TO 210
+         Z = CU(1,II)
+         GO TO 220
+  210    IINEG = -II
+         Z = CU(2,IINEG)
+  220    Q(KLM1,J) = Q(KLM1,J) - Z
+  230 CONTINUE
+C DETERMINE THE VECTOR TO ENTER THE BASIS.
+  240 XMAX = 0.
+      IF (JS.GT.N) GO TO 490
+      DO 280 J=JS,N
+         ZU = Q(KLM1,J)
+         II = Q(KLM2,J)
+         IF (II.GT.0) GO TO 250
+         II = -II
+         ZV = ZU
+         ZU = -ZU - CU(1,II) - CU(2,II)
+         GO TO 260
+  250    ZV = -ZU - CU(1,II) - CU(2,II)
+  260    IF (KFORCE.EQ.1 .AND. II.GT.N) GO TO 280
+         IF (IU(1,II).EQ.1) GO TO 270
+         IF (ZU.LE.XMAX) GO TO 270
+         XMAX = ZU
+         IN = J
+  270    IF (IU(2,II).EQ.1) GO TO 280
+         IF (ZV.LE.XMAX) GO TO 280
+         XMAX = ZV
+         IN = J
+  280 CONTINUE
+      IF (XMAX.LE.TOLER) GO TO 490
+      IF (Q(KLM1,IN).EQ.XMAX) GO TO 300
+      DO 290 I=1,KLM2
+         Q(I,IN) = -Q(I,IN)
+  290 CONTINUE
+      Q(KLM1,IN) = XMAX
+C DETERMINE THE VECTOR TO LEAVE THE BASIS.
+  300 IF (IPHASE.EQ.1 .OR. IA.EQ.0) GO TO 330
+      XMAX = 0.
+      DO 310 I=1,IA
+         Z = ABS(Q(I,IN))
+         IF (Z.LE.XMAX) GO TO 310
+         XMAX = Z
+         IOUT = I
+  310 CONTINUE
+      IF (XMAX.LE.TOLER) GO TO 330
+      DO 320 J=1,N2
+         Z = Q(IA,J)
+         Q(IA,J) = Q(IOUT,J)
+         Q(IOUT,J) = Z
+  320 CONTINUE
+      IOUT = IA
+      IA = IA - 1
+      PIVOT = Q(IOUT,IN)
+      GO TO 420
+  330 KK = 0
+      DO 340 I=1,KLM
+         Z = Q(I,IN)
+         IF (Z.LE.TOLER) GO TO 340
+         KK = KK + 1
+         RES(KK) = Q(I,N1)/Z
+         S(KK) = I
+  340 CONTINUE
+  350 IF (KK.GT.0) GO TO 360
+      KODE = 2
+      GO TO 590
+  360 XMIN = RES(1)
+      IOUT = S(1)
+      J = 1
+      IF (KK.EQ.1) GO TO 380
+      DO 370 I=2,KK
+         IF (RES(I).GE.XMIN) GO TO 370
+         J = I
+         XMIN = RES(I)
+         IOUT = S(I)
+  370 CONTINUE
+      RES(J) = RES(KK)
+      S(J) = S(KK)
+  380 KK = KK - 1
+      PIVOT = Q(IOUT,IN)
+      II = Q(IOUT,N2)
+      IF (IPHASE.EQ.1) GO TO 400
+      IF (II.LT.0) GO TO 390
+      IF (IU(2,II).EQ.1) GO TO 420
+      GO TO 400
+  390 IINEG = -II
+      IF (IU(1,IINEG).EQ.1) GO TO 420
+  400 II = IABS(II)
+      CUV = CU(1,II) + CU(2,II)
+      IF (Q(KLM1,IN)-PIVOT*CUV.LE.TOLER) GO TO 420
+C BYPASS INTERMEDIATE VERTICES.
+      DO 410 J=JS,N1
+         Z = Q(IOUT,J)
+         Q(KLM1,J) = Q(KLM1,J) - Z*CUV
+         Q(IOUT,J) = -Z
+  410 CONTINUE
+      Q(IOUT,N2) = -Q(IOUT,N2)
+      GO TO 350
+C GAUSS-JORDAN ELIMINATION.
+  420 IF (ITER.LT.MAXIT) GO TO 430
+      KODE = 3
+      GO TO 590
+  430 ITER = ITER + 1
+      DO 440 J=JS,N1
+         IF (J.NE.IN) Q(IOUT,J) = Q(IOUT,J)/PIVOT
+  440 CONTINUE
+C IF PERMITTED, USE SUBROUTINE COL OF THE DESCRIPTION
+C SECTION AND REPLACE THE FOLLOWING SEVEN STATEMENTS DOWN
+C TO AND INCLUDING STATEMENT NUMBER 460 BY..
+C     DO 460 J=JS,N1
+C        IF(J .EQ. IN) GO TO 460
+C        Z = -Q(IOUT,J)
+C        CALL COL(Q(1,J), Q(1,IN), Z, IOUT, KLM1)
+C 460 CONTINUE
+      DO 460 J=JS,N1
+         IF (J.EQ.IN) GO TO 460
+         Z = -Q(IOUT,J)
+         DO 450 I=1,KLM1
+            IF (I.NE.IOUT) Q(I,J) = Q(I,J) + Z*Q(I,IN)
+  450    CONTINUE
+  460 CONTINUE
+      TPIVOT = -PIVOT
+      DO 470 I=1,KLM1
+         IF (I.NE.IOUT) Q(I,IN) = Q(I,IN)/TPIVOT
+  470 CONTINUE
+      Q(IOUT,IN) = 1./PIVOT
+      Z = Q(IOUT,N2)
+      Q(IOUT,N2) = Q(KLM2,IN)
+      Q(KLM2,IN) = Z
+      II = ABS(Z)
+      IF (IU(1,II).EQ.0 .OR. IU(2,II).EQ.0) GO TO 240
+      DO 480 I=1,KLM2
+         Z = Q(I,IN)
+         Q(I,IN) = Q(I,JS)
+         Q(I,JS) = Z
+  480 CONTINUE
+      JS = JS + 1
+      GO TO 240
+C TEST FOR OPTIMALITY.
+  490 IF (KFORCE.EQ.0) GO TO 580
+      IF (IPHASE.EQ.1 .AND. Q(KLM1,N1).LE.TOLER) GO TO 500
+      KFORCE = 0
+      GO TO 240
+C SET UP PHASE 2 COSTS.
+  500 IPHASE = 2
+      DO 510 J=1,NKLM
+         CU(1,J) = 0.
+         CU(2,J) = 0.
+  510 CONTINUE
+      DO 520 J=N1,NK
+         CU(1,J) = 1.
+         CU(2,J) = 1.
+  520 CONTINUE
+      DO 560 I=1,KLM
+         II = Q(I,N2)
+         IF (II.GT.0) GO TO 530
+         II = -II
+         IF (IU(2,II).EQ.0) GO TO 560
+         CU(2,II) = 0.
+         GO TO 540
+  530    IF (IU(1,II).EQ.0) GO TO 560
+         CU(1,II) = 0.
+  540    IA = IA + 1
+         DO 550 J=1,N2
+            Z = Q(IA,J)
+            Q(IA,J) = Q(I,J)
+            Q(I,J) = Z
+  550    CONTINUE
+  560 CONTINUE
+      GO TO 160
+  570 IF (Q(KLM1,N1).LE.TOLER) GO TO 500
+      KODE = 1
+      GO TO 590
+  580 IF (IPHASE.EQ.1) GO TO 570
+C PREPARE OUTPUT.
+      KODE = 0
+  590 SUM = 0.D0
+      DO 600 J=1,N
+         X(J) = 0.
+  600 CONTINUE
+      DO 610 I=1,KLM
+         RES(I) = 0.
+  610 CONTINUE
+      DO 640 I=1,KLM
+         II = Q(I,N2)
+         SN = 1.
+         IF (II.GT.0) GO TO 620
+         II = -II
+         SN = -1.
+  620    IF (II.GT.N) GO TO 630
+         X(II) = SN*Q(I,N1)
+         GO TO 640
+  630    IIMN = II - N
+         RES(IIMN) = SN*Q(I,N1)
+         IF (II.GE.N1 .AND. II.LE.NK) SUM = SUM +
+     *    DBLE(Q(I,N1))
+  640 CONTINUE
+      ERROR = SUM
+      RETURN
+      END
+  8  3  2  5  0     1.E-5130
+  2  0  1  3  1  7
+  7  4  4 15  7  4
+  9  4  7 20  6  7
+  2  2  1  5  3  4
+  9  3  2 14 10  0
+  4  5  0  9  9  4
+  4  4  9 17 -1  9
+  1  6  2  9  5  6
+  0  4  5  9 -1  5
+  3  2  7 12 -2  1
+  3  6 12 21 -3  6
+  0  3  6  9 -3  5
+  6  2  4 12  4  6
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 

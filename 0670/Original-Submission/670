@@ -1,0 +1,5782 @@
+C      ALGORITHM 670, COLLECTED ALGORITHMS FROM ACM.
+C      THIS WORK PUBLISHED IN TRANSACTIONS ON MATHEMATICAL SOFTWARE,
+C      VOL. 15, NO. 1, PP. 31-40.
+C THIS PROGRAM IS DESIGNED TO RUN IN BATCH MODE.
+C TO SOLVE THE 5-BODY ORBIT PROBLEM FROM NONSTIFF DETEST
+C USING THE NYSTROM CODE RKNINT.  IT IS MEANT TO SERVE AS A SAMPLE
+C DRIVER.  IT USES THE 12(10) PAIR ON THE INTERVAL [0,10] THEN
+C SWITCHES TO THE 6(4) PAIR FOR DENSE OUTPUT ON [10,20].
+C
+C     .. Parameters ..
+      INTEGER           NOVHD, NEQ, LWORK, NWANT, IDEV
+      PARAMETER         (NOVHD=14,NEQ=15,LWORK=NOVHD+20*NEQ,NWANT=6,
+     *                  IDEV=6)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  H, HNEXT, HSTART, HUSED, T, TEND, TINC, TNEXT,
+     *                  TOL
+      INTEGER           IEVAL, IFAIL, ISET, K, MAXSTP, NATT, NFAIL,
+     *                  NSUCC
+      LOGICAL           HIGH, ONESTP, START
+C     ..
+C     .. Local Arrays ..
+      DOUBLE PRECISION  RWORK(LWORK), THRES(NEQ), THRESP(NEQ), Y(NEQ),
+     *                  YDP(NEQ), YP(NEQ), YPWANT(NWANT), YWANT(NWANT)
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL          EVAL, FCN5BD, RKNDIA, RKNINT, RKNSET
+C     ..
+C     .. Data statements ..
+      DATA              Y/3.42947D0, 3.35387D0, 1.35495D0, 6.64146D0,
+     *                  5.97157D0, 2.18231D0, 11.2630D0, 14.6953D0,
+     *                  6.27961D0, -30.1552D0, 1.65700D0, 1.43786D0,
+     *                  -21.1238D0, 28.4465D0, 15.3883D0/
+      DATA              YP/-.557161D0, .505697D0, .230579D0, -.415571D0,
+     *                  .365683D0, .169143D0, -.325326D0, .189706D0,
+     *                  .0877265D0, -.0240476D0, -.287660D0, -.117220D0,
+     *                  -.176861D0, -.216393D0, -.0148648D0/
+C     ..
+C     .. Executable Statements ..
+      WRITE (UNIT=IDEV,FMT=99999)
+C
+C CALL RKNSET WITH DEFAULT THRES,THRESP, MAXSTP AND H
+C
+      THRES(1) = 0.0D0
+      THRESP(1) = 0.0D0
+      H = 0.0D0
+      MAXSTP = 0
+C
+      TOL = 1.0D-6
+      START = .TRUE.
+      ONESTP = .FALSE.
+      HIGH = .TRUE.
+C
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+      WRITE (UNIT=IDEV,FMT=99998) ISET
+      IF (ISET.NE.0) STOP
+C
+C CALL RKNINT IN INTERVAL MODE.  THE INITIAL VALUES FOR Y AND YP ARE
+C GIVEN IN DATA STATEMENTS.
+C
+      T = 0.0D0
+      TEND = 10.0D0
+      IFAIL = 0
+C
+      WRITE (UNIT=IDEV,FMT=99997) T, TEND, TOL
+      WRITE (UNIT=IDEV,FMT=99996) (Y(K),K=1,NEQ)
+      WRITE (UNIT=IDEV,FMT=99995) (YP(K),K=1,NEQ)
+C
+      CALL RKNINT(FCN5BD,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+C
+      WRITE (UNIT=IDEV,FMT=99994) T, IFAIL
+      WRITE (UNIT=IDEV,FMT=99993) (Y(K),K=1,NEQ)
+      WRITE (UNIT=IDEV,FMT=99992) (YP(K),K=1,NEQ)
+      IF (IFAIL.NE.0) STOP
+C
+      CALL RKNDIA(NEQ,HNEXT,HUSED,HSTART,NSUCC,NFAIL,NATT,THRES,THRESP,
+     *            RWORK)
+      WRITE (UNIT=IDEV,FMT=99991) HSTART, HUSED, HNEXT, NSUCC, NFAIL,
+     *  NATT
+      WRITE (UNIT=IDEV,FMT=99990) (THRES(K),K=1,NEQ)
+      WRITE (UNIT=IDEV,FMT=99989) (THRESP(K),K=1,NEQ)
+C
+C CHANGE TO DENSE OUTPUT MODE AND THE 6(4) PAIR. RESET H.
+C
+      ONESTP = .TRUE.
+      H = 0.125D0*HNEXT
+      HIGH = .FALSE.
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+      WRITE (UNIT=IDEV,FMT=99987) ISET
+      IF (ISET.NE.0) STOP
+C
+      TEND = 20.0D0
+      TINC = 1.0D0
+      TNEXT = T + TINC
+C
+C LOOP POINT FOR ONESTEP MODE
+C
+   20 CALL RKNINT(FCN5BD,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+C
+      WRITE (UNIT=IDEV,FMT=99994) T, IFAIL
+      IF (IFAIL.NE.0) STOP
+C
+C LOOP POINT FOR DENSE MODE
+C
+   40 CONTINUE
+      IF (TNEXT.LE.T) THEN
+         CALL EVAL(NEQ,T,Y,YP,NWANT,TNEXT,YWANT,YPWANT,RWORK,IEVAL)
+         WRITE (UNIT=IDEV,FMT=99988) TNEXT, IEVAL
+         WRITE (UNIT=IDEV,FMT=99993) (YWANT(K),K=1,NWANT)
+         WRITE (UNIT=IDEV,FMT=99992) (YPWANT(K),K=1,NWANT)
+         TNEXT = TNEXT + TINC
+         GO TO 40
+      END IF
+C
+      IF (T.LT.TEND) GO TO 20
+C
+      CALL RKNDIA(NEQ,HNEXT,HUSED,HSTART,NSUCC,NFAIL,NATT,THRES,THRESP,
+     *            RWORK)
+      WRITE (UNIT=IDEV,FMT=99991) HSTART, HUSED, HNEXT, NSUCC, NFAIL,
+     *  NATT
+C
+      STOP
+C
+C FORMAT STATEMENTS
+99999 FORMAT (' ','TEST OF THE NYSTROM INTEGRATOR RKNINT',/' THE TEST ',
+     *       'PROBLEM IS THE FIVE-BODY ORBIT PROBLEM FROM',' NONSTIFF ',
+     *       'DETEST',/)
+99998 FORMAT (' ','RETURNED FROM CALL TO RKNSET WITH ISET = ',I2,/)
+99997 FORMAT (' ','T = ',F7.3,' TEND = ',F7.3,' TOL = ',1P,D8.1,/)
+99996 FORMAT (' ','INITIAL VALUES FOR Y  ',/3(2X,F11.6),/)
+99995 FORMAT (' ','INITIAL VALUES FOR YP ',/3(2X,F11.6),/)
+99994 FORMAT (' ','RETURNED FROM RKNINT AT T = ',F11.6,' WITH IFAIL = ',
+     *       I2,/)
+99993 FORMAT (' ','Y  = ',/3(2X,F11.6),/)
+99992 FORMAT (' ','YP = ',/3(2X,F11.6),/)
+99991 FORMAT (' ','STATISTICS FROM RKNDIA',/' ',' HSTART = ',1P,D10.3,
+     *       ' HUSED = ',1P,D10.3,' HNEXT = ',1P,D10.3,/'  NSUCC = ',I5,
+     *       ' NFAIL = ',I5,' NATT = ',I4,/)
+99990 FORMAT (' ','THRESHOLDS FOR Y  ',/3(2X,1P,D8.1),/)
+99989 FORMAT (' ','THRESHOLDS FOR YP ',/3(2X,1P,D8.1),/)
+99988 FORMAT (' ','RETURNED FROM EVAL AT TWANT = ',F11.6,
+     *       ' WITH IEVAL =',I2,/)
+99987 FORMAT (' ','CHANGE TO DENSE OUTPUT MODE',/' ','RETURNED FROM RE',
+     *       'SET CALL TO RKNSET WITH ISET = ',I2,/)
+      END
+C
+      SUBROUTINE FCN5BD(NEQ,T,Y,YDP)
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION  T
+      INTEGER           NEQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION  Y(NEQ), YDP(NEQ)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  DENOM, K2, SUM
+      INTEGER           I, J, K, L
+C     ..
+C     .. Local Arrays ..
+      DOUBLE PRECISION  FT(3,5), M(0:5), R(5), YT(3,5)
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC         SQRT
+C     ..
+C     .. Data statements ..
+C
+C THIS ROUTINE DESCRIBES THE MOTION OF THE FIVE OUTER PLANETS ABOUT THE
+C SUN BY A SYSTEM OF SECOND-ORDER DIFFERENTIAL EQUATIONS.  THE
+C FOLLOWING CONSTANTS ARE USED:
+C                K2 = GRAVITIONAL CONSTANT
+C                M0 = MASS OF SUN AND THE 4 INNER PLANETS
+C                M1 = MASS OF JUPITER
+C                M2 =         SATURN
+C                M3 =         URANUS
+C                M4 =         NEPTUNE
+C                M5 =         PLUTO.
+C
+C FOR EACH PLANET, J = 1, 5, THE THREE SPATIAL COORDINATES, I = 1, 3
+C ARE GIVEN BY
+C          Y''(I,J) = F(POSITIONS AND MASSES OF ALL BODIES).
+C CONSEQUENTLY, THE ONE-DIMENSIONAL VECTOR Y IS COPIED INTO A 2-D
+C ARRAY TO COMPUTE Y'' AND THE RESULTING 2-D ARRAY IS COPIED BACK
+C INTO THE 1-D VECTOR YDP.
+C
+      DATA              K2/2.959122D0/
+      DATA              M/1.000006D0, .954786D-3, .285584D-3,
+     *                  .437273D-4, .517759D-4, .277778D-5/
+C     ..
+C     .. Executable Statements ..
+C
+      DO 40 J = 1, 5
+         DO 20 I = 1, 3
+            YT(I,J) = Y(3*(J-1)+I)
+   20    CONTINUE
+   40 CONTINUE
+C
+      DO 80 J = 1, 5
+         SUM = 0.0D0
+         DO 60 I = 1, 3
+            SUM = SUM + YT(I,J)*YT(I,J)
+   60    CONTINUE
+         R(J) = SQRT(SUM)
+   80 CONTINUE
+C
+      DO 160 J = 1, 5
+         DO 140 I = 1, 3
+            FT(I,J) = K2*(-(M(0)+M(J))*YT(I,J)/(R(J)**3))
+            SUM = 0.0D0
+            DO 120 K = 1, 5
+               IF (K.NE.J) THEN
+                  DENOM = 0.0D0
+                  DO 100 L = 1, 3
+                     DENOM = DENOM + (YT(L,K)-YT(L,J))**2
+  100             CONTINUE
+                  DENOM = SQRT(DENOM)
+                  SUM = SUM + M(K)*((YT(I,K)-YT(I,J))/(DENOM**3)-YT(I,K)
+     *                  /(R(K)**3))
+               END IF
+  120       CONTINUE
+            FT(I,J) = FT(I,J) + SUM
+  140    CONTINUE
+  160 CONTINUE
+C
+      DO 200 J = 1, 5
+         DO 180 I = 1, 3
+            YDP(3*(J-1)+I) = FT(I,J)
+  180    CONTINUE
+  200 CONTINUE
+C
+      RETURN
+      END
+C THIS PROGRAM IS DESIGNED TO RUN IN INTERACTIVE MODE.
+C TO INTEGRATE A PERIODIC RESTRICTED THREE-BODY PROBLEM. THE EQUATIONS
+C ARE  GIVEN IN SHAMPINE & BACA, ACM TRANS MATH SOFTWARE, 12,No 1,p1,198
+C THEY NORMALLY INVOLVE 1ST DERIVATIVE TERMS AND SO IN THIS CASE THEY HA
+C BEEN TRANSFORMED INTO A NON-ROTATING COORDINATE SYSTEM FOR RK-NYSTROM.
+C THE PROBLEM IS SOLVED OVER A RANGE OF TOLERANCES AND THE GLOBAL ERROR
+C THE END OF THE 1ST PERIOD IS COMPUTED. ALSO GIVEN IS THE ERROR IN THE
+C JACOBI CONSTANT. THE MAXIMUM OF THIS IS TAKEN OVER ALL STEPS AND, IF
+C APPLICABLE OVER ALL DENSE POINTS.
+C
+C     .. Parameters ..
+      INTEGER           NOVHD, NEQ, NWANT, LWORK
+      PARAMETER         (NOVHD=14,NEQ=2,NWANT=NEQ,LWORK=NOVHD+20*NEQ)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  C, CJAC, CJAC0, ERDX, ERDY, ERX, ERY, GLODEN,
+     *                  GLOJAC, GLOMAX, H, HNEXT, HSTART, HUSED, S, T,
+     *                  TEND, TINC, TNEXT, TOL, TSTART, X0, XD0, Y0, YD0
+      INTEGER           IEVAL, IFAIL, ISET, ITOL, MAXSTP, NATT, NFAIL,
+     *                  NSUCC, NTOL
+      LOGICAL           DENSE, HIGH, ONESTP, START
+C     ..
+C     .. Local Arrays ..
+      DOUBLE PRECISION  RWORK(LWORK), THRES(NEQ), THRESP(NEQ), Y(NEQ),
+     *                  YDP(NEQ), YP(NEQ), YPWANT(NWANT), YWANT(NWANT)
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL          EVAL, FCN3BD, JACOBI, RKNDIA, RKNINT, RKNSET
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC         ABS, COS, LOG10, MAX, SIN
+C     ..
+C     .. Executable Statements ..
+C
+C INITIAL CONDITIONS
+C
+      TSTART = 0.0D0
+      TEND = 6.19216933131963970674D0
+      X0 = 1.2D0
+      Y0 = 0.0D0
+      XD0 = 0.0D0
+      YD0 = -1.04935750983031990726D0
+C
+C READ INPUT
+C
+      PRINT *, ' HIGH/LOW ORDER (T/F) '
+      READ *, HIGH
+      PRINT *, ' ONESTEP/INTERVAL MODE (T/F) '
+      READ *, ONESTP
+      IF ( .NOT. HIGH .AND. ONESTP) THEN
+         PRINT *, ' DENSE MODE (T/F) '
+         READ *, DENSE
+         IF (DENSE) THEN
+            PRINT *, ' ENTER INCREMENT FOR DENSE MODE '
+            PRINT *, ' NOTE THAT TSTART = ', TSTART, ',  TEND = ', TEND
+            READ *, TINC
+         ELSE
+            TINC = 0.0D0
+         END IF
+      ELSE
+         DENSE = .FALSE.
+         TINC = 0.0D0
+      END IF
+      PRINT *, ' ENTER FIRST TOLERANCE - POSITIVE AND .LT. 1.0 '
+      READ *, TOL
+      PRINT *, ' NUMBER OF TOLERANCES ( TOL(N+1) = TOL(N)/10 ) '
+      READ *, NTOL
+C
+C PRINT HEADINGS FOR RESULTS
+C
+      WRITE (UNIT=*,FMT=99999) TSTART, TEND, NTOL, TOL
+      IF (HIGH) THEN
+         IF (ONESTP) THEN
+            WRITE (UNIT=*,FMT=99993)
+         ELSE
+            WRITE (UNIT=*,FMT=99992)
+         END IF
+      ELSE
+         IF (ONESTP) THEN
+            IF (DENSE) THEN
+               WRITE (UNIT=*,FMT=99991) TINC
+            ELSE
+               WRITE (UNIT=*,FMT=99990)
+            END IF
+         ELSE
+            WRITE (UNIT=*,FMT=99989)
+         END IF
+      END IF
+C
+C LOOP OVER TOLERANCES
+C
+      DO 60 ITOL = 1, NTOL
+C
+C CALL RKNSET WITH DEFAULT THRES,THRESP,MAXSTP AND H
+C
+         THRES(1) = 0.0D0
+         THRESP(1) = 0.0D0
+         H = 0.0D0
+         MAXSTP = 0
+         START = .TRUE.
+         CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,
+     *               LWORK,RWORK,ISET)
+         IF (ISET.NE.0) THEN
+            WRITE (UNIT=*,FMT=99998) ISET
+            STOP
+         END IF
+C
+C SET INITIAL VALUES
+C
+         Y(1) = X0
+         Y(2) = Y0
+         YP(1) = XD0
+         YP(2) = YD0 + X0
+         T = TSTART
+         IFAIL = 0
+         CALL JACOBI(T,NEQ,Y,YP,CJAC0)
+         TNEXT = T + TINC
+C GLOMAX WILL CONTAIN MAX GLOBAL ERROR OVER COMPONENTS AT TEND
+         GLOMAX = 1.0D-30
+C GLODEN WILL CONTAIN MAX GLOBAL ERROR IN JACOBI CONST AT DENSE POINTS
+         GLODEN = 1.0D-30
+C GLOJAC WILL CONTAIN MAX GLOBAL ERROR IN JACOBI CONST AT STEP POINTS
+         GLOJAC = 1.0D-30
+C
+C LOOP POINT FOR ONESTEP MODE
+C
+   20    CALL RKNINT(FCN3BD,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+C
+         IF (IFAIL.GT.0) THEN
+            WRITE (UNIT=*,FMT=99997) IFAIL, T
+            STOP
+         END IF
+C
+         CALL JACOBI(T,NEQ,Y,YP,CJAC)
+         GLOJAC = MAX(GLOJAC,ABS(CJAC0-CJAC))
+C
+         IF (DENSE) THEN
+C
+C LOOP POINT FOR DENSE MODE
+C
+   40       CONTINUE
+            IF (TNEXT.LE.T) THEN
+               CALL EVAL(NEQ,T,Y,YP,NEQ,TNEXT,YWANT,YPWANT,RWORK,IEVAL)
+               CALL JACOBI(TNEXT,NEQ,YWANT,YPWANT,CJAC)
+               GLODEN = MAX(GLODEN,ABS(CJAC0-CJAC))
+               TNEXT = TNEXT + TINC
+               GO TO 40
+            END IF
+         END IF
+C
+         IF (T.LT.TEND) GO TO 20
+C
+         CALL RKNDIA(NEQ,HNEXT,HUSED,HSTART,NSUCC,NFAIL,NATT,THRES,
+     *               THRESP,RWORK)
+C
+C  COMPUTE GLOBAL ERRORS AT END OF INTEGRATION
+C
+         C = COS(T)
+         S = SIN(T)
+         ERX = Y(1) - X0*C + Y0*S
+         ERY = Y(2) - X0*S - Y0*C
+         ERDX = YP(1) - (XD0-Y0)*C + (X0+YD0)*S
+         ERDY = YP(2) - (X0+YD0)*C - (XD0+Y0)*S
+         GLOMAX = MAX(ABS(ERX),ABS(ERY),ABS(ERDX),ABS(ERDY))
+C
+C PRINT RESULTS
+C
+         IF (DENSE) THEN
+            WRITE (UNIT=*,FMT=99995) LOG10(TOL), NSUCC, NFAIL,
+     *        LOG10(GLOMAX), LOG10(GLOJAC), LOG10(GLODEN)
+         ELSE
+            WRITE (UNIT=*,FMT=99995) LOG10(TOL), NSUCC, NFAIL,
+     *        LOG10(GLOMAX), LOG10(GLOJAC)
+         END IF
+C
+C DECREASE TOLERANCE
+C
+         TOL = TOL/10.0D0
+   60 CONTINUE
+C
+      STOP
+C
+C FORMAT STATEMENTS
+99999 FORMAT (/' TEST OF THE NYSTROM INTEGRATOR RKNINT',/' A RESTRICTE',
+     *       'D THREE BODY PROBLEM',/' INTEGRATED FROM ',F6.2,' TO ',
+     *       F6.2,/' WITH ',I2,' SUCCESIVELY DECREASING RELATIVE TOLER',
+     *       'ANCES',/' STARTING WITH ',1P,D8.1,/)
+99998 FORMAT (' ','RETURNED FROM RKNSET WITH ISET = ',I2)
+99997 FORMAT (' ','RETURNED FROM RKNINT WITH IFAIL = ',I2,'  AT T = ',
+     *       1P,D10.3,/)
+99996 FORMAT (' ','RETURNED FROM EVAL WITH IEVAL = ',I2,' AT TWANT = ',
+     *       1P,D10.3,/)
+99995 FORMAT (3X,F5.1,2I11,3F12.3)
+99994 FORMAT (3X,F5.1,2I11,2F12.3)
+99993 FORMAT (' THE INTEGRATIONS USE THE HIGHER ORDER FORMULAS ',/' ME',
+     *       'ASURING ERROR AT END OF PERIOD (ERR1)',/' AND ERROR IN J',
+     *       'ACOBI CONST AT INTEGRATION POINTS (ERR2)',//'    LOG10 S',
+     *       'UCCESSFUL     FAILED      LOG10       LOG10',/'    (TOL)',
+     *       '      STEPS      STEPS      (ERR1)      (ERR2)',/)
+99992 FORMAT (' THE INTEGRATIONS USE THE HIGHER ORDER FORMULAS ',/' ME',
+     *       'ASURING ERROR AT END OF PERIOD (ERR1)',/' AND ERROR IN J',
+     *       'ACOBI CONST AT END OF PERIOD (ERR2)',//'    LOG10 SUCCES',
+     *       'SFUL     FAILED      LOG10       LOG10',/'    (TOL)     ',
+     *       ' STEPS      STEPS      (ERR1)      (ERR2)',/)
+99991 FORMAT (' THE INTEGRATIONS USE THE LOWER ORDER FORMULAS ',/' MEA',
+     *       'SURING ERROR AT END OF PERIOD (ERR1)',/' ERROR IN JACOBI',
+     *       ' CONST AT INTEGRATION POINTS (ERR2)',/' AND ERROR IN JAC',
+     *       'OBI CONST AT INTERPOLATION POINTS',' (ERR3)',/' SPACED A',
+     *       'T ',F5.2,//'    LOG10 SUCCESSFUL     FAILED      LOG10  ',
+     *       '     LOG10','       LOG10',/'    (TOL)      STEPS      S',
+     *       'TEPS      (ERR1)      (ERR2)','      (ERR3)',/)
+99990 FORMAT (' THE INTEGRATIONS USE THE LOWER ORDER FORMULAS ',/' MEA',
+     *       'SURING ERROR AT END OF PERIOD (ERR1)',/' AND ERROR IN JA',
+     *       'COBI CONST AT INTEGRATION POINTS (ERR2)',//'    LOG10 SU',
+     *       'CCESSFUL     FAILED      LOG10       LOG10',/'    (TOL) ',
+     *       '     STEPS      STEPS      (ERR1)      (ERR2)',/)
+99989 FORMAT (' THE INTEGRATIONS USE THE LOWER ORDER FORMULAS ',/' MEA',
+     *       'SURING ERROR AT END OF PERIOD (ERR1)',/' AND ERROR IN JA',
+     *       'COBI CONST AT END OF PERIOD (ERR2)',//'    LOG10 SUCCESS',
+     *       'FUL     FAILED      LOG10       LOG10',/'    (TOL)      ',
+     *       'STEPS      STEPS      (ERR1)      (ERR2)',/)
+      END
+C
+      SUBROUTINE FCN3BD(NEQ,X,Y,YDP)
+C
+C DERIVATIVES FOR RESTRICTED THREE BODY PROBLEM IN  Y" = F(X,Y)  FORM
+C
+C     .. Parameters ..
+      DOUBLE PRECISION  EMU, ONEMU
+      PARAMETER         (EMU=1.0D0/82.45D0,ONEMU=1.0D0-EMU)
+C     ..
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION  X
+      INTEGER           NEQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION  Y(NEQ), YDP(NEQ)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  C, R1, R2, S, X1, X2, Y1, Y2
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC         COS, SIN, SQRT
+C     ..
+C     .. Executable Statements ..
+      C = COS(X)
+      S = SIN(X)
+      X1 = -EMU*C
+      Y1 = -EMU*S
+      X2 = ONEMU*C
+      Y2 = ONEMU*S
+      R1 = ONEMU/SQRT((Y(1)-X1)**2+(Y(2)-Y1)**2)**3
+      R2 = EMU/SQRT((Y(1)-X2)**2+(Y(2)-Y2)**2)**3
+      YDP(1) = (X1-Y(1))*R1 + (X2-Y(1))*R2
+      YDP(2) = (Y1-Y(2))*R1 + (Y2-Y(2))*R2
+      END
+C
+C
+      SUBROUTINE JACOBI(X,NEQ,Y,YP,CJAC)
+C
+C COMPUTES JACOBI CONSTANT
+C
+C     .. Parameters ..
+      DOUBLE PRECISION  EMU, ONEMU
+      PARAMETER         (EMU=1.0D0/82.45D0,ONEMU=1.0D0-EMU)
+C     ..
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION  CJAC, X
+      INTEGER           NEQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION  Y(NEQ), YP(NEQ)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  C, R1, R2, S, X1, X2, Y1, Y2
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC         COS, SIN, SQRT
+C     ..
+C     .. Executable Statements ..
+      C = COS(X)
+      S = SIN(X)
+      X1 = -EMU*C
+      Y1 = -EMU*S
+      X2 = ONEMU*C
+      Y2 = ONEMU*S
+      R1 = ONEMU/SQRT((Y(1)-X1)**2+(Y(2)-Y1)**2)
+      R2 = EMU/SQRT((Y(1)-X2)**2+(Y(2)-Y2)**2)
+      CJAC = YP(1)**2 + YP(2)**2 - 2.0D0*(Y(1)*YP(2)-Y(2)*YP(1)+R1+R2)
+      END
+C THIS PROGRAM IS DESIGNED TO RUN IN INTERACTIVE MODE.
+C A TWO BODY GRAVITATIONAL SYSTEM, WHICH CAN BE SOLVED USING
+C NEWTON-RAPHSON ON KEPLERS EQUATION. MAXIMUM GLOBAL ERRORS
+C IN THE MAIN AND DENSE SOLUTIONS ARE PRINTED.
+C
+C     .. Parameters ..
+      INTEGER           NOVHD, NEQ, LWORK, NWANT
+      PARAMETER         (NOVHD=14,NEQ=2,LWORK=NOVHD+20*NEQ,NWANT=NEQ)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  ANOM, BECC, ECC, GLODEN, GLOMAX, H, HNEXT,
+     *                  HSTART, HUSED, T, TEND, TFIN, TINC, TNEXT, TOL,
+     *                  TSTART, Y1, Y2, YP1, YP2
+      INTEGER           IEVAL, IFAIL, ISET, ITOL, MAXSTP, NATT, NFAIL,
+     *                  NSUCC, NTOL
+      LOGICAL           DENSE, HIGH, ONESTP, START
+C     ..
+C     .. Local Arrays ..
+      DOUBLE PRECISION  RWORK(LWORK), THRES(NEQ), THRESP(NEQ), Y(NEQ),
+     *                  YDP(NEQ), YP(NEQ), YPWANT(NWANT), YWANT(NWANT)
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL          ERROR, EVAL, FCN2BD, RKNDIA, RKNINT, RKNSET
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC         LOG10, SQRT
+C     ..
+C     .. Executable Statements ..
+C
+C READ INPUT
+C
+      TSTART = 0.0D0
+      PRINT *, ' INPUT TFIN - POSITIVE '
+      READ *, TFIN
+      PRINT *, ' HIGH/LOW ORDER (T/F) '
+      READ *, HIGH
+      PRINT *, ' ONESTEP/INTERVAL MODE (T/F) '
+      READ *, ONESTP
+      IF ( .NOT. HIGH .AND. ONESTP) THEN
+         PRINT *, ' DENSE MODE (T/F) '
+         READ *, DENSE
+         IF (DENSE) THEN
+            PRINT *, ' ENTER INCREMENT FOR DENSE MODE '
+            PRINT *, ' NOTE TSTART = ', TSTART, ', TEND = ', TFIN
+            READ *, TINC
+         ELSE
+            TINC = 0.0D0
+         END IF
+      ELSE
+         DENSE = .FALSE.
+         TINC = 0.0D0
+      END IF
+      PRINT *, ' ENTER ECCENTRICITY - REAL VALUE IN RANGE [0.,1.) '
+      READ *, ECC
+      PRINT *, ' ENTER FIRST TOLERANCE - POSITIVE AND .LT. 1.0 '
+      READ *, TOL
+      PRINT *, ' ENTER NUMBER OF TOLERANCES ( TOL(N+1) = TOL(N)/10 ) '
+      READ *, NTOL
+C
+C PRINT HEADINGS FOR RESULTS
+C
+      WRITE (UNIT=*,FMT=99999) TSTART, TFIN, NTOL, TOL
+      IF (HIGH) THEN
+         IF (ONESTP) THEN
+            WRITE (UNIT=*,FMT=99993)
+         ELSE
+            WRITE (UNIT=*,FMT=99992)
+         END IF
+      ELSE
+         IF (ONESTP) THEN
+            IF (DENSE) THEN
+               WRITE (UNIT=*,FMT=99991) TINC
+            ELSE
+               WRITE (UNIT=*,FMT=99990)
+            END IF
+         ELSE
+            WRITE (UNIT=*,FMT=99989)
+         END IF
+      END IF
+C
+C INITIAL CONDITIONS
+C
+      BECC = SQRT(1.0D0-ECC**2)
+      Y1 = 1.0D0 - ECC
+      Y2 = 0.0D0
+      YP1 = 0.0D0
+      YP2 = SQRT((1.0D0+ECC)/(1.0D0-ECC))
+C
+C LOOP OVER TOLERANCES
+C
+      DO 60 ITOL = 1, NTOL
+C
+C CALL RKNSET WITH DEFAULT THRES,THRESP,MAXSTP AND H
+C
+         THRES(1) = 0.0D0
+         THRESP(1) = 0.0D0
+         H = 0.0D0
+         MAXSTP = 0
+         START = .TRUE.
+         CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,
+     *               LWORK,RWORK,ISET)
+         IF (ISET.NE.0) THEN
+            WRITE (UNIT=*,FMT=99998) ISET
+            STOP
+         END IF
+C
+C SET INITIAL VALUES
+C
+         Y(1) = Y1
+         Y(2) = Y2
+         YP(1) = YP1
+         YP(2) = YP2
+         T = TSTART
+         TNEXT = T + TINC
+         TEND = TFIN
+         IFAIL = 0
+C
+C SET QUANTITIES USED TO MEASURE ERROR
+C
+         ANOM = 0.0D0
+         GLOMAX = 1.0D-30
+         GLODEN = 1.0D-30
+C
+C LOOP POINT FOR ONESTEP MODE
+C
+   20    CALL RKNINT(FCN2BD,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+C
+         IF (IFAIL.GT.0) THEN
+            WRITE (UNIT=*,FMT=99997) IFAIL, T
+            STOP
+         END IF
+         CALL ERROR(NEQ,T,Y,YP,ECC,BECC,ANOM,GLOMAX)
+C
+         IF (DENSE) THEN
+C
+C LOOP POINT FOR DENSE MODE
+C
+   40       CONTINUE
+            IF (TNEXT.LE.T) THEN
+               CALL EVAL(NEQ,T,Y,YP,NEQ,TNEXT,YWANT,YPWANT,RWORK,IEVAL)
+               IF (IEVAL.GT.0) THEN
+                  WRITE (UNIT=*,FMT=99996) IEVAL, TNEXT
+                  STOP
+               END IF
+               CALL ERROR(NEQ,TNEXT,YWANT,YPWANT,ECC,BECC,ANOM,GLODEN)
+               TNEXT = TNEXT + TINC
+               GO TO 40
+            END IF
+         END IF
+C
+         IF (T.LT.TEND) GO TO 20
+C
+         CALL RKNDIA(NEQ,HNEXT,HUSED,HSTART,NSUCC,NFAIL,NATT,THRES,
+     *               THRESP,RWORK)
+C
+C PRINT RESULTS
+C
+         IF (DENSE) THEN
+            WRITE (UNIT=*,FMT=99995) LOG10(TOL), NSUCC, NFAIL,
+     *        LOG10(GLOMAX), LOG10(GLODEN)
+         ELSE
+            WRITE (UNIT=*,FMT=99994) LOG10(TOL), NSUCC, NFAIL,
+     *        LOG10(GLOMAX)
+         END IF
+C
+C DECREASE TOLERANCE
+C
+         TOL = TOL/10.0D0
+   60 CONTINUE
+C
+      STOP
+C
+C FORMAT STATEMENTS
+99999 FORMAT (/' TEST OF THE NYSTROM INTEGRATOR RKNINT',/' THE PROBLEM',
+     *       ' IS A SYSTEM OF 2 BODIES',/' INTEGRATED FROM ',F6.2,
+     *       ' TO ',F6.2,/' WITH ',I2,' SUCCESIVELY DECREASING RELATIV',
+     *       'E TOLERANCES',/' STARTING WITH ',1P,D8.1,/)
+99998 FORMAT (' ','RETURNED FROM INITIAL CALL TO RKNSET WITH ISET = ',
+     *       I2,/)
+99997 FORMAT (' ','RETURNED FROM RKNINT WITH IFAIL = ',I2,'  AT T = ',
+     *       1P,D10.3,/)
+99996 FORMAT (' ','RETURNED FROM EVAL WITH IEVAL = ',I2,' AT TWANT = ',
+     *       1P,D10.3,/)
+99995 FORMAT (3X,F5.1,2I11,2F12.3)
+99994 FORMAT (3X,F5.1,2I11,F12.3)
+99993 FORMAT (' THE INTEGRATIONS USE THE HIGHER ORDER FORMULAS ',/' ME',
+     *       'ASURING MAX ERROR OVER INTEGRATION POINTS (ERR1)',//'   ',
+     *       ' LOG10 SUCCESSFUL     FAILED      LOG10 ',/'    (TOL)   ',
+     *       '   STEPS      STEPS      (ERR1)',/)
+99992 FORMAT (' THE INTEGRATIONS USE THE HIGHER ORDER FORMULAS ',/' ME',
+     *       'ASURING ERROR AT END OF INTEGRATION (ERR1)',//'    LOG10',
+     *       ' SUCCESSFUL     FAILED      LOG10 ',/'    (TOL)      STE',
+     *       'PS      STEPS      (ERR1)',/)
+99991 FORMAT (' THE INTEGRATIONS USE THE LOWER ORDER FORMULAS ',/' MEA',
+     *       'SURING MAX ERROR OVER INTEGRATION POINTS (ERR1)',/' AND ',
+     *       'AT INTERPOLATION POINTS (ERR2) SPACED AT ',F5.2,//'    L',
+     *       'OG10 SUCCESSFUL     FAILED      LOG10       LOG10',/'   ',
+     *       ' (TOL)      STEPS      STEPS      (ERR1)      (ERR2)',/)
+99990 FORMAT (' THE INTEGRATIONS USE THE LOWER ORDER FORMULAS ',/' MEA',
+     *       'SURING MAX ERROR OVER INTEGRATION POINTS (ERR1)',//'    ',
+     *       'LOG10 SUCCESSFUL     FAILED      LOG10 ',/'    (TOL)    ',
+     *       '  STEPS      STEPS      (ERR1)',/)
+99989 FORMAT (' THE INTEGRATIONS USE THE LOWER ORDER FORMULAS ',/' MEA',
+     *       'SURING ERROR AT END OF INTEGRATION (ERR1)',//'    LOG10 ',
+     *       'SUCCESSFUL     FAILED      LOG10 ',/'    (TOL)      STEP',
+     *       'S      STEPS      (ERR1)',/)
+      END
+C
+      SUBROUTINE FCN2BD(NEQ,T,Y,YDP)
+C
+C DERIVATIVES FOR TWO BODY PROBLEM IN  Y'' = F(T,Y)  FORM
+C
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION  T
+      INTEGER           NEQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION  Y(NEQ), YDP(NEQ)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  R
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC         SQRT
+C     ..
+C     .. Executable Statements ..
+C
+      R = SQRT(Y(1)**2+Y(2)**2)**3
+      YDP(1) = -Y(1)/R
+      YDP(2) = -Y(2)/R
+      RETURN
+      END
+C
+      SUBROUTINE ERROR(NEQ,T,Y,YP,ECC,B,U,GLO)
+C
+C ROUTINE TO CALCULATE ERRORS IN SOLUTION COMPONENTS
+C
+C LOCAL WORKSPACE
+C     .. Parameters ..
+      INTEGER          NNEQ
+      PARAMETER        (NNEQ=2)
+C     ..
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION B, ECC, GLO, T, U
+      INTEGER          NEQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION Y(NEQ), YP(NEQ)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION C, DEL, DEN, S
+      INTEGER          I, IT
+C     ..
+C     .. Local Arrays ..
+      DOUBLE PRECISION ERR(NNEQ), ERRP(NNEQ), YPT(NNEQ), YT(NNEQ)
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC        ABS, COS, MAX, SIN
+C     ..
+C     .. Executable Statements ..
+C
+      IT = 0
+      DEL = 1.0D0
+   20 IF (ABS(DEL).GT.1.0D-11 .AND. IT.LT.50) THEN
+         DEL = (T-U+ECC*SIN(U))/(1.0D0-ECC*COS(U))
+         IT = IT + 1
+         U = U + DEL
+         IF (IT.EQ.50) PRINT *, ' CONVERGENCE FAILURE'
+         GO TO 20
+      END IF
+      C = COS(U)
+      S = SIN(U)
+      DEN = 1.0D0/(1.0D0-ECC*C)
+      YT(1) = C - ECC
+      YT(2) = B*S
+      YPT(1) = -S*DEN
+      YPT(2) = B*C*DEN
+C
+      DO 40 I = 1, NEQ
+         ERR(I) = ABS(YT(I)-Y(I))
+         ERRP(I) = ABS(YPT(I)-YP(I))
+         GLO = MAX(GLO,ERR(I),ERRP(I))
+   40 CONTINUE
+C
+      RETURN
+      END
+C THIS PROGRAM IS DESIGNED TO RUN IN BATCH MODE.
+C A TWO BODY GRAVITATIONAL SYSTEM.
+C THE LOW ORDER FORMULAS ARE USED IN ONESTEP MODE AND SOLUTIONS OBTAINED
+C BY INTERPOLATION AT EQUISPACED MESHPOINTS ARE PRINTED .
+C
+C
+C     .. Parameters ..
+      INTEGER           NEQ, LWORK, IDEV, NWANT
+      PARAMETER         (NEQ=2,LWORK=14+11*NEQ,IDEV=6,NWANT=NEQ)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  ECC, H, HNEXT, HSTART, HUSED, T, TEND, TINC,
+     *                  TNEXT, TOL, TSTART, Y1, Y2, YP1, YP2
+      INTEGER           IEVAL, IFAIL, ISET, ITOL, K, MAXSTP, NATT,
+     *                  NFAIL, NSUCC, NTOL
+      LOGICAL           HIGH, ONESTP, START
+C     ..
+C     .. Local Arrays ..
+      DOUBLE PRECISION  RWORK(LWORK), THRES(NEQ), THRESP(NEQ), Y(NEQ),
+     *                  YDP(NEQ), YP(NEQ), YPWANT(NWANT), YWANT(NWANT)
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL          EVAL, FCN2BD, RKNDIA, RKNINT, RKNSET
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC         SQRT
+C     ..
+C     .. Executable Statements ..
+      HIGH = .FALSE.
+      ONESTP = .TRUE.
+      TINC = 2.0D0
+      TOL = 1.0D-4
+      NTOL = 2
+C
+C INITIAL CONDITIONS
+C
+      TSTART = 0.0D0
+      ECC = 0.5D0
+      Y1 = 1.0D0 - ECC
+      Y2 = 0.0D0
+      YP1 = 0.0D0
+      YP2 = SQRT((1.0D0+ECC)/(1.0D0-ECC))
+      TEND = 20.0D0
+      WRITE (UNIT=IDEV,FMT=99999)
+C
+C LOOP OVER TOLERANCES
+C
+      DO 60 ITOL = 1, NTOL
+         WRITE (UNIT=IDEV,FMT=99998) TOL
+C
+C CALL RKNSET WITH DEFAULT THRES,THRESP,MAXSTEP AND H
+C
+         THRES(1) = 0.0D0
+         THRESP(1) = 0.0D0
+         H = 0.0D0
+         MAXSTP = 0
+         START = .TRUE.
+         CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,
+     *               LWORK,RWORK,ISET)
+         IF (ISET.NE.0) THEN
+            WRITE (UNIT=IDEV,FMT=99997) ISET
+            STOP
+         END IF
+C
+C SET INITIAL VALUES
+C
+         Y(1) = Y1
+         Y(2) = Y2
+         YP(1) = YP1
+         YP(2) = YP2
+         T = TSTART
+         TNEXT = T + TINC
+         IFAIL = 0
+         WRITE (UNIT=IDEV,FMT=99996) T, (Y(K),K=1,NEQ)
+C
+C LOOP POINT FOR ONESTEP MODE
+C
+   20    CALL RKNINT(FCN2BD,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+C
+         IF (IFAIL.GT.0) THEN
+            WRITE (UNIT=IDEV,FMT=99995) IFAIL, T
+            STOP
+         END IF
+C
+C LOOP POINT FOR DENSE MODE
+C
+   40    CONTINUE
+         IF (TNEXT.LE.T) THEN
+            CALL EVAL(NEQ,T,Y,YP,NEQ,TNEXT,YWANT,YPWANT,RWORK,IEVAL)
+            IF (IEVAL.GT.0) THEN
+               WRITE (UNIT=IDEV,FMT=99994) IEVAL, TNEXT
+               STOP
+            END IF
+            WRITE (UNIT=IDEV,FMT=99996) TNEXT, (YWANT(K),K=1,NEQ)
+            TNEXT = TNEXT + TINC
+            GO TO 40
+         END IF
+C
+         IF (T.LT.TEND) GO TO 20
+C
+         CALL RKNDIA(NEQ,HNEXT,HUSED,HSTART,NSUCC,NFAIL,NATT,THRES,
+     *               THRESP,RWORK)
+C
+         WRITE (UNIT=IDEV,FMT=99993) NSUCC, NFAIL
+C
+C DECREASE TOLERANCE
+C
+         TOL = TOL/10.0D0
+   60 CONTINUE
+C
+      STOP
+C
+C FORMAT STATEMENTS
+99999 FORMAT (/' EXAMPLE PROGRAM FOR THE NYSTROM INTEGRATOR RKNINT',
+     *       /' RUN ON A VAX 11/780 UNDER VMS ')
+99998 FORMAT (//' TOL = ',1P,E9.1,//'    T      Y(1)       Y(2)',/)
+99997 FORMAT (' ','RETURNED FROM INITIAL CALL TO RKNSET WITH ISET = ',
+     *       I2,/)
+99996 FORMAT (' ',F5.1,2(2X,F9.6))
+99995 FORMAT (' ','RETURNED FROM RKNINT WITH IFAIL = ',I2,'  AT T = ',
+     *       1P,D10.3,/)
+99994 FORMAT (' ','RETURNED FROM EVAL WITH IEVAL = ',I2,' AT TNEXT = ',
+     *       1P,D10.3,/)
+99993 FORMAT (/'  NUMBER OF SUCCESSFUL STEPS = ',I5,/'  NUMBER OF   FA',
+     *       'ILED   STEPS = ',I5)
+      END
+C
+      SUBROUTINE FCN2BD(NEQ,T,Y,YDP)
+C
+C DERIVATIVES FOR TWO BODY PROBLEM IN  Y'' = F(T,Y)  FORM
+C
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION  T
+      INTEGER           NEQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION  Y(NEQ), YDP(NEQ)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  R
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC         SQRT
+C     ..
+C     .. Executable Statements ..
+C
+      R = SQRT(Y(1)**2+Y(2)**2)**3
+      YDP(1) = -Y(1)/R
+      YDP(2) = -Y(2)/R
+      RETURN
+      END
+*
+EXAMPLE PROGRAM FOR THE NYSTROM INTEGRATOR RKNINT
+RUN ON A VAX 11/780 UNDER VMS
+*
+*
+TOL =   1.0E-04
+*
+   T      Y(1)       Y(2)
+*
+  0.0   0.500000   0.000000
+  2.0  -1.205725   0.613567
+  4.0  -1.334760  -0.476846
+  6.0   0.357481  -0.445583
+  8.0  -1.037620   0.730223
+ 10.0  -1.426172  -0.326580
+ 12.0   0.055152  -0.720315
+ 14.0  -0.828795   0.817878
+ 16.0  -1.481032  -0.167885
+ 18.0  -0.267195  -0.842229
+ 20.0  -0.578026   0.863388
+*
+ NUMBER OF SUCCESSFUL STEPS =   108
+ NUMBER OF   FAILED   STEPS =    16
+*
+*
+TOL =   1.0E-05
+*
+   T      Y(1)       Y(2)
+*
+  0.0   0.500000   0.000000
+  2.0  -1.205725   0.613566
+  4.0  -1.334760  -0.476846
+  6.0   0.357481  -0.445584
+  8.0  -1.037620   0.730222
+ 10.0  -1.426170  -0.326583
+ 12.0   0.055158  -0.720312
+ 14.0  -0.828800   0.817874
+ 16.0  -1.481028  -0.167894
+ 18.0  -0.267176  -0.842226
+ 20.0  -0.578043   0.863384
+*
+ NUMBER OF SUCCESSFUL STEPS =   169
+ NUMBER OF   FAILED   STEPS =    15
+C THIS PROGRAM IS DESIGNED TO RUN IN BATCH MODE.
+C A TWO BODY GRAVITATIONAL SYSTEM.
+C THE HIGH ORDER FORMULAS ARE USED IN ONESTEP MODE AND SOLUTIONS
+C OBTAINED BY STEPPING EXACTLY OT OUTPUT POINTS..
+C
+C
+C     .. Parameters ..
+      INTEGER           NEQ, LWORK, IDEV, NWANT
+      PARAMETER         (NEQ=2,LWORK=14+20*NEQ,IDEV=6,NWANT=NEQ)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  ECC, H, HNEXT, HSTART, HUSED, T, TEND, TINC,
+     *                  TNEXT, TOL, TSTART, Y1, Y2, YP1, YP2
+      INTEGER           IFAIL, ISET, ITOL, K, MAXSTP, NATT, NFAIL,
+     *                  NSUCC, NTOL
+      LOGICAL           HIGH, LPRINT, ONESTP, START
+C     ..
+C     .. Local Arrays ..
+      DOUBLE PRECISION  RWORK(LWORK), THRES(NEQ), THRESP(NEQ), Y(NEQ),
+     *                  YDP(NEQ), YP(NEQ)
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL          FCN2BD, RKNDIA, RKNINT, RKNSET
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC         SQRT
+C     ..
+C     .. Executable Statements ..
+      HIGH = .TRUE.
+      ONESTP = .TRUE.
+      TINC = 2.0D0
+      TOL = 1.0D-4
+      NTOL = 2
+C
+C INITIAL CONDITIONS
+C
+      TSTART = 0.0D0
+      ECC = 0.5D0
+      Y1 = 1.0D0 - ECC
+      Y2 = 0.0D0
+      YP1 = 0.0D0
+      YP2 = SQRT((1.0D0+ECC)/(1.0D0-ECC))
+      TEND = 20.0D0
+      WRITE (UNIT=IDEV,FMT=99999)
+C
+C LOOP OVER TOLERANCES
+C
+      DO 40 ITOL = 1, NTOL
+         WRITE (UNIT=IDEV,FMT=99998) TOL
+C
+C CALL RKNSET WITH DEFAULT THRES,THRESP,MAXSTEP AND H
+C
+         THRES(1) = 0.0D0
+         THRESP(1) = 0.0D0
+         H = 0.5D0*TINC
+         MAXSTP = 0
+         START = .TRUE.
+         CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,
+     *               LWORK,RWORK,ISET)
+         IF (ISET.NE.0) THEN
+            WRITE (UNIT=IDEV,FMT=99997) ISET
+            STOP
+         END IF
+C
+C SET INITIAL VALUES
+C
+         Y(1) = Y1
+         Y(2) = Y2
+         YP(1) = YP1
+         YP(2) = YP2
+         T = TSTART
+         TNEXT = T + TINC
+         IFAIL = 0
+         WRITE (UNIT=IDEV,FMT=99996) T, (Y(K),K=1,NEQ)
+C
+         CALL RKNINT(FCN2BD,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+C
+         IF (IFAIL.GT.0) THEN
+            WRITE (UNIT=IDEV,FMT=99995) IFAIL, T
+            STOP
+         END IF
+C
+         CALL RKNDIA(NEQ,HNEXT,HUSED,HSTART,NSUCC,NFAIL,NATT,THRES,
+     *               THRESP,RWORK)
+C
+C LOOP POINT FOR ONESTEP MODE
+C
+   20    CONTINUE
+C
+         LPRINT = .FALSE.
+         IF (T+HNEXT.GE.TNEXT) THEN
+            H = TNEXT - T
+            LPRINT = .TRUE.
+            CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,
+     *                  LWORK,RWORK,ISET)
+            IF (ISET.NE.0) THEN
+               WRITE (UNIT=IDEV,FMT=99997) ISET
+               STOP
+            END IF
+         END IF
+         IFAIL = 0
+C
+         CALL RKNINT(FCN2BD,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+C
+         IF (IFAIL.GT.0) THEN
+            WRITE (UNIT=IDEV,FMT=99995) IFAIL, T
+            STOP
+         END IF
+C
+         CALL RKNDIA(NEQ,HNEXT,HUSED,HSTART,NSUCC,NFAIL,NATT,THRES,
+     *               THRESP,RWORK)
+C
+         IF (LPRINT .AND. HUSED.EQ.H) THEN
+            WRITE (UNIT=IDEV,FMT=99996) T, (Y(K),K=1,NEQ)
+            TNEXT = T + TINC
+         END IF
+C
+         IF (T.LT.TEND) GO TO 20
+C
+         WRITE (UNIT=IDEV,FMT=99993) NSUCC, NFAIL
+C
+C DECREASE TOLERANCE
+C
+         TOL = TOL/10.0D0
+   40 CONTINUE
+C
+      STOP
+C
+C FORMAT STATEMENTS
+99999 FORMAT (/' EXAMPLE PROGRAM FOR THE NYSTROM INTEGRATOR RKNINT',
+     *       /' RUN ON A VAX 11/780 UNDER VMS ')
+99998 FORMAT (//' TOL = ',1P,E9.1,//'    T      Y(1)       Y(2)',/)
+99997 FORMAT (' ','RETURNED FROM INITIAL CALL TO RKNSET WITH ISET = ',
+     *       I2,/)
+99996 FORMAT (' ',F5.1,2(2X,F9.6))
+99995 FORMAT (' ','RETURNED FROM RKNINT WITH IFAIL = ',I2,'  AT T = ',
+     *       1P,D10.3,/)
+99994 FORMAT (' ','RETURNED FROM EVAL WITH IEVAL = ',I2,' AT TNEXT = ',
+     *       1P,D10.3,/)
+99993 FORMAT (/'  NUMBER OF SUCCESSFUL STEPS = ',I5,/'  NUMBER OF   FA',
+     *       'ILED   STEPS = ',I5)
+      END
+C
+      SUBROUTINE FCN2BD(NEQ,T,Y,YDP)
+C
+C DERIVATIVES FOR TWO BODY PROBLEM IN  Y'' = F(T,Y)  FORM
+C
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION  T
+      INTEGER           NEQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION  Y(NEQ), YDP(NEQ)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  R
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC         SQRT
+C     ..
+C     .. Executable Statements ..
+C
+      R = SQRT(Y(1)**2+Y(2)**2)**3
+      YDP(1) = -Y(1)/R
+      YDP(2) = -Y(2)/R
+      RETURN
+      END
+*
+EXAMPLE PROGRAM FOR THE NYSTROM INTEGRATOR RKNINT
+RUN ON A VAX 11/780 UNDER VMS
+*
+*
+TOL =   1.0E-04
+*
+   T      Y(1)       Y(2)
+*
+  0.0   0.500000   0.000000
+  2.0  -1.205725   0.613567
+  4.0  -1.334761  -0.476845
+  6.0   0.357478  -0.445588
+  8.0  -1.037617   0.730225
+ 10.0  -1.426170  -0.326580
+ 12.0   0.055161  -0.720309
+ 14.0  -0.828801   0.817874
+ 16.0  -1.481025  -0.167895
+ 18.0  -0.267164  -0.842222
+ 20.0  -0.578052   0.863386
+*
+ NUMBER OF SUCCESSFUL STEPS =    28
+ NUMBER OF   FAILED   STEPS =     7
+*
+*
+TOL =   1.0E-05
+*
+   T      Y(1)       Y(2)
+*
+  0.0   0.500000   0.000000
+  2.0  -1.205725   0.613566
+  4.0  -1.334760  -0.476846
+  6.0   0.357481  -0.445584
+  8.0  -1.037620   0.730220
+ 10.0  -1.426168  -0.326585
+ 12.0   0.055164  -0.720309
+ 14.0  -0.828804   0.817872
+ 16.0  -1.481026  -0.167899
+ 18.0  -0.267164  -0.842224
+ 20.0  -0.578053   0.863383
+*
+ NUMBER OF SUCCESSFUL STEPS =    31
+ NUMBER OF   FAILED   STEPS =     7
+C-----------------------------------------------------------------------
+C
+C THE FOUR USER CALLABLE ROUTINES DOCUMENTED BELOW ARE :
+C
+C  1. RKNSET - SETUP ROUTINE - THE USER MUST CALL THIS ROUTINE PRIOR TO
+C              THE FIRST CALL OF THE CORE INTEGRATOR TO SET INTEGRATION
+C              TOLERANCES AND OPTIONAL INPUTS.
+C
+C  2. RKNINT - CORE INTEGRATION ROUTINE
+C
+C  3. RKNDIA - DIAGNOSTIC ROUTINE - THE USER MAY CALL THIS ROUTINE TO
+C              EXTRACT OPTIONAL OUTPUT ABOUT THE INTEGRATION.
+C
+C  4. EVAL   - INTERPOLATION ROUTINE - THE USER MAY CALL THIS ROUTINE
+C              ONLY WHEN THE LOWER ORDER FORMULAS ARE EMPLOYED.
+C
+C
+C   IT IS LIKELY THAT THE CODE WILL BE INCLUDED IN THE D02L SUBCHAPTER
+C   AT MARK 13 OF THE NAG FORTRAN LIBRARY - NUMERICAL ALGORITHMS GROUP,
+C   256 BANBURY ROAD, OXFORD, ENGLAND, OX2 7DE.
+C
+C   THE CODE IS AVAILABLE FROM THE AUTHORS ON IBM PC XT FORMAT FLOPPY
+C   DISKETTE.
+C
+C
+C-----------------------------------------------------------------------
+C
+C     SUBROUTINE RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,
+C    +                  ONESTP,HIGH,LWORK,RWORK,IFAIL)
+C
+C***********************************************************************
+C ABSTRACT
+C***********************************************************************
+C
+C THIS IS THE SETUP ROUTINE FOR THE NYSTROM CODE RKNINT.  IT MUST BE
+C CALLED BEFORE THE FIRST CALL TO RKNINT FOR ANY PROBLEM AND CAN BE
+C USED TO CHANGE OPTIONAL INPUTS BETWEEN CONTINUATION CALLS.
+C
+C THE MACHINE-DEPENDENT CONSTANT UROUND IS SET IN RKNSET AND PASSED
+C IN THE WORKING STORAGE ARRAY RWORK TO OTHER ROUTINES.  UROUND IS
+C DEFINED AS THE LARGEST POSITIVE NUMBER SUCH THAT
+C  UROUND = 1 + UROUND  IN THE ARITHMETIC BEING USED.
+C
+C ASSOCIATED ROUTINES ARE RKNINT, THE NYSTROM INTEGRATOR, THE
+C DIAGNOSTIC ROUTINE RKNDIA AND THE DENSE OUTPUT ROUTINE, EVAL.
+C
+C***********************************************************************
+C OVERVIEW OF ARGUMENTS
+C***********************************************************************
+C
+C NEQ - NUMBER OF DIFFERENTIAL EQUATIONS TO BE SOLVED.
+C
+C H - OPTIONAL STEPSIZE.
+C
+C TOL - ERROR CONTROL PARAMETER.
+C
+C THRES, THRESP - OPTIONAL ERROR CONTROL PARAMETERS.
+C
+C MAXSTP - OPTIONAL MAXIMUM  NUMBER OF ATTEMPTED STEPS.
+C
+C START - LOGICAL VARIABLE INDICATING INITIALIZATION.
+C
+C ONESTP - LOGICAL VARIABLE INDICATING MODE IN WHICH RKNINT IS TO RUN.
+C
+C HIGH - LOGICAL VARIABLE INDICATING WHICH FORMULA PAIR IS TO
+C        BE USED.
+C
+C LWORK - DIMENSION OF RWORK IN THE CALLING PROGRAM.
+C
+C RWORK - ARRAY USED TO PASS OPTIONAL PARAMETERS TO RKNINT.
+C
+C IFAIL - ON EXIT, INDICATES STATUS OF RKNSET.
+C
+C***********************************************************************
+C INITIALIZATION CALL TO RKNSET
+C***********************************************************************
+C
+C TO INITIALIZE RKNINT FOR THE START OF A NEW PROBLEM, CALL RKNSET WITH
+C START = .TRUE.
+C
+C NEQ - INTEGER.  NUMBER OF DIFFERENTIAL EQUATIONS.  MUST BE SPECIFIED.
+C
+C H - REAL.  IF H .EQ. 0 THEN RKNINT WILL SELECT A SUITABLE
+C                                       STARTING STEPSIZE
+C                        ELSE ABS(H) IN THE APPROPRIATE DIRECTION
+C                                       WILL BE USED.
+C
+C     THE FIRST STEP TAKEN BY RKNINT IS A CRITICAL ONE BECAUSE IT MUST
+C     REFLECT HOW FAST Y AND Y' CHANGE NEAR THE INITIAL POINT.  THE USER
+C     CAN PROVIDE RKNINT WITH SOME IDEA OF THE SCALE OF THE PROBLEM VIA
+C     THIS PARAMETER - ANYTHING REASONABLE WILL DO.  A MISTAKE IN THE
+C     SIGN OF THE GUESSED H WILL BE FORGIVEN AS ONLY ITS SIZE IS
+C     IMPORTANT.
+C
+C**** IF YOU DO NOT HAVE AN IDEA AS TO THE SCALE OF THE PROBLEM
+C**** SET  H = 0  ON THE INITIAL CALL TO RKNSET AND RKNINT WILL
+C**** GENERATE A SUITABLE VALUE OF H AT SOME ADDITIONAL EXPENSE.
+C
+C TOL -  REAL.
+C          THE USER MUST SET THIS ERROR PARAMETER TO SPECIFY HOW
+C          ACCURATELY HE WANTS THE CODE TO COMPUTE THE SOLUTION.
+C          THE RELATIVE ERROR TOLERANCE  TOL  MUST SATISFY
+C
+C                     1 .GE. TOL .GE. 1O * UROUND.
+C
+C          TOL AND THE VALUES IN THE ARRAYS THRES(*) AND THRESP(*)
+C          ARE USED IN THE LOCAL ERROR TEST.  AT EACH STEP THIS
+C          TEST REQUIRES ROUGHLY THAT
+C
+C             ABS(LOCAL ERROR IN Y) .LE. TOL * MAX(ABS(Y),THRES)
+C
+C          FOR EACH COMPONENT OF Y AND THRES, AND
+C
+C             ABS(LOCAL ERROR IN YP) .LE. TOL * MAX(ABS(YP),THRESP)
+C
+C          FOR EACH COMPONENT OF YP AND THRESP.  THE DEFAULT VALUE FOR
+C          EACH COMPONENT OF THRES AND THRESP IS  THRDEF,  CURRENTLY
+C          DEFINED TO BE  50*UROUND.  THIS CHOICE YIELDS ESSENTIALLY
+C          A PURE RELATIVE ERROR TEST BUT THE USE OF THE SMALL POSITIVE
+C          THRES(HOLD) WILL HELP TO AVOID TROUBLE SHOULD A SOLUTION
+C          COMPONENT VANISH ON A PARTICULAR STEP.  NOTE THAT THERE IS
+C          NO DEFAULT VALUE FOR  TOL.
+C
+C          A NEARLY PURE RELATIVE ERROR TEST MAY BE TOO DEMANDING
+C          FOR COMPONENTS WHICH BECOME VERY SMALL.  OFTEN COMPONENTS
+C          WHICH BECOME SMALLER IN MAGNITUDE THAN A THRES(HOLD) ARE NOT
+C          PHYSICALLY INTERESTING.  A SUITABLE THRES(HOLD) VALUE DEPENDS
+C          THE SCALING OF THE PROBLEM AND HENCE REQUIRES THE USER'S INSI
+C          A PRELIMINARY INTEGRATION MIGHT BE NECESSARY TO LEARN ENOUGH
+C          ABOUT THE PROBLEM TO SELECT SUITABLE ERROR PARAMETERS FOR THE
+C          DEFINITIVE INTEGRATION.
+C
+C          THE CODE WILL NOT ATTEMPT TO COMPUTE A SOLUTION AT AN ACCURAC
+C          UNREASONABLE FOR THE COMPUTER BEING USED.  IT WILL ADVISE YOU
+C          SHOULD THIS SITUATION ARISE.  TO CONTINUE THE INTEGRATION, YO
+C          WILL HAVE TO INCREASE TOL AND/OR THRES AND/OR THRESP.
+C
+C          PRACTICALLY ALL PRESENT DAY CODES, INCLUDING THIS ONE, CONTRO
+C          AN ESTIMATE OF THE LOCAL ERROR AT EACH STEP AND DO NOT EVEN
+C          ATTEMPT TO CONTROL THE GLOBAL ERROR DIRECTLY.  IN PARTICULAR,
+C          CONTROLLING THE LOCAL ERROR IN A RELATIVE SENSE DOES NOT NECE
+C          RESULT IN CONTROL OF THE GLOBAL ERROR IN A RELATIVE SENSE.
+C          USUALLY, BUT NOT ALWAYS, THE TRUE ACCURACY OF THE APPROXIMATE
+C          SOLUTION IS COMPARABLE TO THE ERROR TOLERANCES.  ALSO, THIS
+C          CODE WILL USUALLY, BUT NOT ALWAYS, YIELD A MORE ACCURATE
+C          SOLUTION IF THE TOLERANCES ARE REDUCED AND THE INTEGRATION IS
+C          REPEATED.  BY COMPARING TWO SUCH SOLUTIONS IT IS POSSIBLE TO
+C          OBTAIN A FAIRLY RELIABLE IDEA OF THE TRUE ERROR IN THE
+C          SOLUTION AT THE LARGER TOLERANCES.
+C
+C THRES - REAL ARRAY OF SIZE .GE. NEQ, USED IN ERROR CONTROL FOR
+C         COMPONENTS OF Y.
+C         IF THRES(1) .LE. 0 THEN RKNSET USES THE DEFAULT (THRDEF) FOR
+C                                 ALL COMPONENTS OF THRES.
+C                            ELSE IT CHECKS EACH COMPONENT.
+C                                 IF THRES(K) .LE. 0 THEN IFAIL = 1
+C                                                    ELSE ACCEPT THRES(K
+C
+C THRESP - REAL ARRAY OF SIZE .GE. NEQ, USED IN ERROR CONTROL FOR
+C          COMPONENTS OF YP.  THRESP IS DEFINED IN THE SAME WAY AS THRES
+C
+C MAXSTP - MAXIMUM NUMBER OF ATTEMPTED STEPS ALLOWED ON **ANY CALL** TO
+C          RKNINT.  IF MAXSTP .LE. 0 THEN A DEFAULT OF 1000 IS USED
+C                                    ELSE MAXSTP IS USED.
+C
+C START - LOGICAL.  SET .TRUE. FOR INITIALIZATION CALL.
+C
+C ONESTP - LOGICAL.  SET .TRUE. IF YOU WISH TO RUN RKNINT IN STEP-ORIENT
+C          MODE (CONTROL RETURNS TO THE CALLING PROGRAM AFTER EACH STEP)
+C          SET  .FALSE.  FOR INTERVAL MODE (INTEGRATION TO TEND BEFORE
+C          CONTROL RETURNS TO CALLING PROGRAM).
+C
+C HIGH - LOGICAL.  SET  .TRUE.  IF YOU WISH TO USE THE 12(10) FORMULA
+C        PAIR AND  .FALSE.  IF YOU WISH TO USE THE 6(4) PAIR.
+C
+C        THE 12(10) PAIR REQUIRES MORE STORAGE THAN THE 6(4) PAIR.  THE
+C        HIGH ORDER PAIR WILL PROBABLY TAKE LESS WORK IF THE ERROR
+C        REQUIREMENT IS STRINGENT WHILE THE LOWER ORDER PAIR WILL USUALL
+C        BE MORE EFFICIENT AT RELAXED TOLERANCES.  IF THE DENSE OUTPUT
+C        ROUTINE  EVAL  IS TO BE USED, THE 6(4) PAIR MUST BE SELECTED.
+C
+C LWORK - INTEGER.  DIMENSION OF RWORK IN THE CALLING PROGRAM.
+C         IF (HIGH) THEN LWORK MUST BE .GE. 14 + 20*NEQ
+C                   ELSE LWORK MUST BE .GE. 14 + 11*NEQ.
+C
+C RWORK - REAL ARRAY OF SIZE LWORK.  USED TO PASS OPTIONAL
+C         INPUTS TO RKNINT.  THE SAME ARRAY MUST BE PASSED TO RKNINT
+C         AND MUST NOT BE CHANGED BY THE USER.
+C
+C IFAIL - INTEGER. USED FOR OUTPUT ONLY.
+C
+C***********************************************************************
+C ON EXIT FROM RKNSET:
+C***********************************************************************
+C
+C **** START ALWAYS HAS THE VALUE .FALSE. ON RETURN FROM RKNSET.
+C
+C IFAIL = 0 == SUCCESSFUL INITIALIZATION.
+C
+C IFAIL = 1 == THE USER INDICATED THAT HE WISHED TO SET THRES (THRESP)
+C              BY SETTING  THRES(1) (THRESP(1)) .GT. 0.0  BUT
+C              AT LEAST ONE COMPONENT OF THRES (THRESP) WAS .LE. 0.0.
+C
+C IFAIL = 2 == LWORK NOT LARGE ENOUGH.
+C
+C IFAIL = 3 == (TOL .GT. 1) OR (TOL .LT. 10*UROUND).
+C
+C***********************************************************************
+C CHANGING OPTIONAL INPUTS BEFORE A CONTINUATION CALL TO RKNINT
+C***********************************************************************
+C
+C NEQ - MUST NOT BE CHANGED.
+C
+C H - IF H .EQ. 0 THEN THE PREDICTED STEPSIZE CALCULATED IN
+C                      RKNINT WILL BE ATTEMPTED ON THE NEXT STEP
+C                 ELSE RKNINT WILL ATTEMPT A STEP OF SIZE
+C                      ABS(H) IN THE APPROPRIATE DIRECTION.
+C
+C TOL, THRES, THRESP - THE VALUES OF TOL, THRES AND THRESP MAY BE CHANGE
+C                 CHECKING IS DONE AS ON AN INITIALIZATION CALL.
+C
+C MAXSTP - CAN BE CHANGED.  SET AS ON AN INITIALIZATION CALL.
+C
+C START - MUST BE  .FALSE.  THE USER NEED NOT RESET  START  AS THE
+C         VALUE  .FALSE.  WAS RETURNED BY THE INITIALIZATION CALL.
+C
+C ONESTP - CAN BE CHANGED.  SET AS ON AN INITIALIZATION CALL.
+C
+C HIGH - CAN BE CHANGED.  YOU MUST SUPPLY SUFFICIENT STORAGE FOR
+C        THE FORMULA PAIR SELECTED.
+C
+C LWORK - CHECKED ON EACH CALL TO RKNSET.
+C
+C RWORK - MUST NOT BE CHANGED BY THE USER.
+C
+C ON EXIT, POSSIBLE VALUES OF IFAIL ARE THE SAME AS FOR THE
+C INITIALIZATION CALL.
+C
+C***********************************************************************
+C     SUBROUTINE RKNINT(F,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+C
+C **********************************************************************
+C ** ABSTRACT **
+C **************
+C
+C    SUBROUTINE RKNINT USES RUNGE-KUTTA-NYSTROM METHODS TO
+C    INTEGRATE A SYSTEM OF SECOND ORDER ORDINARY DIFFERENTIAL
+C    EQUATIONS OF THE FORM
+C                        Y'' = F(T,Y).
+C    TWO SETS OF FORMULAS ARE PROVIDED - A 6(4) (LOW-ORDER) PAIR
+C    THAT USES 6 STAGES AND A 12(10) (HIGH-ORDER) PAIR THAT USES
+C    17 STAGES.  THE USER SELECTS THE PAIR TO BE USED.
+C
+C    THE 6(4) FORMULAS ARE DESCRIBED IN
+C    DORMAND,J.R., PRINCE,P.J. (1986)  RUNGE-KUTTA NYSTROM TRIPLES.
+C    REPORT TP-CS-86-05, DEPT. OF COMPUTER SCIENCE, TEESSIDE
+C    POLYTECHNIC, MIDDLESBROUGH, CLEVELAND.
+C
+C    THE 12(10) FORMULAS ARE DESCRIBED IN
+C    DORMAND,J.R., EL-MIKKAWY,M.E.A., PRINCE,P.J. (1986)  HIGH ORDER
+C    EMBEDDED RUNGE-KUTTA-NYSTROM FORMULAE.
+C    REPORT TP-MR-86-02, DEPT. OF MATHEMATICS, TEESSIDE
+C    POLYTECHNIC, MIDDLESBROUGH, CLEVELAND.
+C
+C    GIVEN INITIAL VALUES FOR Y AND Y' AT AN INITIAL TIME T, THE
+C    ROUTINE INTEGRATES FROM T TO TEND.  WITH THE SOLUTION Y AND
+C    Y' OF THAT PROBLEM, THE USER CAN RESET TEND AND CONTINUE THE
+C    INTEGRATION.  IT IS EASY TO MAKE THE ROUTINE RETURN THE
+C    INTERMEDIATE VALUES OF Y AND Y' AT EACH STEP ON THE WAY TO TEND.
+C
+C    A DENSE OUTPUT FACILITY IS PROVIDED WITH THE LOW-ORDER PAIR,
+C    THROUGH A THIRD FORMULA OF ORDER 6 WHICH USES THE SAME STAGES.
+C    RKNINT RETURNS WITH SUFFICIENT INFORMATION TO ALLOW
+C    THE USER TO CALL A SEPARATE EVALUATION ROUTINE WHICH CAN
+C    COMPUTE APPROXIMATIONS TO Y AND Y' AT ANY T VALUE IN THE LAST
+C    COMPLETED STEP.
+C
+C    RKNINT CALLS THE ROUTINES COEF64 AND COEFHI.
+C    ASSOCIATED ROUTINES ARE THE SETUP ROUTINE RKNSET, THE DIAGNOSTIC
+C    ROUTINE RKNDIA AND THE OUTPUT ROUTINE EVAL.
+C
+C***********************************************************************
+C** OVERVIEW OF THE ARGUMENTS FOR RKNINT
+C **********************************************************************
+C
+C    F - SUBROUTINE SUPPLIED BY THE USER WHICH DESCRIBES THE SYSTEM OF
+C        DIFFERENTIAL EQUATIONS
+C
+C    NEQ - NUMBER OF DIFFERENTIAL EQUATIONS
+C
+C    T - CURRENT VALUE OF THE INDEPENDENT VARIABLE
+C
+C    TEND - THE CODE WILL ATTEMPT TO INTEGRATE TO TEND
+C
+C    Y, YP - ARRAYS CONTAINING COMPONENTS OF THE SOLUTION AND ITS
+C            DERIVATIVE AT T
+C
+C    YDP - AFTER INITIALIZATION, THIS ARRAY CONTAINS F(T,Y).
+C
+C    RWORK - A WORKING STORAGE ARRAY.  THE SETUP ROUTINE RKNSET PASSES
+C            INFORMATION TO RKNINT USING RWORK.  THE ARRAY MUST BE OF SI
+C                  A) FOR THE 6(4) PAIR, .GE. 14 + 11*NEQ
+C                  B) FOR THE 12(10) PAIR, .GE. 14 + 20*NEQ.
+C            WHEN THE 6(4) PAIR IS USED, THIS ARRAY CONTAINS THE
+C            INFORMATION NECESSARY TO COMPUTE THE INTERPOLANT.
+C
+C    IFAIL - INTEGER REPORTING THE STATUS OF THE INTEGRATION.
+C
+C***********************************************************************
+C**  HOW TO INITIALIZE RKNINT
+C***********************************************************************
+C
+C *** BEFORE CALLING RKNINT FOR THE FIRST TIME IN AN INTEGRATION, THE
+C *** SETUP ROUTINE RKNSET MUST BE CALLED.  USING RKNSET, THE USER
+C *** ALLOCATES SUFFICIENT STORAGE FOR THE VARIABLES USED BY THE CODE,
+C *** SELECTS THE FORMULA PAIR, MODE OF INTEGRATION AND ACCURACY
+C *** REQUIREMENT AND SETS APPROPRIATE VALUES FOR INITIALIZATION OF
+C *** RKNINT.
+C *** SEE THE DOCUMENTATION FOR RKNSET.
+C
+C    BEFORE CALLING THE SUBROUTINE RKNINT, THE USER MUST DEFINE THE
+C    PROBLEM TO BE SOLVED.
+C
+C    F - PROVIDE A SUBROUTINE OF THE FORM
+C                               F(NEQ,T,Y,YDP)
+C        TO DEFINE THE SYSTEM OF DIFFERENTIAL EQUATIONS, WHERE Y AND YDP
+C        ARE DIMENSIONED APPROPRIATELY IN F.  GIVEN THE VALUES OF T AND
+C        Y, THE ROUTINE F MUST EVALUATE THE NEQ COMPONENTS OF Y'' AND
+C        RETURN THE VALUES IN YDP.
+C
+C        F MUST NOT ALTER T OR Y.  THE NAME F MUST BE DECLARED EXTERNAL
+C        IN THE CALLING PROGRAM.
+C
+C    NEQ - INTEGER.  NUMBER OF DIFFERENTIAL EQUATIONS.
+C
+C    T - REAL.  DEFINES THE INITIAL POINT OF THE INTEGRATION.
+C
+C    TEND - REAL.  RKNINT WILL ATTEMPT TO INTEGRATE FROM T TO TEND.
+C           INTEGRATION EITHER FORWARD IN T (TEND .GT. T) OR BACKWARD
+C           IN T (TEND .LT. T) IS PERMITTED.
+C
+C           IF T .EQ. TEND, NO ACTION WILL BE TAKEN.
+C
+C           THE CODE ADVANCES THE SOLUTION FROM T TO TEND USING STEPSIZE
+C           THAT ARE AUTOMATICALLY SELECTED SO AS TO ACHIEVE THE REQUEST
+C           ACCURACY AS EFFICIENTLY AS POSSIBLE.
+C           IF INDICATED, THE CODE WILL RETURN WITH THE SOLUTION
+C           FOLLOWING EACH INTERMEDIATE STEP (STEP-ORIENTED MODE) BUT TE
+C           MUST STILL BE PROVIDED.
+C
+C           NOTE THAT RKNINT NEVER INTEGRATES PAST TEND - IT WILL HIT TE
+C           EXACTLY.  THIS FEATURE IS USEFUL IF THERE ARE KNOWN VALUES O
+C           SUCH THAT INTEGRATION PAST T SHOULD NOT BE ATTEMPTED.
+C
+C    Y - REAL ARRAY OF SIZE .GE. NEQ.  ON THE FIRST CALL, SET TO THE VAL
+C        OF Y AT THE INITIAL POINT.
+C
+C    YP - REAL ARRAY OF SIZE .GE. NEQ.  ON THE FIRST CALL, SET TO THE VA
+C         OF Y' AT THE INITIAL POINT.
+C
+C    YDP - REAL ARRAY OF SIZE .GE. NEQ.  USED ONLY FOR OUTPUT.
+C
+C    RWORK - REAL.  WORKING STORAGE ARRAY.
+C
+C    IFAIL - INTEGER.  ERROR INDICATOR. MUST BE SET TO ZERO ON ENTRY.
+C
+C***********************************************************************
+C** OUTPUT - AFTER ANY EXIT FROM RKNINT
+C***********************************************************************
+C
+C    THE PRINCIPAL AIM OF THE CODE IS TO RETURN A COMPUTED SOLUTION AT T
+C    ALTHOUGH IT IS POSSIBLE TO OBTAIN INTERMEDIATE RESULTS ALONG THE WA
+C    TO FIND OUT WHETHER THE CODE ACHIEVED ITS GOAL OR IF THE INTEGRATIO
+C    WAS INTERRUPTED, CHECK T AND IFAIL.
+C
+C    T - THE INTEGRATION WAS SUCCESSFULLY ADVANCED TO THE OUTPUT VALUE
+C        OF T.
+C
+C    Y, YP - CONTAIN THE APPROXIMATE SOLUTION AND DERIVATIVE AT T.
+C
+C    YDP - CONTAINS THE VALUE OF F AT T, Y.
+C
+C    RWORK - CONTAINS THE INTERMEDIATE STAGES FROM THE LAST STEP
+C            AS WELL AS THE VALUES OF Y, YP AND YDP AT THE START
+C            OF THE LAST STEP.  THE USER MUST NOT ALTER THIS ARRAY
+C            BEFORE A CALL TO THE DENSE OUTPUT ROUTINE, EVAL.  IN
+C            PARTICULAR, A CALL TO RKNSET SHOULD NOT BE MADE BETWEEN
+C            A CALL TO RKNINT AND A CALL TO EVAL.
+C
+C    IFAIL - REPORTS THE PROGRESS OF THE CODE.
+C
+C        0 = SUCCESSFUL INTEGRATION TO THE VALUE GIVEN BY T.
+C
+C        > 0 = FAILURE OF SOME SORT.
+C        1 = ON ANY CALL, T AND TEND WERE THE SAME ON INPUT.
+C            ON A CONTINUATION CALL, EITHER NEQ OR THE DIRECTION
+C            OF INTEGRATION WAS CHANGED.
+C        2 = THE NUMBER OF ATTEMPTED STEPS WAS GREATER THAN THE
+C            MAXIMUM ALLOWED.
+C        3 = THE LOCAL ERROR TEST SPECIFIED BY TOL, THRES AND
+C            THRESP IS TOO STRINGENT.
+C        4 = THE CODE IS BEING USED INEFFICIENTLY. THE STEP SIZE HAS
+C            BEEN REDUCED BY A SIGNIFICANT AMOUNT TOO OFTEN IN ORDER
+C            TO HIT THE OUTPUT POINTS SPECIFIED BY TEND.
+C
+C***********************************************************************
+C** CONTINUATION CALLS
+C***********************************************************************
+C
+C    THIS CODE IS ORGANIZED SO THAT SUBSEQUENT CALLS TO CONTINUE THE
+C    INTEGRATION INVOLVE LITTLE (IF ANY) ADDITIONAL EFFORT ON THE USER'S
+C    PART.  YOU MUST MONITOR IFAIL IN ORDER TO DETERMINE WHAT TO DO NEXT
+C
+C    DO NOT ALTER ANY QUANTITY NOT SPECIFICALLY PERMITTED BELOW, IN
+C    PARTICULAR DO NOT CHANGE NEQ, RWORK OR THE DIFFERENTIAL EQUATION
+C    IN SUBROUTINE F.  ANY SUCH ALTERATION CONSTITUTES A NEW PROBLEM
+C    AND MUST BE TREATED AS SUCH, I.E., YOU MUST START AFRESH.
+C
+C    OPTIONAL INPUTS SUCH AS THE FORMULA PAIR, TOL, THRES,
+C    THRESP AND H CAN BE CHANGED BY A CALL TO RKNSET (SEE SECTION ON
+C    OPTIONAL INPUTS AND OUTPUTS).  NOTE THAT
+C    INCREASING A TOLERANCE MAKES THE EQUATION EASIER TO INTEGRATE.
+C    DECREASING A TOLERANCE WILL MAKE IT HARDER AND MAY NOT BE A REASONA
+C    CHOICE ON A CONTINUATION CALL.
+C
+C    ** FOLLOWING A COMPLETED TASK (IFAIL = 0) **
+C       CALL THE CODE AGAIN TO CONTINUE THE INTEGRATION TO A NEW
+C                  VALUE OF TEND.
+C
+C    ** FOLLOWING AN INTERRUPTED TASK **
+C    IF
+C    IFAIL = 1, THERE IS AN ERROR IN A PARAMETER.  CHECK INPUT VALUES.
+C
+C    IFAIL = 2, THE CODE HAS ATTEMPTED MAXSTP STEPS.  YOU SHOULD
+C                  CONSIDER THE POSSIBILITY THAT THE ERROR PARAMETERS
+C                  ARE NOT APPROPRIATE.  IN PARTICULAR, IF A SOLUTION
+C                  COMPONENT VANISHES AND THE CORRESPONDING COMPONENT
+C                  OF THRES OR THRESP IS TOO SMALL, THE CODE MAY NEED A
+C                  OF STEPS.  YOU MAY ALTER TOL, THRES OR THRESP IF YOU
+C                  WISH.  IF YOU WANT TO CONTINUE YOU **MUST** SET IFAIL
+C                  CALL RKNINT AGAIN AND AN ADDITIONAL MAXSTP STEPS WILL
+C                  BE ALLOWED.
+C
+C    IFAIL = 3, THE TEST FOR LIMITING PRECISION IN THE COMPUTER ARITHMET
+C                  BEING USED HAS BEEN VIOLATED.  IT MAY BE POSSIBLE
+C                  TO CONTINUE THE INTEGRATION IF THE ERROR PARAMETERS
+C                  TOL, THRES, THRESP ARE INCREASED.
+C                  USE RKNSET TO CHANGE TOL, THRES, THRESP.
+C                  IF YOU ARE SURE YOU WANT TO CONTINUE WITH RELAXED
+C                  ERROR PARAMETERS CALL RKNINT AGAIN WITH THE NEW
+C                  VALUES AND YOU **MUST** SET IFAIL=0.
+C
+C    IFAIL = 4, THE CODE HAS DETECTED INEFFICIENT USE OF THE ROUTINE BY
+C                  THE USER'S CALLING (SUB)PROGRAM. OUT OF THE LAST 100
+C                  OR MORE SUCCESSFUL STEPS, MORE THAN TEN PER CENT ARE
+C                  STEPS WITH SIZES THAT HAVE HAD TO REDUCED BY A FACTOR
+C                  GREATER THAN 0.5 IN ORDER TO HIT THE USER SPECIFIED
+C                  POINTS TEND. TO CONTINUE YOU **MUST** SET IFAIL=0
+C                  AND CALL RKNINT AGAIN.
+C
+C **** IF RKNINT RETURNS TO THE CALLING PROGRAM WITH  IFAIL .GT. 0
+C **** YOU MUST TAKE SOME ACTION TO CORRECT THE ERROR BEFORE RKNINT
+C **** IS CALLED AGAIN.  OTHERWISE AN INFINITE LOOP MAY OCCUR.  THE
+C **** ROUTINE WILL ATTEMPT TO DETECT THE CASE WHERE AN ERROR STATE
+C **** IS NOT CORRECTED.  IF TWO FAILURES OCCUR AT THE SAME VALUE OF
+C **** T (IN A SINGLE INTEGRATION) RKNINT WILL PRINT A MESSAGE
+C **** AND STOP. THE ROUTINE WILL ALSO STOP IF THE INPUT VALUE OF
+C **** IFAIL IS NONZERO.
+C
+C***********************************************************************
+C   OPTIONAL INPUTS AND OUTPUTS
+C***********************************************************************
+C
+C    THE SETUP ROUTINE RKNSET CAN BE USED TO PASS OPTIONAL VALUES
+C    TO RKNINT.  THE ROUTINE MUST BE CALLED BEFORE THE FIRST CALL TO
+C    RKNINT FOR A PARTICULAR PROBLEM AND CAN BE CALLED BETWEEN
+C    CONTINUATION CALLS IF YOU WISH TO CHANGE ANY OPTIONAL VALUES.
+C    SEE THE DOCUMENTATION FOR RKNSET.
+C
+C    THE OPTIONAL INPUTS ARE:
+C
+C    H - STEP SIZE FOR THE NEXT STEP.
+C
+C    TOL, THRES, THRESP - LOCAL ERROR CONTROL PARAMETERS.
+C
+C    MAXSTP - MAXIMUM NUMBER OF ATTEMPTED STEPS ALLOWED ON ANY
+C             CALL TO RKNINT.
+C
+C    ONESTP - MODE OF INTEGRATION.
+C
+C    HIGH - CHOICE OF FORMULA PAIR.
+C
+C
+C    THE DIAGNOSTIC ROUTINE RKNDIA CAN BE CALLED AFTER ANY CALL TO
+C    RKNINT TO RETURN INFORMATION REGARDING THE PERFORMANCE OF THE
+C    INTEGRATOR.
+C
+C    OPTIONAL OUTPUTS:
+C
+C    HSTART - THE STEPSIZE ACTUALLY USED BY RKNINT ON THE FIRST STEP.
+C
+C    HUSED - THE STEPSIZE LAST USED BY RKNINT.
+C
+C    HNEXT - THE STEPSIZE PREDICTED BY RKNINT FOR USE ON THE NEXT STEP.
+C
+C    NSUCC - THE NUMBER OF SUCCESSFUL STEPS TAKEN BY RKNINT SINCE LAST
+C        INITIALIZATION.
+C
+C    NFAIL - THE NUMBER OF FAILED STEPS SINCE LAST INITIALIZATION.
+C
+C    NATT - THE NUMBER OF ATTEMPTED STEPS TAKEN TO FIND AN APPROPRIATE
+C           INITIAL STEPSIZE.
+C
+C***********************************************************************
+C     SUBROUTINE RKNDIA(NEQ, HNEXT, HUSED, HSTART, NSUCC, NFAIL, NATT,
+C    +                  THRES, THRESP, RWORK)
+C
+C**********************************************************************
+C ABSTRACT
+C**********************************************************************
+C
+C RKNDIA IS THE DIAGNOSTIC ROUTINE ASSOCIATED WITH THE NYSTROM SOLVER,
+C RKNINT.  AFTER A CALL TO RKNINT, THIS ROUTINE CAN BE CALLED TO
+C OBTAIN INFORMATION ABOUT THE PERFORMANCE OF RKNINT AND THE CURRENT
+C SETTINGS OF OPTIONAL VALUES.  THIS INFORMATION IS SAVED IN RWORK
+C BY RKNINT AND EXTRACTED BY RKNDIA.
+C
+C THE USER SHOULD BE AWARE THAT AFTER AN UNSUCCESSFUL CALL TO RKNINT,
+C SOME OF THE INFORMATION RETURNED BY RKNDIA MAY REFER TO THE LAST
+C SUCCESSFUL STEP.
+C
+C ASSOCIATED ROUTINES ARE THE NYSTROM INTEGRATOR, RKNINT, AND THE
+C SETUP ROUTINE, RKNSET.
+C
+C**********************************************************************
+C TO CALL RKNDIA
+C**********************************************************************
+C
+C NEQ - INTEGER. ON INPUT, NUMBER OF DIFFERENTIAL EQUATIONS BEING SOLVED
+C       UNCHANGED ON OUTPUT.
+C
+C HNEXT - REAL.  OUTPUT ONLY.  THE PREDICTED STEPSIZE CALCULATED BY
+C         RKNINT FOR USE ON THE NEXT STEP.
+C
+C HUSED - REAL. OUTPUT ONLY.  THE STEPSIZE LAST USED BY RKNINT.
+C
+C HSTART - REAL. OUTPUT ONLY.  THE STEPSIZE USED BY RKNINT FOR THE
+C          FIRST STEP OF THE CURRENT PROBLEM.  IT MAY BE DIFFERENT
+C          THAN THE VALUE INPUT BY THE USER.  THIS VALUE COULD BE
+C          USEFUL AS AN INITIAL ESTIMATE IN STARTING INTEGRATION
+C          OF PROBLEMS OF SIMILAR TYPE.
+C
+C NSUCC - INTEGER.  OUTPUT ONLY.  NUMBER OF SUCCESSFUL STEPS SINCE
+C         LAST INITIALIZATION OF RKNINT.
+C
+C NFAIL - INTEGER.  OUTPUT ONLY.  NUMBER OF FAILED STEPS SINCE LAST
+C         INITIALIZATION OF RKNINT.
+C
+C NATT - INTEGER. OUTPUT ONLY.  NUMBER OF ATTEMPTED STEPS TAKEN TO
+C        FIND AN APPROPRIATE STARTING STEPSIZE (WHEN THE USER DOES
+C        NOT GIVE AN ESTIMATE).
+C        THE COST OF AN ATTEMPTED STEP OF THIS SORT WILL BE
+C        APPROXIMATELY HALF THAT OF A USUAL INTEGRATION STEP.
+C
+C NOTE THAT NFAIL DOES NOT INCLUDE NATT.  A PARTIAL STARTING STEP DOES
+C NOT COUNT AS A FAILED STEP.
+C
+C THRES, THRESP - REAL ARRAYS OF SIZE .GE. NEQ.  OUTPUT ONLY.  THRESHOLD
+C                 TOLERANCES USED IN THE ERROR CONTROL STRATEGY FOR
+C                 Y AND YP, RESPECTIVELY.
+C
+C RWORK - REAL ARRAY.  MUST BE THE SAME AS
+C         THE WORKING STORAGE ARRAY PASSED TO RKNSET AND RKNINT.  THE
+C         INFORMATION PASSED BACK BY RKNDIA IS EXTRACTED FROM RWORK.
+C
+C***********************************************************************
+C     SUBROUTINE EVAL(NEQ, T, Y, YP, NWANT, TWANT, YWANT,
+C    +                YPWANT, RWORK, IFAIL)
+C
+C***********************************************************************
+C ABSTRACT
+C***********************************************************************
+C
+C THIS IS THE DENSE OUTPUT ROUTINE ASSOCIATED WITH THE NYSTROM
+C INTEGRATOR, RKNINT.  EVAL USES THE THIRD FORMULA OF THE RUNGE-KUTTA-
+C NYSTROM 6(4)6 TRIPLE TO EVALUATE Y AND Y' AT THE POINT SIGMA * H,
+C WHERE H IS THE STEPSIZE LAST USED BY RKNINT AND SIGMA SHOULD
+C USUALLY BE IN THE INTERVAL (0, 1).  SIGMA IS COMPUTED AS
+C         SIGMA = (TWANT - TOLD) / H.
+C
+C EVAL CALLS THE ROUTINE CFEVAL.
+C
+C***********************************************************************
+C OVERVIEW OF ARGUMENTS
+C***********************************************************************
+C
+C NEQ - NUMBER OF DIFFERENTIAL EQUATIONS.
+C
+C T - CURRENT VALUE OF THE DEPENDENT VARIABLE, AS RETURNED BY RKNINT.
+C
+C Y, YP - VALUES OF Y AND Y' AT T, AS RETURNED BY RKNINT.
+C
+C NWANT - THE USER WISHES INTERMEDIATE VALUES FOR THE FIRST
+C         NWANT COMPONENTS ONLY (NWANT .LE. NEQ).
+C
+C TWANT - THE USER WISHES INTERMEDIATE VALUES AT TWANT.
+C
+C YWANT, YPWANT - ON OUTPUT, VALUES OF Y AND Y' AT TWANT.
+C
+C RWORK - WORKING STORAGE ARRAY USED BY RKNINT.  THE INTERMEDIATE
+C         STAGES USED IN THE NYSTROM INTERPOLATION FORMULA ARE
+C         PASSED FROM RKNINT IN THIS ARRAY, ALONG WITH AUXILIARY
+C         INFORMATION.
+C
+C IFAIL - STATUS OF ROUTINE.
+C
+C***********************************************************************
+C TO CALL EVAL
+C***********************************************************************
+C
+C NEQ - INTEGER.  NUMBER OF DIFFERENTIAL EQUATIONS. SAME AS THE VALUE
+C       PASSED TO RKNINT.
+C
+C T - REAL.  VALUE OF THE INDEPENDENT VARIABLE LAST RETURNED BY RKNINT.
+C
+C Y, YP - REAL ARRAYS OF SIZE .GE. NEQ.  SHOULD BE PASSED UNCHANGED
+C              FROM THE VALUES RETURNED BY RKNINT.
+C
+C NWANT - INTEGER .LE. NEQ.  VALUES OF Y AND Y' FOR THE FIRST NWANT
+C         COMPONENTS WILL BE RETURNED.
+C
+C TWANT - REAL.  INTERPOLATION AT TWANT IS REQUIRED.
+C
+C YWANT, YPWANT - REAL ARRAYS OF SIZE .GE. NWANT.  USED FOR OUTPUT.
+C
+C RWORK - REAL ARRAY.  SAME AS THE WORKING
+C         STORAGE ARRAY USED BY RKNINT.  SHOULD NOT BE ALTERED BEFORE
+C         A CALL TO EVAL.
+C
+C IFAIL - INTEGER.  USED FOR OUTPUT ONLY.
+C
+C***********************************************************************
+C ON EXIT FROM EVAL
+C***********************************************************************
+C
+C YWANT AND YPWANT WILL CONTAIN APPROXIMATIONS TO Y AND Y' AT TWANT,
+C PROVIDED IFAIL IS 0 OR 1.  OTHERWISE, NO ACTION IS TAKEN.
+C
+C IFAIL = 0 == SUCCESS.
+C
+C       = 1 == EXTRAPOLATION WAS PERFORMED, I.E., THE VALUE OF TWANT
+C              WAS NOT BETWEEN T AND T-H, WHERE H IS THE LAST STEPSIZE
+C              USED BY RKNINT.  THE USER SHOULD BE AWARE THAT THE
+C              ERROR IN AN EXTRAPOLATED VALUE MAY BE ** LARGE **.
+C
+C       = 2 == NWANT .GT. NEQ.  EVAL CAN BE CALLED AGAIN DIRECTLY
+C              WHEN NWANT IS RESET.
+C
+C       = 3 == RKNINT LAST USED THE 12(10) FORMULA PAIR TO INTEGRATE
+C              THE DIFFERENTIAL EQUATIONS.  INTERPOLATION IS NOT
+C              AVAILABLE WITH THIS PAIR.
+C
+C***********************************************************************
+      SUBROUTINE RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,
+     *                  LWORK,RWORK,IFAIL)
+C
+C THIS IS THE SET-UP ROUTINE FOR THE NYSTROM CODE RKNINT.  IT
+C MUST BE CALLED BEFORE THE FIRST CALL TO RKNINT AND CAN BE
+C USED BETWEEN CONTINUATION CALLS TO CHANGE OPTIONAL INPUTS.
+C
+C THE ROUTINE USES THE MACHINE-DEPENDENT CONSTANTS UROUND
+C AND THRDEF, WHICH IS CURRENTLY SET TO 50*UROUND.
+C
+C IF STORAGE IS AT PREMIUM, THEN IN THE CALLING (SUB)PROGRAM THE DUMMY
+C ARGUMENT 'THRES' MAY BE THE ACTUAL ARGUMENT 'RWORK(15+4*NEQ)' AND
+C SIMILARLY 'THRESP' MAY BE 'RWORK(15+5*NEQ)'.
+C
+C     .. Parameters ..
+      DOUBLE PRECISION  UROUND, THRDEF, ONE, ZERO, U10
+      INTEGER           NOVHD, NSTMAX
+      PARAMETER         (UROUND=3.0D-17,THRDEF=50.0D0*UROUND,ONE=1.0D0,
+     *                  ZERO=0.0D0,U10=10.0D0*UROUND,NOVHD=14,
+     *                  NSTMAX=1000)
+C     ..
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION  H, TOL
+      INTEGER           IFAIL, LWORK, MAXSTP, NEQ
+      LOGICAL           HIGH, ONESTP, START
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION  RWORK(LWORK), THRES(NEQ), THRESP(NEQ)
+C     ..
+C     .. Local Scalars ..
+      INTEGER           K, NTHR, NTHRP
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC         ABS, DBLE
+C     ..
+C     .. Executable Statements ..
+C
+      IF ((HIGH .AND. LWORK.LT.NOVHD+20*NEQ)
+     *    .OR. (LWORK.LT.NOVHD+11*NEQ)) THEN
+         IFAIL = 2
+         GO TO 100
+      END IF
+C
+C NOTE:  ONE == TRUE,  ZERO == FALSE
+C
+      NTHR = NOVHD + 4*NEQ
+      NTHRP = NOVHD + 5*NEQ
+      IF (START) THEN
+         RWORK(7) = ONE
+         RWORK(1) = ABS(H)
+         RWORK(2) = ZERO
+         RWORK(3) = ZERO
+         RWORK(4) = ZERO
+         RWORK(5) = ZERO
+         RWORK(11) = ZERO
+         RWORK(13) = UROUND
+         RWORK(14) = ZERO
+      ELSE
+         RWORK(7) = ZERO
+         IF (H.NE.ZERO) RWORK(3) = ABS(H)
+      END IF
+      IF (ONESTP) THEN
+         RWORK(8) = ONE
+      ELSE
+         RWORK(8) = ZERO
+      END IF
+      IF (MAXSTP.LE.0) THEN
+         RWORK(6) = DBLE(NSTMAX)
+      ELSE
+         RWORK(6) = DBLE(MAXSTP)
+      END IF
+      IF (HIGH) THEN
+         RWORK(10) = ONE
+      ELSE
+         RWORK(10) = ZERO
+      END IF
+      IF ((TOL.GT.ONE) .OR. (TOL.LT.U10)) THEN
+         IFAIL = 3
+         GO TO 100
+      ELSE
+         RWORK(12) = TOL
+      END IF
+C
+C SET THRES INTO RWORK
+C
+      IF (THRES(1).LE.ZERO) THEN
+         DO 20 K = 1, NEQ
+            RWORK(NTHR+K) = THRDEF
+   20    CONTINUE
+      ELSE
+CVEC
+CVEC  THE FOLLOWING LOOP WAS NOT VECTORIZABLE ON A CDC CYBER 205 DUE TO
+CVEC  THE 'GO TO' STATEMENT.
+CVEC
+         DO 40 K = 1, NEQ
+            IF (THRES(K).LE.ZERO) THEN
+               IFAIL = 1
+               GO TO 100
+            ELSE
+               RWORK(NTHR+K) = THRES(K)
+            END IF
+   40    CONTINUE
+      END IF
+C
+C SET THRESP INTO RWORK
+C
+      IF (THRESP(1).LE.ZERO) THEN
+         DO 60 K = 1, NEQ
+            RWORK(NTHRP+K) = THRDEF
+   60    CONTINUE
+      ELSE
+CVEC
+CVEC  THE FOLLOWING LOOP IS NOT VECTORIZABLE ON A CDC CYBER 205 DUE TO
+CVEC  THE 'GO TO' STATEMENT
+CVEC
+         DO 80 K = 1, NEQ
+            IF (THRESP(K).LE.ZERO) THEN
+               IFAIL = 1
+               GO TO 100
+            ELSE
+               RWORK(NTHRP+K) = THRESP(K)
+            END IF
+   80    CONTINUE
+      END IF
+C
+      RWORK(9) = ONE
+      IFAIL = 0
+C
+  100 CONTINUE
+      START = .FALSE.
+C
+      END
+      SUBROUTINE RKNINT(F,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+C
+C
+C PARAMETER STATEMENTS.
+C     THE FIRST SET RELATES TO THE STEP SIZE SELECTION ALGORITHM.
+C     THE SECOND SET PROVIDES INTEGER CONSTANTS AND A UNIT NUMBER
+C        FOR THE OUTPUT MESSAGE WHEN CODE TERMINATES EXECUTION.
+C     THE THIRD SET CONTAINS DOUBLE PRECISION CONSTANTS USED
+C        IN THE CODE.
+C
+C
+C NOTE -
+C THE LOCAL ARRAYS ARE LARGE ENOUGH TO ACCOMODATE THE COEFFICIENTS
+C OF THE 12(10) FORMULA PAIR.  THIS ADDS CLARITY TO THE PROGRAM BUT
+C SOME STORAGE COULD BE SAVED IF NECESSARY (BY ADDITIONAL PROGRAMMING
+C EFFORT).  TWO POSSIBLE WAYS OF SAVING STORAGE ARE:
+C     1) STORE THE MATRIX OF COEFFICIENTS  A  IN STRICTLY LOWER
+C        TRIANGULAR FORM.  THIS WOULD SAVE  153  LOCATIONS.
+C     2) INCLUDE THE STORAGE REQUIREMENT FOR THE COEFFICIENTS
+C        IN THE WORKSPACE ARRAY  RWORK.
+C
+C
+C IF THE USE OF COMMON STATEMENTS IS TO BE AVOIDED, /SAVE1/ CAN
+C BE REPLACED BY CALLING THE APPROPRIATE COEFFICIENT ROUTINE
+C (COEFHI OR COEF64) ON EACH ENTRY TO RKNINT AND SETTING THE ARRAY PTR
+C APPROPRIATELY.  SIMILARLY, THE VALUES IN /SAVE3/ COULD BE RECOMPUTED
+C ON EACH ENTRY. OTHER MEANS WILL HAVE TO BE FOUND TO REPLACE /SAVE2/.
+C
+C     .. Parameters ..
+      DOUBLE PRECISION  R, RMN1, RMN2, RMN3, SCALEL, SCALEH
+      PARAMETER         (R=10.0D0,RMN1=1.0D0/R,RMN2=1.0D0/(R*R),
+     *                  RMN3=1.0D0/(R*R*R),SCALEL=0.8D0,SCALEH=0.75D0)
+      INTEGER           IDEV, UROUND, NOVHD, HUNDRD
+      PARAMETER         (IDEV=6,UROUND=13,NOVHD=14,HUNDRD=100)
+      DOUBLE PRECISION  ONE, ZERO, FIFTH, TWO, HALF, QUAR, ELVNTH, FOUR,
+     *                  EIGHT, TEN, TWENTY, TWOHUN, TENPC
+      PARAMETER         (ONE=1.0D0,ZERO=0.0D0,FIFTH=0.2D0,TWO=2.0D0,
+     *                  HALF=0.5D0,QUAR=0.25D0,ELVNTH=1.0D0/11.0D0,
+     *                  FOUR=4.0D0,EIGHT=8.0D0,TEN=1.0D1,TWENTY=2.0D1,
+     *                  TWOHUN=2.0D2,TENPC=0.1D0)
+C     ..
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION  T, TEND
+      INTEGER           IFAIL, NEQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION  RWORK(*), Y(NEQ), YDP(NEQ), YP(NEQ)
+C     ..
+C     .. Subroutine Arguments ..
+      EXTERNAL          F
+C     ..
+C     .. Scalars in Common ..
+      DOUBLE PRECISION  DIR, EXPON, H, RANGE, RHIGH, SCALE, STBRAD,
+     *                  TCHECK, TOL, TOOSML
+      INTEGER           EFFCT1, EFFCT2, FINPH2, ISTP, NASTEP, NATT,
+     *                  NBASE, NEQOLD, NFLSTP, NRT1, NRT2, NRT3, NRT4,
+     *                  NSTAGE, NSTMAX, NTHR, NTHRP, NWT, NWTP
+      LOGICAL           FAILED, FIRST, HGIVEN, LAST, LOOP, OPTRED,
+     *                  PHASE2, SUCCES
+C     ..
+C     .. Arrays in Common ..
+      DOUBLE PRECISION  A(17,17), B(16), BHAT(15), BP(16), BPHAT(17),
+     *                  C(17)
+      INTEGER           PTR(16)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  ABSH, ABSHP, ALPHA, BETA, DEL, ERR, ERRP, FDEL,
+     *                  HSQ, HUSED, SCALE1, SCL, SCLP, SK, SPK, TAU,
+     *                  THRES, THRESP, TOLD, TRY, WT, WTP, YDPDEL,
+     *                  YDPNRM, YINTK, YPDEL, YPINTK, YPNRM
+      INTEGER           I, J, JSTAGE, K
+      LOGICAL           DFLT, DFLTP, INEFFC, WASTE
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL          COEF64, COEFHI
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC         ABS, DBLE, INT, MAX, MIN, SIGN
+C     ..
+C     .. Common blocks ..
+      COMMON            /SAVE1/A, C, BPHAT, B, BP, BHAT, PTR
+      COMMON            /SAVE2/DIR, RANGE, TCHECK, H, EXPON, RHIGH, TOL,
+     *                  SCALE, STBRAD, TOOSML, NEQOLD, NSTAGE, NSTMAX,
+     *                  NASTEP, ISTP, NFLSTP, NATT, EFFCT1, EFFCT2,
+     *                  FINPH2, LAST, FAILED, FIRST, HGIVEN, SUCCES,
+     *                  OPTRED, PHASE2, LOOP
+      COMMON            /SAVE3/NRT1, NRT2, NRT3, NRT4, NBASE, NTHR,
+     *                  NTHRP, NWT, NWTP
+C     ..
+C     .. Save statement ..
+      SAVE              /SAVE1/, /SAVE2/, /SAVE3/
+C     ..
+C     .. Executable Statements ..
+C
+C BLOCK A.
+C CHECK FOR NONZERO ENTRY VALUE OF IFAIL.
+C
+      IF (IFAIL.NE.0) THEN
+         WRITE (UNIT=IDEV,FMT=99998) IFAIL
+         STOP
+      END IF
+      NASTEP = 0
+      IFAIL = 0
+C
+      IF (RWORK(7).EQ.ONE) THEN
+C
+C BLOCK B.
+C FIRST CALL IN AN INTEGRATION.
+C EXTRACT DATA FROM SETUP ROUTINE RKNSET.
+C
+         TOLD = T
+         H = RWORK(1)
+         HUSED = ZERO
+         RWORK(1) = ZERO
+         NSTMAX = INT(RWORK(6)+FIFTH)
+         RWORK(9) = ZERO
+         RWORK(7) = ZERO
+         TOL = RWORK(12)
+C
+C INITIALIZATION.
+C
+         EFFCT1 = 0
+         EFFCT2 = 0
+         ISTP = 0
+         NFLSTP = 0
+         NATT = 0
+         FIRST = .TRUE.
+         LOOP = .FALSE.
+         IF (T.EQ.TEND) THEN
+            IFAIL = 1
+            GO TO 620
+         END IF
+         NEQOLD = NEQ
+         RANGE = ABS(TEND-T)
+         DIR = SIGN(ONE,TEND-T)
+C
+C THE NEXT THREE LINES RELATE TO THE CODE CHOICE OF H0.
+C
+         OPTRED = .FALSE.
+         HGIVEN = H .NE. ZERO
+         PHASE2 = FIRST .AND. .NOT. HGIVEN
+C
+C SET UP POINTERS TO RWORK.
+C
+         NRT1 = NOVHD
+         NRT2 = NOVHD + NEQ
+         NRT3 = NOVHD + 2*NEQ
+         NRT4 = NOVHD + 3*NEQ
+         NTHR = NOVHD + 4*NEQ
+         NTHRP = NOVHD + 5*NEQ
+         NBASE = NOVHD + 6*NEQ
+C
+C PICK UP CONSTANTS DEPENDING ON ORDER OF METHOD SELECTED AND SET
+C POINTERS. THE LOCAL ARRAY PTR CONTAINS POINTERS TO WHERE THE STAGES
+C ARE HELD IN THE ARRAY RWORK. THIS IS TO ALLOW SAVINGS IN STORAGE FOR
+C 12(10) PAIR AND BOTH PAIRS TO BE IMPLEMENTED IN THE SAME BLOCK OF
+C CODE.
+C
+         RHIGH = RWORK(10)
+         IF (RWORK(10).EQ.ZERO) THEN
+            EXPON = FIFTH
+            STBRAD = FOUR
+            TOOSML = TWENTY*RWORK(UROUND)
+            NSTAGE = 6
+            SCALE = SCALEL
+            CALL COEF64(A,C,BPHAT,B,BP)
+            FINPH2 = 4
+            NWT = NBASE + 3*NEQ
+            NWTP = NBASE + 4*NEQ
+            PTR(1) = 0
+            PTR(2) = 1
+            PTR(3) = 2
+            PTR(4) = 3
+            PTR(5) = 4
+         ELSE
+            EXPON = ELVNTH
+            STBRAD = EIGHT
+            TOOSML = TWOHUN*RWORK(UROUND)
+            NSTAGE = 17
+            SCALE = SCALEH
+            CALL COEFHI(A,C,BHAT,BPHAT,B,BP)
+            FINPH2 = 14
+            NWT = NBASE + 12*NEQ
+            NWTP = NBASE + 13*NEQ
+            PTR(1) = 0
+            PTR(2) = 1
+            PTR(3) = 2
+            PTR(4) = 0
+            PTR(5) = 3
+            PTR(6) = 4
+            PTR(7) = 5
+            PTR(8) = 6
+            PTR(9) = 7
+            PTR(10) = 8
+            PTR(11) = 9
+            PTR(12) = 10
+            PTR(13) = 11
+            PTR(14) = 12
+            PTR(15) = 13
+            PTR(16) = 3
+         END IF
+C
+         CALL F(NEQ,T,Y,YDP)
+C
+         IF ( .NOT. HGIVEN) THEN
+C
+C PHASE 1 OF CALCULATION OF AN INITIAL STEPSIZE H0 BY THE CODE
+C   IF || YP(T0) || .NE. 0 THEN H0 = (TOL**EXPON) / ||YP(T0)||
+C                          ELSE H0 = TEND - T0
+C   IF || YDP(T0) || .NE. 0 THEN HP0 = (TOL**EXPON) / ||YDP(T0)||
+C                           ELSE HP0 = TEND - T0
+C   H = MIN(H0, HP0)
+C NOTE: 1) EXPON = 1/5  FOR THE 6(4) PAIR,
+C          EXPON = 1/11 FOR THE 12(10) PAIR.
+C       2) THE STRATEGY GIVEN ABOVE HAS BEEN MODIFIED TO TRY TO
+C          AVOID SELECTING TOO SMALL A VALUE FOR H0 WHEN THE
+C          INITIAL VALUES OF Y AND YP ARE SMALL.
+C
+            YPNRM = ZERO
+            YDPNRM = ZERO
+            DFLT = .FALSE.
+            DFLTP = .FALSE.
+CVEC
+CVEC  THE FOLLOWING LOOP WAS NOT VECTORIZABLE ON A  CRAY 1S.
+CVEC  THE FOLLOWING LOOP WAS NOT VECTORIZABLE ON A CDC CYBER 205.
+CVEC
+C
+C EVALUATE NORMS AS DESCRIBED ABOVE AND INITIALISE THE WEIGHT VECTORS
+C FOR USE IN PHASE2.
+C
+            DO 20 K = 1, NEQ
+               THRES = RWORK(NTHR+K)
+               WT = MAX(THRES,ABS(Y(K)))
+               RWORK(NWT+K) = WT
+               TRY = ABS(YP(K)/WT)
+               IF (TRY.GT.YPNRM) THEN
+                  YPNRM = TRY
+                  DFLT = WT .EQ. THRES
+               END IF
+               THRESP = RWORK(NTHRP+K)
+               WTP = MAX(THRESP,ABS(YP(K)))
+               RWORK(NWTP+K) = WTP
+               TRY = ABS(YDP(K)/WTP)
+               IF (TRY.GT.YDPNRM) THEN
+                  YDPNRM = TRY
+                  DFLTP = WTP .EQ. THRESP
+               END IF
+   20       CONTINUE
+            ABSH = RANGE
+            ABSHP = RANGE
+            TAU = TOL**EXPON
+            IF (ABSH*YPNRM.GT.TAU .AND. .NOT. DFLT) ABSH = TAU/YPNRM
+            IF (ABSHP*YDPNRM.GT.TAU .AND. .NOT. DFLTP)
+     *          ABSHP = TAU/YDPNRM
+            H = MIN(ABSH,ABSHP)
+C
+C END OF PHASE 1.
+C
+         END IF
+C
+C END OF BLOCK B.
+C
+      ELSE
+C
+C BLOCK C.
+C CONTINUATION CALL.
+C CHECK DATA FOR CONSISTENCY.
+C
+         TOLD = RWORK(14)
+         HUSED = RWORK(2)
+         IF (T.EQ.TEND) IFAIL = 1
+         IF (NEQ.NE.NEQOLD) IFAIL = 1
+         IF (DIR*(TEND-T).LT.ZERO) IFAIL = 1
+         IF (IFAIL.EQ.1) GO TO 620
+C
+C CHECK FOR OPTIONAL INPUTS.
+C
+         IF (RWORK(9).EQ.ONE) THEN
+            H = RWORK(3)
+            NSTMAX = INT(RWORK(6)+FIFTH)
+            RWORK(9) = ZERO
+            TOL = RWORK(12)
+            IF (RHIGH.NE.RWORK(10)) THEN
+               RHIGH = RWORK(10)
+               IF (RWORK(10).EQ.ZERO) THEN
+                  EXPON = FIFTH
+                  STBRAD = FOUR
+                  TOOSML = TWENTY*RWORK(UROUND)
+                  NSTAGE = 6
+                  SCALE = SCALEL
+                  FINPH2 = 4
+                  NWT = NBASE + 3*NEQ
+                  NWTP = NBASE + 4*NEQ
+                  PTR(1) = 0
+                  PTR(2) = 1
+                  PTR(3) = 2
+                  PTR(4) = 3
+                  PTR(5) = 4
+                  CALL COEF64(A,C,BPHAT,B,BP)
+               ELSE
+                  EXPON = ELVNTH
+                  STBRAD = EIGHT
+                  TOOSML = TWOHUN*RWORK(UROUND)
+                  NSTAGE = 17
+                  SCALE = SCALEH
+                  CALL COEFHI(A,C,BHAT,BPHAT,B,BP)
+                  FINPH2 = 14
+                  NWT = NBASE + 12*NEQ
+                  NWTP = NBASE + 13*NEQ
+                  PTR(1) = 0
+                  PTR(2) = 1
+                  PTR(3) = 2
+                  PTR(4) = 0
+                  PTR(5) = 3
+                  PTR(6) = 4
+                  PTR(7) = 5
+                  PTR(8) = 6
+                  PTR(9) = 7
+                  PTR(10) = 8
+                  PTR(11) = 9
+                  PTR(12) = 10
+                  PTR(13) = 11
+                  PTR(14) = 12
+                  PTR(15) = 13
+                  PTR(16) = 3
+               END IF
+            END IF
+         END IF
+C
+C END OF BLOCK C.
+C
+      END IF
+C
+C BLOCK D.
+C THE START OF A NEW STEP.
+C
+      H = SIGN(ABS(H),DIR)
+C
+   40 CONTINUE
+      SUCCES = .FALSE.
+   60 LAST = .FALSE.
+C
+C THE CODE IS REQUIRED TO HIT TEND EXACTLY WITH A REASONABLE STEPSIZE.
+C CHECK THAT  T+H .LE. TEND  OR  T+2*H .LE. TEND  IN THE DIRECTION
+C OF INTEGRATION. A CHECK IS INCORPORATED LATER IN THE CODE TO CHECK
+C WHEN H IS REDUCED TOO OFTEN BY A SIGNIFICANT AMOUNT, HENCE IMPAIRING
+C EFFICIENCY.
+C
+      IF (DIR*(T+H-TEND).GE.ZERO) THEN
+         INEFFC = (TEND-T)/H .LT. HALF
+         H = TEND - T
+         LAST = .TRUE.
+      ELSE
+         IF (DIR*(T+TWO*H-TEND).GE.ZERO) THEN
+            H = (TEND-T)/TWO
+         END IF
+      END IF
+C
+      FAILED = .FALSE.
+C
+C RESTART HERE AFTER A STEP FAILURE.
+C
+   80 CONTINUE
+C
+C THE CHECK FOR LIMITING PRECISION, USING  TOOSML,  IS BASED ON
+C THE DISTANCE BETWEEN COEFFICIENTS  C(I)  IN THE RKN FORMULAS,
+C AS DESCRIBED IN
+C     SHAMPINE,L.F.,WATTS,H.A. (1979).  THE ART OF WRITING A
+C     RUNGE-KUTTA CODE.  APPL. MATH. COMPUTATION 5, 93-121.
+C
+      IF (ABS(H).LT.TOOSML*MAX(ABS(T),ABS(T+H))) THEN
+C
+C STEP TOO SMALL. CONTROL RETURNS TO USER THROUGH BOTTOM OF CODE.
+C
+         IFAIL = 3
+         GO TO 600
+      END IF
+      NASTEP = NASTEP + 1
+      IF (NASTEP.GT.NSTMAX) THEN
+         IFAIL = 2
+         GO TO 600
+      END IF
+C
+C END OF BLOCK D.
+C
+C BLOCK E.
+C FORM THE STAGES AND STORE THEM IN THE WORKING STORAGE ARRAY, RWORK.
+C TEMPORARY STORAGE:
+C      RWORK(NRT1+K) CONTAINS THE SUM OF THE STAGES  SUM A(I,J)*G(J)
+C          USED IN FORMING THE INTERNAL Y VALUES. AT THE END OF
+C          THE BLOCK IT WILL CONTAIN   SUM BHAT(I) * G(I)   AND
+C          WILL BE USED IN ERROR ESTIMATION FOR Y.
+C      RWORK(NRT2+K) WILL CONTAIN  SUM BPHAT(I) * G(I)   AND WILL
+C          BE USED IN ESTIMATING THE ERROR IN YP.
+C AT THE END OF THE BLOCK, THE NEW APPROXIMATION TO Y(K) WILL BE
+C IN RWORK(NRT3+K) AND THE APPROXIMATION TO YP(K) WILL BE IN
+C RWORK(NRT4+K).
+C
+C NOTE.
+C MANY OF THE FOLLOWING LOOPS OVER  K=1,NEQ  HAVE CONSTANT ARRAY VALUES
+C INSIDE. THE CODE IS WRITTEN WITH CLARITY IN MIND. ANY OPTIMIZING
+C COMPILER WILL IDENTIFY THESE OCCURRENCES AND MOVE THESE CONSTANT
+C VALUES OUTSIDE THE LOOPS. TWO LOOPS CONTAIN CHECKS FOR ZERO
+C MULTIPLIERS SO AS TO PREVENT NEEDLESS COMPUTATION.
+C
+      HSQ = H*H
+      DO 100 K = 1, NEQ
+         RWORK(NRT2+K) = BPHAT(1)*YDP(K)
+  100 CONTINUE
+      DO 260 I = 2, NSTAGE
+C
+         DO 120 K = 1, NEQ
+            RWORK(NRT1+K) = A(I,1)*YDP(K)
+  120    CONTINUE
+C
+         DO 160 J = 2, I - 1
+            JSTAGE = NBASE + PTR(J-1)*NEQ
+            IF (A(I,J).NE.ZERO) THEN
+               DO 140 K = 1, NEQ
+                  RWORK(NRT1+K) = RWORK(NRT1+K) + A(I,J)*RWORK(JSTAGE+K)
+  140          CONTINUE
+            END IF
+  160    CONTINUE
+C
+         DO 180 K = 1, NEQ
+            RWORK(NRT3+K) = Y(K) + C(I)*H*YP(K) + HSQ*RWORK(NRT1+K)
+  180    CONTINUE
+C
+         JSTAGE = NBASE + PTR(I-1)*NEQ
+         CALL F(NEQ,T+C(I)*H,RWORK(NRT3+1),RWORK(JSTAGE+1))
+C
+         IF (BPHAT(I).NE.ZERO) THEN
+            DO 200 K = 1, NEQ
+               RWORK(NRT2+K) = RWORK(NRT2+K) + BPHAT(I)*RWORK(JSTAGE+K)
+  200       CONTINUE
+         END IF
+C
+C CONTROL USUALLY GOES FROM HERE TO THE START OF THE LOOP (I=2,NSTAGE),
+C UNLESS IT IS THE FIRST STEP AND THE CODE IS COMPUTING H0,
+C IN WHICH CASE THE NEXT BLOCK OF CODE IS EXECUTED.
+C
+         IF (PHASE2) THEN
+            YPNRM = ZERO
+            YDPNRM = ZERO
+            DEL = ZERO
+            FDEL = ZERO
+            YPDEL = ZERO
+            YDPDEL = ZERO
+CVEC
+CVEC  THE FOLLOWING LOOP WAS NOT VECTORIZABLE ON A CDC CYBER 205.
+CVEC
+            DO 220 K = 1, NEQ
+               YINTK = RWORK(NRT3+K)
+               YPINTK = YP(K) + H*RWORK(NRT2+K)
+               WT = MAX(RWORK(NWT+K),ABS(YINTK))
+               WTP = MAX(RWORK(NWTP+K),ABS(YPINTK))
+               RWORK(NWT+K) = WT
+               RWORK(NWTP+K) = WTP
+               YPNRM = MAX(YPNRM,ABS(YINTK)/WT,ABS(Y(K))/WT)
+               YDPNRM = MAX(YDPNRM,ABS(YPINTK)/WTP,ABS(YP(K))/WTP)
+               DEL = MAX(DEL,ABS(YINTK-Y(K))/WT)
+               FDEL = MAX(FDEL,ABS(YPINTK-YP(K))/WT)
+               YPDEL = MAX(YPDEL,ABS(YPINTK-YP(K))/WTP)
+               YDPDEL = MAX(YDPDEL,ABS(RWORK(JSTAGE+K)-YDP(K))/WTP)
+  220       CONTINUE
+            DEL = MAX(DEL,ABS(C(I)*H)/RANGE)
+            SCL = ONE
+            SCLP = ONE
+            IF (DEL.GT.TEN*RWORK(UROUND)*YPNRM) THEN
+               IF (ABS(H)*FDEL.GT.STBRAD*DEL)
+     *             SCL = STBRAD/R*MAX(DEL/(ABS(H)*FDEL),RMN3)
+            END IF
+            IF (YPDEL.GT.TEN*RWORK(UROUND)*YDPNRM) THEN
+               IF (ABS(H)*YDPDEL.GT.STBRAD*YPDEL)
+     *             SCLP = STBRAD/R*MAX(YPDEL/(ABS(H)*YDPDEL),RMN3)
+            END IF
+            SCALE1 = MIN(SCL,SCLP)
+            IF (SCALE1.LT.ONE) THEN
+               NATT = NATT + 1
+               H = SCALE1*ABS(H)
+               H = DIR*H
+               LAST = .FALSE.
+C
+C RESET THE WEIGHT VECTORS
+C
+               DO 240 K = 1, NEQ
+                  RWORK(NWT+K) = MAX(ABS(Y(K)),RWORK(NTHR+K))
+                  RWORK(NWTP+K) = MAX(ABS(YP(K)),RWORK(NTHRP+K))
+  240          CONTINUE
+               GO TO 80
+            END IF
+C
+C TO SAVE ON STORAGE THE WEIGHT VECTORS RWORK(NWT+...) AND
+C RWORK(NWTP+...) ARE IN LOCATIONS WHERE THE STAGES ARE USUALLY KEPT
+C AND HENCE PHASE2 OPERATES UPTO THE FOURTH STAGE FOR THE 6(4) PAIR AND
+C THE 14TH STAGE FOR THE 12(10) PAIR.
+C
+            PHASE2 = I .LT. FINPH2
+         END IF
+  260 CONTINUE
+C
+      DO 280 K = 1, NEQ
+         RWORK(NRT4+K) = YP(K) + H*RWORK(NRT2+K)
+  280 CONTINUE
+C
+C THE 12(10) PAIR DOES NOT USE FSAL (FIRST STAGE ON STEP N+1 IS SAME
+C AS LAST STAGE ON STEP N), HENCE MUST ADD STAGES UP TO OBTAIN THE
+C APPROXIMATIONS. UTILIZE FACT THAT
+C     BHAT(2)=BHAT(3)=BHAT(4)=BHAT(5)=BHAT(6)=BHAT(16)=BHAT(17)=0.
+C
+      IF (RHIGH.EQ.ONE) THEN
+         DO 300 K = 1, NEQ
+            RWORK(NRT1+K) = BHAT(1)*YDP(K)
+  300    CONTINUE
+         DO 340 J = 7, 15
+            JSTAGE = NBASE + PTR(J-1)*NEQ
+            DO 320 K = 1, NEQ
+               RWORK(NRT1+K) = RWORK(NRT1+K) + BHAT(J)*RWORK(JSTAGE+K)
+  320       CONTINUE
+  340    CONTINUE
+         DO 360 K = 1, NEQ
+            RWORK(NRT3+K) = Y(K) + H*YP(K) + HSQ*RWORK(NRT1+K)
+  360    CONTINUE
+      END IF
+C
+C END OF BLOCK E.
+C
+C
+C BLOCK F.
+C ERROR ESTIMATION.
+C USE THE TEMPORARY STORAGE VECTORS RWORK(NRT1+K) AND RWORK(NRT2+K)
+C TO COMPUTE  YHAT - Y  AND  YPHAT - YP  RESPECTIVELY.
+C SEPARATE SECTIONS ARE USED FOR THE 12(10) AND 6(4) PAIRS
+C IN ORDER TO TAKE ADVANTAGE OF THE FACT THAT FOR THE 6(4) PAIR
+C CASE, B(4) = B(5) = B(6) = ZERO, WHILST FOR THE 12(10) PAIR
+C B(2) = B(3) = B(4) = B(5) = B(6) = B(17) = ZERO AND SIMILARLY FOR
+C BP.
+C
+      DO 380 K = 1, NEQ
+         RWORK(NRT1+K) = RWORK(NRT1+K) - B(1)*YDP(K)
+         RWORK(NRT2+K) = RWORK(NRT2+K) - BP(1)*YDP(K)
+  380 CONTINUE
+C
+      IF (RHIGH.EQ.ZERO) THEN
+C
+C ERROR ESTIMATES FOR THE 6(4) PAIR.
+C
+         DO 420 I = 2, 3
+            JSTAGE = NBASE + PTR(I-1)*NEQ
+            DO 400 K = 1, NEQ
+               RWORK(NRT1+K) = RWORK(NRT1+K) - B(I)*RWORK(JSTAGE+K)
+  400       CONTINUE
+  420    CONTINUE
+         DO 460 I = 2, NSTAGE
+            JSTAGE = NBASE + PTR(I-1)*NEQ
+            DO 440 K = 1, NEQ
+               RWORK(NRT2+K) = RWORK(NRT2+K) - BP(I)*RWORK(JSTAGE+K)
+  440       CONTINUE
+  460    CONTINUE
+C
+      ELSE
+C
+C ERROR ESTIMATES FOR THE 12(10) PAIR.
+C
+         DO 500 I = 7, 16
+            JSTAGE = NBASE + PTR(I-1)*NEQ
+            DO 480 K = 1, NEQ
+               RWORK(NRT1+K) = RWORK(NRT1+K) - B(I)*RWORK(JSTAGE+K)
+               RWORK(NRT2+K) = RWORK(NRT2+K) - BP(I)*RWORK(JSTAGE+K)
+  480       CONTINUE
+  500    CONTINUE
+      END IF
+C
+C FORM ERR, THE MAXIMUM OF THE WEIGHTED MAX NORMS OF THE ESTIMATED
+C LOCAL ERRORS IN Y AND YP.
+C
+      ERR = ZERO
+      ERRP = ZERO
+      DO 520 K = 1, NEQ
+         SK = HSQ*RWORK(NRT1+K)
+         SPK = H*RWORK(NRT2+K)
+         WT = HALF*ABS(Y(K)) + QUAR*ABS(RWORK(NRT3+K)) +
+     *        QUAR*ABS(RWORK(NRT3+K)-SK)
+         WT = MAX(WT,RWORK(NTHR+K))
+         WTP = HALF*ABS(YP(K)) + QUAR*ABS(RWORK(NRT4+K)) +
+     *         QUAR*ABS(RWORK(NRT4+K)-SPK)
+         WTP = MAX(WTP,RWORK(NTHRP+K))
+         ERR = MAX(ERR,ABS(SK)/WT)
+         ERRP = MAX(ERRP,ABS(SPK)/WTP)
+  520 CONTINUE
+      ERR = MAX(ERR,ERRP)
+C
+C END OF BLOCK F.
+C
+      IF (ERR.GT.TOL) THEN
+C
+C BLOCK G.
+C FAILED STEP.
+C
+         LAST = .FALSE.
+         IF (FIRST .AND. .NOT. HGIVEN) THEN
+C
+C PHASE 3 FOR CODE CHOICE OF H0.
+C
+            NATT = NATT + 1
+            IF (SUCCES) THEN
+C
+C THE CODE HAS DISCARDED AN INITIAL STEP IN FAVOUR OF A MUCH LARGER
+C PREDICTED STEP BUT THIS LARGER STEP HAS FAILED.  THEREFORE CARRY
+C OUT OPTIMAL REDUCTION.
+C
+               OPTRED = .TRUE.
+               ALPHA = SCALE*(TOL/ERR)**EXPON
+               ALPHA = MAX(RMN2,ALPHA)
+            ELSE
+C
+C NO SUCCESSFUL STEP YET.  REDUCE H0 TO H0/R AND RESET WEIGHT VECTORS.
+C
+               ALPHA = RMN1
+               PHASE2 = .TRUE.
+               DO 540 K = 1, NEQ
+                  RWORK(NWT+K) = MAX(ABS(Y(K)),RWORK(NTHR+K))
+                  RWORK(NWTP+K) = MAX(ABS(YP(K)),RWORK(NTHRP+K))
+  540          CONTINUE
+            END IF
+         ELSE
+C
+C NOT THE FIRST STEP (OR H0 WAS SUPPLIED BY THE USER), SO USE THE
+C NORMAL STEP REDUCTION ALGORITHM.
+C
+            NFLSTP = NFLSTP + 1
+            IF (FAILED) THEN
+               ALPHA = HALF
+            ELSE
+               FAILED = .TRUE.
+               ALPHA = SCALE*(TOL/ERR)**EXPON
+               ALPHA = MAX(RMN1,ALPHA)
+            END IF
+         END IF
+         H = ALPHA*H
+C
+C TRY THE STEP AGAIN.
+C
+         GO TO 80
+C
+C END OF BLOCK G.
+C
+      ELSE
+C
+C BLOCK H.
+C SUCCESSFUL STEP.
+C
+         SUCCES = .TRUE.
+         BETA = ((ERR/TOL)**EXPON)/SCALE
+         IF (FIRST) THEN
+C
+C PHASE 3 FOR CODE CHOICE OF H0.
+C
+            ALPHA = ONE/MAX(RMN3,BETA)
+         ELSE
+C
+C NORMAL STEPSIZE PREDICTION.
+C
+            ALPHA = ONE/MAX(RMN1,BETA)
+            IF (FAILED) ALPHA = MIN(ONE,ALPHA)
+         END IF
+         HUSED = H
+         H = ALPHA*H
+C
+         IF (FIRST .AND. .NOT. LAST .AND. .NOT. OPTRED .AND. ALPHA.GT.R)
+     *       THEN
+C
+C PHASE 3 FOR CODE CHOICE OF H0. THE CODE HAS ATTEMPTED THE FIRST STEP,
+C IS NOT AT THE END OF THE INTEGRATION RANGE, HAS NOT ENCOUNTERED A STEP
+C FAILURE IN PHASE3, AND THE PREDICTED INCREASE IS LARGER THAN THE
+C MAXIMUM PERMITTED ON A NORMAL STEP. RETAKE THE STEP.
+C
+            HUSED = ZERO
+            NATT = NATT + 1
+            GO TO 60
+         END IF
+C
+         IF (FIRST) RWORK(1) = HUSED
+         FIRST = .FALSE.
+         TOLD = T
+         T = T + HUSED
+         EFFCT1 = EFFCT1 + 1
+         IF (LAST) THEN
+            T = TEND
+            IF (INEFFC) EFFCT2 = EFFCT2 + 1
+C
+C TEST FOR INEFFICIENT USE OF FORMULAS FOR OUTPUT.
+C
+            IF (EFFCT1.GT.HUNDRD) THEN
+               WASTE = DBLE(EFFCT2)/DBLE(EFFCT1) .GT. TENPC
+               IF (WASTE) THEN
+                  IFAIL = 4
+                  EFFCT1 = 0
+                  EFFCT2 = 0
+               END IF
+            END IF
+         END IF
+         ISTP = ISTP + 1
+C
+C ON A SUCCESSFUL STEP, COPY THE NEW APPROXIMATIONS INTO Y AND YP.
+C SAVE THE OLD VALUES OF Y, YP AND YDP IN RWORK,
+C ALONG WITH THE INTERMEDIATE STAGES FOR USE IN CASE DENSE
+C OUTPUT IS REQUIRED.
+C
+         DO 560 K = 1, NEQ
+            RWORK(NRT1+K) = Y(K)
+            Y(K) = RWORK(NRT3+K)
+            RWORK(NRT2+K) = YP(K)
+            YP(K) = RWORK(NRT4+K)
+            RWORK(NRT3+K) = YDP(K)
+  560    CONTINUE
+C
+C SINCE THE 12(10) PAIR DOES NOT USE FSAL (SEE ABOVE), A FUNCTION
+C EVALUATION IS DONE HERE WHICH WILL BE USED ON THE NEXT STEP. FOR THE
+C 6(4) PAIR SET YDP FROM THE LAST STAGE.
+C
+         IF (RHIGH.EQ.ONE) THEN
+            CALL F(NEQ,T,Y,YDP)
+         ELSE
+            JSTAGE = NBASE + PTR(5)*NEQ
+            DO 580 K = 1, NEQ
+               YDP(K) = RWORK(JSTAGE+K)
+  580       CONTINUE
+         END IF
+C
+C IF THE CODE HAS NOT REACHED THE END OF THE INTEGRATION RANGE OR IS
+C OPERATING IN INTERVAL MODE, ATTEMPT THE NEXT STEP.
+C
+         IF ( .NOT. (LAST .OR. (RWORK(8).EQ.ONE))) GO TO 40
+C
+C END OF BLOCK H.
+C
+      END IF
+C
+C BLOCK I.
+C SET DIAGNOSTIC INFORMATION AND EXIT.
+C
+  600 RWORK(2) = HUSED
+      RWORK(3) = H
+      RWORK(4) = DBLE(ISTP)
+      RWORK(5) = DBLE(NFLSTP)
+      RWORK(11) = DBLE(NATT)
+      RWORK(14) = TOLD
+  620 CONTINUE
+C
+C TEST FOR SUCCESSIVE FAILURES AT THE SAME VALUE OF T.
+C
+      IF (IFAIL.GT.0) THEN
+         IF ( .NOT. LOOP) THEN
+            LOOP = .TRUE.
+            TCHECK = T
+         ELSE
+            IF (TCHECK.EQ.T) THEN
+               WRITE (UNIT=IDEV,FMT=99999) T
+               STOP
+            ELSE
+               LOOP = .FALSE.
+            END IF
+         END IF
+      ELSE
+         LOOP = .FALSE.
+      END IF
+C
+C END OF BLOCK I.
+C
+      RETURN
+C
+C
+99999 FORMAT (/' RKNINT STOPPED DUE TO TWO SUCCESSIVE FAILURES',' AT',
+     *       ' THE SAME VALUE OF T (= ',1P,D12.5,')',/)
+99998 FORMAT (/' RKNINT STOPPED DUE TO NONZERO INPUT VALUE OF IFAIL. ',
+     *       'IFAIL = ',I3)
+      END
+      SUBROUTINE RKNDIA(NEQ,HNEXT,HUSED,HSTART,NSUCC,NFAIL,NATT,THRES,
+     *                  THRESP,RWORK)
+C
+C THIS IS THE DIAGNOSTIC ROUTINE ASSOCIATED WITH THE NYSTROM
+C SOLVER RKNINT.  THE VALUES OF THE PARAMETERS IN THE SUBROUTINE
+C CALL ARE TAKEN OUT OF RWORK.
+C
+C SEE COMMENT IN RKNSET ABOUT STORAGE REDUCTION FOR THRES AND THRESP.
+C
+C     .. Parameters ..
+      DOUBLE PRECISION  XINC
+      INTEGER           NOVHD
+      PARAMETER         (XINC=0.2D0,NOVHD=14)
+C     ..
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION  HNEXT, HSTART, HUSED
+      INTEGER           NATT, NEQ, NFAIL, NSUCC
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION  RWORK(*), THRES(NEQ), THRESP(NEQ)
+C     ..
+C     .. Local Scalars ..
+      INTEGER           K, NTHR, NTHRP
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC         INT
+C     ..
+C     .. Executable Statements ..
+C
+      NTHR = NOVHD + 4*NEQ
+      NTHRP = NOVHD + 5*NEQ
+C
+      HSTART = RWORK(1)
+      HUSED = RWORK(2)
+      HNEXT = RWORK(3)
+      NSUCC = INT(RWORK(4)+XINC)
+      NFAIL = INT(RWORK(5)+XINC)
+      NATT = INT(RWORK(11)+XINC)
+      DO 20 K = 1, NEQ
+         THRES(K) = RWORK(NTHR+K)
+         THRESP(K) = RWORK(NTHRP+K)
+   20 CONTINUE
+      RETURN
+      END
+      SUBROUTINE EVAL(NEQ,T,Y,YP,NWANT,TWANT,YWANT,YPWANT,RWORK,IFAIL)
+C
+C THIS ROUTINE USES THE THIRD FORMULA OF THE RKN6(4)6 TRIPLE
+C TO RETURN THE VALUES OF Y AND YP AT THE POINT TWANT, WHICH
+C SHOULD BE BETWEEN T-H AND T.
+C
+C     .. Parameters ..
+      INTEGER         NOVHD
+      DOUBLE PRECISION ONE
+      PARAMETER       (NOVHD=14,ONE=1.0D0)
+C     ..
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION T, TWANT
+      INTEGER         IFAIL, NEQ, NWANT
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION RWORK(NOVHD+14*NEQ), Y(NEQ), YP(NEQ),
+     *                YPWANT(NWANT), YWANT(NWANT)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION H, HSIG, SIGMA, SUM, SUMP, TOLD
+      INTEGER         I, JSTAGE, K, NBASE, NRT1, NRT2, NRT3, NSTAGE
+      LOGICAL         INTERP
+C     ..
+C     .. Local Arrays ..
+      DOUBLE PRECISION BPSTAR(6), BSTAR(6)
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL        CFEVAL
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC       SIGN
+C     ..
+C     .. Executable Statements ..
+C
+      IF (RWORK(10).EQ.ONE) THEN
+         IFAIL = 3
+         GO TO 100
+      END IF
+      NSTAGE = 6
+      IF (NWANT.GT.NEQ .OR. NWANT.LT.1) THEN
+         IFAIL = 2
+         GO TO 100
+      END IF
+C
+C RWORK(NRT1+...) CONTAINS THE PREVIOUS VALUE OF Y.
+C RWORK(NRT2+...) CONTAINS THE PREVIOUS VALUE OF YP.
+C RWORK(NRT3+...) CONTAINS THE PREVIOUS VALUE OF YDP.
+C
+      NRT1 = NOVHD
+      NRT2 = NOVHD + NEQ
+      NRT3 = NOVHD + 2*NEQ
+      NBASE = NOVHD + 6*NEQ
+C
+C CHECK FOR TRIVIAL CASES
+C
+      IFAIL = 0
+      IF (TWANT.EQ.T) THEN
+         DO 20 K = 1, NWANT
+            YWANT(K) = Y(K)
+            YPWANT(K) = YP(K)
+   20    CONTINUE
+         GO TO 100
+      END IF
+      H = RWORK(2)
+      TOLD = RWORK(14)
+      IF (TWANT.EQ.TOLD) THEN
+         DO 40 K = 1, NWANT
+            YWANT(K) = RWORK(NRT1+K)
+            YPWANT(K) = RWORK(NRT2+K)
+   40    CONTINUE
+         GO TO 100
+      END IF
+C
+C CHECK FOR EXTRAPOLATION
+C
+      IF (SIGN(ONE,H).EQ.ONE) THEN
+         INTERP = (TOLD.LT.TWANT) .AND. (TWANT.LT.T)
+      ELSE
+         INTERP = (TOLD.GT.TWANT) .AND. (TWANT.GT.T)
+      END IF
+      IF ( .NOT. INTERP) IFAIL = 1
+C
+      HSIG = TWANT - TOLD
+      SIGMA = HSIG/H
+      CALL CFEVAL(BSTAR,BPSTAR,SIGMA)
+C
+C COMPUTE YWANT AND YPWANT.
+C THE FACT THAT BSTAR(2) = 0 = BPSTAR(2) IS USED.
+C
+      DO 80 K = 1, NWANT
+         SUM = BSTAR(1)*RWORK(NRT3+K)
+         SUMP = BPSTAR(1)*RWORK(NRT3+K)
+         DO 60 I = 3, NSTAGE
+            JSTAGE = NBASE + (I-2)*NEQ
+            SUM = SUM + BSTAR(I)*RWORK(JSTAGE+K)
+            SUMP = SUMP + BPSTAR(I)*RWORK(JSTAGE+K)
+   60    CONTINUE
+         YWANT(K) = RWORK(NRT1+K) + HSIG*(RWORK(NRT2+K)+HSIG*SUM)
+         YPWANT(K) = RWORK(NRT2+K) + HSIG*SUMP
+   80 CONTINUE
+C
+  100 RETURN
+      END
+      SUBROUTINE COEF64(A,C,BPHAT,B,BP)
+C
+C THIS ROUTINE RETURNS THE COEFFICIENTS FOR THE
+C DORMAND/PRINCE RKN6(4)6FD PAIR USED IN THE CODE
+C TO COMPUTE Y AND YP.  THE COEFFICIENTS FOR THE DENSE
+C OUTPUT FORMULA ARE RETURNED BY THE ROUTINE CFEVAL TO
+C THE INTERPOLATION SUBROUTINE.
+C
+C     .. Array Arguments ..
+      DOUBLE PRECISION  A(17,17), B(16), BP(16), BPHAT(17), C(17)
+C     ..
+C     .. Executable Statements ..
+C     DOUBLE PRECISION  R
+C     INTRINSIC         SQRT
+C
+C     R = SQRT(8581.0)
+C
+C     C(1) = 0.
+C     C(2) = (209.0-R)/900.0
+C     C(3) = (209.0-R)/450.0
+C     C(4) = (209.0+R)/450.0
+C     C(5) = 9./10.
+C     C(6) = 1.
+C
+C     A(2,1) = (26131.0-209.0*R)/810000.0
+C     A(3,1) = (26131.0-209.0*R)/607500.0
+C     A(3,2) = (26131.0-209.0*R)/303750.0
+C     A(4,1) = (980403512254.0+7781688431.0*R)/11694469921875.0
+C     A(4,2) = -(1262884486208.0+15385481287.0*R)/11694469921875.0
+C     A(4,3) = (7166233891441.0+78694563299.0*R)/46777879687500.0
+C     A(5,1) = -9.0*(329260.0+3181.0*R)/27040000.0
+C     A(5,2) = 27.0*(35129.0+3331.0*R)/13520000.0
+C     A(5,3) = -27.0*(554358343.0+31040327.0*R)/464060480000.0
+C     A(5,4) = 153.0*(8555257.0-67973.0*R)/2745920000.0
+C     A(6,1) = 329.0/4212.0
+C     A(6,2) = 0.
+C     A(6,3) = (84119543.0+366727.0*R)/409622616.0
+C     A(6,4) = (84119543.0-366727.0*R)/409622616.0
+C     A(6,5) = 200.0/17901.0
+C
+C     BPHAT(1) = 329.0/4212.0
+C     BPHAT(2) = 0.
+C     BPHAT(3) = (389225579.0+96856.0*R)/1024056540.0
+C     BPHAT(4) = (389225579.0-96856.0*R)/1024056540.0
+C     BPHAT(5) = 2000.0/17901.0
+C     BPHAT(6) = 1./20.
+C
+C     B(1) = (2701.0+23.0*R)/4563.0
+C     B(2) = -(9829.0+131.0*R)/9126.0
+C     B(3) = 5.0*(1798.0+17.0*R)/9126.0
+C
+C     BP(1) = 115.0/2106.0
+C     BP(2) = 0.
+C     BP(3) = (84119543.0+366727.0*R)/256014135.0
+C     BP(4) = (84119543.0-366727.0*R)/256014135.0
+C     BP(5) = 6950.0/17901.0
+C     BP(6) = -1./10.
+C
+C     COEFFICIENTS FOR RKN646FD COMPUTED TO 30D BY MACSYMA
+C
+      C(1) = 0.0D0
+      C(2) = 1.29295903136704415288990053209D-1
+      C(3) = 2.58591806273408830577980106418D-1
+      C(4) = 6.70297082615480058310908782471D-1
+      C(5) = 9.0D-1
+      C(6) = 1.0D0
+C
+      A(2,1) = 8.35871528396802532822102346743D-3
+      A(3,1) = 1.11449537119573671042946979566D-2
+      A(3,2) = 2.22899074239147342085893959132D-2
+      A(4,1) = 1.45474742801091785895935232316D-1
+      A(4,2) = -2.29860640522647473120261456297D-1
+      A(4,3) = 3.09034987202967536528726080729D-1
+      A(5,1) = -2.07668262950789954335146205252D-1
+      A(5,2) = 6.86366784292514312273571851042D-1
+      A(5,3) = -1.99549277872349252201326358888D-1
+      A(5,4) = 1.25850756530624894262900713098D-1
+      A(6,1) = 7.81101614434947768281101614435D-2
+      A(6,2) = 0.0D0
+      A(6,3) = 2.882917411897667776841772093D-1
+      A(6,4) = 1.22425537174570410182422422005D-1
+      A(6,5) = 1.1172560192168035305290207251D-2
+C
+      BPHAT(1) = 7.81101614434947768281101614435D-2
+      BPHAT(2) = 0.0D0
+      BPHAT(3) = 3.88843478705982602715952208523D-1
+      BPHAT(4) = 3.71320757928842267403035557523D-1
+      BPHAT(5) = 1.1172560192168035305290207251D-1
+      BPHAT(6) = 5.0D-2
+C
+      B(1) = 1.05885926037041827822001005886D0
+      B(2) = -2.40675137192445205319176777632D0
+      B(3) = 1.84789211155403377497175771746D0
+      B(4) = 0.0D0
+      B(5) = 0.0D0
+      B(6) = 0.0D0
+C
+      BP(1) = 5.46058879392212725546058879392D-2
+      BP(2) = 0.0D0
+      BP(3) = 4.6126678590362684429468353488D-1
+      BP(4) = 1.95880859479312656291875875208D-1
+      BP(5) = 3.88246466677839226858834701972D-1
+      BP(6) = -1.0D-1
+C
+      RETURN
+      END
+      SUBROUTINE CFEVAL(B,BP,S)
+C
+C THIS ROUTINE RETURNS THE COEFFICIENTS FOR Y AND YP FROM THE
+C DORMAND/PRINCE DENSE OUTPUT PAIR OF RKN6(4)6FD.
+C
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION  S
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION  B(6), BP(6)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  U, V, W, X
+C     ..
+C     .. Executable Statements ..
+C
+C     R = SQRT(8581.0D0)
+C
+      B(1) = (((900.D0*S-3819.D0)*S+6386.D0)*S-5244.D0)*S + 2106.D0
+      B(1) = B(1)/4212.D0
+      BP(1) = (((5400.D0*S-19095.D0)*S+25544.D0)*S-15732.D0)*S + 4212.D0
+      BP(1) = BP(1)/4212.D0
+      B(2) = 0.D0
+      BP(2) = 0.D0
+C
+C     U = 5860823.0D0 - 152228.0D0*R
+C     V = 4929647204.0D0 - 156109769.0D0*R
+C     W = 22190560391.0D0 - 1109665151.0D0*R
+C     X = 81356461.0D0 + 25954829.0D0*R
+C     Y = 22529243880.0D0
+C     Z = 11264621940.0D0
+C     B(3) = (((1800.*U*S-6.*V)*S+W)*S+18.*X)*S/Y
+C     BP(3) = (((5400.*U*S-15.*V)*S+2.*W)*S+27.*X)*S/Z
+C
+      U = -.365774278775981018074400638167D-3
+      V = -.423066852735158392593161679389D0
+      W = -.357765287229492094385275612595D1
+      X = .110329844381694622139549133756D0
+      B(3) = (((1800.D0*U*S-6.D0*V)*S+W)*S+18.D0*X)*S
+      U = -.731548557551962036148801276334D-3
+      V = -.846133705470316785186323358781D0
+      W = -.715530574458984188770551225188D1
+      X = .220659688763389244279098267512D0
+      BP(3) = (((5400.D0*U*S-15.D0*V)*S+2.D0*W)*S+27.D0*X)*S
+C
+C     U = 5860823.0D0 + 152228.0D0*R
+C     V = 4929647204.0D0 + 156109769.0D0*R
+C     W = 22190560391.0D0 + 1109665151.0D0*R
+C     X = 81356461.0D0 - 25954829.0D0*R
+C     B(4) = (((1800.*U*S-6.*V)*S+W)*S+18.*X)*S/Y
+C     BP(4) = (((5400.*U*S-15.*V)*S+2.*W)*S+27.*X)*S/Z
+C
+      U = .886060093179442480359392334923D-3
+      V = .860688925651348955842548458187D0
+      W = .554758675105232911302563118117D1
+      X = -.103107545982925635135268011828D0
+      B(4) = (((1800.D0*U*S-6.D0*V)*S+W)*S+18.D0*X)*S
+      U = .177212018635888496071878466985D-2
+      V = .172137785130269791168509691638D1
+      W = .110951735021046582260512623623D2
+      X = -.206215091965851270270536023656D0
+      BP(4) = (((5400.D0*U*S-15.D0*V)*S+2.D0*W)*S+27.D0*X)*S
+C
+      B(5) = ((225.D0*S-651.D0)*S+620.D0)*S - 195.D0
+      B(5) = -200.D0*S*B(5)/17901.D0
+      BP(5) = ((270.D0*S-651.D0)*S+496.D0)*S - 117.D0
+      BP(5) = -1000.D0*S*BP(5)/17901.D0
+      B(6) = S*(S-1.D0)*((300.D0*S-523.D0)*S+234.D0)/220.D0
+      BP(6) = S*(((1800.D0*S-4115.D0)*S+3028.D0)*S-702.D0)/220.D0
+C
+      RETURN
+      END
+      SUBROUTINE COEFHI(A,C,BCAP,BDCAP,B,BD)
+C
+C THIS ROUTINE RETURNS THE COEFFICIENTS FOR THE RUNGE-KUTTA
+C NYSTROM 12(10) PAIR OF DORMAND AND PRINCE.  THE COEFFICIENTS
+C WERE SUPPLIED BY D/P.
+C COEFFICIENTS OF RKN12(10)17M TO 30 DECIMAL PLACES FROM MACSYMA.
+C
+C     .. Array Arguments ..
+      DOUBLE PRECISION  A(17,17), B(16), BCAP(15), BD(16), BDCAP(17),
+     *                  C(17)
+C     ..
+C     .. Executable Statements ..
+C
+      C(1) = 0.0D0
+      C(2) = 2.0D-2
+      C(3) = 4.0D-2
+      C(4) = 1.0D-1
+      C(5) = 1.33333333333333333333333333333D-1
+      C(6) = 1.6D-1
+      C(7) = 5.0D-2
+      C(8) = 2.0D-1
+      C(9) = 2.5D-1
+      C(10) = 3.33333333333333333333333333333D-1
+      C(11) = 5.0D-1
+      C(12) = 5.55555555555555555555555555556D-1
+      C(13) = 7.5D-1
+      C(14) = 8.57142857142857142857142857143D-1
+      C(15) = 9.45216222272014340129957427739D-1
+      C(16) = 1.0D0
+      C(17) = 1.0D0
+C
+      A(2,1) = 2.0D-4
+C
+      A(3,1) = 2.66666666666666666666666666667D-4
+      A(3,2) = 5.33333333333333333333333333333D-4
+C
+      A(4,1) = 2.91666666666666666666666666667D-3
+      A(4,2) = -4.16666666666666666666666666667D-3
+      A(4,3) = 6.25D-3
+C
+      A(5,1) = 1.64609053497942386831275720165D-3
+      A(5,2) = 0.0D0
+      A(5,3) = 5.48696844993141289437585733882D-3
+      A(5,4) = 1.75582990397805212620027434842D-3
+C
+      A(6,1) = 1.9456D-3
+      A(6,2) = 0.0D0
+      A(6,3) = 7.15174603174603174603174603175D-3
+      A(6,4) = 2.91271111111111111111111111111D-3
+      A(6,5) = 7.89942857142857142857142857143D-4
+C
+      A(7,1) = 5.6640625D-4
+      A(7,2) = 0.0D0
+      A(7,3) = 8.80973048941798941798941798942D-4
+      A(7,4) = -4.36921296296296296296296296296D-4
+      A(7,5) = 3.39006696428571428571428571429D-4
+      A(7,6) = -9.94646990740740740740740740741D-5
+C
+      A(8,1) = 3.08333333333333333333333333333D-3
+      A(8,2) = 0.0D0
+      A(8,3) = 0.0D0
+      A(8,4) = 1.77777777777777777777777777778D-3
+      A(8,5) = 2.7D-3
+      A(8,6) = 1.57828282828282828282828282828D-3
+      A(8,7) = 1.08606060606060606060606060606D-2
+C
+      A(9,1) = 3.65183937480112971375119150338D-3
+      A(9,2) = 0.0D0
+      A(9,3) = 3.96517171407234306617557289807D-3
+      A(9,4) = 3.19725826293062822350093426091D-3
+      A(9,5) = 8.22146730685543536968701883401D-3
+      A(9,6) = -1.31309269595723798362013884863D-3
+      A(9,7) = 9.77158696806486781562609494147D-3
+      A(9,8) = 3.75576906923283379487932641079D-3
+C
+      A(10,1) = 3.70724106871850081019565530521D-3
+      A(10,2) = 0.0D0
+      A(10,3) = 5.08204585455528598076108163479D-3
+      A(10,4) = 1.17470800217541204473569104943D-3
+      A(10,5) = -2.11476299151269914996229766362D-2
+      A(10,6) = 6.01046369810788081222573525136D-2
+      A(10,7) = 2.01057347685061881846748708777D-2
+      A(10,8) = -2.83507501229335808430366774368D-2
+      A(10,9) = 1.48795689185819327555905582479D-2
+C
+      A(11,1) = 3.51253765607334415311308293052D-2
+      A(11,2) = 0.0D0
+      A(11,3) = -8.61574919513847910340576078545D-3
+      A(11,4) = -5.79144805100791652167632252471D-3
+      A(11,5) = 1.94555482378261584239438810411D0
+      A(11,6) = -3.43512386745651359636787167574D0
+      A(11,7) = -1.09307011074752217583892572001D-1
+      A(11,8) = 2.3496383118995166394320161088D0
+      A(11,9) = -7.56009408687022978027190729778D-1
+      A(11,10) = 1.09528972221569264246502018618D-1
+C
+      A(12,1) = 2.05277925374824966509720571672D-2
+      A(12,2) = 0.0D0
+      A(12,3) = -7.28644676448017991778247943149D-3
+      A(12,4) = -2.11535560796184024069259562549D-3
+      A(12,5) = 9.27580796872352224256768033235D-1
+      A(12,6) = -1.65228248442573667907302673325D0
+      A(12,7) = -2.10795630056865698191914366913D-2
+      A(12,8) = 1.20653643262078715447708832536D0
+      A(12,9) = -4.13714477001066141324662463645D-1
+      A(12,10) = 9.07987398280965375956795739516D-2
+      A(12,11) = 5.35555260053398504916870658215D-3
+C
+      A(13,1) = -1.43240788755455150458921091632D-1
+      A(13,2) = 0.0D0
+      A(13,3) = 1.25287037730918172778464480231D-2
+      A(13,4) = 6.82601916396982712868112411737D-3
+      A(13,5) = -4.79955539557438726550216254291D0
+      A(13,6) = 5.69862504395194143379169794156D0
+      A(13,7) = 7.55343036952364522249444028716D-1
+      A(13,8) = -1.27554878582810837175400796542D-1
+      A(13,9) = -1.96059260511173843289133255423D0
+      A(13,10) = 9.18560905663526240976234285341D-1
+      A(13,11) = -2.38800855052844310534827013402D-1
+      A(13,12) = 1.59110813572342155138740170963D-1
+C
+      A(14,1) = 8.04501920552048948697230778134D-1
+      A(14,2) = 0.0D0
+      A(14,3) = -1.66585270670112451778516268261D-2
+      A(14,4) = -2.1415834042629734811731437191D-2
+      A(14,5) = 1.68272359289624658702009353564D1
+      A(14,6) = -1.11728353571760979267882984241D1
+      A(14,7) = -3.37715929722632374148856475521D0
+      A(14,8) = -1.52433266553608456461817682939D1
+      A(14,9) = 1.71798357382154165620247684026D1
+      A(14,10) = -5.43771923982399464535413738556D0
+      A(14,11) = 1.38786716183646557551256778839D0
+      A(14,12) = -5.92582773265281165347677029181D-1
+      A(14,13) = 2.96038731712973527961592794552D-2
+C
+      A(15,1) = -9.13296766697358082096250482648D-1
+      A(15,2) = 0.0D0
+      A(15,3) = 2.41127257578051783924489946102D-3
+      A(15,4) = 1.76581226938617419820698839226D-2
+      A(15,5) = -1.48516497797203838246128557088D1
+      A(15,6) = 2.15897086700457560030782161561D0
+      A(15,7) = 3.99791558311787990115282754337D0
+      A(15,8) = 2.84341518002322318984542514988D1
+      A(15,9) = -2.52593643549415984378843352235D1
+      A(15,10) = 7.7338785423622373655340014114D0
+      A(15,11) = -1.8913028948478674610382580129D0
+      A(15,12) = 1.00148450702247178036685959248D0
+      A(15,13) = 4.64119959910905190510518247052D-3
+      A(15,14) = 1.12187550221489570339750499063D-2
+C
+      A(16,1) = -2.75196297205593938206065227039D-1
+      A(16,2) = 0.0D0
+      A(16,3) = 3.66118887791549201342293285553D-2
+      A(16,4) = 9.7895196882315626246509967162D-3
+      A(16,5) = -1.2293062345886210304214726509D1
+      A(16,6) = 1.42072264539379026942929665966D1
+      A(16,7) = 1.58664769067895368322481964272D0
+      A(16,8) = 2.45777353275959454390324346975D0
+      A(16,9) = -8.93519369440327190552259086374D0
+      A(16,10) = 4.37367273161340694839327077512D0
+      A(16,11) = -1.83471817654494916304344410264D0
+      A(16,12) = 1.15920852890614912078083198373D0
+      A(16,13) = -1.72902531653839221518003422953D-2
+      A(16,14) = 1.93259779044607666727649875324D-2
+      A(16,15) = 5.20444293755499311184926401526D-3
+C
+      A(17,1) = 1.30763918474040575879994562983D0
+      A(17,2) = 0.0D0
+      A(17,3) = 1.73641091897458418670879991296D-2
+      A(17,4) = -1.8544456454265795024362115588D-2
+      A(17,5) = 1.48115220328677268968478356223D1
+      A(17,6) = 9.38317630848247090787922177126D0
+      A(17,7) = -5.2284261999445422541474024553D0
+      A(17,8) = -4.89512805258476508040093482743D1
+      A(17,9) = 3.82970960343379225625583875836D1
+      A(17,10) = -1.05873813369759797091619037505D1
+      A(17,11) = 2.43323043762262763585119618787D0
+      A(17,12) = -1.04534060425754442848652456513D0
+      A(17,13) = 7.17732095086725945198184857508D-2
+      A(17,14) = 2.16221097080827826905505320027D-3
+      A(17,15) = 7.00959575960251423699282781988D-3
+      A(17,16) = 0.0D0
+C
+C
+      BCAP(1) = 1.21278685171854149768890395495D-2
+      BCAP(2) = 0.0D0
+      BCAP(3) = 0.0D0
+      BCAP(4) = 0.0D0
+      BCAP(5) = 0.0D0
+      BCAP(6) = 0.0D0
+      BCAP(7) = 8.62974625156887444363792274411D-2
+      BCAP(8) = 2.52546958118714719432343449316D-1
+      BCAP(9) = -1.97418679932682303358307954886D-1
+      BCAP(10) = 2.03186919078972590809261561009D-1
+      BCAP(11) = -2.07758080777149166121933554691D-2
+      BCAP(12) = 1.09678048745020136250111237823D-1
+      BCAP(13) = 3.80651325264665057344878719105D-2
+      BCAP(14) = 1.16340688043242296440927709215D-2
+      BCAP(15) = 4.65802970402487868693615238455D-3
+C      BCAP(16) =      0.0D0
+C      BCAP(17) =      0.0D0
+C
+      BDCAP(1) = 1.21278685171854149768890395495D-2
+      BDCAP(2) = 0.0D0
+      BDCAP(3) = 0.0D0
+      BDCAP(4) = 0.0D0
+      BDCAP(5) = 0.0D0
+      BDCAP(6) = 0.0D0
+      BDCAP(7) = 9.08394342270407836172412920433D-2
+      BDCAP(8) = 3.15683697648393399290429311645D-1
+      BDCAP(9) = -2.63224906576909737811077273181D-1
+      BDCAP(10) = 3.04780378618458886213892341513D-1
+      BDCAP(11) = -4.15516161554298332243867109382D-2
+      BDCAP(12) = 2.46775609676295306562750285101D-1
+      BDCAP(13) = 1.52260530105866022937951487642D-1
+      BDCAP(14) = 8.14384816302696075086493964505D-2
+      BDCAP(15) = 8.50257119389081128008018326881D-2
+      BDCAP(16) = -9.15518963007796287314100251351D-3
+      BDCAP(17) = 2.5D-2
+C
+      B(1) = 1.70087019070069917527544646189D-2
+      B(2) = 0.0D0
+      B(3) = 0.0D0
+      B(4) = 0.0D0
+      B(5) = 0.0D0
+      B(6) = 0.0D0
+      B(7) = 7.22593359308314069488600038463D-2
+      B(8) = 3.72026177326753045388210502067D-1
+      B(9) = -4.01821145009303521439340233863D-1
+      B(10) = 3.35455068301351666696584034896D-1
+      B(11) = -1.31306501075331808430281840783D-1
+      B(12) = 1.89431906616048652722659836455D-1
+      B(13) = 2.68408020400290479053691655806D-2
+      B(14) = 1.63056656059179238935180933102D-2
+      B(15) = 3.79998835669659456166597387323D-3
+      B(16) = 0.0D0
+C      B(17) =      0.0D0
+C
+      BD(1) = 1.70087019070069917527544646189D-2
+      BD(2) = 0.0D0
+      BD(3) = 0.0D0
+      BD(4) = 0.0D0
+      BD(5) = 0.0D0
+      BD(6) = 0.0D0
+      BD(7) = 7.60624588745593757356421093119D-2
+      BD(8) = 4.65032721658441306735263127583D-1
+      BD(9) = -5.35761526679071361919120311817D-1
+      BD(10) = 5.03182602452027500044876052344D-1
+      BD(11) = -2.62613002150663616860563681567D-1
+      BD(12) = 4.26221789886109468625984632024D-1
+      BD(13) = 1.07363208160116191621476662322D-1
+      BD(14) = 1.14139659241425467254626653171D-1
+      BD(15) = 6.93633866500486770090602920091D-2
+      BD(16) = 2.0D-2
+C      BD(17) =      0.0D0
+C
+      RETURN
+C
+C
+C                                    c  = 0
+C                                     1
+C
+C
+C                                         1
+C                                    c  = --
+C                                     2   50
+C
+C
+C                                         1
+C                                    c  = --
+C                                     3   25
+C
+C
+C                                         1
+C                                    c  = --
+C                                     4   10
+C
+C
+C                                         2
+C                                    c  = --
+C                                     5   15
+C
+C
+C                                         4
+C                                    c  = --
+C                                     6   25
+C
+C
+C                                         1
+C                                    c  = --
+C                                     7   20
+C
+C
+C                                         1
+C                                    c  = -
+C                                     8   5
+C
+C
+C                                         1
+C                                    c  = -
+C                                     9   4
+C
+C
+C                                          1
+C                                    c   = -
+C                                     10   3
+C
+C
+C                                          1
+C                                    c   = -
+C                                     11   2
+C
+C
+C                                          5
+C                                    c   = -
+C                                     12   9
+C
+C
+C                                          3
+C                                    c   = -
+C                                     13   4
+C
+C
+C                                          6
+C                                    c   = -
+C                                     14   7
+C
+C
+C                                        8437
+C                                  c   = ----
+C                                   15   8926
+C
+C
+C                                    c   = 1
+C                                     16
+C
+C
+C                                    c   = 1
+C                                     17
+C
+C
+C                                          1
+C                                 a     = ----
+C                                  2, 1   5000
+C
+C
+C                                          1
+C                                 a     = ----
+C                                  3, 1   3750
+C
+C
+C                                          1
+C                                 a     = ----
+C                                  3, 2   1875
+C
+C
+C                                          7
+C                                 a     = ----
+C                                  4, 1   2400
+C
+C
+C                                            1
+C                                 a     = - ---
+C                                  4, 2     240
+C
+C
+C                                           1
+C                                  a     = ---
+C                                   4, 3   160
+C
+C
+C                                          2
+C                                 a     = ----
+C                                  5, 1   1215
+C
+C
+C                                   a     = 0
+C                                    5, 2
+C
+C
+C                                           4
+C                                  a     = ---
+C                                   5, 3   729
+C
+C
+C                                          32
+C                                 a     = -----
+C                                  5, 4   18225
+C
+C
+C                                          152
+C                                 a     = -----
+C                                  6, 1   78125
+C
+C
+C                                   a     = 0
+C                                    6, 2
+C
+C
+C                                         1408
+C                                a     = ------
+C                                 6, 3   196875
+C
+C
+C                                         2048
+C                                a     = ------
+C                                 6, 4   703125
+C
+C
+C                                         432
+C                                a     = ------
+C                                 6, 5   546875
+C
+C
+C                                          29
+C                                 a     = -----
+C                                  7, 1   51200
+C
+C
+C                                   a     = 0
+C                                    7, 2
+C
+C
+C                                         341
+C                                a     = ------
+C                                 7, 3   387072
+C
+C
+C                                          151
+C                               a     = - ------
+C                                7, 4     345600
+C
+C
+C                                         243
+C                                a     = ------
+C                                 7, 5   716800
+C
+C
+C                                           11
+C                               a     = - ------
+C                                7, 6     110592
+C
+C
+C                                          37
+C                                 a     = -----
+C                                  8, 1   12000
+C
+C
+C                                   a     = 0
+C                                    8, 2
+C
+C
+C                                   a     = 0
+C                                    8, 3
+C
+C
+C                                          2
+C                                 a     = ----
+C                                  8, 4   1125
+C
+C
+C                                          27
+C                                 a     = -----
+C                                  8, 5   10000
+C
+C
+C                                          5
+C                                 a     = ----
+C                                  8, 6   3168
+C
+C
+C                                          224
+C                                 a     = -----
+C                                  8, 7   20625
+C
+C
+C                                    100467472123373
+C                           a     = -----------------
+C                            9, 1   27511470744477696
+C
+C
+C                                   a     = 0
+C                                    9, 2
+C
+C
+C                                    101066550784375
+C                           a     = -----------------
+C                            9, 3   25488568483854336
+C
+C
+C                                    49478218404275
+C                           a     = -----------------
+C                            9, 4   15475202293768704
+C
+C
+C                                    21990175014231
+C                           a     = ----------------
+C                            9, 5   2674726322379776
+C
+C
+C                                    3576386017671875
+C                         a     = - -------------------
+C                          9, 6     2723635603703291904
+C
+C
+C                                      16163228153
+C                             a     = -------------
+C                              9, 7   1654104722787
+C
+C
+C                                    38747524076705
+C                           a     = -----------------
+C                            9, 8   10316801529179136
+C
+C
+C                                 62178936641284701329
+C                       a      = -----------------------
+C                        10, 1   16772293867250014666848
+C
+C
+C                                  a      = 0
+C                                   10, 2
+C
+C
+C                                     46108564356250
+C                           a      = ----------------
+C                            10, 3   9072835168325103
+C
+C
+C                                     1522561724950
+C                           a      = ----------------
+C                            10, 4   1296119309760729
+C
+C
+C                                   45978886013453735443
+C                       a      = - ----------------------
+C                        10, 5     2174186242050927827184
+C
+C
+C                               299403512366617849203125
+C                      a      = -------------------------
+C                       10, 6   4981371278573254356053856
+C
+C
+C                                 15571226634087127616
+C                        a      = ---------------------
+C                         10, 7   774466927638876610083
+C
+C
+C                                  133736375367792139885
+C                       a      = - ----------------------
+C                        10, 8     4717207650164066625051
+C
+C
+C                                       7461389216
+C                             a      = ------------
+C                              10, 9   501451974639
+C
+C
+C                             501256914705531962342417557181
+C                   a      = --------------------------------
+C                    11, 1   14270506505142656332600844507392
+C
+C
+C                                  a      = 0
+C                                   11, 2
+C
+C
+C                                      1143766215625
+C                          a      = - ---------------
+C                           11, 3     132752960853408
+C
+C
+C                                       6864570325
+C                           a      = - -------------
+C                            11, 4     1185294293334
+C
+C
+C                           194348369382310456605879163404183
+C                  a      = ---------------------------------
+C                   11, 5   99893545535998594328205911551744
+C
+C
+C                           94634958447010580589908066176109375
+C                a      = - -----------------------------------
+C                 11, 6     27549212808177898050085930321520256
+C
+C
+C                              17006472665356285286219618514
+C                   a      = - ------------------------------
+C                    11, 7     155584463413110817059022733377
+C
+C
+C                            33530528814694461893884349656345
+C                   a      = --------------------------------
+C                    11, 8   14270506505142656332600844507392
+C
+C
+C                                   13439782155791134368
+C                        a      = - --------------------
+C                         11, 9     17777268379678341919
+C
+C
+C                                    1441341768767571
+C                          a       = -----------------
+C                           11, 10   13159456712985856
+C
+C
+C                      105854110734231079069010159870911189747853
+C             a      = -------------------------------------------
+C              12, 1   5156624149476760916008179453333467046288864
+C
+C
+C                                  a      = 0
+C                                   12, 2
+C
+C
+C                                    144579793509250000
+C                        a      = - --------------------
+C                         12, 3     19842290513127000261
+C
+C
+C                                    101935644099967250
+C                        a      = - --------------------
+C                         12, 4     48188419817594143491
+C
+C
+C                         1585474394319811696785932424388196965
+C                a      = -------------------------------------
+C                 12, 5   1709257457318830856936350991091849456
+C
+C
+C                      843499776333774172853009613469456309715703125
+C           a      = - ---------------------------------------------
+C            12, 6     510505790798199330684809765880013237582597536
+C
+C
+C                        15057703799298260121553794369056896088480
+C             a      = - ------------------------------------------
+C              12, 7     714327132646734138085088291809720015274157
+C
+C
+C                      1749840442221344572962864758990584360232600
+C             a      = -------------------------------------------
+C              12, 8   1450300542040339007627300471250037606768743
+C
+C
+C                             11255775246405733991656178432768
+C                  a      = - --------------------------------
+C                   12, 9     27206626483067760480757659602193
+C
+C
+C                                   669010348769579696
+C                         a       = -------------------
+C                          12, 10   7368057640845834597
+C
+C
+C                                      4598083098752
+C                           a       = ---------------
+C                            12, 11   858563707934367
+C
+C
+C                     1639758773684715326849438048667467886824967397
+C          a      = - -----------------------------------------------
+C           13, 1     11447568726280607813664651120965112496134881280
+C
+C
+C                                  a      = 0
+C                                   13, 2
+C
+C
+C                                     3942453384375
+C                           a      = ---------------
+C                            13, 3   314673684985856
+C
+C
+C                                     11737114158175
+C                           a      = ----------------
+C                            13, 4   1719466921529856
+C
+C
+C                           23710715033675876683332701739887457
+C                a      = - -----------------------------------
+C                 13, 5     4940189888325748664958546898558976
+C
+C
+C                  498150575499633273684774666731162498301909124515625
+C         a      = ---------------------------------------------------
+C          13, 6   87415924307623977386706008889913792042985180430336
+C
+C
+C                      64881557768202140428371179540010005713998551
+C             a      = --------------------------------------------
+C              13, 7   85896810580242200654071863296887242202224768
+C
+C
+C                     2336309182318568698279006266321563486172654055
+C          a      = - -----------------------------------------------
+C           13, 8     18316109962048972501863441793544179993815810048
+C
+C
+C                            493399374030747471036018890494175
+C                 a      = - ---------------------------------
+C                  13, 9     251658285736841065236836942273664
+C
+C
+C                             418285003077108927126515545155
+C                   a       = ------------------------------
+C                    13, 10   455369916679568501838710898688
+C
+C
+C                                     15171723902781457
+C                         a       = - -----------------
+C                          13, 11     63532954684873728
+C
+C
+C                                    1501203688494867
+C                          a       = ----------------
+C                           13, 12   9434957026426880
+C
+C
+C                   34188549803371802849576690267872548602326398788953
+C          a      = --------------------------------------------------
+C           14, 1   42496542183406636759747616530102745233754251202880
+C
+C
+C                                  a      = 0
+C                                   14, 2
+C
+C
+C                                    18971246281693750
+C                        a      = - -------------------
+C                         14, 3     1138830954584356089
+C
+C
+C                                    59230464334542700
+C                        a      = - -------------------
+C                         14, 4     2765732318276293359
+C
+C
+C                        5147939981309774383134903239728881770043
+C               a      = ----------------------------------------
+C                14, 5   305929030949718561059100251282184099064
+C
+C
+C                 362572021355026772337065830211467821556305840522907812
+C      a      = - ------------------------------------------------------
+C       14, 6     324512095420929759624784749347170583153994213035432256
+C
+C
+C                    60305503318319653518547439098565661266182518307816
+C         a      = - --------------------------------------------------
+C          14, 7     17856872599361492097414471889911176856851308259643
+C
+C
+C                   1036461878759982363277481306266144563833492657780645
+C        a      = - ----------------------------------------------------
+C         14, 8      67994467493450618815596186448164392374006801924608
+C
+C
+C                        128398681100219349205889126776607047000
+C               a      = ---------------------------------------
+C                14, 9    7473801441221286756994805323613917077
+C
+C
+C                             49156374556350058671822606102117
+C                 a       = - --------------------------------
+C                  14, 10     9039888303968618912866414995904
+C
+C
+C                                  12253036339964386945
+C                        a       = --------------------
+C                         14, 11   8828680926314891943
+C
+C
+C                                  647188390508758231059
+C                      a       = - ----------------------
+C                       14, 12     1092148506009694282240
+C
+C
+C                                     10915833599872
+C                           a       = ---------------
+C                            14, 13   368729913707897
+C
+C
+Ca      =
+C 15, 1
+C
+C    4939337286263213195547765488387521892799075623007291241961609516532
+C  - -------------------------------------------------------------------
+C    5408250052307451520718178852915698257207815452080611897685945761264
+C
+C
+C                                  a      = 0
+C                                   15, 2
+C
+C
+C                          7588799849596321243074032368290625
+C                a      = -------------------------------------
+C                 15, 3   3147217749590114939838670370597819616
+C
+C
+C                          16870665568420512953501332587233725
+C                 a      = ------------------------------------
+C                  15, 4   955405388268427749593882076788623812
+C
+C
+C               80864251591837801485030858227147601466956843757908779606
+C    a      = - --------------------------------------------------------
+C     15, 5     54447992506702009927986632715967769032585338753056786562
+C
+C
+Ca      =
+C 15, 6
+C
+C    4610328329649866588704236006423149172472141907645890762410296050212
+C    -------------------------------------------------------------------
+C    2135428689710103309390449198881479603148467934048051598947383737508
+C
+C
+Ca      =
+C 15, 7
+C
+C       4159963831215576225909381034291748993887819834160487158570788681
+C       ----------------------------------------------------------------
+C       1040533184037697645660563795162185415624171583014576682740416336
+C
+C
+Ca      =
+C 15, 8
+C
+C  738139214212435127943380193414870655354213707189052136566460666444958
+C  ---------------------------------------------------------------------
+C  259596002510757672994472584939953516345975141699869371088925396540699
+C
+C
+C              333683433458405281346882867597135977469443722954786270692
+C   a      = - ---------------------------------------------------------
+C    15, 9     132102862435303266640535426836147775872819092781208127980
+C
+C
+C               42661937996741208687503901295747546613008142604821349179
+C     a       = --------------------------------------------------------
+C      15, 10   55162410119399855550108207148248549410926885937244965785
+C
+C
+C                       630755628691078947314733435975762542732598947
+C           a       = - ---------------------------------------------
+C            15, 11     333503232300511886435069380727586592765317456
+C
+C
+C                     1522350657470125698997653827133798314909646891
+C           a       = ----------------------------------------------
+C            15, 12   1520094067152619944607524353149267399623188480
+C
+C
+C                          305575414262755427083262606101825880
+C               a       = --------------------------------------
+C                15, 13   65839748482572312891297405431209259829
+C
+C
+C                         256624643108055110568255672032710477795
+C              a       = -----------------------------------------
+C               15, 14   22874609758516552135947898572671559986304
+C
+C
+C              571597862947184314270186718640978947715678864684269066846
+C   a      = - ---------------------------------------------------------
+C    16, 1     207705506488030390761613596901272001190776700439774478634
+C
+C
+C                                  a      = 0
+C                                   16, 2
+C
+C
+C                                     66981514290625
+C                           a      = ----------------
+C                            16, 3   1829501741761029
+C
+C
+C                                     43495576635800
+C                           a      = ----------------
+C                            16, 4   4443075658562499
+C
+C
+C                           127865248353371207265315478623656127
+C                a      = - ------------------------------------
+C                 16, 5     10401415428935853634424440540325344
+C
+C
+C              131656514265807573955723157408023481433806699348396032656
+C     a      = ---------------------------------------------------------
+C      16, 6    92668695535091962564795912774190176478892159517481612467
+C
+C
+C             3881494143728609118531066904799685950051960514138645179820
+C    a      = ----------------------------------------------------------
+C     16, 7   2446349095978358868919950548516272963929118212742344026549
+C
+C
+C            16292266704968075585259245375842819400619822954470178684291
+C   a      = -----------------------------------------------------------
+C    16, 8   66288722243155885736983218667976563740242178853010092663614
+C
+C
+C                     43986024977384568043684084266385512680544563954
+C          a      = - -----------------------------------------------
+C           16, 9     4922783599524658241955780540171948284522386185
+C
+C
+C                      285912200202585226675651763671663063668290787
+C            a       = ---------------------------------------------
+C             16, 10   65371192072964016939690070594254881767827200
+C
+C
+C                               6776815256667778089672518929
+C                   a       = - ----------------------------
+C                    16, 11     3693654613173093729492918708
+C
+C
+C                            398946554885847045598775476868169
+C                  a       = ---------------------------------
+C                   16, 12   344154261237450078839899047372800
+C
+C
+C                                     76630698033396272
+C                        a       = - -------------------
+C                         16, 13     4432017119727044925
+C
+C
+C                                    28401702316003037
+C                         a       = -------------------
+C                          16, 14   1469612686944417840
+C
+C
+C                          66049942462586341419969330578128801
+C               a       = --------------------------------------
+C                16, 15   12691068622536592094919763114637498325
+C
+C
+C         83940754497395557520874219603241359529066454343054832302344735
+Ca      = --------------------------------------------------------------
+C 17, 1   64192596456995578553872477759926464976144474354415663868673233
+C
+C
+C                                  a      = 0
+C                                   17, 2
+C
+C
+C                                 892543892035485503125
+C                       a      = -----------------------
+C                        17, 3   51401651664490002607536
+C
+C
+C                                 12732238157949399705325
+C                      a      = - ------------------------
+C                       17, 4     686579204375687891972088
+C
+C
+C                      5290376174838819557032232941734928484252549
+C             a      = -------------------------------------------
+C              17, 5   357179779572898187570048915214361602000384
+C
+C
+C          2687322933801750693719999180471745666665021538793817303193221
+C a      = -------------------------------------------------------------
+C  17, 6   2863980005760296740624015421425947092438943496681472214589916
+C
+C
+Ca      =
+C 17, 7
+C
+C        197649786681880330585741729796159873563741413724149351549277865
+C      - ---------------------------------------------------------------
+C        378029217824623393200881653405474359138017953416246216408422692
+C
+C
+Ca      =
+C 17, 8
+C
+C     100286075630483975704018828319990067604207336241794360144098685695
+C   - ------------------------------------------------------------------
+C      20486915674765670626893195919603679319429068544972409068469849579
+C
+C
+C                8739866119696575810411768434844068608106287881671139259
+C       a      = -------------------------------------------------------
+C        17, 9   2282122412587168891929052689609009868137678763277087160
+C
+C
+C                   7922242431969626895355493632206885458496418610471389
+C       a       = - ----------------------------------------------------
+C        17, 10     748272134517487495468365669337985635214015258726400
+C
+C
+C                          2777643183645212014464950387658055285
+C                a       = -------------------------------------
+C                 17, 11   1141545470045611737197667093465955392
+C
+C
+C                         1372659703515496442825084239977218110461
+C             a       = - ----------------------------------------
+C              17, 12     1313121960368535725613950174847107891200
+C
+C
+C                               6144417902699179309851023
+C                     a       = --------------------------
+C                      17, 13   85608793932459282773805825
+C
+C
+C                                140294243355138853053241
+C                     a       = --------------------------
+C                      17, 14   64884622846351585391642880
+C
+C
+C                       168671028523891369934964082754523881107337
+C            a       = --------------------------------------------
+C             17, 15   24062875279623260368388427013982199424119600
+C
+C
+C                                  a       = 0
+C                                   17, 16
+C
+C
+C                                      63818747
+C                               bc  = ----------
+C                                 1   5262156900
+C
+C
+C                                    bc  = 0
+C                                      2
+C
+C
+C                                    bc  = 0
+C                                      3
+C
+C
+C                                    bc  = 0
+C                                      4
+C
+C
+C                                    bc  = 0
+C                                      5
+C
+C
+C                                    bc  = 0
+C                                      6
+C
+C
+C                                   22555300000000
+C                             bc  = ---------------
+C                               7   261366897038247
+C
+C
+C                                    1696514453125
+C                              bc  = -------------
+C                                8   6717619827072
+C
+C
+C                                       45359872
+C                               bc  = - ---------
+C                                 9     229764843
+C
+C
+C                                     19174962087
+C                              bc   = -----------
+C                                10   94371046000
+C
+C
+C                                       19310468
+C                              bc   = - ---------
+C                                11     929468925
+C
+C
+C                                   16089185487681
+C                            bc   = ---------------
+C                              12   146694672924800
+C
+C
+C                                     1592709632
+C                              bc   = -----------
+C                                13   41841694125
+C
+C
+C                                    52675701958271
+C                            bc   = ----------------
+C                              14   4527711056573100
+C
+C
+C                        12540904472870916741199505796420811396
+C                bc   = ----------------------------------------
+C                  15   2692319557780977037279406889319526430375
+C
+C
+C                                   bc   = 0
+C                                     16
+C
+C
+C                                   bc   = 0
+C                                     17
+C
+C
+C                                       63818747
+C                               bdc  = ----------
+C                                  1   5262156900
+C
+C
+C                                   bdc  = 0
+C                                      2
+C
+C
+C                                   bdc  = 0
+C                                      3
+C
+C
+C                                   bdc  = 0
+C                                      4
+C
+C
+C                                   bdc  = 0
+C                                      5
+C
+C
+C                                   bdc  = 0
+C                                      6
+C
+C
+C                                   451106000000000
+C                            bdc  = ----------------
+C                               7   4965971043726693
+C
+C
+C                                    8482572265625
+C                             bdc  = --------------
+C                                8   26870479308288
+C
+C
+C                                       181439488
+C                              bdc  = - ---------
+C                                 9     689294529
+C
+C
+C                                     57524886261
+C                             bdc   = ------------
+C                                10   188742092000
+C
+C
+C                                        38620936
+C                              bdc   = - ---------
+C                                 11     929468925
+C
+C
+C                                    144802669389129
+C                            bdc   = ---------------
+C                               12   586778691699200
+C
+C
+C                                      6370838528
+C                              bdc   = -----------
+C                                 13   41841694125
+C
+C
+C                                   368729913707897
+C                           bdc   = ----------------
+C                              14   4527711056573100
+C
+C
+C                      111940113324845802831946788738852162520696
+C              bdc   = -------------------------------------------
+C                 15   1316544263754897771229629968877248424453375
+C
+C
+C                                        113178587
+C                             bdc   = - -----------
+C                                16     12362232960
+C
+C
+C                                          1
+C                                  bdc   = --
+C                                     17   40
+C
+C
+C                                      27121957
+C                                b  = ----------
+C                                 1   1594593000
+C
+C
+C                                    b  = 0
+C                                     2
+C
+C
+C                                    b  = 0
+C                                     3
+C
+C
+C                                    b  = 0
+C                                     4
+C
+C
+C                                    b  = 0
+C                                     5
+C
+C
+C                                    b  = 0
+C                                     6
+C
+C
+C                                   4006163300000
+C                              b  = --------------
+C                               7   55441463008113
+C
+C
+C                                    9466403125
+C                               b  = -----------
+C                                8   25445529648
+C
+C
+C                                      163199648
+C                               b  = - ---------
+C                                9     406149975
+C
+C
+C                                      23359833
+C                                b   = --------
+C                                 10   69636250
+C
+C
+C                                       18491714
+C                               b   = - ---------
+C                                11     140828625
+C
+C
+C                                   11052304606701
+C                             b   = --------------
+C                              12   58344472186000
+C
+C
+C                                     1191129152
+C                               b   = -----------
+C                                13   44377554375
+C
+C
+C                                    2033811086741
+C                             b   = ---------------
+C                              14   124730332137000
+C
+C
+C                        3616943474975740389660406409450169802
+C                 b   = ---------------------------------------
+C                  15   951830146690244407118982233597812374375
+C
+C
+C                                    b   = 0
+C                                     16
+C
+C
+C                                    b   = 0
+C                                     17
+C
+C
+C                                      27121957
+C                               bd  = ----------
+C                                 1   1594593000
+C
+C
+C                                    bd  = 0
+C                                      2
+C
+C
+C                                    bd  = 0
+C                                      3
+C
+C
+C                                    bd  = 0
+C                                      4
+C
+C
+C                                    bd  = 0
+C                                      5
+C
+C
+C                                    bd  = 0
+C                                      6
+C
+C
+C                                   4217014000000
+C                             bd  = --------------
+C                               7   55441463008113
+C
+C
+C                                    47332015625
+C                              bd  = ------------
+C                                8   101782118592
+C
+C
+C                                      652798592
+C                              bd  = - ----------
+C                                9     1218449925
+C
+C
+C                                      70079499
+C                               bd   = ---------
+C                                 10   139272500
+C
+C
+C                                       36983428
+C                              bd   = - ---------
+C                                11     140828625
+C
+C
+C                                   99470741460309
+C                            bd   = ---------------
+C                              12   233377888744000
+C
+C
+C                                     4764516608
+C                              bd   = -----------
+C                                13   44377554375
+C
+C
+C                                   14236677607187
+C                            bd   = ---------------
+C                              14   124730332137000
+C
+C
+C                       198066487470143918516004831967805004004
+C                bd   = ----------------------------------------
+C                  15   2855490440070733221356946700793437123125
+C
+C
+C                                          1
+C                                   bd   = --
+C                                     16   50
+C
+C
+C                                   bd   = 0
+C                                     17
+C
+      END
+C
+C STRINGENT TESTS
+C
+C     .. Parameters ..
+      INTEGER           IDEV
+      PARAMETER         (IDEV=6)
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL          EFFTST, ERRGEN, LOOPER, REVERS, SINGLR, SWITCH,
+     *                  TESTER, TSTXXX
+C     ..
+C     .. Executable Statements ..
+      WRITE (UNIT=IDEV,FMT=99999)
+      CALL ERRGEN
+      WRITE (UNIT=IDEV,FMT=99999)
+      CALL TESTER
+      WRITE (UNIT=IDEV,FMT=99999)
+      CALL SWITCH
+      WRITE (UNIT=IDEV,FMT=99999)
+      CALL REVERS
+      WRITE (UNIT=IDEV,FMT=99999)
+      CALL EFFTST
+      WRITE (UNIT=IDEV,FMT=99999)
+      CALL TSTXXX
+      WRITE (UNIT=IDEV,FMT=99999)
+C
+C SEE COMMENTS IN ROUTINE SINGLR BEFORE CALLING THIS ROUTINE.
+C
+      CALL SINGLR
+      WRITE (UNIT=IDEV,FMT=99999)
+      CALL LOOPER
+C
+99999 FORMAT (//'*************',/'*************',//)
+      END
+      SUBROUTINE ERRGEN
+C
+C CHECKS ERROR EXITS ARE TRIPPED.
+C
+C     .. Parameters ..
+      INTEGER           NOVHD, NDIM, IDEV
+      PARAMETER         (NOVHD=14,NDIM=3,IDEV=6)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  H, HNEXT, HSTART, HUSED, T, TEND, TNEXT, TOL
+      INTEGER           IEVAL, IFAIL, ISET, K, LWORK, MAXSTP, NATT, NEQ,
+     *                  NERR, NFAIL, NSUCC
+      LOGICAL           HIGH, ONESTP, START
+C     ..
+C     .. Local Arrays ..
+      DOUBLE PRECISION  RWORK(NOVHD+11*NDIM), THRES(NDIM), THRESP(NDIM),
+     *                  Y(NDIM), YDP(NDIM), YP(NDIM), YPWANT(NDIM),
+     *                  YWANT(NDIM)
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL          ERROR, EVAL, POLY06, RKNDIA, RKNINT, RKNSET
+C     ..
+C     .. Executable Statements ..
+C
+C CALL THE SET-UP ROUTINE RKNSET
+C ERROR RETURN IF THRES(1) .GT. 0, BUT THRES(K) .LE. 0 FOR
+C SOME K .GT. 1; OR SIMILARLY FOR THRESP; OR IF LWORK, THE
+C DIMENSION OF RWORK, IS TOO SMALL.
+C
+      NEQ = NDIM
+      LWORK = NOVHD + 11*NEQ
+      H = 0.0D0
+      TOL = 1.0D-4
+      MAXSTP = 400
+      START = .TRUE.
+      ONESTP = .FALSE.
+      HIGH = .FALSE.
+      DO 20 K = 1, NEQ
+         THRES(K) = 1.0D0
+         THRESP(K) = 1.0D0
+   20 CONTINUE
+C
+C ERROR IN THRES.
+C
+      THRES(2) = 0.0D0
+      WRITE (UNIT=IDEV,FMT=99999)
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+      WRITE (UNIT=IDEV,FMT=99987) ISET
+C
+C FIX THRES. MISTAKE IN THRESP.
+C
+      START = .TRUE.
+      THRES(2) = 1.0D0
+      THRESP(3) = -0.7D0
+      WRITE (UNIT=IDEV,FMT=99998)
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+      WRITE (UNIT=IDEV,FMT=99987) ISET
+C
+C LWORK TOO SMALL.
+C
+      START = .TRUE.
+      THRESP(3) = 1.0D0
+      LWORK = 2
+      WRITE (UNIT=IDEV,FMT=99997)
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+      WRITE (UNIT=IDEV,FMT=99987) ISET
+C
+C TOL OUT OF RANGE.
+C
+      START = .TRUE.
+      LWORK = NOVHD + 11*NEQ
+      TOL = 2.0D0
+      WRITE (UNIT=IDEV,FMT=99993)
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+      WRITE (UNIT=IDEV,FMT=99987) ISET
+C
+C CORRECT CALL.
+C
+      START = .TRUE.
+      TOL = 1.0D-4
+      THRES(1) = 6.0D-6
+      THRES(2) = 1.0D0
+      THRES(3) = 6.0D-6
+      THRESP(1) = 6.0D-6
+      THRESP(2) = 1.0D0
+      THRESP(3) = 6.0D-6
+      WRITE (UNIT=IDEV,FMT=99996)
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+      WRITE (UNIT=IDEV,FMT=99987) ISET
+C
+C INITIAL VALUES.
+C
+      Y(1) = 4.0D0
+      Y(2) = 0.0D0
+      Y(3) = 5.0D0
+      YP(1) = -2.0D0
+      YP(2) = 0.0D0
+      YP(3) = 0.0D0
+      T = 0.0D0
+      TEND = 1.0D0
+      WRITE (UNIT=IDEV,FMT=99989) T, TEND, TOL
+      WRITE (UNIT=IDEV,FMT=99988) (Y(K),K=1,NEQ), (YP(K),K=1,NEQ)
+      IFAIL = 0
+      CALL RKNINT(POLY06,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+      WRITE (UNIT=IDEV,FMT=99986) IFAIL, T
+      WRITE (UNIT=IDEV,FMT=99985) (Y(K),K=1,NEQ)
+      WRITE (UNIT=IDEV,FMT=99984) (YP(K),K=1,NEQ)
+      CALL ERROR(NEQ,T,Y,YP)
+C
+C RETRIEVE DIAGNOSTIC INFORMATION FROM RKNDIA.
+C
+      CALL RKNDIA(NEQ,HNEXT,HUSED,HSTART,NSUCC,NFAIL,NATT,THRES,THRESP,
+     *            RWORK)
+      WRITE (UNIT=IDEV,FMT=99982) NSUCC, NFAIL, NATT, HNEXT, HUSED
+      WRITE (UNIT=IDEV,FMT=99981) HSTART, (THRES(K),K=1,NEQ),
+     *  (THRESP(K),K=1,NEQ)
+C
+C EXTRAPOLATION USING EVAL.
+C
+      TNEXT = 1.1D0
+      WRITE (UNIT=IDEV,FMT=99995)
+      CALL EVAL(NEQ,T,Y,YP,1,TNEXT,YWANT,YPWANT,RWORK,IEVAL)
+      WRITE (UNIT=IDEV,FMT=99983) IEVAL, TNEXT
+      WRITE (UNIT=IDEV,FMT=99985) YWANT(1)
+      WRITE (UNIT=IDEV,FMT=99984) YPWANT(1)
+      CALL ERROR(1,TNEXT,YWANT,YPWANT)
+C
+C CHANGE TO ONE-STEP MODE.
+C
+      ONESTP = .TRUE.
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+C
+C CALL RKNINT WITH TEND = T.
+C
+      TEND = T
+      WRITE (UNIT=IDEV,FMT=99994)
+      IFAIL = 0
+      CALL RKNINT(POLY06,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+      WRITE (UNIT=IDEV,FMT=99986) IFAIL, T
+      WRITE (UNIT=IDEV,FMT=99985) (Y(K),K=1,NEQ)
+      WRITE (UNIT=IDEV,FMT=99984) (YP(K),K=1,NEQ)
+C
+C RUN CORRECTLY FOR ONE STEP.
+C
+      TEND = 5.0D0
+      IFAIL = 0
+      CALL RKNINT(POLY06,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+C
+C CALL RKNINT WITH NEQ .NE. NEQOLD.
+C
+      NERR = 2
+      WRITE (UNIT=IDEV,FMT=99992)
+      IFAIL = 0
+      CALL RKNINT(POLY06,NERR,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+      WRITE (UNIT=IDEV,FMT=99986) IFAIL, T
+      WRITE (UNIT=IDEV,FMT=99985) (Y(K),K=1,NEQ)
+      WRITE (UNIT=IDEV,FMT=99984) (YP(K),K=1,NEQ)
+C
+C RUN CORRECTLY FOR ONE STEP.
+C
+      IFAIL = 0
+      CALL RKNINT(POLY06,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+C
+C CHANGE DIRECTION OF INTEGRATION.
+C
+      TEND = 0.5D0
+      WRITE (UNIT=IDEV,FMT=99991)
+      IFAIL = 0
+      CALL RKNINT(POLY06,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+      WRITE (UNIT=IDEV,FMT=99986) IFAIL, T
+      WRITE (UNIT=IDEV,FMT=99985) (Y(K),K=1,NEQ)
+      WRITE (UNIT=IDEV,FMT=99984) (YP(K),K=1,NEQ)
+C
+C RUN CORRECTLY FOR ONE STEP.
+C
+      TEND = 5.0D0
+      IFAIL = 0
+      CALL RKNINT(POLY06,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+C
+C CHANGE MAXSTP USING RKNSET.
+C
+      MAXSTP = 4
+      ONESTP = .FALSE.
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+      WRITE (UNIT=IDEV,FMT=99987) ISET
+C
+C CALL RKNINT.
+C
+      WRITE (UNIT=IDEV,FMT=99990)
+      IFAIL = 0
+      CALL RKNINT(POLY06,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+      WRITE (UNIT=IDEV,FMT=99986) IFAIL, T
+      WRITE (UNIT=IDEV,FMT=99985) (Y(K),K=1,NEQ)
+      WRITE (UNIT=IDEV,FMT=99984) (YP(K),K=1,NEQ)
+C
+C RETRIEVE DIAGNOSTIC INFORMATION FROM RKNDIA.
+C
+      CALL RKNDIA(NEQ,HNEXT,HUSED,HSTART,NSUCC,NFAIL,NATT,THRES,THRESP,
+     *            RWORK)
+      WRITE (UNIT=IDEV,FMT=99982) NSUCC, NFAIL, NATT, HNEXT, HUSED
+      WRITE (UNIT=IDEV,FMT=99981) HSTART, (THRES(K),K=1,NEQ),
+     *  (THRESP(K),K=1,NEQ)
+      RETURN
+C
+C FORMAT STATEMENTS.
+C
+99999 FORMAT (' ERROR TESTS FOR RKNINT SET OF ROUTINES',/' CALL ','TO ',
+     *       'RKNSET WITH THRES(2) ILLEGAL',/)
+99998 FORMAT (' CALL TO RKNSET WITH THRESP(3) ILLEGAL',/)
+99997 FORMAT (' CALL TO RKNSET WITH LWORK TOO SMALL',/)
+99996 FORMAT (' CORRECT CALL TO RKNSET')
+99995 FORMAT (' CALL TO EVAL REQUIRING EXTRAPOLATION, WITH',' NWANT',
+     *       ' = 1',/)
+99994 FORMAT (' CALL TO RKNINT WITH TEND = T',/)
+99993 FORMAT (' CALL TO RKNSET WITH TOL ILLEGAL',/)
+99992 FORMAT (' CALL TO RKNINT WITH NEQ = 2 .NE. NEQOLD=3',/)
+99991 FORMAT (' CALL TO RKNINT, CHANGING DIRECTION OF INTEGRATION',/)
+99990 FORMAT (' CALL TO RKNINT WITH MAXSTP = 4',/)
+99989 FORMAT (' TEST OF THE NYSTROM INTEGRATOR RKNINT',/' THE PR','OBL',
+     *       'EM IS A SYSTEM OF 3 POLYNOMIALS IN T',/' INTEGRATE','D F',
+     *       'ROM ',F6.3,' TO ',F6.3,/' THE RELATIVE ERROR TOLER','ANC',
+     *       'E IS ',1P,D8.1,/)
+99988 FORMAT (' INITIAL VALUES FOR Y  ',3(2X,F7.2),/' INITIAL VA','LUE',
+     *       'S FOR YP ',3(2X,F7.2),/)
+99987 FORMAT (' RETURNED FROM INITIAL CALL TO RKNSET WITH ISET = ',I2,/)
+99986 FORMAT (' RETURNED FROM RKNINT WITH IFAIL = ',I2,'  AT T = ',1P,
+     *       D10.3,/)
+99985 FORMAT (' Y  = ',3(2X,1P,D11.4),/)
+99984 FORMAT (' YP = ',3(2X,1P,D11.4),/)
+99983 FORMAT (' RETURNED FROM EVAL WITH IEVAL = ',I2,' AT TWANT = ',1P,
+     *       D10.3,/)
+99982 FORMAT (' STATISTICS FROM RKNDIA',/' NSUCC = ',I5,' NFAIL ','= ',
+     *       I5,' NATT = ',I4,/' HNEXT = ',1P,D10.3,' HUSED = ',1P,
+     *       D10.3,/)
+99981 FORMAT (' HSTART = ',1P,D10.3,/' THRESHOLDS FOR Y  ',3(2X,1P,D8.1)
+     *       ,/' THRESHOLDS FOR YP ',3(2X,1P,D8.1),/)
+      END
+      SUBROUTINE TESTER
+C
+C INTEGRATES THE SAME PROBLEM TWICE: ONCE USING THE LOWER ORDER
+C PAIR AND ONCE USING THE HIGHER ORDER PAIR.
+C
+C     .. Parameters ..
+      INTEGER           NOVHD, NDIM, IDEV
+      PARAMETER         (NOVHD=14,NDIM=3,IDEV=6)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  DEL, H, HNEXT, HSTART, HUSED, T, TEND, TNEXT,
+     *                  TOL
+      INTEGER           IEVAL, IFAIL, ISET, K, LWORK, MAXSTP, NATT, NEQ,
+     *                  NFAIL, NSUCC
+      LOGICAL           ALL, HIGH, ONESTP, RESET, START
+      CHARACTER*21      TITLE
+C     ..
+C     .. Local Arrays ..
+      DOUBLE PRECISION  RWORK(NOVHD+20*NDIM), THRES(NDIM), THRESP(NDIM),
+     *                  Y(NDIM), YDP(NDIM), YP(NDIM), YPWANT(NDIM),
+     *                  YWANT(NDIM)
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL          ERROR, EVAL, POLY06, RKNDIA, RKNINT, RKNSET
+C     ..
+C     .. Executable Statements ..
+C
+C CALL THE SET-UP ROUTINE RKNSET.
+C
+      NEQ = NDIM
+      HIGH = .FALSE.
+C
+   20 IF (HIGH) THEN
+         LWORK = NOVHD + 20*NEQ
+         TITLE = 'HIGHER-ORDER FORMULAS'
+      ELSE
+         LWORK = NOVHD + 11*NEQ
+         TITLE = ' LOWER-ORDER FORMULAS'
+      END IF
+      DO 40 K = 1, NEQ
+         THRES(K) = 6.0D-6
+         THRESP(K) = 6.0D-6
+   40 CONTINUE
+      THRES(2) = 1.0D0
+      THRESP(2) = 1.0D0
+      H = 0.0D0
+      MAXSTP = 400
+      START = .TRUE.
+      ONESTP = .TRUE.
+      TOL = 1.0D-5
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+      WRITE (UNIT=IDEV,FMT=99997) ISET
+      RESET = .FALSE.
+      ALL = .TRUE.
+C
+C INITIAL VALUES.
+C
+      Y(1) = 4.0D0
+      Y(2) = 0.0D0
+      Y(3) = 5.0D0
+      YP(1) = -2.0D0
+      YP(2) = 0.0D0
+      YP(3) = 0.0D0
+      T = 0.0D0
+      TNEXT = T
+C
+C TO INTEGRATE BACKWARDS IN TIME, MAKE TEND .LT. T AND DEL .LT. 0.
+C
+      DEL = 1.0D0
+      TEND = 10.0D0
+C
+      WRITE (UNIT=IDEV,FMT=99999) T, TEND, DEL, TOL, TITLE
+      WRITE (UNIT=IDEV,FMT=99998) (Y(K),K=1,NEQ), (YP(K),K=1,NEQ)
+C
+   60 IFAIL = 0
+      CALL RKNINT(POLY06,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+C
+      WRITE (UNIT=IDEV,FMT=99996) IFAIL, T
+      IF (IFAIL.GT.0) STOP
+      WRITE (UNIT=IDEV,FMT=99995) (Y(K),K=1,NEQ)
+      WRITE (UNIT=IDEV,FMT=99994) (YP(K),K=1,NEQ)
+      CALL ERROR(NEQ,T,Y,YP)
+C
+C RETRIEVE DIAGNOSTIC INFORMATION FROM RKNDIA.
+C
+      CALL RKNDIA(NEQ,HNEXT,HUSED,HSTART,NSUCC,NFAIL,NATT,THRES,THRESP,
+     *            RWORK)
+      WRITE (UNIT=IDEV,FMT=99991) NSUCC, NFAIL, NATT, HNEXT, HUSED
+      IF (ALL) THEN
+         ALL = .FALSE.
+         WRITE (UNIT=IDEV,FMT=99990) HSTART, (THRES(K),K=1,NEQ),
+     *     (THRESP(K),K=1,NEQ)
+      END IF
+C
+      IF (HIGH) GO TO 100
+C
+C INTERPOLATION.
+C
+   80 TNEXT = TNEXT + DEL
+C
+C IF INTEGRATING BACKWARDS IN TIME, CHECK (TNEXT .GE. T).
+C
+      IF (TNEXT.LE.T) THEN
+         CALL EVAL(NEQ,T,Y,YP,NEQ,TNEXT,YWANT,YPWANT,RWORK,IEVAL)
+         WRITE (UNIT=IDEV,FMT=99993) IEVAL, TNEXT
+         IF (IEVAL.GT.0) STOP
+         WRITE (UNIT=IDEV,FMT=99995) (YWANT(K),K=1,NEQ)
+         WRITE (UNIT=IDEV,FMT=99994) (YPWANT(K),K=1,NEQ)
+         CALL ERROR(NEQ,TNEXT,YWANT,YPWANT)
+         GO TO 80
+      ELSE
+         TNEXT = TNEXT - DEL
+      END IF
+C
+C IF INTEGRATING BACKWARDS IN TIME, CHECK (T .LE. -1.).
+C
+  100 IF ((T.GE.1.) .AND. ( .NOT. RESET)) THEN
+         RESET = .TRUE.
+         THRES(1) = 0.0D0
+         THRESP(1) = 0.0D0
+         MAXSTP = -100
+         CALL RKNSET(NEQ,0.D0,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,
+     *               LWORK,RWORK,ISET)
+         WRITE (UNIT=IDEV,FMT=99992) ISET
+         ALL = .TRUE.
+      END IF
+C
+C IF INTEGRATING BACKWARDS IN TIME, CHECK (T .GT. TEND).
+C
+      IF (T.LT.TEND) GO TO 60
+C
+C CHANGE FORMULA PAIR.
+C
+      IF ( .NOT. HIGH) THEN
+         HIGH = .TRUE.
+         GO TO 20
+      END IF
+      RETURN
+C
+C FORMAT STATEMENTS.
+C
+99999 FORMAT (' TEST OF THE NYSTROM INTEGRATOR RKNINT',/' THE PR','OBL',
+     *       'EM IS A SYSTEM OF 3 POLYNOMIALS IN T',/' INTEGRATE','D F',
+     *       'ROM ',F6.2,' TO ',F6.1,' WITH INTERPOLATION AT INTERV',
+     *       'ALS OF SIZE',F6.1,/' THE RELATIVE ERROR TOLERANCE IS ',1P,
+     *       D8.1,/' THIS INTEGRATION USES THE ',A21,/)
+99998 FORMAT (' INITIAL VALUES FOR Y  ',3(2X,F7.2),/' INITIAL VA','LUE',
+     *       'S FOR YP ',3(2X,F7.2),/)
+99997 FORMAT (' RETURNED FROM INITIAL CALL TO RKNSET WITH ISET = ',I2,/)
+99996 FORMAT (' RETURNED FROM RKNINT WITH IFAIL = ',I2,'  AT T = ',1P,
+     *       D10.3,/)
+99995 FORMAT (' Y  = ',3(2X,1P,D11.4),/)
+99994 FORMAT (' YP = ',3(2X,1P,D11.4),/)
+99993 FORMAT (' RETURNED FROM EVAL WITH IEVAL = ',I2,' AT TWANT = ',1P,
+     *       D10.3,/)
+99992 FORMAT (' RETURNED FROM RESET CALL TO RKNSET WITH ISET = ',I2,/)
+99991 FORMAT (' STATISTICS FROM RKNDIA',/' NSUCC = ',I5,' NFAIL ','= ',
+     *       I5,' NATT = ',I5,/' HNEXT = ',1P,D10.3,' HUSED = ',1P,
+     *       D10.3,/)
+99990 FORMAT (' HSTART = ',1P,D10.3,/' THRESHOLDS FOR Y  ',3(2X,1P,D8.1)
+     *       ,/' THRESHOLDS FOR YP ',3(2X,1P,D8.1),/)
+      END
+      SUBROUTINE SWITCH
+C
+C SOLVES A SIMPLE PROBLEM SWITCHING BETWEEN FORMULA
+C PAIRS MID-INTEGRATION.
+C
+C     .. Parameters ..
+      INTEGER           NOVHD, NDIM, IDEV
+      PARAMETER         (NOVHD=14,NDIM=3,IDEV=6)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  H, HNEXT, HSTART, HUSED, T, TEND, TNEXT, TOL
+      INTEGER           IEVAL, IFAIL, ISET, K, LWORK, MAXSTP, NATT, NEQ,
+     *                  NFAIL, NSUCC
+      LOGICAL           HIGH, ONESTP, START
+C     ..
+C     .. Local Arrays ..
+      DOUBLE PRECISION  RWORK(NOVHD+20*NDIM), THRES(NDIM), THRESP(NDIM),
+     *                  Y(NDIM), YDP(NDIM), YP(NDIM), YPWANT(NDIM),
+     *                  YWANT(NDIM)
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL          ERROR, EVAL, POLY06, RKNDIA, RKNINT, RKNSET
+C     ..
+C     .. Executable Statements ..
+C
+      WRITE (UNIT=IDEV,FMT=99999)
+C
+C CALL RKNSET, STARTING WITH THE 6(4) PAIR.
+C
+      NEQ = NDIM
+      HIGH = .FALSE.
+      LWORK = NOVHD + 11*NEQ
+      H = 0.0D0
+      TOL = 1.0D-4
+      MAXSTP = 0
+      START = .TRUE.
+      ONESTP = .FALSE.
+      THRES(1) = 6.0D-6
+      THRES(2) = 1.0D0
+      THRES(3) = 6.0D-6
+      THRESP(1) = 6.0D-6
+      THRESP(2) = 1.0D0
+      THRESP(3) = 6.0D-6
+      WRITE (UNIT=IDEV,FMT=99996)
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+      WRITE (UNIT=IDEV,FMT=99993) ISET
+C
+C INITIAL VALUES.
+C
+      Y(1) = 4.0D0
+      Y(2) = 0.0D0
+      Y(3) = 5.0D0
+      YP(1) = -2.0D0
+      YP(2) = 0.0D0
+      YP(3) = 0.0D0
+      T = 0.0D0
+      TEND = 1.0D0
+      WRITE (UNIT=IDEV,FMT=99995) T, TEND, TOL
+      WRITE (UNIT=IDEV,FMT=99994) (Y(K),K=1,NEQ), (YP(K),K=1,NEQ)
+      IFAIL = 0
+      CALL RKNINT(POLY06,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+      WRITE (UNIT=IDEV,FMT=99992) IFAIL, T
+      WRITE (UNIT=IDEV,FMT=99991) (Y(K),K=1,NEQ)
+      WRITE (UNIT=IDEV,FMT=99990) (YP(K),K=1,NEQ)
+      CALL ERROR(NEQ,T,Y,YP)
+C
+C RETRIEVE DIAGNOSTIC INFORMATION FROM RKNDIA.
+C
+      CALL RKNDIA(NEQ,HNEXT,HUSED,HSTART,NSUCC,NFAIL,NATT,THRES,THRESP,
+     *            RWORK)
+      WRITE (UNIT=IDEV,FMT=99987) NSUCC, NFAIL, NATT, HNEXT, HUSED
+      WRITE (UNIT=IDEV,FMT=99986) HSTART, (THRES(K),K=1,NEQ),
+     *  (THRESP(K),K=1,NEQ)
+C
+C CHANGE TO ONE-STEP MODE AND 12(10) PAIR WITHOUT CHANGING LWORK.
+C
+      WRITE (UNIT=IDEV,FMT=99998)
+      HIGH = .TRUE.
+      ONESTP = .TRUE.
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+      WRITE (UNIT=IDEV,FMT=99988) ISET
+C
+C CHANGE TO ONE-STEP MODE CORRECTLY.
+C
+      WRITE (UNIT=IDEV,FMT=99996)
+      HIGH = .TRUE.
+      LWORK = NOVHD + 20*NEQ
+      ONESTP = .TRUE.
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+      WRITE (UNIT=IDEV,FMT=99988) ISET
+C
+C RUN RKNINT FOR ONE STEP.
+C
+      TEND = 5.0D0
+      IFAIL = 0
+      CALL RKNINT(POLY06,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+C
+C TRY USING EVAL WITH 12(10) PAIR.
+C
+      TNEXT = 1.1D0
+      WRITE (UNIT=IDEV,FMT=99997)
+      CALL EVAL(NEQ,T,Y,YP,1,TNEXT,YWANT,YPWANT,RWORK,IEVAL)
+      WRITE (UNIT=IDEV,FMT=99989) IEVAL, TNEXT
+      RETURN
+C
+C FORMAT STATEMENTS.
+C
+99999 FORMAT (' ERROR TESTS FOR RKNINT SET OF ROUTINES',/' TEST ','OF ',
+     *       'SWITCH BETWEEN FORMULA PAIRS',/' STARTING WITH THE',' 6(',
+     *       '4) PAIR',/)
+99998 FORMAT (' CALL TO RKNSET WITH A SWITCH TO THE 12(10)',' PAIR,',
+     *       ' BUT LWORK NOT UPDATED',/)
+99997 FORMAT (' AFTER ONE STEP WITH RKNINT AND THE 12(10) PAIR',' T',
+     *       'RY TO CALL EVAL',/)
+99996 FORMAT (' CORRECT CALL TO RKNSET',/)
+99995 FORMAT (' TEST OF THE NYSTROM INTEGRATOR RKNINT',/' THE PR','OBL',
+     *       'EM IS A SYSTEM OF 3 POLYNOMIALS IN T',/' INTEGRATE','D F',
+     *       'ROM ',F6.3,' TO ',F6.3,/' THE RELATIVE ERROR TOLER','ANC',
+     *       'E IS ',1P,D8.1,/)
+99994 FORMAT (' INITIAL VALUES FOR Y  ',3(2X,F7.2),/' INITIAL VA','LUE',
+     *       'S FOR YP ',3(2X,F7.2),/)
+99993 FORMAT (' RETURNED FROM INITIAL CALL TO RKNSET WITH ISET = ',I2,/)
+99992 FORMAT (' RETURNED FROM RKNINT WITH IFAIL = ',I2,'  AT T = ',1P,
+     *       D10.3,/)
+99991 FORMAT (' Y  = ',3(2X,1P,D11.4),/)
+99990 FORMAT (' YP = ',3(2X,1P,D11.4),/)
+99989 FORMAT (' RETURNED FROM EVAL WITH IEVAL = ',I2,' AT TWANT = ',1P,
+     *       D10.3,/)
+99988 FORMAT (' RETURNED FROM RESET CALL TO RKNSET WITH ISET = ',I2,/)
+99987 FORMAT (' STATISTICS FROM RKNDIA',/' NSUCC = ',I5,' NFAIL ','= ',
+     *       I5,' NATT = ',I3,/' HNEXT = ',1P,D10.3,' HUSED = ',1P,
+     *       D10.3,/)
+99986 FORMAT (' HSTART = ',1P,D10.3,/' THRESHOLDS FOR Y  ',3(2X,1P,D8.1)
+     *       ,/' THRESHOLDS FOR YP ',3(2X,1P,D8.1),/)
+      END
+      SUBROUTINE REVERS
+C
+C DEMONSTRATES INTEGRATION IN NEGATIVE DIRECTION.
+C
+C     .. Parameters ..
+      INTEGER           NOVHD, NDIM, IDEV
+      PARAMETER         (NOVHD=14,NDIM=3,IDEV=6)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  H, HNEXT, HSTART, HUSED, T, TEND, TOL
+      INTEGER           IFAIL, ISET, K, LWORK, MAXSTP, NATT, NEQ, NFAIL,
+     *                  NSUCC
+      LOGICAL           HIGH, ONESTP, START
+C     ..
+C     .. Local Arrays ..
+      DOUBLE PRECISION  RWORK(NOVHD+20*NDIM), THRES(NDIM), THRESP(NDIM),
+     *                  Y(NDIM), YDP(NDIM), YP(NDIM)
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL          ERROR, POLY06, RKNDIA, RKNINT, RKNSET
+C     ..
+C     .. Executable Statements ..
+C
+      WRITE (UNIT=IDEV,FMT=99999)
+C
+C CALL RKNSET, STARTING WITH THE 6(4) PAIR.
+C
+      WRITE (UNIT=IDEV,FMT=99998)
+      NEQ = NDIM
+      HIGH = .FALSE.
+      LWORK = NOVHD + 11*NEQ
+      H = 0.0D0
+      TOL = 1.0D-4
+      MAXSTP = 0
+      START = .TRUE.
+      ONESTP = .FALSE.
+      THRES(1) = 6.0D-6
+      THRES(2) = 1.0D0
+      THRES(3) = 6.0D-6
+      THRESP(1) = 6.0D-6
+      THRESP(2) = 1.0D0
+      THRESP(3) = 6.0D-6
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+      WRITE (UNIT=IDEV,FMT=99994) ISET
+C
+C INITIAL VALUES.
+C
+      Y(1) = 4.0D0
+      Y(2) = 0.0D0
+      Y(3) = 5.0D0
+      YP(1) = -2.0D0
+      YP(2) = 0.0D0
+      YP(3) = 0.0D0
+      T = 0.0D0
+      TEND = 1.0D0
+      WRITE (UNIT=IDEV,FMT=99996) T, TEND, TOL
+      WRITE (UNIT=IDEV,FMT=99995) (Y(K),K=1,NEQ), (YP(K),K=1,NEQ)
+      IFAIL = 0
+      CALL RKNINT(POLY06,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+      WRITE (UNIT=IDEV,FMT=99993) IFAIL, T
+      WRITE (UNIT=IDEV,FMT=99992) (Y(K),K=1,NEQ)
+      WRITE (UNIT=IDEV,FMT=99991) (YP(K),K=1,NEQ)
+      CALL ERROR(NEQ,T,Y,YP)
+C
+C RETRIEVE DIAGNOSTIC INFORMATION FROM RKNDIA.
+C
+      CALL RKNDIA(NEQ,HNEXT,HUSED,HSTART,NSUCC,NFAIL,NATT,THRES,THRESP,
+     *            RWORK)
+      WRITE (UNIT=IDEV,FMT=99990) NSUCC, NFAIL, NATT, HNEXT, HUSED
+      WRITE (UNIT=IDEV,FMT=99989) HSTART, (THRES(K),K=1,NEQ),
+     *  (THRESP(K),K=1,NEQ)
+C
+C
+      WRITE (UNIT=IDEV,FMT=99997)
+      H = HUSED
+      START = .TRUE.
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+      WRITE (UNIT=IDEV,FMT=99994) ISET
+      TEND = 0.0D0
+      IFAIL = 0
+      CALL RKNINT(POLY06,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+      WRITE (UNIT=IDEV,FMT=99993) IFAIL, T
+      WRITE (UNIT=IDEV,FMT=99992) (Y(K),K=1,NEQ)
+      WRITE (UNIT=IDEV,FMT=99991) (YP(K),K=1,NEQ)
+      CALL ERROR(NEQ,T,Y,YP)
+C
+C RETRIEVE DIAGNOSTIC INFORMATION FROM RKNDIA.
+C
+      CALL RKNDIA(NEQ,HNEXT,HUSED,HSTART,NSUCC,NFAIL,NATT,THRES,THRESP,
+     *            RWORK)
+      WRITE (UNIT=IDEV,FMT=99990) NSUCC, NFAIL, NATT, HNEXT, HUSED
+      WRITE (UNIT=IDEV,FMT=99989) HSTART, (THRES(K),K=1,NEQ),
+     *  (THRESP(K),K=1,NEQ)
+C
+      RETURN
+C
+C FORMAT STATEMENTS.
+C
+99999 FORMAT (' TEST INTEGRATION IN NEGATIVE DIRECTION',/)
+99998 FORMAT (' FIRST INTEGRATE IN THE POSITIVE DIRECTION',/)
+99997 FORMAT (' NOW INTEGRATE BACK TO ORIGIN',/)
+99996 FORMAT (' TEST OF THE NYSTROM INTEGRATOR RKNINT',/' THE PR','OBL',
+     *       'EM IS A SYSTEM OF 3 POLYNOMIALS IN T',/' INTEGRATE','D F',
+     *       'ROM ',F6.3,' TO ',F6.3,/' THE RELATIVE ERROR TOLER','ANC',
+     *       'E IS ',1P,D8.1,/)
+99995 FORMAT (' INITIAL VALUES FOR Y  ',3(2X,F7.2),/' INITIAL VA','LUE',
+     *       'S FOR YP ',3(2X,F7.2),/)
+99994 FORMAT (' RETURNED FROM CALL TO RKNSET WITH ISET = ',I2,/)
+99993 FORMAT (' RETURNED FROM RKNINT WITH IFAIL = ',I2,'  AT T = ',1P,
+     *       D10.3,/)
+99992 FORMAT (' Y  = ',3(2X,1P,D11.4),/)
+99991 FORMAT (' YP = ',3(2X,1P,D11.4),/)
+99990 FORMAT (' STATISTICS FROM RKNDIA',/' NSUCC = ',I5,' NFAIL ','= ',
+     *       I5,' NATT = ',I3,/' HNEXT = ',1P,D10.3,' HUSED = ',1P,
+     *       D10.3,/)
+99989 FORMAT (' HSTART = ',1P,D10.3,/' THRESHOLDS FOR Y  ',3(2X,1P,D8.1)
+     *       ,/' THRESHOLDS FOR YP ',3(2X,1P,D8.1),/)
+      END
+      SUBROUTINE EFFTST
+C
+C CHECKS FOR INEFFICIENT USE OF FORMULAS FOR OUTPUT.
+C
+C     .. Parameters ..
+      INTEGER           NEQ, LWORK, IDEV, NWANT
+      PARAMETER         (NEQ=2,LWORK=14+11*NEQ,IDEV=6,NWANT=NEQ)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  ECC, H, HNEXT, HSTART, HUSED, T, TEND, TINC,
+     *                  TNEXT, TOL, TSTART, Y1, Y2, YP1, YP2
+      INTEGER           IFAIL, ISET, MAXSTP, NATT, NFAIL, NSUCC
+      LOGICAL           HIGH, ONESTP, START
+C     ..
+C     .. Local Arrays ..
+      DOUBLE PRECISION  RWORK(LWORK), THRES(NEQ), THRESP(NEQ), Y(NEQ),
+     *                  YDP(NEQ), YP(NEQ)
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL          FCN2BD, RKNDIA, RKNINT, RKNSET
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC         SQRT
+C     ..
+C     .. Executable Statements ..
+      HIGH = .FALSE.
+      ONESTP = .TRUE.
+      TINC = 2.0D-3
+      TOL = 1.0D-4
+C
+C INITIAL CONDITIONS.
+C
+      TSTART = 0.0D0
+      ECC = 0.5D0
+      Y1 = 1.0D0 - ECC
+      Y2 = 0.0D0
+      YP1 = 0.0D0
+      YP2 = SQRT((1.0D0+ECC)/(1.0D0-ECC))
+      TEND = 20.0D0
+      WRITE (UNIT=IDEV,FMT=99999)
+C
+C CALL RKNSET WITH DEFAULT THRES,THRESP,MAXSTEP AND H.
+C
+      THRES(1) = 0.0D0
+      THRESP(1) = 0.0D0
+      H = 0.0D0
+      MAXSTP = 0
+      START = .TRUE.
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+      IF (ISET.NE.0) THEN
+         WRITE (UNIT=IDEV,FMT=99998) ISET
+         STOP
+      END IF
+C
+C SET INITIAL VALUES.
+C
+      Y(1) = Y1
+      Y(2) = Y2
+      YP(1) = YP1
+      YP(2) = YP2
+      T = TSTART
+      TNEXT = T + TINC
+      IFAIL = 0
+C
+C LOOP POINT FOR ONESTEP MODE.
+C
+   20 CALL RKNINT(FCN2BD,NEQ,T,TNEXT,Y,YP,YDP,RWORK,IFAIL)
+C
+      IF (IFAIL.GT.0) THEN
+         WRITE (UNIT=IDEV,FMT=99997) IFAIL, T
+      ELSE IF (TNEXT.LT.TEND) THEN
+         TNEXT = TNEXT + TINC
+         GO TO 20
+      END IF
+C
+      CALL RKNDIA(NEQ,HNEXT,HUSED,HSTART,NSUCC,NFAIL,NATT,THRES,THRESP,
+     *            RWORK)
+C
+      WRITE (UNIT=IDEV,FMT=99996) NSUCC, NFAIL, HUSED, HNEXT
+C
+      RETURN
+C
+C FORMAT STATEMENTS.
+C
+99999 FORMAT (/' TEST THAT DETECTION OF INEFFICIENCY IS DETECTED')
+99998 FORMAT (' RETURNED FROM INITIAL CALL TO RKNSET WITH ISET = ',I2,/)
+99997 FORMAT (' RETURNED FROM RKNINT WITH IFAIL = ',I2,'  AT T = ',1P,
+     *       D10.3,/)
+99996 FORMAT (/'  NUMBER OF SUCCESSFUL STEPS = ',I5,/'  NUMBER OF   FA',
+     *       'ILED   STEPS = ',I5,/'  LAST SUCCESSFUL STEP = ',1P,D10.3,
+     *       /'  NEXT STEP TO BE ATTEMPTED = ',1P,D10.3)
+      END
+      SUBROUTINE TSTXXX
+C
+C CHECK CODE CAN INTEGRATE SECOND DERIVATIVES OF X**6 AND X**12.
+C
+C     .. Parameters ..
+      INTEGER           NOVHD, NEQ, IDEV, LWORK, UROUND
+      PARAMETER         (NOVHD=14,NEQ=1,IDEV=6,LWORK=NOVHD+20*NEQ,
+     *                  UROUND=13)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  H, RELER, RELERP, T, TEND, TOL, TRUEY, TRUEYP
+      INTEGER           IFAIL, ISET, MAXSTP
+      LOGICAL           HIGH, ONESTP, START
+C     ..
+C     .. Local Arrays ..
+      DOUBLE PRECISION  RWORK(LWORK), THRES(NEQ), THRESP(NEQ), Y(NEQ),
+     *                  YDP(NEQ), YP(NEQ)
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL          POLX06, POLX12, RKNINT, RKNSET
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC         ABS
+C     ..
+C     .. Executable Statements ..
+C
+C USE THE 12(10) PAIR.
+C
+      WRITE (UNIT=IDEV,FMT=99999)
+C
+C CALL THE SET-UP ROUTINE RKNSET.
+C
+      TOL = 1.0D-6
+      THRES(1) = 0.0D0
+      THRESP(1) = 0.0D0
+      H = 0.0D0
+      MAXSTP = 0
+C
+      START = .TRUE.
+      ONESTP = .FALSE.
+      HIGH = .TRUE.
+C
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+      WRITE (UNIT=IDEV,FMT=99997) ISET
+C
+C CALL RKNINT IN INTERVAL MODE.
+C
+      T = 1.0D0
+      Y(1) = 1.0D0
+      YP(1) = 12.0D0
+      TEND = 2.0D0
+      IFAIL = 0
+C
+      CALL RKNINT(POLX12,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+C
+      WRITE (UNIT=IDEV,FMT=99996) T, IFAIL
+C
+      TRUEY = TEND**12
+      TRUEYP = 12.0D0*TEND**11
+      RELER = ABS((Y(1)-TRUEY)/TRUEY)
+      RELERP = ABS((YP(1)-TRUEYP)/TRUEYP)
+      IF (RELER.LT.50.0D0*RWORK(UROUND)) THEN
+         WRITE (UNIT=IDEV,FMT=99995)
+      ELSE
+         WRITE (UNIT=IDEV,FMT=99994)
+      END IF
+      IF (RELERP.LT.50.0D0*RWORK(UROUND)) THEN
+         WRITE (UNIT=IDEV,FMT=99993)
+      ELSE
+         WRITE (UNIT=IDEV,FMT=99992)
+      END IF
+C
+C USE THE 6(4) PAIR.
+C
+      WRITE (UNIT=IDEV,FMT=99998)
+C
+C CALL THE SET-UP ROUTINE RKNSET.
+C
+      TOL = 1.0D-6
+      THRES(1) = 0.0D0
+      THRESP(1) = 0.0D0
+      H = 0.0D0
+      MAXSTP = 0
+C
+      START = .TRUE.
+      ONESTP = .FALSE.
+      HIGH = .FALSE.
+C
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+      WRITE (UNIT=IDEV,FMT=99997) ISET
+C
+C CALL RKNINT IN INTERVAL MODE.
+C
+      T = 1.0D0
+      Y(1) = 1.0D0
+      YP(1) = 6.0D0
+      TEND = 2.0D0
+      IFAIL = 0
+C
+      CALL RKNINT(POLX06,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+C
+      WRITE (UNIT=IDEV,FMT=99996) T, IFAIL
+C
+      TRUEY = TEND**6
+      TRUEYP = 6.0D0*TEND**5
+      RELER = ABS((Y(1)-TRUEY)/TRUEY)
+      RELERP = ABS((YP(1)-TRUEYP)/TRUEYP)
+      IF (RELER.LT.50.0D0*RWORK(UROUND)) THEN
+         WRITE (UNIT=IDEV,FMT=99995)
+      ELSE
+         WRITE (UNIT=IDEV,FMT=99994)
+      END IF
+      IF (RELERP.LT.50.0D0*RWORK(UROUND)) THEN
+         WRITE (UNIT=IDEV,FMT=99993)
+      ELSE
+         WRITE (UNIT=IDEV,FMT=99992)
+      END IF
+C
+C FORMAT STATEMENTS.
+C
+99999 FORMAT (/' TEST THAT THE 12(10) PAIR INTEGRATES Y''''=(X**12)'''''
+     *       ,' ON (1,2)',/)
+99998 FORMAT (/' TEST THAT THE 6(4) PAIR INTEGRATES Y''''=(X**6)''''',
+     *       ' ON (1,2)',/)
+99997 FORMAT (' RETURNED FORM RKNSET WITH ISET = ',I2,/)
+99996 FORMAT (' RETURNED FROM RKNINT AT T = ',F11.6,' WITH IFAIL = ',I2,
+     *       /)
+99995 FORMAT (' RELATIVE ERROR IN SOLUTION ACCEPTABLE')
+99994 FORMAT (' RELATIVE ERROR IN SOLUTION NOT ACCEPTABLE')
+99993 FORMAT (' RELATIVE ERROR IN DERIVATIVE ACCEPTABLE')
+99992 FORMAT (' RELATIVE ERROR IN DERIVATIVE NOT ACCEPTABLE')
+      END
+      SUBROUTINE SINGLR
+C
+C TESTS THE IFAIL=3 EXIT FROM RKNINT, IE. STEP HAS TO
+C BE SO SMALL TO SATISFY THE ERROR TOLERANCES THAT FOR THE MACHINE
+C PRECISION IT IS POINTLESS TO CONTINUE THE INTEGRATION.
+C
+C ***
+C *** WARNING: THIS PROBLEM MAY CAUSE OVERFLOW ON MACHINES WITH A
+C *** ======== SMALL EXPONENT RANGE (EG. VAX 11/780).
+C ***
+C
+C THE PROBLEM GIVEN CONTAINS A SINGULARITY.
+C THE FIRST ORDER ODE
+C       Y' = X**2 + 100*Y**2 , Y(0)=1.0
+C IS REPOSED AS
+C       Y'' = 2*X + 200*Y*X**2 + 20000*Y**3, Y(0)=1.0,Y'(0)=100.0
+C
+C     .. Parameters ..
+      INTEGER           NOVHD, NDIM, IDEV
+      PARAMETER         (NOVHD=14,NDIM=1,IDEV=6)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  H, HNEXT, HSTART, HUSED, T, TEND, TOL
+      INTEGER           IFAIL, ISET, K, LWORK, MAXSTP, NATT, NEQ, NFAIL,
+     *                  NSUCC
+      LOGICAL           HIGH, ONESTP, START
+C     ..
+C     .. Local Arrays ..
+      DOUBLE PRECISION  RWORK(NOVHD+20*NDIM), THRES(NDIM), THRESP(NDIM),
+     *                  Y(NDIM), YDP(NDIM), YP(NDIM)
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL          FSINGL, RKNDIA, RKNINT, RKNSET
+C     ..
+C     .. Executable Statements ..
+C
+      NEQ = NDIM
+      LWORK = NOVHD + 20*NDIM
+C
+C USE THE 12(10) PAIR.
+C
+      WRITE (UNIT=IDEV,FMT=99999)
+C
+C CALL THE SET-UP ROUTINE RKNSET.
+C
+      TOL = 1.0D-6
+      THRES(1) = 0.0D0
+      THRESP(1) = 0.0D0
+      H = 0.0D0
+      MAXSTP = 0
+C
+      START = .TRUE.
+      ONESTP = .FALSE.
+      HIGH = .TRUE.
+C
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+      WRITE (UNIT=IDEV,FMT=99998) ISET
+C
+C CALL RKNINT IN INTERVAL MODE.
+C
+      T = 0.0D0
+      Y(1) = 1.0D0
+      YP(1) = 100.0D0
+      TEND = 10.0D0
+      WRITE (UNIT=IDEV,FMT=99997) T, TEND, TOL
+      WRITE (UNIT=IDEV,FMT=99996) (Y(K),K=1,NEQ)
+      WRITE (UNIT=IDEV,FMT=99995) (YP(K),K=1,NEQ)
+C
+      IFAIL = 0
+      CALL RKNINT(FSINGL,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+C
+      WRITE (UNIT=IDEV,FMT=99994) T, IFAIL
+      WRITE (UNIT=IDEV,FMT=99993) (Y(K),K=1,NEQ)
+      WRITE (UNIT=IDEV,FMT=99992) (YP(K),K=1,NEQ)
+C
+C RETRIEVE DIAGNOSTIC INFORMATION FROM RKNDIA.
+C
+      CALL RKNDIA(NEQ,HNEXT,HUSED,HSTART,NSUCC,NFAIL,NATT,THRES,THRESP,
+     *            RWORK)
+      WRITE (UNIT=IDEV,FMT=99991) HSTART, HUSED, HNEXT, NSUCC, NFAIL,
+     *  NATT
+      WRITE (UNIT=IDEV,FMT=99990) (THRES(K),K=1,NEQ)
+      WRITE (UNIT=IDEV,FMT=99989) (THRESP(K),K=1,NEQ)
+C
+C USE THE 6(4) PAIR.
+C
+      WRITE (UNIT=IDEV,FMT=99988)
+C
+C CALL THE SET-UP ROUTINE RKNSET, TAKING DEFAULT VALUES.
+C
+      TOL = 1.0D-6
+      THRES(1) = 0.0D0
+      THRESP(1) = 0.0D0
+      H = 0.0D0
+      MAXSTP = 0
+C
+      START = .TRUE.
+      ONESTP = .FALSE.
+      HIGH = .FALSE.
+C
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+      WRITE (UNIT=IDEV,FMT=99998) ISET
+C
+C CALL RKNINT IN INTERVAL MODE.
+C
+      T = 0.0D0
+      Y(1) = 1.0D0
+      YP(1) = 100.0D0
+      TEND = 10.0D0
+      WRITE (UNIT=IDEV,FMT=99997) T, TEND, TOL
+      WRITE (UNIT=IDEV,FMT=99996) (Y(K),K=1,NEQ)
+      WRITE (UNIT=IDEV,FMT=99995) (YP(K),K=1,NEQ)
+C
+      IFAIL = 0
+      CALL RKNINT(FSINGL,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+C
+      WRITE (UNIT=IDEV,FMT=99994) T, IFAIL
+      WRITE (UNIT=IDEV,FMT=99993) (Y(K),K=1,NEQ)
+      WRITE (UNIT=IDEV,FMT=99992) (YP(K),K=1,NEQ)
+C
+C RETRIEVE DIAGNOSTIC INFORMATION FROM RKNDIA.
+C
+      CALL RKNDIA(NEQ,HNEXT,HUSED,HSTART,NSUCC,NFAIL,NATT,THRES,THRESP,
+     *            RWORK)
+      WRITE (UNIT=IDEV,FMT=99991) HSTART, HUSED, HNEXT, NSUCC, NFAIL,
+     *  NATT
+      WRITE (UNIT=IDEV,FMT=99990) (THRES(K),K=1,NEQ)
+      WRITE (UNIT=IDEV,FMT=99989) (THRESP(K),K=1,NEQ)
+C
+      RETURN
+C
+C FORMAT STATEMENTS.
+C
+99999 FORMAT (' TEST OF THE NYSTROM INTEGRATOR RKNINT',/' FOR THE E',
+     *       'RROR EXIT IFAIL=3 USING THE 12(10) PAIR',/)
+99998 FORMAT (' RETURNED FROM CALL TO RKNSET WITH ISET = ',I2,/)
+99997 FORMAT (' T = ',F7.3,' TEND = ',F7.3,' TOL = ',1P,D8.1,/)
+99996 FORMAT (' INITIAL VALUES FOR Y  ',/3(2X,1P,D10.3),/)
+99995 FORMAT (' INITIAL VALUES FOR YP ',/3(2X,1P,D10.3),/)
+99994 FORMAT (' RETURNED FROM RKNINT AT T = ',F11.6,' WITH IFAIL = ',I2,
+     *       /)
+99993 FORMAT (' Y  = ',/3(2X,1P,D10.3),/)
+99992 FORMAT (' YP = ',/3(2X,1P,D10.3),/)
+99991 FORMAT (' STATISTICS FROM RKNDIA',/'  HSTART = ',1P,D10.3,' HUSE',
+     *       'D = ',1P,D10.3,' HNEXT = ',1P,D10.3,/'  NSUCC = ',I5,' N',
+     *       'FAIL = ',I5,'  NATT = ',I4,/)
+99990 FORMAT (' THRESHOLDS FOR Y  ',/3(2X,1P,D8.1),/)
+99989 FORMAT (' THRESHOLDS FOR YP ',/3(2X,1P,D8.1),/)
+99988 FORMAT (' TEST OF THE NYSTROM INTEGRATOR RKNINT',/' FOR THE E',
+     *       'RROR EXIT IFAIL=3 USING THE 6(4) PAIR',/)
+      END
+      SUBROUTINE LOOPER
+C
+C CHECKS THAT RKNINT CAN DETECT A POSSIBLE
+C INFINITE LOOP DUE TO THE USER NOT CORRECTING AN ERROR
+C STATE FLAGGED BY IFAIL .GT. O.
+C
+C     .. Parameters ..
+      INTEGER           NOVHD, NDIM, IDEV
+      PARAMETER         (NOVHD=14,NDIM=3,IDEV=6)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  H, HNEXT, HSTART, HUSED, T, TEND, TOL
+      INTEGER           IFAIL, ISET, K, LWORK, MAXSTP, NATT, NEQ, NFAIL,
+     *                  NSUCC
+      LOGICAL           HIGH, ONESTP, START
+C     ..
+C     .. Local Arrays ..
+      DOUBLE PRECISION  RWORK(NOVHD+11*NDIM), THRES(NDIM), THRESP(NDIM),
+     *                  Y(NDIM), YDP(NDIM), YP(NDIM)
+C     ..
+C     .. External Subroutines ..
+      EXTERNAL          ERROR, POLY06, RKNDIA, RKNINT, RKNSET
+C     ..
+C     .. Executable Statements ..
+C
+C SET UP USING RKNSET.
+C
+      NEQ = NDIM
+      ONESTP = .FALSE.
+      START = .TRUE.
+      HIGH = .FALSE.
+      LWORK = NOVHD + 11*NEQ
+      TOL = 1.0D-4
+      THRES(1) = 6.0D-6
+      THRES(2) = 1.0D0
+      THRES(3) = 6.0D-6
+      THRESP(1) = 6.0D-6
+      THRESP(2) = 1.0D0
+      THRESP(3) = 6.0D-6
+      H = 0.0D0
+      MAXSTP = 0
+      WRITE (UNIT=IDEV,FMT=99999)
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+      WRITE (UNIT=IDEV,FMT=99995) ISET
+C
+C INITIAL VALUES.
+C
+      Y(1) = 4.0D0
+      Y(2) = 0.0D0
+      Y(3) = 5.0D0
+      YP(1) = -2.0D0
+      YP(2) = 0.0D0
+      YP(3) = 0.0D0
+      T = 0.0D0
+      TEND = 1.0D0
+      WRITE (UNIT=IDEV,FMT=99997) T, TEND, TOL
+      WRITE (UNIT=IDEV,FMT=99996) (Y(K),K=1,NEQ), (YP(K),K=1,NEQ)
+      IFAIL = 0
+      CALL RKNINT(POLY06,NEQ,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+      WRITE (UNIT=IDEV,FMT=99994) IFAIL, T
+      WRITE (UNIT=IDEV,FMT=99993) (Y(K),K=1,NEQ)
+      WRITE (UNIT=IDEV,FMT=99992) (YP(K),K=1,NEQ)
+      CALL ERROR(NEQ,T,Y,YP)
+C
+C RETRIEVE DIAGNOSTIC INFORMATION FROM RKNDIA.
+C
+      CALL RKNDIA(NEQ,HNEXT,HUSED,HSTART,NSUCC,NFAIL,NATT,THRES,THRESP,
+     *            RWORK)
+      WRITE (UNIT=IDEV,FMT=99990) NSUCC, NFAIL, NATT, HNEXT, HUSED,
+     *  HSTART
+C
+C CHANGE TO ONE-STEP MODE.
+C
+      ONESTP = .TRUE.
+      CALL RKNSET(NEQ,H,TOL,THRES,THRESP,MAXSTP,START,ONESTP,HIGH,LWORK,
+     *            RWORK,ISET)
+      WRITE (UNIT=IDEV,FMT=99991) ISET
+C
+C CALL RKNINT WITH NEQ .NE. NEQOLD.
+C
+      TEND = 5.0D0
+      WRITE (UNIT=IDEV,FMT=99998)
+   20 IFAIL = 0
+      CALL RKNINT(POLY06,2,T,TEND,Y,YP,YDP,RWORK,IFAIL)
+      WRITE (UNIT=IDEV,FMT=99994) IFAIL, T
+      WRITE (UNIT=IDEV,FMT=99993) (Y(K),K=1,NEQ)
+      WRITE (UNIT=IDEV,FMT=99992) (YP(K),K=1,NEQ)
+C
+C SET UP LOOP.
+C
+      IF (T.LT.TEND) GO TO 20
+      STOP
+C
+C FORMAT STATEMENTS.
+C
+99999 FORMAT (' CORRECT CALL TO RKNSET')
+99998 FORMAT (' CALL TO RKNINT WITH NEQ .NE. NEQOLD',/' TEND CHA','NGE',
+     *       'D TO 5.',/)
+99997 FORMAT (' TEST OF THE NYSTROM INTEGRATOR RKNINT',/' THE PR','OBL',
+     *       'EM IS A SYSTEM OF 3 POLYNOMIALS IN T',/' INTEGRATE','D F',
+     *       'ROM ',F6.3,' TO ',F6.3,/' THE RELATIVE ERROR TOLER','ANC',
+     *       'E IS ',1P,D8.1,/' THIS TEST LOOKS FOR A STOP IN RKNINT',/)
+99996 FORMAT (' INITIAL VALUES FOR Y  ',3(2X,F7.2),/' INITIAL VA','LUE',
+     *       'S FOR YP ',3(2X,F7.2),/)
+99995 FORMAT (' RETURNED FROM INITIAL CALL TO RKNSET WITH ISET = ',I2,/)
+99994 FORMAT (' RETURNED FROM RKNINT WITH IFAIL = ',I2,'  AT T = ',1P,
+     *       D10.3,/)
+99993 FORMAT (' Y  = ',3(2X,1P,D11.4),/)
+99992 FORMAT (' YP = ',3(2X,1P,D11.4),/)
+99991 FORMAT (' RETURNED FROM RESET CALL TO RKNSET WITH ISET = ',I2,/)
+99990 FORMAT (' STATISTICS FROM RKNDIA',/' NSUCC = ',I5,' NFAIL ','= ',
+     *       I5,' NATT = ',I3,/' HNEXT = ',1P,D10.3,' HUSED = ',1P,
+     *       D10.3,' HSTART = ',1P,D10.3,/)
+      END
+      SUBROUTINE POLY06(NEQ,T,Y,YDP)
+C
+C SIMPLE POLYNOMIAL TO INTEGRATE.
+C
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION  T
+      INTEGER           NEQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION  Y(NEQ), YDP(NEQ)
+C     ..
+C     .. Executable Statements ..
+C
+      YDP(1) = 2.0D0
+      YDP(2) = 6.0D0*T*(2.0D0*T-3.0D0)
+      YDP(3) = 10.0D0*T**3*(3.0D0*T-20.0D0)
+      RETURN
+      END
+      SUBROUTINE ERROR(NEQ,T,Y,YP)
+C
+C MEASURES ERROR IN INTEGRATING ABOVE POLYNOMIAL.
+C
+C     .. Parameters ..
+      INTEGER          IDEV
+      PARAMETER        (IDEV=6)
+C     ..
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION T
+      INTEGER          NEQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION Y(NEQ), YP(NEQ)
+C     ..
+C     .. Local Scalars ..
+      INTEGER          I
+C     ..
+C     .. Local Arrays ..
+      DOUBLE PRECISION ERR(3), ERRP(3), YPT(3), YT(3)
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC        ABS
+C     ..
+C     .. Executable Statements ..
+C
+      YT(1) = T*T - 2.0D0*T + 4.0D0
+      YT(2) = T**3*(T-3.0D0)
+      YT(3) = T**5*(T-10.0D0) + 5.0D0
+      YPT(1) = 2.0D0*T - 2.0D0
+      YPT(2) = T*T*(4.0D0*T-9.0D0)
+      YPT(3) = T**4*(6.0D0*T-50.0D0)
+C
+      DO 20 I = 1, NEQ
+         ERR(I) = ABS(YT(I)-Y(I))
+         ERRP(I) = ABS(YPT(I)-YP(I))
+   20 CONTINUE
+C
+      WRITE (UNIT=IDEV,FMT=99999) (ERR(I),I=1,NEQ), (ERRP(I),I=1,NEQ)
+      RETURN
+C
+99999 FORMAT (' ERRORS IN Y  ',3(2X,1P,D11.4),/' ERRORS IN YP ',3(2X,1P,
+     *       D11.4),/)
+      END
+      SUBROUTINE FSINGL(NEQ,T,Y,YDP)
+C
+C EQUATION WITH SINGULARITY.
+C
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION  T
+      INTEGER           NEQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION  Y(NEQ), YDP(NEQ)
+C     ..
+C     .. Executable Statements ..
+C
+      YDP(1) = 2.0D0*T + 200.0D0*T**2*Y(1) + 20000.0D0*Y(1)**3
+C
+      RETURN
+      END
+      SUBROUTINE FCN2BD(NEQ,T,Y,YDP)
+C
+C DERIVATIVES FOR TWO BODY PROBLEM IN  Y'' = F(T,Y)  FORM.
+C
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION  T
+      INTEGER           NEQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION  Y(NEQ), YDP(NEQ)
+C     ..
+C     .. Local Scalars ..
+      DOUBLE PRECISION  R
+C     ..
+C     .. Intrinsic Functions ..
+      INTRINSIC         SQRT
+C     ..
+C     .. Executable Statements ..
+C
+      R = SQRT(Y(1)**2+Y(2)**2)**3
+      YDP(1) = -Y(1)/R
+      YDP(2) = -Y(2)/R
+      RETURN
+      END
+      SUBROUTINE POLX12(NEQ,T,Y,YDP)
+C
+C ROUTINE FOR Y'' = (X**12)''.
+C
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION  T
+      INTEGER           NEQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION  Y(NEQ), YDP(NEQ)
+C     ..
+C     .. Executable Statements ..
+C
+      YDP(1) = 11.0D0*12.0D0*T**10
+C
+      RETURN
+      END
+      SUBROUTINE POLX06(NEQ,T,Y,YDP)
+C
+C ROUTINE FOR Y''=(X**6)''.
+C
+C     .. Scalar Arguments ..
+      DOUBLE PRECISION  T
+      INTEGER           NEQ
+C     ..
+C     .. Array Arguments ..
+      DOUBLE PRECISION  Y(NEQ), YDP(NEQ)
+C     ..
+C     .. Executable Statements ..
+C
+      YDP(1) = 5.0D0*6.0D0*T**4
+C
+      RETURN
+      END

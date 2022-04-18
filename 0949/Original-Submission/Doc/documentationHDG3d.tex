@@ -1,0 +1,1757 @@
+\documentclass[10pt,english]{article}
+
+%\usepackage{graphics,rawfonts,pictex,latexsym,makeidx,psfig,amssymb,amsmath,epsfig}
+\usepackage{graphicx,amsfonts,amssymb,amsmath,epsfig,framed}
+\usepackage{babel}
+
+
+\usepackage[framed]{mcode}
+
+
+\setlength{\baselineskip}{19pt}
+
+\setlength{\topmargin}{-0.2in} \setlength{\oddsidemargin}{-0.03in}
+\setlength{\evensidemargin}{-0.03in} \setlength{\leftmargin}{0in}
+\setlength{\textwidth}{6.3in} \setlength{\textheight}{8.75in}
+\setlength{\headheight}{0in} \setlength{\topskip}{0in}
+
+
+
+\newcommand{\smallfrac}[2]{{\textstyle\frac{#1}{#2}}}
+\newcommand{\ds}{\displaystyle}
+\newcommand{\oneline}{\vspace{0.4cm}\hrule\vspace{0.4cm}}
+
+\newcommand{\Nelt}{{N_{\mathrm{elt}}}}
+\newcommand{\Nnd}{{N_{\mathrm{qd}}}}
+\newcommand{\Nndb}{{N_{\mathrm{qd2}}}}
+\newcommand{\Nfc}{{N_{\mathrm{fc}}}}
+\newcommand{\Ndir}{{N_{\mathrm{dir}}}}
+\newcommand{\Nneu}{{N_{\mathrm{neu}}}}
+\newcommand{\dir}{{\mathrm{dir}}}
+\newcommand{\neu}{{\mathrm{neu}}}
+\newcommand{\free}{{\mathrm{free}}}
+
+
+\newcommand{\pp}{\widehat{\mathbf p}}
+\newcommand{\qq}{\widehat{\mathbf q}}
+
+\newcommand{\unfinished}[1]{\vspace{3pt}\hfill\fbox{\parbox{0.25\textwidth}
+{#1 }}}
+
+
+\title{Implementation of HDG in three dimensions}
+
+\author{Zhixing Fu, Luis F Gatica, \& Francisco-Javier Sayas}
+
+\date{Last update: \today}
+
+\begin{document}
+\parindent=0pt
+
+
+\maketitle
+\tableofcontents
+
+\newpage
+
+\begin{framed}
+Notation of this documentation follows strictly that of the paper
+\begin{center}
+\em Matlab tools for HDG in three dimensions
+\end{center}
+\end{framed}
+
+
+\section{Pseudo-Matlab notation}
+
+Assume that $\mathbf u$ is a column vector with $N$ components and $\mathrm A$ is an $M\times N$ matrix. We then consider the $M\times N$ matrix $\mathbf u^\top \odot \mathrm A:=\mathrm A\, \mathrm{diag}(\mathbf u)$ with elements
+\[
+(\mathbf u^\top \odot \mathrm A)_{ij}= u_j \mathrm A_{ij}.
+\]
+Similarly, if $\mathbf v$ is a column vector with $M$ components, we consider the matrix $\mathbf v\odot\mathrm A:=\mathrm{diag}(\mathbf v)\mathrm A $, i.e.,
+\[
+(\mathbf v \odot \mathrm A)_{ij}= v_i \mathrm A_{ij}.
+\]
+Assuming correct sizes for the matrices and vectors (vectors will be assumed to be column vectors throughout), both operations can be easily accomplished in Matlab
+\begin{verbatim}
+     bsxfun(@times,u',A)   % row times matrix
+     bsxfun(@times,v,A)    % column times matrix
+\end{verbatim}
+
+We will use Kronecker products in a very particular form. Assume that $\mathbf c$ is a column vector with $N$ components and that $\mathrm A$ is a $m\times n$ matrix. Then
+\[
+\mathbf c^\top \otimes \mathrm A = \left[\begin{array}{c|c|c|c} c_1\mathrm A & c_2\mathrm A & \cdots & c_N \mathrm A\end{array}\right]
+\]
+is a $m\times (n N)$ matrix, organized in $N$ blocks of size $m\times n$. It will be the case that we will want the result stored as a $3$-dimensional $m\times n\times N$. This is easily programmed as follows
+
+\begin{verbatim}
+     cA=kron(c',A):  
+     cA=reshape(cA,[m,n,N]); 
+\end{verbatim}
+
+For convenience, we will also write
+\[
+\mathbf a_i^\top:=\mathrm{row}(\mathrm A,i)
+\]
+to select the $i$-th row of a matrix $\mathrm A$. Finally, in the last part of the code we will use the symbol $\bullet$ to represent the element by element multiplication of arrays (Matlab's {\tt .*} operator).
+
+\section{Geometric elements}
+
+
+\subsection{Reference elements}
+We first consider the reference tetrahedron $\widehat K$, with vertices 
+\[
+\widehat{\mathbf v}_1:=(0,0,0) \qquad \widehat{\mathbf v}_2:=(1,0,0), \qquad \widehat{\mathbf v}_3:=(0,1,0), \qquad \widehat{\mathbf v}_4:=(0,0,1).
+\]
+Note that $|\widehat K|:=\mathrm{vol}\,\widehat K=1/6.$ We also consider the two dimensional reference element $\widehat K_2:=\{(s,t)\,:\,s,t\ge 0, s+t\le 1\}$ with vertices
+\[
+\widehat{\mathbf w}_1:=(0,0), \qquad \widehat{\mathbf w}_2:=(1,0), \qquad \widehat{\mathbf w}_3:=(0,1).
+\]
+
+\subsection{Tetrahedra}
+
+Given a tetrahedron with vertices $(\mathbf v_1,\mathbf v_2,\mathbf v_3,\mathbf v_4)$ (the order is relevant), we consider the affine mapping $\mathrm F_K:\widehat K\to K$
+\[
+\mathrm F_K(\widehat{\mathbf x})=\mathrm B_K \widehat{\mathbf x}+\mathbf v_1, \qquad 
+\mathrm B_K=
+\left[\begin{array}{ccc}
+x_2-x_1 & x_3-x_1 & x_4-x_1\\ 
+y_2-y_1 & y_3-y_1 & y_4-y_1\\ 
+z_2-z_1 & z_3-z_1 & z_4-z_1
+\end{array}\right]
+\]
+so that $\mathrm F_K(\widehat{\mathbf v}_i)=\mathbf v_i$ for $ i=\in\{1,2,3,4\}$. 
+All elements of the triangulation will be given with positive orientation, that is,
+\[
+\mathrm{det}\,\mathrm B_K=6|K|=\Big( (\mathbf v_2-\mathbf v_1)\times (\mathbf v_3-\mathbf v_1)\Big)\cdot (\mathbf v_4-\mathbf v_1)>0.
+\]
+
+\subsection{Parametrization of triangles}
+
+A triangle $e$ in $\mathbb R^3$ with vertices $(\mathbf w_1, \mathbf w_2, \mathbf w_3)$ (the order is relevant), will be parametrized via
+$\boldsymbol\phi_e:\widehat K_2\to e,$
+given by
+\[
+\boldsymbol\phi_e(s,t):=s\,(\mathbf w_2-\mathbf w_1)+t\,(\mathbf w_3-\mathbf w_1)+\mathbf w_1, \qquad |\partial_s\boldsymbol\phi_e\times \partial_t\boldsymbol\phi_e|=2|e|,
+\]
+so that $\boldsymbol\phi_e(\widehat{\mathbf w}_i)=\mathbf w_i$, for $i\in \{1,2,3\}$.
+The local orientation of the vertices of $e$ gives an orientation to the normal vector: we will define the normal vector so that its norm is proportional to the area of $e$, that is
+\[
+\mathbf n_e:=\smallfrac12 \Big( (\mathbf w_2-\mathbf w_1)\times (\mathbf w_3-\mathbf w_1)\Big).
+\]
+
+
+\subsection{Parametrization of the faces of a tetrahedron}\label{sec:1.3}
+
+Given a tetrahedron $K$ with vertices $(\mathbf v_1,\mathbf v_2,\mathbf v_3,\mathbf v_4)$ we will consider its four faces given in the following order (and with the inherited orientations):
+\[
+\begin{array}{ccc}
+e^K_1 &\qquad \longleftrightarrow \qquad& (\mathbf v_1,\mathbf v_2,\mathbf v_3)\\[1.3ex]
+e^K_2  &\qquad \longleftrightarrow \qquad& (\mathbf v_1,\mathbf v_2,\mathbf v_4)\\[1.3ex]
+e^K_3  &\qquad \longleftrightarrow \qquad& (\mathbf v_1,\mathbf v_3,\mathbf v_4)\\[1.3ex]
+e^K_4  &\qquad \longleftrightarrow \qquad& (\mathbf v_4,\mathbf v_2,\mathbf v_3).
+\end{array}\qquad\qquad \left[\begin{array}{ccc} 1 & 2 & 3 \\[1.3ex] 1 & 2 & 4 \\[1.3ex]1 & 3 & 4 \\[1.3ex]4 & 2 & 3\end{array}\right]
+\]
+(Note that with this orientation of the faces, the normals of the second and fourth faces point outwards, while those of the first and third faces point inwards. This numbering is done for the sake of parametrization.)
+
+The parametrizations of the faces $ e_\ell^K\in \mathcal E(K)$
+\[
+\boldsymbol\phi_\ell^K:\widehat K_2\to e_\ell^K \qquad \ell\in \{1,2,3,4\},
+\]
+given by the formulas
+\[
+\begin{array}{l}\ds \boldsymbol\phi_1^K(s,t) := (s,t,0)\\[1.5ex] 
+\ds \boldsymbol\phi_2^K(s,t) :=(s,0,t)\\[1.5ex] 
+\ds \boldsymbol\phi_3^K(s,t) :=(0,s,t) \\[1.5ex] 
+\ds \boldsymbol\phi_4^K(s,t) :=(s,t,1-s-t)\end{array}
+\]
+will be used for integrals on $\partial K$.
+
+\subsection{The permutation index}\label{sec:1.4}
+
+Consider the affine invertible maps $F_\mu:\widehat K_2\to\widehat K_2$ given by the formulas
+\[
+\begin{array}{l}
+\ds F_1(s,t) := (s,t)\\[1.5ex] 
+\ds F_2(s,t) := (t,s)\\[1.5ex] 
+\ds F_3(s,t) := (t,1-s-t)\\[1.5ex] 
+\ds F_4(s,t) := (s,1-s-t)\\[1.5ex] 
+\ds F_5(s,t) := (1-s-t,s)\\[1.5ex] 
+\ds F_6(s,t) := (1-s-t,t)\\[1.5ex] 
+\end{array} \qquad \qquad 
+\left[\begin{array}{ccc} \mathbf 1 & \mathbf 2 & \mathbf 3 \\[1.5ex] \mathbf 1 & 3 & 2 \\[1.5ex] 3 & 1 & 2 \\[1.5ex] 3 & \mathbf 2 & 1 \\[1.5ex] 2 & 3 & 1 \\[1.5ex] 2 & 1 & \mathbf 3\end{array}\right].
+\]
+The table on the right shows the indices of images of the vertices $(\widehat{\mathbf w}_1,\widehat{\mathbf w}_2,\widehat{\mathbf w}_3)$, with boldface font for those that stay fixed. We note that $F_2$, $F_4$ and $F_6$ change orientation.
+
+Given a tetrahedron $K$, assume that the face $e=e_\ell^K$. We thus have six possible cases 
+of how the parametrizations $\boldsymbol\phi_\ell^K$ and $\boldsymbol\phi_e$ match. We will encode this information in a matrix so that
+\[
+\mu=\mathrm{perm}(K,\ell)\quad\mbox{and} \quad e=e_\ell^K  \qquad \mbox{imply}\qquad \boldsymbol\phi_e\circ F_\mu=\boldsymbol\phi_\ell^K.
+\]
+
+\subsection{A tetrahedrization in basic and expanded forms}
+
+We are given a polyhedral domain $\Omega$, with faces grouped in two subsets $\Gamma_D$ and $\Gamma_N$ (for Dirichlet and Neumann boundary conditions), and a tetrahedrization of $\Omega$. The basic tetrahedrization is given through four fields:
+\begin{itemize}
+\item {\tt T.coordinates} is an $N_{\mathrm{ver}}\times 3$ matrix with the coordinates of the vertices of the triangulation,
+\item {\tt T.elements} is an $\Nelt\times 4$ matrix: the $K$-th row of the matrix contains the indices of the vertices of $K$; {\em positive orientation is assumed},
+\item {\tt T.dirichlet} is a $\Ndir\times 3$ matrix, with the vertex numbers for the Dirichlet faces,
+\item {\tt T.neumann} is a $\Nneu\times 3$ matrix, with the vertex numbers for the Neumann faces.
+\end{itemize}
+For the boundary faces, it is assumed that {\em either all of them are given with positive orientation} (normals pointing outwards) or {\em all of them are given with negative orientation}. This is an example of a basic tetrahedral data structure, for a partition with $48$ vertices, $108$ tetrahedral elements, $36$ Dirichlet faces and $48$ Neumann faces.
+
+\oneline
+\begin{verbatim}
+T = 
+    coordinates: [48x3 double]
+       elements: [108x4 double]
+      dirichlet: [36x3 double]
+        neumann: [48x3 double]
+\end{verbatim}
+\oneline
+
+In {\bf expanded form}, the tetrahedral data structure contains many more useful fields.
+\begin{itemize}
+\item In this form, the faces listed in the fields {\tt T.dirichlet} and {\tt T.neumann} are positively oriented.
+\item {\tt T.faces} is a $\Nfc\times 4$ matrix with a list of faces: the first three columns contain the global vertex numbers for the faces (its order will give the intrinsic parametrization of the face); Dirichlet and Neumann faces are numbered exacly as in {\tt T.dirichlet} and {\tt T.neumann}, the fourth column contains an index:
+\begin{itemize}
+\item 0 for interior faces
+\item 1 for Dirichlet faces
+\item 2 for Neumann faces
+\end{itemize}
+\item {\tt T.dirfaces} and {\tt T.neufaces} are row vectors with the list of Dirichlet and Neumann faces (that is, they point out what rows of {\tt T.faces} contain a $1$ (resp a $2$) in the last column)
+\item {\tt T.facebyele} is an $\Nelt\times 4$ matrix: its $K$-th row contains the numbers of faces that make up $\partial K$; they are given in the order shown in Section \ref{sec:1.3}, that is, locally
+\[
+ \left[\begin{array}{ccc} 1 & 2 & 3 \\ 1 & 2 & 4 \\1 & 3 & 4 \\4 & 2 & 3\end{array}\right]
+\]
+This is the matrix we have described as $e_\ell^K$.
+\item {\tt T.perm} is an $\Nelt\times 4$ matrix containing numbers from $1$ to $6$; the $K$-th row indicates what permutations are needed for each of the faces to get to the proper numbering of the face (see Section \ref{sec:1.4}), i.e., this is just the matrix $\mathrm{perm}(K,\ell)$
+\item {\tt T.volume} is a $\Nelt\times 1$ column vector with the volumes of the elements
+\item {\tt T.area} is a $\Nfc\times 1$ column vector with the areas of the faces
+\item {\tt T.normals} is a $\Nelt\times 12$ matrix with the {\em non-normalized} normal vectors for the faces of the ech; its $K$-th row contains four row vectors of three components each
+\[
+\left[ \begin{array}{c|c|c|c} \mathbf n_1^\top & \mathbf n_2^\top & \mathbf n_3^\top & \mathbf n_4^\top\end{array}\right]
+\]
+so that $\mathbf n_\ell$ is the normal vector to the face $e_\ell^K$, {\em pointing outwards} and such that $|\mathbf n_\ell|=|e_\ell^K|$.
+\end{itemize}
+
+
+\oneline
+\begin{verbatim}
+T = 
+    coordinates: [48x3 double]
+       elements: [108x4 double]
+      dirichlet: [36x3 double]
+        neumann: [48x3 double]
+          faces: [258x4 double]
+       dirfaces: [1x36 double]
+       neufaces: [1x48 double]
+      facebyele: [108x4 double]
+    orientation: [108x4 double]
+           perm: [108x4 double]
+         volume: [108x1 double]
+           area: [258x1 double]
+        normals: [108x12 double]
+\end{verbatim}
+\oneline
+
+In what follows we will frequently identify
+\[
+\mathcal T_h \equiv \{1,\ldots,\Nelt\} \qquad \mathcal E_h\equiv \{1,\ldots,\Nfc\}.
+\]
+
+
+\section{Quadrature}
+
+\subsection{Volume integrals}\label{sec:2.1}
+
+Quadrature rules will be given in the reference element $\widehat K$. They will be composed of quadrature points, given by their {\em barycentric coordinates}, and weights. Geometrically, we can think of points
+\[
+\widehat{\mathbf p}_q:=(\widehat x_q,\widehat y_q,\widehat z_q), \qquad q=1,\ldots,\Nnd
+\]
+and weights $\widehat\omega_q$, with the normalization
+\[
+\sum_{q=1}^\Nnd \widehat\omega_q=1,
+\qquad\mbox{so that}\qquad
+\int_{\widehat K} \widehat\phi \approx\smallfrac16 \sum_q \widehat\omega_q \widehat\phi(\widehat{\mathbf p}_q).
+\]
+For a general tetrahedron, we will approximate
+\[
+\int_K \phi=\mathrm{det}\,\mathrm B_K\int_{\widehat K} \phi\circ\mathrm F_K \approx |K| \sum_q \widehat\omega_q \phi(\mathbf p_q^K)\qquad \mbox{with}\qquad\mathbf p_q^K =\mathrm F_K(\widehat{\mathbf p}_q).
+\]
+For convenience, a quadrature formula will be stored in an $\Nnd\times 5$ matrix. The $q$-th row contains the barycentric coordinates of $\widehat{\mathbf p}_q$ and then the weight $\widehat\omega_q$, that is, we store
+\[
+(1-\widehat x_q-\widehat y_q-\widehat z_q,\widehat x_q,\widehat y_q,\widehat z_q,\widehat\omega_q)
+\]
+as rows. We will also consider the $\Nnd\times 4$ matrix $\Lambda$ with the barycentric coordinates of the quadrature points.
+
+\subsection{Integrals on faces}
+
+Two dimensional quadrature rules will be given in the reference element $\widehat K_2$, using points and weights so that
+\[
+\sum_{r=1}^\Nndb\varpi_r=1\qquad\mbox{and thus}\qquad
+\int_{\widehat K_2} \widehat\phi \approx \smallfrac12 \sum_r \varpi_r \widehat\phi(\qq_r), \qquad \qq_r=(\widehat s_r,\widehat t_r).
+\]
+To compute an integral on $e\in \mathcal E_h$, we simply parametrize from $\widehat K_2$ and proceed accordingly:
+\[
+\int_e \phi = 2 |e| \int_{\widehat K_2} \phi\circ\boldsymbol\phi_e\approx|e|\sum_r \varpi_r \phi(\mathbf q_r^e) \qquad\mbox{with}\qquad \mathbf q_r^e:=\boldsymbol\phi_e(\qq_r).
+\]
+A face quadrature formula will be stored in an $\Nndb\times 4$ matrix, with the barycentric coordinates of the quadrature points in the first columns and the weights in the last one. The $r$-th row of this matrix is therefore
+\[
+(1-\widehat s_r-\widehat t_r,\widehat s_r,\widehat t_r,\varpi_r).
+\]
+The $\Nndb\times 3$ with the barycentric coordinates of the quadrature points will be denoted $\Xi$.
+
+\subsection{Integrals on boundaries of tetrahedra}\label{sec:2.3}
+
+In many cases we will be integrating on a face that is given with geometric information of an adjacent tetrahedron. The quadrature points $\qq_r$ lead to four groups of quadrature points on the faces of $\widehat K$ (see Section \ref{sec:1.3}):
+\[
+\begin{array}{l}
+\qq_r^1 :=(\widehat s_r,\widehat t_r,0)\\[1.5ex]
+\qq_r^2 :=(\widehat s_r,0,\widehat t_r)\\[1.5ex]
+\qq_r^3 :=(0,\widehat s_r,\widehat t_r)\\[1.5ex]
+\qq_r^4 :=(\widehat s_r,\widehat t_r,1-\widehat s_r-\widehat t_r)
+\end{array}
+\]
+For a given $\psi:K\to \mathbb R$, we can approximate
+\[
+\int_{e_\ell^K}\psi \approx |e_\ell^K| \sum_r \varpi_r\psi (\mathbf q_{r,\ell}^K) \qquad\mbox{with}\qquad \mathbf q_{r,\ell}^K =\mathrm F_K(\qq_r^\ell)=\boldsymbol\phi_{e_\ell^K}(F_{\mathrm{perm}(K,\ell)}(\widehat{\mathbf q}_r))
+\]
+and thus
+\[
+\int_{\partial K}\psi \approx \sum_{\ell=1}^ 4 |e_\ell^K|\sum_r \varpi_r\psi (\mathbf q_{r,\ell}^K) .
+\]
+
+\section{Dubiner polynomial bases}
+
+
+\subsection{The Dubiner basis in two variables}
+
+Let
+\[
+d_2=d_2(k)={k+2 \choose 2}=\mathrm{dim}\,\mathcal P_k(\widehat K_2).
+\]
+The Dubiner basis in two variables is a basis of the space of bivariate polynomials such that
+\[
+\int_{\check K_2} \check D_i\,\check D_j=0 \qquad i\neq j, \qquad \check K_2=\{ 2 \widehat{\mathbf x}-(1,1)^\top\,:\, \widehat{\mathbf x}\in \widehat K_2\}.
+\]
+It is ordered in such a way that
+\[
+\mathcal P_k(\check K_2)=\mathrm{span}\{\check  D_j\,:\, j\le d_2(k)\} \qquad \forall k\ge 0.
+\]
+The Dubiner basis is evaluated using Jacobi polynomials (here we use a small variation of code by John Buckhart for the evaluation of the Jacobi polynomials). Details on how this is coded can be found in the documentation of the 2-dimensional HDG code. Given $N_{\mathrm{points}}$  points $\mathbf q_r=(s_r,t_r)$, the function {\tt dubiner2d} returns the matrices
+\[
+\check D_j(\mathbf q_r), \qquad \partial_{s} \check D_j(\mathbf q_r), \qquad \partial_{t} \check D_j(\mathbf q_r).
+\]
+Output is given as three $N_{\mathrm{points}}\times d_2$ matrices.
+
+%% CODE
+
+\lstinputlisting{../dubiner2d.m}
+
+
+\subsection{The Dubiner basis in three variables}
+
+We now denote
+\[
+d_3:=d_3(k)={k+3\choose 3}=\mathrm{dim}\,\mathcal P_k(\widehat K).
+\]
+A basis  $\{\check P_j\}$ of the space of 3-variate polynomials is given with the orthogonality property
+\[
+\int_{\check K}\check P_i\check P_j=0 \qquad i\neq j, \qquad \check K=\{ 2 \widehat{\mathbf x}-(1,1,1)^\top\,:\, \widehat{\mathbf x}\in \widehat K\}.
+\]
+We also assume that
+\[
+\mathcal P_k(\check K)=\mathrm{span}\{ P_j\,:\, j\le d_3(k)\} \qquad \forall k\ge 0.
+\]
+Output is given in a similar way to the {\tt dubiner2d} code: given points $\mathbf p_q$, we evaluate
+\[
+\check P_j(\mathbf p_q), \qquad \partial_x \check P_j(\mathbf p_q), \qquad \partial_y \check P_j(\mathbf p_q), \qquad \partial_z \check P_j(\mathbf p_q)
+\]
+and output as four $N_{\mathrm{points}}\times d_3$ matrices.
+
+%% CODE
+
+\lstinputlisting{../dubiner3d.m}
+
+
+\section{Volume matrices and integrals}
+
+\subsection{Representation of a piecewise polynomial function}
+
+Let $k$ be a fixed polynomial degree and consider
+\[
+\widehat P_j:=\check P_j(2\,\cdot\,-(1,1,1)^\top) , \qquad \mathcal P_k(\widehat K)=\mathrm{span}\{ \widehat P_j\,:\, 1\le j\le d_3\}.
+\]
+This basis is hierarchical.
+We then consider the following basis of $\mathcal P_k(K)$
+\[
+P_i^K :=\widehat P_i\circ \mathrm F_K^{-1} , \qquad i=1,\ldots,d_3.
+\]
+A function in the space
+\[
+W_h:=\prod_{K\in \mathcal T_h}\mathcal P_k(K)=\{ u_h :\Omega\to\mathbb R\,:\, u_h|_K \in \mathcal P_k(K)\quad\forall K\in \mathcal T_h\} 
+\]
+will be represented in two possible forms: as a $d_3\times \Nelt$ matrix, whose $K$-th column contains the coefficients of $u_h|_K$ in the basis $\{ P_i^K\}$, or as a $d_3\,\Nelt$ column vector, with $d_3$-sized blocks containing the same values. {\em The matrix storage form will be preferred}. The {\tt reshape} command moves from one to the other easily.
+
+\paragraph{Warning.} At every evaluation of the basis functions or their derivatives, we need to apply the following rule
+\[
+\widehat P_i(\mathbf x)=\check P_i(2\mathbf x-\mathbf 1), \qquad \partial_{\widehat \star} \widehat P_i(\mathbf x)=2\partial_{\check\star}\check P_i(2\mathbf x-\mathbf 1), \qquad \star\in \{x,  y,  z\}, \qquad \mathbf 1:=(1,1,1)^\top.
+\]
+
+\subsection{Computing all quadrature nodes at once}\label{sec:3.3}
+
+Let $\Lambda$ be the $\Nnd\times 4$ matrix with the barycentric coordinates of the nodes of a quadrature formula (see Section \ref{sec:2.1}). Let 
+\[
+\mathrm X^{\mathcal T}, \qquad \mathrm Y^{\mathcal T}, \qquad \mathrm Z^{\mathcal T}
+\]
+be the $4\times \Nelt $ matrices with the $(x,y,z)$ coordinates of the four vertices of all elements (we count elements by rows and vertices by columns). Then, the $\Nnd\times \Nelt$ matrices
+\[
+\mathrm X:=\Lambda \mathrm X^{\mathcal T} , \qquad \mathrm Y:=\Lambda \mathrm Y^{\mathcal T} , \qquad \mathrm Z:=\Lambda \mathrm Z^{\mathcal T}
+\]
+contain the coordinates of all quadrature nodes on all the elements. Therefore, if $f$ is a vectorized function of three variables, the $\Nnd\times \Nelt$ matrix $f(\mathrm X,\mathrm Y,\mathrm Z)$ contains the values of $f$ at all the quadrature nodes. The Matlab instruction to generate these points based on our data structure are:
+\begin{verbatim}
+     x=T.coordinates(:,1); x=formula(:,[1 2 3 4])*x(T.elements');
+     y=T.coordinates(:,1); y=formula(:,[1 2 3 4])*y(T.elements');
+     z=T.coordinates(:,1); z=formula(:,[1 2 3 4])*z(T.elements');
+\end{verbatim}
+
+
+
+
+
+\subsection{Testing a function on elements}\label{sec:3.4}
+
+Given a vectorized function $f:\Omega\to \mathbb R$, we aim to compute the integrals
+\[
+\int_K f P_i^K \qquad  i=1,\ldots,d_3, \quad K\in \mathcal T_h,
+\]
+and store them in a $d_3\times \Nelt$ matrix. Let
+\[
+\mathrm P_{qj}:=\widehat P_j(\widehat{\mathbf p}_q), \qquad q=1,\ldots,\Nnd, \qquad j=1,\ldots, d_3.
+\]
+Then
+\[
+\int_K f P_i^K \approx |K|\sum_q \widehat\omega_q f(\mathbf p_K^q) \widehat P_i(\widehat{\mathbf p}_q)= |K|\sum_q \widehat\omega_q \mathrm P_{qi} f(\mathbf p_K^q),\qquad  i=1,\ldots,d_3, \quad K\in \mathcal T_h.
+\]
+If $\mathbf{vol}$ is the column vector with the volumes of all elements if $\widehat{\boldsymbol\omega}$ is the column vector with the weights of the quadrature rule, this formula is
+\[
+\mathbf{vol}^\top \odot \Big( (\widehat{\boldsymbol\omega}\odot \mathrm P)^\top f(\mathrm X,\mathrm Y,\mathrm Z)\Big).
+\]
+
+\paragraph{Implementation notes.} 
+The code admits a row cell array of functions as input. If the array contains only one function, the output is a matrix. If the input contains several functions, then the output is a row cell array with the matrices.
+
+%% CODE 
+\lstinputlisting{../testElem.m}
+
+\subsection{Mass matrices}
+
+Given a vectorized function $m:\Omega \to \mathbb R$, we aim to compute the integrals
+\[
+\int_K m\, P_i^K P_j^K \qquad i,j=1,\ldots,d_3, \quad K\in \mathcal T_h,
+\]
+and store them in a $d_3\times d_3\times \Nelt$ array. We first change to the reference element and apply there a quadrature rule:
+\[
+\int_K m\, P_i^K P_j^K \approx |K|\sum_q \widehat\omega_q (\mathbf p_q^K) \widehat P_i(\widehat{\mathbf p}_q) \widehat P_j(\widehat{\mathbf p}_q).
+\]
+Let $\mathrm X$, $\mathrm Y$, $\mathrm Z$ be the $\Nnd\times\Nelt$ matrices with the coordinates of all quadrature nodes and let $\mathbf{vol}$ be the column vector with the volumes of the elements. We thus consider the $\Nnd\times\Nelt$ matrix
+\[
+\mathrm M = \mathbf{vol}^\top\odot m(\mathrm X,\mathrm Y,\mathrm Z),
+\]
+ compute
+\[
+\sum_q \mathbf m_q^\top \otimes (\widehat\omega_q\mathbf p_q\mathbf p_q^\top), \qquad \mathbf m_q^\top=\mathrm{row}(\mathrm M,q), \qquad \mathbf p_q^\top=\mathrm{row}(\mathrm P,q),
+\]
+and reshape this $d_3\times (d_3\Nelt)$ matrix as a $d_3\times d_3\times \Nelt$ array.
+
+\paragraph{Implementation notes.} The code produces mass matrices associated to several coefficients. The input is a row cell array and the output a cell array whose elements are the mass matrices.
+
+%% CODE
+
+\lstinputlisting{../MassMatrix.m}
+
+\subsection{Convection matrices}\label{sec:3.6}
+
+The next aim is the computation of the matrices
+\[
+\int_K P_i^K \partial_\star P_j^K, \qquad i,j=1,\ldots,d_3, \quad K\in \mathcal T_h, \quad \star\in \{x,y,z\}
+\]
+to be stored in $d_3\times d_3\times \Nelt$ arrays $\mathrm C^\star$.  The first step will require the computation of matrices on the reference element by means of a quadrature formula of sufficiently high order:
+\[
+\widehat{\mathrm C}^\star_{ij} :=\int_{\widehat K} \widehat P_i \partial_{\widehat\star} \widehat P_j =\smallfrac16\sum_q \widehat\omega_q \widehat P_i(\widehat{\mathbf p}_q) \partial_{\widehat\star} \widehat P_j(\widehat{\mathbf p}_q), \qquad i,j=1,\ldots,d_3, \qquad \star\in \{x,y,z\}.
+\]
+If
+\[
+\mathrm P_{qi}^\star:=\partial_{\widehat\star} \widehat P_i(\widehat{\mathbf p}_q), \qquad q=1,\ldots,\Nnd, \quad i=1,\ldots,d_3, \qquad \star\in \{x,y,z\}
+\]
+then
+\[
+\widehat{\mathrm  C}^\star=\smallfrac16(\widehat{\boldsymbol\omega}\odot\mathrm P)^\top \mathrm P^\star.
+\]
+
+We next make a change of variables to the reference element
+\begin{eqnarray*}
+\int_K P_i^K \left[\begin{array}{c}\partial_x P_j^K \\[1.3ex]
+\partial_y P_j^K\\[1.3ex]
+\partial_z P_j^K
+\end{array}\right] &=& \mathrm{det}\,\mathrm B_K \int_{\widehat K} \widehat P_i \mathrm B_K^{-\top} \left[\begin{array}{c}\partial_{\widehat x} \widehat P_j^K \\[1.3ex]
+\partial_{\widehat y} \widehat P_j^K\\[1.3ex]
+\partial_{\widehat z} \widehat P_j^K
+\end{array}\right]\\
+&=&\left[ \begin{array}{ccc} a_{xx}^K & a_{xy}^K & a_{xz}^K \\[1.5ex] a_{yx}^K & a_{yy}^K & a_{yz}^K \\[1.5ex] a_{zx}^K & a_{zy}^K & a_{zz}^K\end{array}\right]
+\left[\begin{array}{c} \widehat{\mathrm C}_{ij}^x \\[1.3ex] \widehat{\mathrm C}_{ij}^y\\[1.3ex] \widehat{\mathrm C}_{ij}^z\end{array}\right], \qquad 
+\mathrm{det}\,\mathrm B_K\mathrm B_K^{-\top}=\left[ \begin{array}{ccc} a_{xx}^K & a_{xy}^K & a_{xz}^K \\[1.5ex] a_{yx}^K & a_{yy}^K & a_{yz}^K \\[1.5ex] a_{zx}^K & a_{zy}^K & a_{zz}^K\end{array}\right], 
+\end{eqnarray*}
+with (the element index $K$ is omitted)
+\begin{eqnarray*}
+a_{xx} &=& (y_3-y_1) (z_4-z_1)-(y_4-y_1) (z_3-z_1),\\
+a_{xy} &=& (y_4-y_1) (z_2-z_1)-(y_2-y_1) (z_4-z_1),\\
+a_{xz} &=& (y_2-y_1) (z_3-z_1)-(y_3-y_1) (z_2-z_1),\\
+a_{yx} &=& (x_4-x_1) (z_3-z_1)-(x_3-x_1) (z_4-z_1),\\
+a_{yy} &=& (x_2-x_1) (z_4-z_1)-(x_4-x_1) (z_2-z_1),\\
+a_{yz} &=& (x_3-x_1) (z_2-z_1)-(x_2-x_1) (z_3-z_1),\\
+a_{zx} &=& (x_3-x_1) (y_4-y_1)-(x_4-x_1) (y_3-y_1),\\
+a_{zy} &=& (x_4-x_1) (y_2-y_1)-(x_2-x_1) (y_4-y_1),\\
+a_{zz} &=& (x_2-x_1) (y_3-y_1)-(x_3-x_1) (y_2-y_1).\\
+\end{eqnarray*}
+If the previous nine quantities are computed for each of the elements and stored in nine {\em column} vectors with $\Nelt$ components, it follows that
+\begin{eqnarray*}
+\mathrm C^x &=& \mathbf a_{xx}^\top \otimes \widehat{\mathrm C}^x+\mathbf a_{xy}^\top \otimes \widehat{\mathrm C}^y+\mathbf a_{xz}^\top \otimes \widehat{\mathrm C}^z,\\
+\mathrm C^y &=& \mathbf a_{yx}^\top \otimes \widehat{\mathrm C}^x+\mathbf a_{yy}^\top \otimes \widehat{\mathrm C}^y+\mathbf a_{yz}^\top \otimes \widehat{\mathrm C}^z,\\
+\mathrm C^z &=& \mathbf a_{zx}^\top \otimes \widehat{\mathrm C}^x+\mathbf a_{zy}^\top \otimes \widehat{\mathrm C}^y+\mathbf a_{zz}^\top \otimes \widehat{\mathrm C}^z,
+\end{eqnarray*}
+that is
+\[
+\mathrm C^\star=\sum_{\#\in \{x,y,z\}} \mathbf a_{\star\#}^\top\otimes\widehat{\mathrm C}^\#.
+\]
+
+%% CODE
+
+\lstinputlisting{../ConvMatrix.m}
+
+\subsection{A function for errors}\label{sec:3.8}
+
+Given a function $u:\Omega\to \mathbb R$ and a piecewise polynomial function $u_h\in W_h$, the aim of this part is the approximated computation of
+\[
+\Big( \sum_{K\in \mathcal T_h} |u-u_h|^2\Big)^{1/2}.
+\]
+As usual, let $\mathrm X$, $\mathrm Y$, $\mathrm Z$ be the $\Nnd\times \Nelt$ matrices with the coordinates of the quadrature nodes on all the elements and let
+\[
+\mathrm P_{qi}:=\widehat P_i(\widehat{\mathbf p}_q) \qquad q=1,\ldots,\Nnd, \quad i=1,\ldots,d_3.
+\]
+Assuming that the coefficients of $u_h$ are given in a $d_3\times \Nelt$ matrix $\mathrm U$, it follows that $\mathrm P\mathrm U$ are the values of $u_h$ on all quadrature nodes, and therefore the $\Nnd\times \Nelt$ matrix
+\[
+\mathrm E:=\mathrm P \mathrm U-u(\mathrm X,\mathrm Y,\mathrm Z)\qquad 
+\mathrm E_{qK}:=u_h(\mathbf p_q^K)-u(\mathbf p^K_q)
+\]
+contains the differences at all quadrature points. The computation of the error is just a vector-matrix-vector multiplication, after element-by-element squaring the values $\mathrm E_{qK}$:
+\[
+\Big(\sum_{q,K} \widehat\omega_q \mathrm E_{qK}^2 |K|\Big)^{1/2}.
+\]
+
+
+%% CODE
+
+\lstinputlisting{../errorElem.m}
+
+\section{Surface matrices and integrals}
+
+\subsection{Piecewise polynomial functions on the skeleton}
+
+Given a face $e\in \mathcal E_h$, a basis for $\mathcal P_k(e)$ is defined by pushing forward the basis on $\widehat K_2$ using the parametrization $\boldsymbol\phi_e$, namely,
+\[
+D_i^e\circ\boldsymbol\phi_e=\widehat D_i, \qquad i=1,\ldots,d_2, \qquad e \in \mathcal E_h.
+\]
+The skeleton of the triangulation $\partial\mathcal T_h$ is the set formed by joining all faces of all elements.
+A function in the space
+\[
+M_h:=\prod_{e\in \mathcal E_h} \mathcal P_k(e) =\{ \widehat u_h:\partial\mathcal T_h \to \Omega\,:\, \widehat u_h|_e\in \mathcal P_k(e) \quad \forall e\in \mathcal E_h\}, \qquad \partial\mathcal T_h=\bigcup_{e\in \mathcal E_h} e,
+\]
+can be stored in two ways: as a $d_2\times \Nfc$ matrix, whose $e$-th column stores the coefficients of the function on the face $e$, or as a $d_2\Nfc$ column vector, with blocks of $d_2$ elements corresponding to the faces.
+
+\paragraph{Warning.} Similarly to what we do in $\mathcal P_k(\widehat K)$, for two dimensional functions we will be using a Dubiner basis, that is orthogonal in $\check K_2:=2\widehat K_2-\mathbf 1$. Therefore, at each evaluation of basis functions we have to apply the substitution
+\[
+\widehat D_i(\mathbf x)=\check D_i(2\mathbf x-\mathbf 1).
+\]
+
+\subsection{Testing on faces}\label{sec:4.2}
+
+Let $f:\Omega\to\mathbb R$. The aim of this function is the approximation of
+\[
+\int_e f D_i^e \qquad i=1,\ldots,d_2, \qquad e \in \mathcal E_h, 
+\]
+which will be stored as a $d_2\times \Nfc$ matrix. This process is very similar to the one explained in Section \ref{sec:3.4} for testing on elements. We first write the approximations in the form
+\[
+\int_e f D_i^e \approx |e|\sum_r  \varpi_r \widehat D_i(\qq_r) f(\mathbf q_r^e),\qquad\mbox{where}\qquad \mathbf q_r^e=\boldsymbol\phi_e(\qq_r).
+\]
+To evaluate $f$ at all quadrature points, we start by constructing three $3\times \Nfc$ matrices $\mathrm X^{\mathcal E}$, 
+$\mathrm Y^{\mathcal E}$,  and $\mathrm Z^{\mathcal E}$, with the respective coordinates of the three vertices of each of the faces. If $\Xi$ is the $\Nndb\times 3$ matrix with the barycentric coordinates of all quadrature points (the first three columns of the matrix where we store the quadrature formula), then
+\[
+\mathrm X =\Xi \,\mathrm X^{\mathcal E}, \qquad
+\mathrm Y =\Xi\,\mathrm Y^{\mathcal E},\qquad
+\mathrm Z =\Xi\,\mathrm Z^{\mathcal E}
+\]
+are $\Nndb\times \Nfc$ matrices with the coordinates of all quadrature points on the faces, as mapped from the reference element with the intrinsic parametrization of each element. With the given data structure, this construction is easily accomplished. For instance:
+
+\begin{verbatim}
+     x=T.coordinates(:,1); x=formula(:,1:3)*x(T.faces(:,1:3)');
+\end{verbatim}
+
+(Recall that the last column of {\tt T.faces} contains information about the location of the face in the interior domain, Dirichlet boundary or Neumann boundary.)
+If
+\[
+\mathrm D_{rj}=\widehat D_j(\qq_r), \qquad  r=1,\ldots,\Nnd,\quad j=1,\ldots,d_2,  
+\]
+$\boldsymbol\varpi$ is the column vector with the weights of the quadrature formula, and $\mathbf{area}$ is the column vector with the areas of the elements, then the result is just
+\[
+\mathbf{area}\odot \Big((\boldsymbol\varpi\odot\mathrm D)^\top \, f(\mathrm X,\mathrm Y,\mathrm Z)\Big),
+\]
+reshaped as a three dimensional array.
+
+
+\paragraph{Implementation notes.}
+For input/output, see {\tt testElem.m} in Section \ref{sec:3.4}
+
+%% CODE
+
+\lstinputlisting{../testFaces.m}
+
+\subsection{The penalization parameter $\tau$}
+
+Piecewise constant functions on the boundaries of the elements,
+\[
+\xi\in \mathcal P_0(\partial\mathcal T_h):= \prod_{K\in \mathcal T_h}\prod_{e\in \mathcal E(K)} \mathcal P_0(e),
+\]
+will be stored as $4\times \Nelt$ matrices and denoted $\xi_\ell^K$. These functions can be double valued on internal faces. Some simple but relevant piecewise constant functions, that can be taken from geometric information, are
+\begin{verbatim}
+     T.area(T.facebyele')
+     nx=T.normals(:,[1 4 7 10])';
+     ny=T.normals(:,[2 5 8 11])';
+     nz=T.normals(:,[3 6 9 12])';
+\end{verbatim}
+The first one has been denoted so far $e_\ell^K$. The one with components of the normal vectors will be denoted $n_\star\in \mathcal P_0(\partial\mathcal T_h)$, for $\star\in \{x,y,z\}$.
+
+An important part of the HDG scheme is a penalization function $\tau\in \mathcal P_0(\partial\mathcal T_h)$. Currently, the code supports three choices: constant $\tau\equiv 1$, the first face choice
+\[
+\tau_1^K=1, \quad K\in \mathcal T_h,\qquad \mbox{and}\qquad \tau_\ell^K=0, \quad \ell\in \{2,3,4\}, \quad K\in \mathcal T_h,
+\]
+and the one random face choice (using a discrete uniform random distribution to choose one face on each element)
+\[
+\tau_\ell^K=\delta_{\ell(K)}^K \qquad \ell(K)\in \{1,2,3,4\}.
+\]
+
+
+%% CODE
+
+\lstinputlisting{../createTau3d.m}
+
+
+
+\subsection{Three types of surface matrices}\label{sec:5.4}
+
+\subsubsection*{Type (a)}
+
+The aim of this section is the computation of
+\[
+\int_{\partial K} P_i^K P_j^K \qquad i,j=1,\ldots,d_3, \qquad K\in \mathcal T_h,
+\]
+and its storage as a $d_3\times d_3\times \Nelt$ array. Using a quadrature formula of sufficiently high order, we can write
+\[
+\int_{\partial K} P_i^K P_j^K=\sum_{\ell=1}^4 {\tau_\ell^K |e_\ell^K|} \sum_r \widehat P_i(\qq_r^\ell) \varpi_r \widehat P_j(\qq_r^\ell).
+\]
+We first compute four $\Nnd\times d_3$ matrices
+\[
+\mathrm P_{ri}^\ell =\widehat P_i(\qq_r^\ell), \qquad r=1,\ldots,\Nndb, \quad i=1,\ldots,d_3,\qquad \ell\in \{1,2,3,4\},
+\]
+and then
+\[
+\sum_{\ell=1}^4 \mathbf t_\ell^\top \otimes \Big( (\boldsymbol\varpi\odot\mathrm P^\ell)^\top \mathrm P^\ell\Big), \qquad \mathbf t_\ell^\top=\mathrm{row}(\mathrm T,\ell), \qquad \mathrm T_K^\ell:=\tau_K^\ell |e_\ell^K|.
+\]
+The result is a $d_3\times (d_3\Nelt)$ matrix that is then reshaped as a $d_3\times d_3\times \Nelt$ array.
+
+\subsubsection*{Type (b)}
+
+The second group of matrices is
+\[
+\tau^K_\ell \int_{e_\ell^K}  D_i^{e_\ell^K}D_j^{e_\ell^K}
+\qquad \begin{array}{c}i=1,\ldots,d_2\\
+j=1,\ldots,d_3\end{array}\qquad \begin{array}{c}K \in \mathcal T_h\\ \ell\in\{1,2,3,4\},\end{array}
+\]
+to be stored as the diagonal blocks of a block-diagonal $4d_2\times 4d_2\times \Nelt$ array.
+Using quadrature and the fact that we are free to choose the parametrization $\boldsymbol\phi_e$ when $e=e_\ell^K$, we arrive at
+\[
+\int_{e_\ell^K} \tau D_i^{e_\ell^K}D_j^{e_\ell^K}= |e_\ell^K| \tau_\ell^K \sum_r \varpi_r\widehat D_i(\qq_r)
+\widehat D_j(\qq_r),
+\]
+so the $\ell$-th block is
+\[
+\mathbf t_\ell^\top \otimes \Big((\boldsymbol\varpi\odot\mathrm P)^\top \mathrm P\Big).
+\]
+
+\subsubsection*{Type (c)}
+
+The third group of boundary matrices produces (simultaneously) matrices
+\[
+\frac{\mathrm \xi_K^\ell}{|e_\ell^K|} \int_{e_\ell^K} D_i^{e_\ell^K} P_i^K, \qquad \begin{array}{c}i=1,\ldots,d_2\\
+j=1,\ldots,d_3\end{array}\qquad \begin{array}{c}K \in \mathcal T_h\\ \ell\in\{1,2,3,4\}
+\end{array}
+\]
+that will be stored as $4d_2\times d_3\times \Nelt$ arrays, in blocks of $d_2\times d_3\times \Nelt$ arrays corresponding to the four values of $\ell$. Here $\xi$ is a piecewise constant function. In practice we need
+\[
+\xi^K_\ell=\mathrm T^K_\ell=\tau^K_\ell |e_\ell^K|, \qquad \xi^K_\ell = n^K_{\ell,\star} \qquad \star\in \{x,y,z\},
+\]
+where $n^K_{\ell,\star}$ is the $\star$ component of the non-normalized outward normal vector on $e_\ell^K$.
+Using the notation of Section \ref{sec:2.3} and a quadrature formula of sufficiently high order, the integrals are then
+\begin{eqnarray*}
+\frac{\mathrm \xi_K^\ell}{|e_\ell^K|} \int_{e_\ell^K} D_i^{e_\ell^K} P_i^K&=&  \xi_\ell^K \sum_r \widehat D_i(F_{\mathrm{perm}(K,\ell)} (\qq_r) )\varpi_r \widehat P_j(\qq_r^\ell)\\
+&=& \sum_{\mu=1}^6 \xi_\ell^K \mathbf 1_{\mathrm{perm}(K,\ell)=\mu} \Big( \sum_r \widehat D_i(F_\mu(\qq_r)\varpi_r\widehat P_j(\qq_r^\ell)\Big)
+\end{eqnarray*}
+Let then $\boldsymbol\xi_\mu\in \mathcal P_0(\partial\mathcal T_h)$ be given by
+\[
+\xi_{\ell,\mu}^K= \xi_\ell^K \mathbf 1_{\mathrm{perm}(K,\ell)=\mu} =\left\{ \begin{array}{ll}\xi_\ell^K & \mbox{if $\mathrm{perm}(K,\ell)=\mu$},\\0, & \mbox{otherwise}.\end{array}\right.
+\]
+Then, we just need to compute
+\[
+\sum_{\mu=1}^6 \boldsymbol\xi_{\ell,\mu}^\top \otimes \big( (\boldsymbol\varpi\odot \mathrm D^\mu)^\top\mathrm P^\ell\big), \qquad \boldsymbol\xi_{\ell,\mu}^\top=\mathrm{row}(\boldsymbol\xi_\mu,\ell),
+\]
+where
+\begin{eqnarray*}
+\mathrm P^\ell_{ri}=\widehat P_i(\qq_r^\ell), & &   r=1,\ldots,\Nndb, \quad i=1,\ldots,d_3, \\ \mathrm D^\mu_{ri}=\widehat D_i(F_\mu(\qq_r)), & &  r=1,\ldots,\Nndb, \quad i=1,\ldots,d_2.
+\end{eqnarray*}
+
+\paragraph{Implementation notes.} The matrices $ (\boldsymbol\varpi\odot \mathrm D^\mu)^\top\mathrm P^\ell$ are stored in a single $6d_2\times 4d_3$ array.
+Two local anonymous functions are defined for easy access to local degrees of freedom. The {\tt block2} and {\tt block3} functions produce the lists
+\[
+(\ell-1) d_2+\{1,2,\ldots,d_2\} \qquad \mbox{and}\qquad (\ell-1) d_3+\{1,2,\ldots,d_3\}
+\]
+respectively. These lists allow for easy location of blocks in the $6d_2\times 4d_3$ array that stores them.
+
+%% CODE
+
+\lstinputlisting{../matricesFace.m}
+
+\subsection{Another function for errors}
+
+Given $u:\Omega \to \mathbb R$ and $\widehat u_h \in M_h$ (stored as a $d_2\times \Nfc$ matrix), we want to compute
+\[
+\| \widehat u_h-u\|_h:=\Big( \sum_{e\in \mathcal E_h} |e|\int_e |\widehat u_h-u|^2\Big)^{1/2}.
+\]
+Note that
+\[
+\sum_{e\in \mathcal E_h} |e|\int_e |\widehat u_h-u|^2\approx   \sum_{e\in \mathcal E_h}\sum_r \varpi_r |\widehat u_h(\mathbf q_r^e)-u(\mathbf q_r^e)|^2 |e|^2.
+\]
+What is left is very similar to what was done in Section \ref{sec:3.8} to compute $L^2$ errors. We start computing three $\Nndb\times\Nfc$ matrices $\mathrm X,\mathrm Y,\mathrm Z$, with the coordinates of all quadrature nodes $\mathbf q_r^e$, and the $\Nndb\times d_2$ matrix
+\[
+\mathrm D_{ri}:=\widehat D_i(\qq_r)\qquad r=1,\ldots,\Nndb, \qquad i=1,\ldots,d_2.
+\]
+If $\mathrm U$ is the $d_2\times \Nfc$ matrix with the coefficients of $\widehat u_h$, then
+\[
+\mathrm E:=\mathrm D \mathrm U-u(\mathrm X,\mathrm Y,\mathrm Z)\qquad\mathrm E_{re}:=\widehat u_h(\mathbf q_r^e)-u(\mathbf q_r^e)
+\]
+are the pointwise errors and the total error is just
+\[
+\Big( \sum_{r,e} \varpi_r \mathrm E_{re}^2 |e|^2\Big)^{1/2}.
+\]
+
+%% CODE
+
+\lstinputlisting{../errorFaces.m}
+
+\section{Local solvers}
+
+The local solvers that we next defined are related to the pair of first order PDEs
+\[
+\kappa^{-1}\boldsymbol q+\nabla u=0, \qquad\mbox{and}\qquad \nabla\cdot \boldsymbol q+c u=f \qquad \mbox{in $\Omega$.}
+\]
+
+\subsection{Matrices and bilinear forms}
+
+In order to recognize the matrices that we have computed with terms in the bilinear forms of the HDG method, we need some notation. We will write
+\[
+(u,v)_K:= \int_K u\, v, \qquad \langle u,v\rangle_{\partial K}:= \int_{\partial K} u\, v
+\]
+and we will consider the space
+\[
+\mathcal R_k(\partial K):=\prod_{e\in \mathcal E(K)} \mathcal P_k(e), \qquad \mathrm{dim}\,\mathcal R_k(\partial K)=4 d_2.
+\]
+The degrees of freedom for this last space are organized by taking one face at a time in the order they are given by {\tt T.facebyele}. 
+
+For (non-symmetric) bilinear forms we will use the convention that the bilinear form $b(u,v)$ is related to the matrix $b(U_j,V_i)$, where $\{U_j\}$ is a basis of the space of $u$ and $\{V_i\}$ is a basis of the space for $v$. This is equivalent to saying that the unknown will always be placed as the left-most argument in the bilinear form and the test function will occupy the right-most location.
+
+
+\paragraph{Volume terms.} We start by computing mass matrices associated to two functions ($\kappa^{-1}$ and $c$), and the three convection matrices:
+\[
+\mathrm M_{\kappa^{-1}}^K, \qquad \mathrm M_c^K, \qquad \mathrm C_x^K, \qquad \mathrm C_y^K, \qquad \mathrm C_z^K,
+\]
+where
+\[
+(\mathrm M_m^K)_{ij}=\int_K m\, P_i^K P_j^K, \qquad (\mathrm C_\star^K)_{ij}=\int_K P_i^K \partial_{\star} P_j^K.
+\]
+Each of these matrices is $d_3\times d_3\times \Nelt$. They correspond to the bilinear forms
+\[
+(m\,u_h,v_h)_K \qquad (\partial_{\star} u_h,v_h)_K \qquad u_h, v_h \in \mathcal P_k(K).
+\]
+
+\paragraph{Surface terms.} We next compute all matrices related to integrals on interfaces:
+\[
+\tau\mathrm{PP}^K, \qquad \tau\mathrm{DP}^K,  \qquad n_x\mathrm{DP}^K, \qquad n_y\mathrm{DP}^K, \qquad n_z\mathrm{DP}^K,\qquad \tau\mathrm{DD}^K.
+\]
+The first of these arrays is $d_3\times d_3\times \Nelt$, the next four are $4d_2\times d_3\times \Nelt$ and the last one is $4d_2\times 4d_2\times \Nelt$. The first matrix and associated bilinear form is
+\[
+\tau\mathrm{PP}^K_{ij} =\int_{\partial K} \tau\, P_i^K P_j^K, \qquad \langle \tau u_h,v_h\rangle_{\partial K} \qquad u_h,v_h \in \mathcal P_k(K).
+\]
+The second one corresponds to the bilinear forms
+\[
+\langle \tau u_h,\widehat v_h\rangle_{\partial K} \qquad u_h\in \mathcal P_k(K), \quad \widehat v_h \in \mathcal R_k(\partial K)
+\]
+or equivalently to
+\[
+\langle \tau u_h,\widehat v_h\rangle_e  \qquad u_h\in \mathcal P_k(K), \quad \widehat v_h \in \mathcal P_k(e), \qquad e \in \mathcal E(K).
+\]
+The matrices associated to the components of the normal vector $\boldsymbol\nu=(\nu_x,\nu_y,\nu_z)$ are related to the bilinear forms
+\[
+\langle \nu_\star u_h,\widehat v_h\rangle_{\partial K} \qquad u_h\in \mathcal P_k(K), \quad \widehat v_h \in \mathcal R_k(\partial K), \qquad \star\in \{x,y,z\}.
+\]
+The last matrix corresponds to
+\[
+\langle \tau \widehat u_h,\widehat v_h\rangle_{\partial K} \qquad \widehat u_h,\widehat v_h \in \mathcal R_k(\partial K)
+\]
+and is therefore block diagonal.
+
+Finally we compute the vectors of tests of $f$ with the basis elements of $\mathcal P_k(K)$: $\mathbf f^K \in \mathbb R^{d_3}$.
+
+\subsection{Matrices related to local solvers}
+
+The $4d_3\times 4d_3\times \Nelt$ array with slices
+\[
+\mathbb A_1^K:=\left[\begin{array}{cccc} \mathrm M_{\kappa^{-1}}^K & \mathrm O &\mathrm O & -(\mathrm C_x^K)^\top \\ 
+ \mathrm O & \mathrm M_{\kappa^{-1}}^K & \mathrm O & -(\mathrm C_y^K)^\top\\
+\mathrm O & \mathrm O & \mathrm M_{\kappa^{-1}}^K & -(\mathrm C_z^K)^\top\\
+\mathrm C_x^K & \mathrm C_y^K & \mathrm C_y^K & \mathrm M_c^K+\tau\mathrm{PP}^K
+\end{array}\right],
+\]
+is the matrix representation of the bilinear form $\Big(\mathcal P_k(K)^3\times \mathcal P_k(K)\Big)\times \Big(\mathcal P_k(K)^3\times \mathcal P_k(K)\Big) \to \mathbb R$:
+\begin{eqnarray*}
+(\boldsymbol q_h,u_h) \quad,\quad (\boldsymbol r_h,w_h)&\longmapsto & (\kappa^{-1}\boldsymbol q_h,\boldsymbol r_h)_K -(u_h,\nabla\cdot\boldsymbol r_h)_K \\
+& & + (\nabla\cdot\boldsymbol q_h,w_h)_K+(c\,u_h,w_h)_K+\langle \tau u_h,v_h\rangle_{\partial K}
+\end{eqnarray*}
+The $4d_3\times 4d_2\times \Nelt$ array with slices
+\[
+ \mathbb A_2^K:=\left[\begin{array}{c} (n_x\mathrm{DP}^K)^\top\\ (n_y\mathrm{DP}^K)^\top \\
+(n_z\mathrm{DP}^K)^\top \\
+-(\tau\mathrm{DP}^K)^\top\end{array}\right]
+\]
+is the matrix representation of the bilinear form $ \mathcal R_k(\partial K)\times \Big(\mathcal P_k(K)^3\times \mathcal P_k(K)\Big)  \to \mathbb R$:
+\begin{eqnarray*}
+\widehat u_h \quad,\quad (\boldsymbol r_h,w_h)&\longmapsto & \langle \widehat u_h,\boldsymbol r_h \cdot\boldsymbol\nu\rangle_{\partial K} -\langle \tau \widehat u_h,w_h\rangle_{\partial K}.
+\end{eqnarray*}
+If $\widehat u_h \in M_h$ is known, we can solve the local problems looking for $\boldsymbol q_h \in \boldsymbol V_h:= W_h^3$ and $u_h \in W_h$
+such that
+\[
+\begin{array}{rl}
+\ds (\kappa^{-1} \boldsymbol q_h,\boldsymbol r_h)_K  -(u_h,\nabla\cdot\boldsymbol r_h)_K  +\langle \widehat u_h,\boldsymbol r_h\cdot\boldsymbol\nu\rangle_{\partial K}&=0 \qquad \forall \boldsymbol r_h \in \boldsymbol V_h\\[1.5ex]
+(\nabla\cdot\boldsymbol q_h,w_h)_K +(c\,u_h,w_h)_K +\langle \tau (u_h -\widehat u_h),w_h\rangle_{\partial K} &=0 \qquad \forall w_h \in W_h.
+\end{array}
+\]
+If $\widehat u_h|_{\partial K}\in \mathbb R_k(\partial K)$ is represented with a vector $\mathbf u_{\partial K} \in \mathbb R^{4d_2}$, then the matrix representation of this local solution is
+\[
+\left[\begin{array}{c} \mathbf q_K \\ \mathbf u_K\end{array}\right]=-(\mathbb A_1^K)^{-1} \mathbb A_2^K \mathbf u_{\partial K} \in \mathbb R^{3d_3+d_3}
+\]
+If we consider the $4d_3\times \Nelt$ matrix with columns
+\[
+\mathbb A_f^K:=\left[\begin{array}{ccc} \mathbf 0 \\ \mathbf 0 \\ \mathbf 0\\ \mathbf f^K\end{array}\right],
+\]
+then
+\[
+\left[\begin{array}{c} \mathbf q_K \\ \mathbf u_K\end{array}\right]=(\mathbb A_1^K)^{-1}\mathbb A_f^K
+\]
+are the coefficients of the solution of 
+\[
+\begin{array}{rl}
+\ds (\kappa^{-1} \boldsymbol q_h,\boldsymbol r_h)_K  -(u_h,\nabla\cdot\boldsymbol r_h)_K  &=0 \qquad \forall \boldsymbol r_h \in \boldsymbol V_h\\[1.5ex]
+(\nabla\cdot\boldsymbol q_h,w_h)_K +(c\,u_h,w_h)_K +\langle \tau u_h ,w_h\rangle_{\partial K} &=(f,w_h)_K \qquad \forall w_h \in W_h.
+\end{array}
+\]
+
+\subsection{Flux operators}
+
+Consider now the $4d_2\times 4d_3\times \Nelt$ array with slices
+\[
+\mathbb A_3^K:=\left[\begin{array}{cccc} n_x\mathrm{DP}^K & n_y\mathrm{DP}^K & n_z\mathrm{DP}^K &
+\tau\mathrm{DP}^K\end{array}\right],
+\]
+the $4d_2\times 4d_2\times \Nelt$ array with slices
+\[
+\mathbb C^K:= \mathbb A_3^K ( \mathbb A_1^K)^{-1} \mathbb A_2^K+\tau\mathrm{DD}^K
+\]
+and the $4d_2\times \Nelt$ matrix with columns
+\[
+ \mathbb C_f^K:=\mathbb A_3^K (\mathbb A_1^K)^{-1}\mathbb A_f^K.
+\]
+The meaning of these matrices  can be made clear by looking at boundary fluxes. 
+
+\paragraph{Flux due to $\widehat u_h$.} Given $(\boldsymbol q_h,u_h,\widehat u_h) \in \boldsymbol V_h\times W_h \times M_h$, the HDG is based on the construction of the function
+\[
+\boldsymbol q_h\cdot\boldsymbol\nu+\tau (u_h-\widehat u_h): \partial K \to \mathbb R.
+\]
+Instead of this quantity, we pay attention to how it creates a linear form
+\[
+\mathcal R_k(\partial K) \ni \widehat v_h \longmapsto -\langle \boldsymbol q_h\cdot\boldsymbol\nu+\tau (u_h-\widehat u_h),\widehat v_h\rangle_{\partial K}=-\langle \boldsymbol q_h\cdot\boldsymbol\nu+\tau u_h,\widehat v_h\rangle_{\partial K}+\langle \tau \widehat u_h,\widehat v_h\rangle_{\partial K},
+\]
+whose matrix representation is
+\[
+-\mathbb A_3^K \left[\begin{array}{c} \mathbf q_K \\ \mathbf u_K\end{array}\right]+(\tau\mathrm{DD})^K\mathbf u_{\partial K}=
+\mathbb A_3^K(\mathbb A_1^K)^{-1} \mathbb A_2^K \mathbf u_{\partial K}+(\tau\mathrm{DD})^K\mathbf u_{\partial K}=
+\mathbb C^K \mathbf u_{\partial K}
+\]
+
+\paragraph{Flux due to sources.} If we take $(\boldsymbol q_h,u_h)$ by solving the local equations due to sources and consider the linear form
+\[
+\mathcal R_k(\partial K) \ni \widehat v_h \longmapsto \langle \boldsymbol q_h\cdot\boldsymbol\nu+\tau u_h,\widehat v_h\rangle_{\partial K},
+\]
+($\widehat u_h$ does not appear here), then the matrix representation of this is
+\[
+\mathbb A_3^K \left[\begin{array}{c} \mathbf q_K \\ \mathbf u_K\end{array}\right]=\mathbb A_3^K(\mathbb A_1^K)^{-1}\mathbb A_f^K = \mathbb C_f^K.
+\]
+
+If we solve the local problems ($\widehat u_h\in M_h$ and $f$ are given)
+\[
+\begin{array}{rl}
+\ds (\kappa^{-1} \boldsymbol q_h,\boldsymbol r_h)_K  -(u_h,\nabla\cdot\boldsymbol r_h)_K  +\langle \widehat u_h,\boldsymbol r_h\cdot\boldsymbol\nu\rangle_{\partial K}&=0 \qquad \forall \boldsymbol r_h \in \boldsymbol V_h\\[1.5ex]
+(\nabla\cdot\boldsymbol q_h,w_h)_K +(c\,u_h,w_h)_K +\langle \tau (u_h -\widehat u_h),w_h\rangle_{\partial K} &=(f,w_h)_K \qquad \forall w_h \in W_h,
+\end{array}
+\]
+then the functional 
+\[
+\mathcal R_k(\partial K) \ni \widehat v_h \longmapsto \langle \boldsymbol q_h\cdot\boldsymbol\nu+\tau u_h,\widehat v_h\rangle_{\partial K},
+\]
+has the matrix representation
+\[
+\mathbb C^K \mathbf u_{\partial K} -\mathbb C_f^K,
+\]
+where $\mathbf u_{\partial K}$ is the vector of degrees of freedom of $\widehat u_h|_{\partial K}$.
+
+\paragraph{Implementation notes.} Note that the Matlab expression {\tt A3/A1*A2} corresponds to $A_3  A_1^{-1} A_2$ (no inversion of $A_1$ is required in the process). {\em The loop over elements can be  parallelized in a very simple way.}
+
+%% CODE
+
+\lstinputlisting{../localsolvers3d.m}
+
+\section{Boundary conditions}
+
+\subsection{Dirichlet boundary conditions}\label{sec:6.1}
+
+The discretization of the Dirichlet boundary condition is given by projecting the Dirichlet data $u_D$ on the space
+\[
+M_h^\dir:=\prod_{e\in \mathcal E_h^{\mathrm{dir}}} \mathcal P_k(e) \qquad \mathrm{dim}\,M_h^\dir=d_2\Ndir.
+\]
+We have to find values
+\[
+u_j^e \quad j=1,\ldots,d_2, \qquad e\in \mathcal E_h^{\mathrm{dir}} \qquad \widehat u_h|_e=\sum_j u_j^e D_j^e
+\]
+such that
+\[
+\sum_j \left(\int_e D_i^e D_j^e \right)u_{j}^e=\int_e D_i^e \widehat u_h =\int_e D_i^e u_D, \qquad  i=1,\ldots,d_2, \qquad e\in \mathcal E_h^{\mathrm{dir}}.
+\]
+Using a quadrature rule, this is equivalent (up to quadrature error) to solving the system
+\[
+|e| \sum_{j=1}^{d_2}\Big( \sum_r \varpi_r \widehat D_i(\qq_r)\widehat D_j(\qq_r)\Big) u_j^e=|e| \sum_r \varpi_r \widehat D_i(\qq_r) u_D(\qq_r), \qquad i=1,\ldots, d_2, \quad e\in \mathcal E_h^{\mathrm{dir}}.
+\]
+If we compute three $\Nnd\times \Ndir$ matrices $\mathrm X^\dir$, $\mathrm Y^\dir$, $\mathrm Z^\dir$ and the basic $\Nnd\times d_2$ matrices on the reference element
+\[
+\mathrm D_{ri}:= \widehat D_i(\qq_r)
+\]
+then the entire computation is reduced to
+\[
+\big( (\boldsymbol\varpi\odot\mathrm D)^\top\mathrm D\big)^{-1} (\boldsymbol\varpi\odot\mathrm D)^\top u_D(\mathrm X^{\mathrm{dir}},\mathrm Y^{\mathrm{dir}},\mathrm Z^{\mathrm{dir}}).
+\]
+
+
+
+
+\subsection{Neumann boundary conditions}
+
+We will be imposing boundary conditions in the form
+\[
+\kappa\nabla u\cdot\boldsymbol\nu=\boldsymbol u_N\cdot\boldsymbol\nu \qquad \mbox{or equivalently} \qquad -\boldsymbol q\cdot\boldsymbol\nu=\boldsymbol u_N\cdot \boldsymbol\nu.
+\]
+This is done in this non-standard form in order to simplify the inclusion of complicated solutions. The aim of this part of the code is the computation of the $d_2\times \Nneu$ matrix
+\[
+\int_e (\boldsymbol u_N\cdot \boldsymbol\nu) D_i^e \qquad i=1,\ldots,d_2, \qquad e\in \mathcal E_h^\neu.
+\]
+Using a quadrature rule we can approximate
+\[
+\int_e (\boldsymbol u_N\cdot \boldsymbol\nu) D_i^e \approx  \sum_r \boldsymbol u_N(\mathbf q_r^e)\cdot\mathbf n^e\, \varpi_r \widehat D_i(\qq_r).
+\]
+If $\boldsymbol u_N=(u_x,u_y,u_z)$ and $\mathbf n_\star$ are column vectors with the $\star$ components of the normal vectors of each of the $\Nneu$ Neumann faces, then, we just need to compute
+\[
+\sum_{\star\in \{x,y,z\}} \mathbf n_\star^\top \odot \big( (\boldsymbol\varpi\odot\mathrm D)^\top u_\star(\mathrm X^\neu,\mathrm Y^\neu,\mathrm Z^\neu)\big),
+\]
+where $\mathrm X^\neu, \mathrm Y^\neu,\mathrm Z^\neu$ are $\Nndb \times \Nneu$ matrices with the coordinates of all quadrature points on the Neumann faces.
+
+
+%% CODE
+
+\lstinputlisting{../BC3d.m}
+
+\section{HDG}
+
+For the correct definition of the HDG method, we need to consider the space
+\[
+M_h^\free:=\{ \widehat v_h \in M_h \,:\, \widehat v_h|_{\Gamma D}=0\} = \prod_{e\in \mathcal E_h^\free} \mathcal P_k(e), \quad\mbox{where} \qquad \free:=\{1,\ldots,\Nfc\} \setminus \dir.
+\]
+
+The HDG method looks for $\widehat u_h \in M_h$ such that
+\[
+\langle \widehat u_h,\widehat v_h\rangle_{\Gamma_D} = \langle u_D,\widehat v_h\rangle_{\Gamma_D} \qquad \forall \widehat v_h\in M_h^\dir
+\]
+(this is the discrete Dirichlet BC), and
+\[
+-\sum_{K\in \mathcal T_h} \langle \boldsymbol q_h\cdot\boldsymbol\nu+\tau(u_h-\widehat u_h),\widehat v_h\rangle_{\partial K} = \langle \boldsymbol u_N\cdot\boldsymbol\nu,\widehat v_h\rangle_{\Gamma_N} \qquad \forall \widehat v_h \in M_h^\free,
+\]
+where $(\boldsymbol q_h,u_u)\in \boldsymbol V_h \times W_h$ is the solution of the local problems:
+\[
+\begin{array}{rl} (\kappa^{-1} \boldsymbol q_h,\boldsymbol r_h)_K -(u_h,\nabla\cdot\boldsymbol r_h)_K +\langle \widehat u_h,\boldsymbol  r_h\cdot\boldsymbol\nu\rangle_{\partial K} &=0 \qquad \forall \boldsymbol r_h \in \mathcal P_k(K)^3,\\[1.5ex]
+(\nabla\cdot\boldsymbol q_h,w_h)_K + (c \, u_h,w_h)_K +\langle \tau(u_h-\widehat u_h),w_h\rangle_{\partial K} &=(f,w_h)_K \qquad \forall w_h \in \mathcal P_k(K)
+\end{array}
+\]
+for all $K \in \mathcal T_h$. The global equation can be decomposed in two groups: for interior faces $e=K\cap \tilde K$, we can write
+\[
+-\langle \boldsymbol q_K\cdot\boldsymbol\nu_K+\tau_K(u_K-\widehat u_e),\widehat v_e\rangle_e-\langle \boldsymbol q_{\tilde K}\cdot\boldsymbol\nu_{\tilde K}+\tau_{\tilde K} (u_{\tilde K}-\widehat u_e),\widehat v_e\rangle_e =0  \qquad \forall \widehat v_e \in \mathcal P_k(e),
+\]
+(this is equality of discrete fluxes across inter-element faces), and for Neumann faces $e\in \mathcal E_h^\neu$, $e\subset \partial K$, we have a discretized version of the Neumann BC
+\[
+-\langle \boldsymbol q_K\cdot\boldsymbol\nu_K+\tau_K(u_K-\widehat u_e),\widehat v_e\rangle_e=\langle \boldsymbol u_N\cdot\boldsymbol\nu_e,\widehat v_e\rangle_e  \qquad \forall \widehat v_e \in \mathcal P_k(e).
+\]
+Since we are testing with the space $M_h^\free$, all integrals on Dirichlet faces are ignored after assembly, while values of $\widehat u_h$ on Dirichlet faces are substituted from the Dirichlet BC.
+
+\subsection{Assembly process}
+
+The local solvers produce a $4d_2\times 4d_2\times \Nelt$ array $\mathbb C$. We now use the {\tt sparse} Matlab builder to assembly the global matrix. The degrees of freedom associated to face $e\in \{1,\ldots,\Nfc\}$ are
+\[
+\mathrm{list}(e)=(e-1)d_2+\{1,\ldots,d_2\}.
+\]
+The degrees of freedom associated to the faces of $K$ are thus
+\[
+\mathrm{dof}(K):=\{ \mathrm{list}(e_1^K),\mathrm{list}(e_2^K),\mathrm{list}(e_3^K),\mathrm{list}(e_4^K)\}.
+\]
+We then create two new $4d_2\times 4d_2\times \Nelt$ arrays
+\[
+\mathrm{Row}_{ij}^K = \mathrm{dof}(K)_i \qquad \mathrm{Col}_{ij}^K = \mathrm{dof}(K)_j.
+\]
+Note that the element $(i,j)$ of $\mathbb C^K$ has to be assembled at the location $(\mathrm{Row}^K_{ij},\mathrm{Col}^K_{ij})=
+( \mathrm{dof}(K)_i ,  \mathrm{dof}(K)_j)$.  
+
+The assembly of the {\bf source term}, given in the matrix $\mathbb C_f$, can be carried out  using the {\tt accumarray} command. The element $(\mathbb C_f^K)_i$ has to be added to the location $\mathrm{dof}(K)_i$.
+
+\subsection{The global system}
+
+\paragraph{1.} The assembly process of the $\mathbb C^K$ matrices produces an $\Nfc\times \Nfc$ matrix. Similarly, the accumulation of the $\mathbb C^K_f$ vectors produces a  vector with $\Nfc$ components. On the Neumann components of this vector, we have to add a vector , with the tests of $\boldsymbol u_N\cdot\boldsymbol\nu$ on Neumann faces.
+
+\paragraph{2.} The value of the unknown on Dirichlet faces is substituted from the data given by the Dirichlet BC and the corresponding part of the system is send to the right hand side.
+The rows associated to the Dirichlet faces are eliminated from the system (this is the same process that is applied to Dirichlet BC in the Finite Element Method). The system is solved on the free degrees of freedom.
+
+\paragraph{3.} The solution of the resulting system is $\widehat u_h\in M_h$. Reconstruction of the other variables $(\boldsymbol  q_h,u_h)$ is done by solving local problems. In matrix form, we have to solve on each $K\in \mathcal T_h$ the system
+\[
+\mathbb A_1^K \left[\begin{array}{c}\mathbf q_K\\ \mathbf u_K\end{array}\right]=\mathbb A^K_f-\mathbb A^K_2 \mathbf u_{\partial K}.
+\]
+
+\paragraph{Implementation notes.} The necessary quadrature formulas are brought in a cell array:
+
+\begin{verbatim}
+     {formula1,formula2,formula3,formula4}
+\end{verbatim}
+
+as follows:
+\begin{itemize}
+\item {\tt formula1} is used for mass matrices; it is assumed to be of degree $3k$ at least; it is also used for all error computations
+\item {\tt formula2} is used for convection matrices (with constant coefficients); it is assumed to be of degree $2k$ at least
+\item {\tt formula3} is a 2-dimensional formula used for integrals on faces; it is assumed to be of degree $2k$ at least
+\item {\tt formula4} is a higer order 2-dimensional formula used for errors
+\end{itemize}
+For input we bring in:
+\begin{itemize}
+\item the coefficients and source term: $\kappa^{-1}, c, f$;
+\item the penalization parameter function $\tau$ in the form of a $\Nelt\times 4$ matrix; the choice of a matrix with all unit entries works fine
+\item the functions for the boundary conditions $u_D$ and $(g_x,g_y,g_z)$ (recall that we impose a boundary condition $-\boldsymbol q\cdot\boldsymbol\nu=\kappa\nabla u\cdot\boldsymbol\nu=\boldsymbol g\cdot\boldsymbol\nu$)
+\item an optional parameter:
+\begin{itemize}
+\item if the parameter is not present or its value is zero, then the problem is solved and the solution is exported in five variables corresponding to matrix forms for $u_h$, the components of $\boldsymbol q_h$ and $\widehat u_h$
+\item if the parameter is not zero, then the system is not solved, but the elements of the system (the matrix, the right hand side and the lists of degrees of freedom (not faces) that are free and Dirichlet) are exported, as well as the local solvers $\mathbb A_1$, $\mathbb A_2$ and $\mathbb A_f$, that are needed to reconstruct the solution.
+\end{itemize}
+\end{itemize}
+
+%% CODE
+
+\lstinputlisting{../HDG3d.m}
+
+\section{Local projections}
+
+\subsection{$L^2$ projection on elements}
+
+Given $u:\Omega\to\mathbb R$ we look for $u_h$ (given by coefficients $u_j^K$) such that
+\[
+\sum_j \Big( \int_K P_i^K P_j^K\Big) u_j^K =\int_K P_i^K u_h = \int_K P_i^K u\qquad i=1,\ldots,d_3, \qquad K \in \mathcal T_h.
+\]
+Using a quadrature rule, we can compute
+\[
+\int_K P_i^K P_j^K =|K| \sum_q \widehat\omega_q \widehat P_i(\pp_q)\widehat P_j(\pp_q),
+\]
+and approximate
+\[
+\int_K P_i^K u\approx |K| \sum_q\widehat\omega_q \widehat P_i(\widehat{\mathbf p}_q) u(\mathbf p_q^K)
+\]
+so that, with the $\Nnd\times \Nelt$ matrices of coordinates of all quadrature points on all elements, we can just compute
+\[
+\big((\widehat{\boldsymbol\omega}\odot\mathrm P)^\top\mathrm P)^{-1} (\widehat{\boldsymbol\omega}\odot\mathrm P)^\top u(\mathrm X,\mathrm Y,\mathrm Z).
+\]
+
+%% CODE
+
+\lstinputlisting{../L2proj3d.m}
+
+\subsection{$L^2$ projection on the skeleton}
+
+Given $u:\Omega\to\mathbb R$, we look for $\widehat u_h \in M_h$ (given by coefficients $u_j^e$) such that
+\[
+\sum_j \Big(\int_e D_i^e D_j^e\Big) u_j^e =\int_e D_i^e \widehat u_h=\int_e D_i^e u \qquad i=1,\ldots,d_2, \qquad e \in \mathcal E_h.
+\]
+Using a quadrature formula we compute
+\[
+\int_e D_i^e D_j^e =|e| \sum_r \varpi_r \widehat D_i(\qq_r)\widehat D_j(\qq_r)
+\]
+and approximate
+\[
+\int_e D_i^e \,u \approx |e| \sum_r \varpi_r \widehat D_i(\qq_r) u(\qq_r^e).
+\]
+Therefore, we just have to compute
+\[
+\big((\boldsymbol\varpi\odot\mathrm D)^\top\mathrm D)^{-1} (\boldsymbol\varpi\odot\mathrm D)^\top u(\mathrm X,\mathrm Y,\mathrm Z),
+\]
+after computing the matrices with the coordinates of all quadrature points in all elements.
+
+%% CODE
+
+\lstinputlisting{../L2projskeleton3d.m}
+
+\subsection{The HDG projection}
+
+Given a pair $(\boldsymbol q,u)$ (a vector field and a function), the HDG projection is the discrete pair $(\boldsymbol q_h,u_h)\in \boldsymbol V_h\times W_h$ such that
+\[
+\begin{array}{rl}
+(\boldsymbol q_h,\boldsymbol r_h)_K &=(\boldsymbol q,\boldsymbol r_h)_K \qquad \forall \boldsymbol r_h \in \mathcal P_{k-1}(K)^3,\\
+(u_h,w_h)_K &=(u,w_h)_K \qquad \forall w_h \in \mathcal P_{k-1}(K),\\
+\langle \boldsymbol q_h\cdot\boldsymbol\nu+\tau u_h,\widehat v_h\rangle_{\partial K}&=
+\langle \boldsymbol q\cdot\boldsymbol\nu+\tau u,\widehat v_h\rangle_{\partial K}\qquad \forall \widehat v_h \in \mathcal R_k(\partial K),
+\end{array}
+\]
+for all $K\in \mathcal T_h$. This problem can be decomposed in a sequence of $\Nelt$ linear systems of order $4d_3$. We first compute a constant mass matrix $\mathrm M^K$ (in the usual $d_3\times d_3\times \Nelt$ format) and drop the last $d_2$ rows, to get a $(d_3-d_2)\times d_3\times \Nelt$ array with slices $\widetilde{\mathrm M}^K$. (Note that $\mathrm{dim}\,\mathcal P_k(K)-\mathrm{dim}\mathcal P_{k-1}(K)=d_2$. In the case $k=0$, $\widetilde{\mathrm M}$ is an empty matrix.)
+
+The matrix to that appears in the left hand side of each of the local projectors is the $(4(d_3-d_2)+4d_2)\times 4d_3$ block matrix
+\[
+\left[\begin{array}{cccc} \widetilde{\mathrm M}^K & \mathrm O & \mathrm O & \mathrm O\\[1.5ex]
+\mathrm O & \widetilde{\mathrm M}^K & \mathrm O & \mathrm O\\[1.5ex]
+\mathrm O & \mathrm O & \widetilde{\mathrm M}^K & \mathrm O\\[1.5ex]
+\mathrm O & \mathrm O & \mathrm O & \widetilde{\mathrm M}^K\\[1.5ex]
+n_x\mathrm{DP}^K &  n_y\mathrm{DP}^K & n_z\mathrm{DP}^K & \tau\mathrm{DP}^K
+\end{array}\right]
+\]
+The first four blocks of the right hand side (for the element $K$) correspond to the tests
+\[
+\int_K q_x P_i^K, \qquad\int_K q_y P_i^K, \qquad\int_K q_z P_i^K, \qquad\int_K u P_i^K, \qquad i=1,\ldots,d_3-d_2.
+\]
+
+
+%% CODE
+
+\lstinputlisting{../projectHDG3d.m}
+
+
+
+\section{Preprocessing of the triangulation}
+
+The first part of the code is quite technical and could possibly be optimized. We start by constructing {\tt T.faces}, the list of all faces. The way this is constructed, the list contains:
+\begin{itemize}
+\item first all the interior faces; for each of the faces, the nodes are given in increasing order;
+\item then the Dirichlet faces, preserving the ordering that was given as input
+\item then the Neumann faces, preserving the ordering that was given as input.
+\end{itemize}
+The HDG code does not use these particularities of the construction of the list of faces. We next construct the list {\tt T.facebyele} by backward referencing from the original lists. The last delicate part of the code is the construction of {\tt T.perm}. Other than that, everything is relatively straightforward.
+
+%% CODE
+
+\lstinputlisting{../HDGgrid3d.m}
+
+
+
+
+\section{Matrices for convection-diffusion}
+
+\subsection{Variable convection}
+
+In order to compute convection matrices with a variable coefficient
+\[
+\int_K c\, P_i^K \partial_\star P_j^K \qquad i,j,=1,\ldots,d_3, \qquad K \in \mathcal T_h, \qquad \star\in \{x,y,z\},
+\]
+we proceed like in Section \ref{sec:3.6}, but looping on quadrature nodes. Using notation of Section \ref{sec:3.6}, we can write
+\begin{eqnarray*}
+\int_K c\, P_i^K P_{j,\star}^K &=& \sum_{\#=1}^3 a_{\star\#}^K \int_{\widehat K} (c\circ \mathrm F_K) \widehat P_i \widehat P_{j,\#}\\
+&\approx& \smallfrac16 \sum_{\#=1}^3 \sum_q a_{\star\#}^q c(\mathbf p_q^K) (\widehat{\mathrm C}_q^\#)_{ij}, \qquad 
+(\widehat{\mathrm C}_q^\#)_{ij} := \widehat\omega_q \widehat P_i(\pp_q) \widehat P_{j,\#}(\pp_q).
+\end{eqnarray*}
+This means that we need to compute $3\Nnd$ ($d_3\times d_3$) matrices on the reference element (the matrices $\widehat{\mathrm C}_q^\#$) and use them for $3\Nnd$ Kronecker products in order to compute a particular value of $\star$. In total, there will be $9\Nnd$ Kronecker products.
+
+As for the vector involved in the Kronecker products, they are the columns of $\mathbf a_{\star\#} \odot c(\mathrm X,\mathrm Y,\mathrm Z)$, where $\mathbf a_{\star\#}$ are the {\em column} vectors with the geometric coefficients of the change of variables and $\mathrm X,\mathrm Y,\mathrm Z$ are the $\Nnd\times\Nelt$ matrices with the coordinates of the quadrature points.
+
+\paragraph{Implementation notes.}
+Thinking of convection-diffusion problems, the code provides convection matrices with different parameter functions for each of the variables, that is
+\[
+\int_K v_x P_i^K \partial_x P_j^K \qquad \int_K v_y P_i^K \partial_y P_j^K\qquad \int_K v_z P_i^K \partial_z P_j^K.
+\]
+The variables {\tt a, b, c,...} are used to tag the nine components of $\mathrm{det}\,\mathrm B_K\, \mathrm B_K^{-\top}$ read by rows (see Section \ref{sec:3.6}) as $\Nelt\times 1$ vectors. The capitalized forms {\tt A, B, ...} correspond to $\Nelt\times\Nnd$ arrays with the values of the variable coefficient at all quadrature points. For instance {\tt a, b, c} corresponding to elements of the first row (and thus to a $\mathrm C^x$ matrix), they have to be multiplied by the value of $v_x$ at quadrature points.
+
+%% CODE
+
+\lstinputlisting{../VariableConv.m}
+
+\subsection{Face matrices related to convection}
+
+The first collection of matrices is a generalization of what we called the Type (c) matrices in Section \ref{sec:5.4}. The goal is the approximate computation of
+\[
+\frac{\xi^K_\ell}{|e^K_\ell|} \int_{e^K_\ell}\alpha\, D_i^{e^K_\ell} P_j^K \qquad \begin{array}{c} i=1,\ldots,d_2\\ j=1,\ldots,d_3\end{array}\qquad \ell\in \{1,2,3,4\}, \qquad K \in \mathcal T_h,
+\]
+where $\boldsymbol\xi\in \mathcal P_0(\partial \mathcal T_h)$, and $\alpha$ is a function of three variables. The result will be presented as a $(4d_2)\times d_3\times \Nelt$ array, by stacking the blocks for $\ell\in\{1,2,3,4\}$ on top of each other ($\ell=1$ on top). Most of what we next explain is an easy generalization of what appears in Section \ref{sec:5.4}.
+
+We first compute the evaluation matrices (see Section \ref{sec:2.3} for the quadrature nodes on the boundary of the reference tetrahedron)
+\begin{eqnarray*}
+\mathrm P^\ell_{ri}:=\widehat P_i(\qq_r^\ell) & & i=1,\ldots,d_3, \quad r=1,\ldots,\Nndb, \qquad \ell\in \{1,2,3,4\},\\
+\mathrm D_{ri}^\mu:=\widehat D_i(F_\mu(\qq_r)) & & i=1,\ldots,d_2, \quad r=1,\ldots,\Nndb, \qquad \mu\in \{1,2,3,4,5,6\}.
+\end{eqnarray*}
+We next consider the piecewise constant functions 
+ $\boldsymbol\xi_\mu\in \mathcal P_0(\partial\mathcal T_h)$ given by
+\[
+\xi_{\ell,\mu}^K= \xi_\ell^K \mathbf 1_{\mathrm{perm}(K,\ell)=\mu} =\left\{ \begin{array}{ll}\xi_\ell^K & \mbox{if $\mathrm{perm}(K,\ell)=\mu$},\\0, & \mbox{otherwise}.\end{array}\right.
+\]
+If $\mathrm X^{\mathcal T},\mathrm Y^{\mathcal T},\mathrm Z^{\mathcal T}$ are the $4\times \Nelt$ matrices with the coordinates of the vertices of the elements and $\Omega_\ell$ is the $\Nndb\times 4$ matrix with the barycentric coordinates of the points $\{\qq_r^\ell\}$, we then construct the $\Nndb\times \Nelt$ matrices
+\[
+\mathrm A_\ell:=\alpha(\Omega_\ell\mathrm X^{\mathcal T},\Omega_\ell\mathrm X^{\mathcal T},\Omega_\ell\mathrm X^{\mathcal T})\qquad \ell\in \{1,2,3,4\},
+\]
+containing the values of $\alpha$ in all quadrature points. The computation is then
+\[
+\sum_{\mu=1}^6 (\mathbf a_{\ell,r}^\top \bullet \boldsymbol\xi_{\mu,r}^\top)\otimes \Big( (\mathrm D^\mu)^\top (\boldsymbol\varpi\odot\mathrm P^\ell)\Big), \qquad \mathbf a_{\ell,r}^\top :=\mathrm{Row}(\mathrm A_\ell,r), \qquad \boldsymbol\xi_{\mu,r}^\top:=\mathrm{Row}(\boldsymbol\xi_\mu,r),
+\]
+where the symbol $\bullet$ has been used to denote the element-by-element muyltiplication of two arays.
+
+\paragraph{Implementation notes.} Instead of doing the computation for a single function $\alpha$ paired with a single piecewise constant function $\boldsymbol\xi$, the code runs for a cell array of functions $\alpha$ paired with a cell array of piecewise constant functions $\boldsymbol\xi$.
+
+%% CODE
+
+\lstinputlisting{../matricesVariableFaceA.m}
+
+The following step concenrs the generalization of the Type (b) matrices of Section \ref{sec:5.4} to variable coefficients. We show how to approximate
+\[
+\frac{\xi^K_\ell}{|e^K_\ell|} \int_{e^K_\ell}\alpha\, D_i^{e^K_\ell}  D_j^{e^K_\ell} \qquad i,j=1,\ldots,d_2\qquad \ell\in \{1,2,3,4\}, \qquad K \in \mathcal T_h,
+\]
+where $\boldsymbol\xi\in \mathcal P_0(\partial \mathcal T_h)$, and $\alpha$ is a function of three variables. The result will be given as a block diagonal $(4d_2)\times (4d_2)\times \Nelt$ array, by daigonally stacking the blocks for different values of $\ell$. We start by computing the values of $\alpha$ on all quadrature nodes: the $\Nndb\times \Nfc$ matrix
+\[
+\mathrm A:=\alpha(\Xi\,\mathrm X^{\mathcal E},\Xi\,\mathrm Z^{\mathcal E},\Xi\,\mathrm Y^{\mathcal E})
+\]
+(where $\mathrm X^{\mathcal E},\mathrm Y^{\mathcal E},\mathrm Z^{\mathcal E}$ are $3\times \Nfc$ with the coordinates of all vertices of all faces and $\Xi$ is the $\Nndb\times 3$ matrix with the barycentric coordinates of the quadrature points $\qq_r$), is organized by global number of faces. We can then construct (by choosing columns in a proper way) for $\Nndb\times \Nelt$ matrices $\mathrm A_\ell$ such that
+\[
+\mathrm A^K_{\ell,r}=\mathrm A_{r,e^K_\ell} \qquad r=1,\ldots,\Nndb, \quad K\in \mathcal T_h, \qquad \ell\in \{1,2,3,4\}.
+\]
+(The information needed for this is contained in {\tt T.facebyele(:,l)}.) Finally we compute
+\[
+\sum_r(\mathbf a_{\ell,r}^\top\bullet\boldsymbol\xi_\ell^\top)\otimes (\varpi_r\mathbf d_r\mathbf d_r^\top), \qquad \mathbf a_{\ell,r}^\top:=\mathrm{Row}(\mathrm A_\ell,r), \quad \boldsymbol\xi_\ell^\top:=\mathrm{Row}(\boldsymbol\xi,\ell), \quad \mathbf d_r^\top:=\mathrm{Row}(\mathrm D,r).
+\]
+\paragraph{Implementation notes.} Instead of doing the computation for a single function $\alpha$ paired with a single piecewise constant function $\boldsymbol\xi$, the code runs for a cell array of functions $\alpha$ paired with a cell array of piecewise constant functions $\boldsymbol\xi$.
+
+%% CODE
+
+\lstinputlisting{../matricesVariableFaceB.m}
+
+
+
+\section{Postprocessing}
+
+\subsection{Local stiffness matrices}
+
+The goal of this section is the computation of the matrices
+\[
+\int_K \nabla P_i^K\cdot\nabla P_j^K \qquad i,j=1,\ldots,d_3, \qquad K\in \mathcal T_h.
+\]	
+For differentiation indices, let us identify the sets $(x,y,z)\equiv (1,2,3).$
+We consider the canonical basis of the space of matrices
+\[
+\mathrm E_{\star\#}=\mathbf e_\star\, \mathbf e_\#^\top, \qquad \star,\#\in \{x,y,z\}.
+\]
+For instance
+\[
+\mathrm E_{xy} =\left[\begin{array}{ccc} 0 & 1 & 0 \\ 0 & 0 & 0 \\ 0
+& 0 & 0 \end{array}\right].
+\]
+We need to compute six $3\times 3$ geometric matrices:
+\[
+\mathrm G_{\star\#}^K = |\det \mathrm B_K|^2 \mathrm B_K^{-1}\mathrm
+E_{\star\#} \mathrm B_K^{-\top}, \qquad \star,\#\in \{x,y,x\}, \qquad K\in \mathcal T_h.
+\]
+We will give explicit formulas for these matrices below. Note
+that
+\[
+(\mathrm G_{\star\#}^K)^\top= |\det \mathrm B_K|^2 (\mathrm B_K^{-1}\mathrm
+E_{\star\#} \mathrm B_K^{-\top})^\top=
+|\det \mathrm B_K|^2 \,\mathrm B_K^{-1}\mathrm
+E_{\star\#}^\top \mathrm B_K^{-\top}= \mathrm G_{\#\star}^K,
+\]
+which is the reason why only six of them are needed/computed. Besides, the matrices $\mathrm G_{\star\star}^T$
+are symmetric. Once we have computed these matrices, we can obtain
+\begin{eqnarray*}
+(\mathrm S_{\star\#}^K)_{ij} &=& \int_K \partial_\star P_i^K
+\partial_\# P_j^K = \int_K (\nabla P_i^K)\cdot( \mathrm E_{\star\#}
+\nabla P_j^K)\\
+&=& |\det\mathrm B_K| \int_{\widehat K} \big( \mathrm B_K^{-\top}
+\nabla \widehat P_i)\cdot ( \mathrm E_{\star\#} \mathrm
+B_K^{-\top}\nabla\widehat P_j)\\
+&=& |\det\mathrm B_K|^{-1} \int_{\widehat K} (\nabla \widehat
+P_i)\cdot (\mathrm G_{\star\#}^K \nabla \widehat P_j)\\
+&=& |\det\mathrm B_K|^{-1} \sum_{\alpha,\beta\in \{x,y,z\}} (\mathrm
+G_{\star\#}^K)_{\alpha,\beta} \int_{\widehat K} (\nabla \widehat
+P_i)\cdot (\mathrm E_{\alpha,\beta} \nabla \widehat P_j)\\
+&=& |\det\mathrm B_K|^{-1} \sum_{\alpha,\beta\in \{x,y,z\}} (\mathrm
+G_{\star\#}^K)_{\alpha,\beta} \int_{\widehat K}\partial_\alpha\widehat P_i\,\partial_\beta \widehat P_j.
+\end{eqnarray*}
+The elements of the matrices $\mathrm G_{\star\#}^K$ are polynomial expressions of the
+elements of $\mathrm B_K$.
+
+{\tiny
+\[
+\mathrm G_{xx}^K = \left[\begin{array}{ccc}
+(y_{13}\,z_{14}-z_{13}\,y_{14})^2&
+(y_{13}\,z_{14}-z_{13}\,y_{14})\,(-y_{12}\,z_{14}+z_{12}\,y_{14})&
+(y_{13}\,z_{14}-z_{13}\,y_{14})\,(y_{12}\,z_{13}-z_{12}\,y_{13})\\
+(y_{13}\,z_{14}-z_{13}\,y_{14})\,(-y_{12}\,z_{14}+z_{12}\,y_{14})&
+(-y_{12}\,z_{14}+z_{12}\,y_{14})^2&
+(-y_{12}\,z_{14}+z_{12}\,y_{14})\,(y_{12}\,z_{13}-z_{12}\,y_{13})\\
+ (y_{13}\,z_{14}-z_{13}\,y_{14})\,(y_{12}\,z_{13}-z_{12}\,y_{13})&
+(-y_{12}\,z_{14}+z_{12}\,y_{14})\,(y_{12}\,z_{13}-z_{12}\,y_{13})&
+(y_{12}\,z_{13}-z_{12}\,y_{13})^2
+\end{array}\right]
+\]
+
+
+\[
+\mathrm G_{xy}^K =\left[\begin{array}{ccc}
+(y_{13}\,z_{14}-z_{13}\,y_{14})\,(-x_{13}\,z_{14}+z_{13}\,x_{14})&
+(y_{13}\,z_{14}-z_{13}\,y_{14})\,(x_{12}\,z_{14}-z_{12}\,x_{14})&
+(y_{13}\,z_{14}-z_{13}\,y_{14})\,(-x_{12}\,z_{13}+z_{12}\,x_{13})\\
+(-x_{13}\,z_{14}+z_{13}\,x_{14})\,(-y_{12}\,z_{14}+z_{12}\,y_{14})&
+(-y_{12}\,z_{14}+z_{12}\,y_{14})\,(x_{12}\,z_{14}-z_{12}\,x_{14})&
+(-y_{12}\,z_{14}+z_{12}\,y_{14})\,(-x_{12}\,z_{13}+z_{12}\,x_{13})\\
+ (-x_{13}\,z_{14}+z_{13}\,x_{14})\,(y_{12}\,z_{13}-z_{12}\,y_{13})&
+(x_{12}\,z_{14}-z_{12}\,x_{14})\,(y_{12}\,z_{13}-z_{12}\,y_{13})&
+(y_{12}\,z_{13}-z_{12}\,y_{13})\,(-x_{12}\,z_{13}+z_{12}\,x_{13})
+\end{array}\right]
+\]
+
+\[
+\mathrm G_{xz}^K
+=\left[\begin{array}{ccc}
+(y_{13}\,z_{14}-z_{13}\,y_{14})\,(x_{13}\,y_{14}-y_{13}\,x_{14})&
+(y_{13}\,z_{14}-z_{13}\,y_{14})\,(-x_{12}\,y_{14}+y_{12}\,x_{14})&
+(y_{13}\,z_{14}-z_{13}\,y_{14})\,(x_{12}\,y_{13}-y_{12}\,x_{13})\\
+(x_{13}\,y_{14}-y_{13}\,x_{14})\,(-y_{12}\,z_{14}+z_{12}\,y_{14})&
+(-y_{12}\,z_{14}+z_{12}\,y_{14})\,(-x_{12}\,y_{14}+y_{12}\,x_{14})&
+(-y_{12}\,z_{14}+z_{12}\,y_{14})\,(x_{12}\,y_{13}-y_{12}\,x_{13})\\
+ (x_{13}\,y_{14}-y_{13}\,x_{14})\,(y_{12}\,z_{13}-z_{12}\,y_{13})&
+(-x_{12}\,y_{14}+y_{12}\,x_{14})\,(y_{12}\,z_{13}-z_{12}\,y_{13})&
+(y_{12}\,z_{13}-z_{12}\,y_{13})\,(x_{12}\,y_{13}-y_{12}\,x_{13})
+\end{array}\right]
+\]
+
+\[
+\mathrm G_{yy}^K=\left[\begin{array}{ccc}
+(-x_{13}\,z_{14}+z_{13}\,x_{14})^2 &
+(-x_{13}\,z_{14}+z_{13}\,x_{14})\,(x_{12}\,z_{14}-z_{12}\,x_{14})&
+(-x_{13}\,z_{14}+z_{13}\,x_{14})\,(-x_{12}\,z_{13}+z_{12}\,x_{13})\\
+ (-x_{13}\,z_{14}+z_{13}\,x_{14})\,(x_{12}\,z_{14}-z_{12}\,x_{14})&
+(x_{12}\,z_{14}-z_{12}\,x_{14})^2&
+(x_{12}\,z_{14}-z_{12}\,x_{14})\,(-x_{12}\,z_{13}+z_{12}\,x_{13})\\
+(-x_{13}\,z_{14}+z_{13}\,x_{14})\,(-x_{12}\,z_{13}+z_{12}\,x_{13})&
+(x_{12}\,z_{14}-z_{12}\,x_{14})\,(-x_{12}\,z_{13}+z_{12}\,x_{13})&
+(-x_{12}\,z_{13}+z_{12}\,x_{13})^2
+\end{array}\right]
+\]
+
+\[
+\mathrm G_{yz}^K=\left[\begin{array}{ccc}
+(-x_{13}\,z_{14}+z_{13}\,x_{14})\,(x_{13}\,y_{14}-y_{13}\,x_{14})&
+(-x_{13}\,z_{14}+z_{13}\,x_{14})\,(-x_{12}\,y_{14}+y_{12}\,x_{14})&
+(-x_{13}\,z_{14}+z_{13}\,x_{14})\,(x_{12}\,y_{13}-y_{12}\,x_{13})\\
+ (x_{13}\,y_{14}-y_{13}\,x_{14})\,(x_{12}\,z_{14}-z_{12}\,x_{14})&
+(x_{12}\,z_{14}-z_{12}\,x_{14})\,(-x_{12}\,y_{14}+y_{12}\,x_{14})&
+(x_{12}\,z_{14}-z_{12}\,x_{14})\,(x_{12}\,y_{13}-y_{12}\,x_{13})\\
+(x_{13}\,y_{14}-y_{13}\,x_{14})\,(-x_{12}\,z_{13}+z_{12}\,x_{13})&
+(-x_{12}\,y_{14}+y_{12}\,x_{14})\,(-x_{12}\,z_{13}+z_{12}\,x_{13})&
+(-x_{12}\,z_{13}+z_{12}\,x_{13})\,(x_{12}\,y_{13}-y_{12}\,x_{13})
+\end{array}\right]
+\]
+
+\[
+\mathrm G_{zz}^K	=\left[\begin{array}{ccc}
+(x_{13}\,y_{14}-y_{13}\,x_{14})^2&
+(x_{13}\,y_{14}-y_{13}\,x_{14})\,(-x_{12}\,y_{14}+y_{12}\,x_{14})&
+(x_{13}\,y_{14}-y_{13}\,x_{14})\,(x_{12}\,y_{13}-y_{12}\,x_{13})\\
+(x_{13}\,y_{14}-y_{13}\,x_{14})\,(-x_{12}\,y_{14}+y_{12}\,x_{14})&
+(-x_{12}\,y_{14}+y_{12}\,x_{14})^2&
+(-x_{12}\,y_{14}+y_{12}\,x_{14})\,(x_{12}\,y_{13}-y_{12}\,x_{13})\\
+ (x_{13}\,y_{14}-y_{13}\,x_{14})\,(x_{12}\,y_{13}-y_{12}\,x_{13})&
+(-x_{12}\,y_{14}+y_{12}\,x_{14})\,(x_{12}\,y_{13}-y_{12}\,x_{13})&
+(x_{12}\,y_{13}-y_{12}\,x_{13})^2
+\end{array}\right]
+\]
+}
+
+The stiffness matrix is the sum
+\[
+\mathrm S_{xx}^K+\mathrm S_{yy}^K+\mathrm S_{zz}^K.
+\]
+
+%% CODE
+
+\lstinputlisting{../Stiffness.m}
+
+\paragraph{Local postprocessing}
+
+Once we have computed the solution $(\boldsymbol q_h,u_h,\widehat u_h)\in \boldsymbol V_h\times W_h\times M_h$ for the HDG equations, we can use some of the known superconvergence property to justify why (for $k\ge 1$) the following local postprocessing is superconvergent. We compute
+\[
+u_h^\star\in \prod_{K\in \mathcal T_h}\mathcal P_{k+1}(K)
+\]
+satisfying
+\begin{eqnarray*}
+(\nabla u_h^\star,\nabla w_h)_K &=& -(\kappa^{-1}\boldsymbol q_h,\nabla w_h)_K \qquad  \forall w_h \in \mathcal P_{k+1}(K),\\
+(u_h^\star,1)_K &=&(u_h,1)_K.
+\end{eqnarray*}
+The HDG code provides decompositions:
+\[
+u_h|_K=\sum_{j=1}^{d_3(k)} u_j^K P_j^K, \qquad q_{\#,h}|_K =\sum_{j=1}^{d_3(k)} q_{\#,j}^K P_j^K
+\]
+We then use the fact that
+\[
+\int_K D_1^K D_i^K = 0 \qquad \forall i\ge 2, \qquad \forall K\in \mathcal T_h,
+\]
+to decompose
+\[
+u_h^\star|_K = u_1^K P_1^K+ \sum_{j=2}^{d_3(k+1)} w_j^K,
+\]
+and write the system
+\[
+\sum_{j=2}^{d_3(k+1)} \Big( \int_K \nabla P_j^K \cdot \nabla P_i^K\Big) w_j^K = -\sum_{\#\in \{x,y,z\}}\sum_{j=1}^{d_3(k)}\Big( \int_K \kappa^{-1}  
+P_i^K\, \partial_{\#} P_j^K\Big) q_{\#,j}^K \qquad i=2,\ldots,d_3(k+1).
+\]
+Therefore, we only need to locally solve systems with the stiffness matrix (eliminating first row and columns) using variable convection matrices to build the right hand side.
+{\em This is the only place in the code where we explicitly use orthogonality properties of the polynomial basis.} 
+
+%% CODE
+
+\lstinputlisting{../postprocessing.m}
+
+\section{Convection-difussion}
+ The convection-diffusion equations are written as
+\[
+\kappa^{-1} \boldsymbol q+\nabla u -0, \qquad \mbox{and} \qquad \nabla\cdot(\boldsymbol q+u\,\boldsymbol\beta)+c\,u=f \qquad \mbox{in $\Omega$}. 
+\]
+On the Neumann boundary, the condition is given as $-(\boldsymbol q + u\boldsymbol\beta)\cdot\boldsymbol\nu=\boldsymbol u_N\cdot\boldsymbol\nu$.
+
+The local HDG equations are 
+\begin{alignat*}{4}
+(\kappa^{-1}\boldsymbol q_h,\boldsymbol r_h)_K-(u_h,\nabla\cdot\boldsymbol r_h)_K+\langle \widehat u_h,\boldsymbol r_h\cdot\boldsymbol\nu\rangle_{\partial K} &=0 &\qquad & \forall \boldsymbol r_h \in \boldsymbol V_h,\\
+(\nabla\cdot\boldsymbol q_h,w_h)_K-(u_h,\boldsymbol\beta\cdot\nabla w_h)_K + (c u_h,w_h)_K\\
++\langle \tau (u_h-\widehat u_h)+(\boldsymbol\beta\cdot\boldsymbol\nu) \widehat u_h,w_h\rangle_{\partial K} &=(f,w_h)_K & &\forall w_h \in W_h.
+\end{alignat*}
+The induced flux on the boundary is
+\[
+\boldsymbol q_h\cdot\boldsymbol\nu +\tau (u_h-\widehat u_h)+(\boldsymbol\beta\cdot\boldsymbol\nu) \widehat u_h.
+\]
+Most of the derivations are straightforward extensions of the pure diffusion problem. The local solvers contain the $4d_3\times 4d_3\times \Nelt$ array
+\[
+\mathbb A_1^K:=\left[\begin{array}{cccl} \mathrm M_{\kappa^{-1}}^K & \mathrm O &\mathrm O & -(\mathrm C_x^K)^\top \\ 
+ \mathrm O & \mathrm M_{\kappa^{-1}}^K & \mathrm O & -(\mathrm C_y^K)^\top\\
+\mathrm O & \mathrm O & \mathrm M_{\kappa^{-1}}^K & -(\mathrm C_z^K)^\top\\
+\mathrm C_x^K & \mathrm C_y^K & \mathrm C_y^K & \mathrm M_c^K+\tau\mathrm{PP}^K-\sum_{\star\in \{x,y,z\}} \beta_\star \mathrm C_\star^K
+\end{array}\right],
+\]
+where $\beta_\star C_\star^K$ is the transpose of the variable convection matrix with entries
+\[
+\int_K \beta_\star P_i^K \partial_x P_j^K \qquad i,j=1,\ldots,d_3.
+\]
+The $4d_3\times 4d_2\times \Nelt$ array with slices
+\[
+ \mathbb A_2^K:=\left[\begin{array}{l} (n_x\mathrm{DP}^K)^\top\\ (n_y\mathrm{DP}^K)^\top \\
+(n_z\mathrm{DP}^K)^\top \\
+-(\tau\mathrm{DP}^K)^\top+\sum_{\star\in \{x,y,z\}} (n_\star\beta_\star \mathrm D \mathrm P^K)^\top\end{array}\right],
+\]
+where $n_\star\beta_\star \mathrm D\mathrm P^K$ is the matrix with entries
+\[
+\int_{e_\ell^K}\beta_\star\nu_\star D_i^{e_\ell^K} P_j^K \qquad i=1,\ldots,d_2, \quad j=1,\ldots,d_3,\quad \ell\in \{1,2,3,4\}.
+\]
+The matrices $\mathbb A_3^K$ and $\mathbb A_f^K$ are the same as in the purely diffusive problem. Finally, the local solvers include the $4d_2\times 4d_2\times \Nelt$ array with slices
+\[
+\mathbb C^K:=\mathbb A_3^K(\mathbb A_1^K)^{-1} \mathbb A_2^K +\tau\mathrm D\mathrm D^K-\sum_{\star\in \{x,y,z\}} n_\star\beta_\star\mathrm D\mathrm D^K,
+\]
+where $n_\star\beta_\star\mathrm D\mathrm D^K$ has elements
+\[
+\int_{e_\ell^K}\beta_\star\nu_\star D_i^{e_\ell^K} D_j^{e_\ell^K} \qquad i,j=1,\ldots,d_2, \quad \ell\in \{1,2,3,4\}.
+\]
+The local solver related to source terms $\mathbb C_f^K$ are defined with the same formulas as in the diffusive case. Everything else is taken verbatim from the diffusive HDG code.
+
+\lstinputlisting{../localsolvers3dCD.m}
+
+\lstinputlisting{../HDG3dCD.m}
+
+
+\section{Quadrature rules}
+
+The scripts and {\tt TableQuadForm.m} include {\tt TablesQuadForm3d.m} matrices with quadrature formulas in the reference elements in two and three dimensions respectively. The are stored as $\Nnd\times 5$ matrices in the three dimensional case and as  $\Nndb\times 4$ matrices in the two dimensional case. The collection of formulas that are stored in those files is given in Tables \ref{6Table1} and \ref{6Table2}. Once the polynomial degree $k$ is chosen, the function {\tt checkQuadrature3d} chooses formulas for all two and three dimensional integrals. We avoid using the two dimensional quadrature formulas that use nodes on the edges of the reference triangle.
+
+\begin{table}[!ht]
+\centering
+\begin{tabular}{|c| c| c| }
+\hline
+name &  degree of precision  & number of quadrature nodes = $\Nnd$\\
+\hline
+tetra1 & 1 & 1\\
+tetra3 & 2 & 4 \\
+tetra5& 5 & 14\\
+tetra7 & 6 & 25 \\
+tetra9& 8 & 45\\
+\hline
+\end{tabular}
+\caption{Quadrature formulas on $\widehat K$}\label{6Table1}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|c|c|c|c|}
+	\hline
+name 	&  degree of precision    &   number of nodes $\Nndb$  & nodes on edges \\
+	\hline
+matrix0 &  1	 &	 1	&  No\\
+matrix2 &  2	 &	 3	&  No\\
+matrix4 & 4 & 6& No\\
+matrix5 & 5& 10 &Yes\\
+matrix7 &7 &15& Yes\\
+matrix9 & 9 & 21 & No\\
+matrix11 & 11 & 28 & Yes\\
+matrix13 & 13 & 36& No\\
+matrix14 & 14 & 45 &Yes\\
+matrix16 & 16 & 55& Yes\\
+matrix18& 18& 66 &No\\
+matrix20&20&78&No\\
+matrix21 & 21 &91& No\\
+matrix23 & 23&105&No\\
+matrix25 & 25& 120 &Yes\\		
+	\hline
+\end{tabular}
+\caption{Quadrature formulas on $\widehat K_2$}\label{6Table2}
+\end{table}
+
+
+
+\lstinputlisting{../checkQuadrature3d.m}
+
+\section{Main programs and their dependences}
+
+\paragraph{Routines needed to start working.} Note that implementation of the Dubiner polynomials in two dimensions uses code for the Jacobi polynomials as a subfunction. This has been adapted from a piece of code by John Burkardt, distributed under hte GNU LGPL license. Quadrature rules have been pre-stored in the form that is needed for the code. Instead of having an m--file with the formulas, there is a script that defines them one by one, and a function that chooses the ones that are going to be used for a given polynomial degree. This is done only once, so this part of the code can be easily modified. The three dimensional formulas that have been included can deal with all cases up to $k=3$. For higher order, once can easily construct more formulas and modify the corresponding files.
+
+\begin{itemize}
+\item {\tt HDGgrid3d}
+\item {\tt createTau3d}
+\item {\tt checkQuadrature3d}
+\begin{itemize}
+\item {\tt TablesQuadFrom3d}
+\item {\tt TablesQuadForm}
+\end{itemize}
+\end{itemize}
+
+
+\paragraph{Main functions.} 
+
+
+\begin{itemize}
+\item {\tt HDG3d}
+\begin{itemize}
+\item {\tt localsolvers3d}
+\begin{itemize}
+\item {\tt MassMatrix}
+\begin{itemize}
+\item {\tt dubiner3d}
+\end{itemize}
+\item {\tt ConvMatrix}
+\begin{itemize}
+\item {\tt dubiner3d}
+\end{itemize}
+\item {\tt matricesFace}
+\begin{itemize}
+\item {\tt dubiner2d}
+\item {\tt dubiner3d}
+\end{itemize}
+\end{itemize}
+\item {\tt BC3d}
+\begin{itemize}
+\item {\tt dubiner2d}
+\end{itemize}
+\end{itemize}
+\item {\tt HDG3dCD}
+\begin{itemize}
+\item {\tt localsolvers3dCD}
+\begin{itemize}
+\item {\tt MassMatrix}
+\begin{itemize}
+\item {\tt dubiner3d}
+\end{itemize}
+\item {\tt ConvMatrix}
+\begin{itemize}
+\item {\tt dubiner3d}
+\end{itemize}
+\item {\tt VariableConv}
+\begin{itemize}
+\item {\tt dubiner3d}
+\end{itemize}
+\item {\tt matricesVariableFaceA}
+\begin{itemize}
+\item {\tt dubiner2d}
+\item {\tt dubiner3d}
+\end{itemize}
+\item {\tt matricesVariableFaceB}
+\begin{itemize}
+\item {\tt dubiner2d}
+\end{itemize}
+\end{itemize}
+\item {\tt BC3d}
+\begin{itemize}
+\item {\tt dubiner2d}
+\end{itemize}
+\end{itemize}
+\end{itemize}
+
+\paragraph{Projections and error functions for testing}
+
+\begin{itemize}
+\item {\tt L2proj3d}
+\begin{itemize}
+\item {\tt dubiner3d}
+\item {\tt errorElem}
+\begin{itemize}
+\item {\tt dubiner3d}
+\end{itemize}
+\end{itemize}
+\item {\tt L2projskeleton3d}
+\begin{itemize}
+\item {\tt dubiner2d}
+\item {\tt errorFaces}
+\begin{itemize}
+\item {\tt dubiner2d}
+\end{itemize}
+\end{itemize}
+\item {\tt projectHDG3d}
+\begin{itemize}
+\item {\tt MassMatrix}
+\begin{itemize}
+\item {\tt dubiner3d}
+\end{itemize}
+\item {\tt matricesFace}
+\begin{itemize}
+\item {\tt dubiner2d}
+\item {\tt dubiner3d}
+\end{itemize}
+\item {\tt testElem}
+\begin{itemize}
+\item {\tt dubiner3d}
+\end{itemize}
+\item {\tt testFaces}
+\begin{itemize}
+\item {\tt dubiner2d}
+\end{itemize}
+\end{itemize}
+\item {\tt errorElem}
+\begin{itemize}
+\item {\tt dubiner3d}
+\end{itemize}
+\item{\tt errorFaces}
+\begin{itemize}
+\item {\tt dubiner2d}
+\end{itemize}
+\item {\tt postprocessing}
+\begin{itemize}
+\item {\tt variableConv}
+\begin{itemize}
+\item {\tt dubiner3d}
+\end{itemize}
+\item{\tt Stiffness}
+\begin{itemize}
+\item {\tt dubiner3d}
+\end{itemize}
+\end{itemize}
+\end{itemize}
+
+
+\section{Alphabetical list of all programs}
+
+\paragraph{Main programs.} 
+\begin{itemize}
+\item {\tt BC3d}
+\item {\tt checkQuadrature3d}
+\item {\tt ConvMatrix}
+\item {\tt createTau3d}
+\item {\tt dubiner2d}
+\item {\tt dubiner3d}
+\item {\tt errorElem}
+\item {\tt errorFaces}
+\item {\tt HDG3d}
+\item {\tt HDG3dCD}
+\item {\tt HDGgrid3d}
+\item {\tt L2proj3d}
+\item {\tt L2projskeleton3d}
+\item {\tt localsolvers3d}
+\item {\tt localsolvers3dCD}
+\item {\tt MassMatrix}
+\item {\tt matricesFace}
+\item {\tt matricesVariableFaceA}
+\item {\tt matricesVariableFaceB}
+\item {\tt postprocessing}
+\item {\tt projectHDG3d}
+\item {\tt Stiffness}
+\item {\tt TablesQuadForm}
+\item {\tt TablesQuadForm3d}
+\item {\tt testElem}
+\item {\tt testFaces}
+\item {\tt VariableConv}
+\end{itemize}
+\paragraph{Examples of fully developed meshes}
+\begin{itemize}
+\item {\tt 4Tchimney}
+\item {\tt Corner}
+\item {\tt FicheraCorner1}
+\item {\tt FicheraCorner2}
+\item {\tt sixT3dDir}
+\end{itemize}
+\paragraph{Scripts}
+\begin{itemize}
+\item {\tt Script\_HDG3DCD}
+\item {\tt scriptHDG3dpaper}
+\end{itemize}
+
+%\section{How to run an example}
+
+
+\end{document}
+
+
+
+
+
+\end{document}
+
+
+

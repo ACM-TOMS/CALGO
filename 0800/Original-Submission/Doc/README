@@ -1,0 +1,322 @@
+             DHABL/DHASRD/DHAEVS/DHAEVD
+             ==========================
+
+The FORTRAN 77 subroutines DHABL, DHASRD, DHAEVS, and DHAEVD are designed to
+compute the eigenvalues of a Hamiltonian matrix
+
+               ( A   G  ) 
+  (*)    H  =  (      T )
+               ( Q  -A  )
+
+by Van Loan's square reduced method as given in [1,2].  Here, A, G, 
+and Q are real n-by-n matrices where G and Q are symmetric.
+
+DHABL applies one of two different kinds of balancing/scaling
+transformations.  The first, symplectic scaling, is of the form
+
+                 -1         ( A'   G'  )
+ (**)    H'  =  D   H D  =  (        T ),
+                            ( Q'  -A'  )
+
+                    -1
+where D = diag(D0,D0  ) is diagonal (and hence symplectic). D0 is
+chosen to give the rows and columns of A' approximately equal 1-norms
+and so that G' and Q' have equal 1-norms. The latter condition implies
+that the bound on the right hand side of 
+
+                                 T
+    || H' ||  <=  max(||A'||,||A' ||) + max(||G'/r||,||r*Q'||) 
+
+is minimized over all r > 0. 
+
+Alternatively, DHABL may apply a norm-scaling transformation
+
+                 1  ( A   G/tau)
+(***)    H'  =  --- (         T),
+                tau (tau*Q  -A )
+
+where tau is a real scalar chosen as
+
+     tau  =  max ( 1, ||A||, ||G||, ||Q|| ). 
+
+Note that this is not a similarity transformation.  The eigenvalues of H
+are tau times the eigenvalues of H'.
+
+DHASRD transforms a Hamiltonian matrix H' to square-reduced form by a
+symplectic orthogonal similarity transformation,  
+
+                   T         ( A''    G''  )
+  (#)   H''    =  U  H' U =  (           T ),
+                             ( Q''   -A''  )
+
+where U is orthogonal and symplectic chosen so that
+
+            2           ( K1  K2  )
+ (##)   H''    =  K  =  (       T ),
+                        ( 0   K1  )
+
+            2
+where K1 = A''  + G'' Q''  is upper Hessenberg and K2 is skew-symmetric.
+The eigenvalues of H are the positive and negative square roots of the 
+eigenvalues of K1. 
+
+DHAEVS completes the eigenvalue calculation by accepting the output of 
+DHASRD, forming the Hessenberg matrix K1 and calculating this eigenvalues 
+by the Hessenberg QR algorithm.
+
+DHAEVD is an easy-to-use driver which calls DHASRD and DHAEVS.  In
+order to make it as simple to use as possible, no scaling options are
+provided. 
+
+---------------------------------------------------------------------------
+
+IMPLEMENTATION:
+===============
+
+DHABL, DHASRD, DHAEVS, and DHAEVD are implemented in the style of
+LAPACK [3], following the SLICOT (Subroutine Library in Control
+Theory) Implementation and Documentation Standard [4]. 
+To date, only DOUBLE PRECISION versions of these subroutines are
+available. The subroutines require the DOUBLE PRECISION versions of 
+the BLAS and LAPACK [3]. Thus, to run the codes, you have to link 
+the BLAS and LAPACK libraries. If those are not available on
+your computer, they can be retrieved through netlib, 
+
+  http://www.netlib.org. 
+
+These are the calling sequences for DHABL, DHASRD, DHAEVS, and DHAEVD. 
+
+      SUBROUTINE DHABL(JOBSCL, N, A, LDA, QG, LDQG, D, RWORK, IERR)
+      INTEGER          IERR, LDA, LDQG, N
+      CHARACTER*1      JOBSCL
+      DOUBLE PRECISION A(LDA,N), D(*), QG(LDQG,N+1), RWORK(N)
+
+
+      SUBROUTINE DHASRD(COMPU, N, A, LDA, QG, LDQG, U, LDU, RWORK, IERR)
+      INTEGER          IERR, LDA, LDQG, LDU, N
+      CHARACTER*1      COMPU
+      DOUBLE PRECISION A(LDA,N), QG(LDQG,N+1), RWORK(2*N), U(LDU,*)
+
+
+      SUBROUTINE DHAEVS(JOBSCL, N, A, LDA, QG, LDQG, WR, WI, RWORK,
+     $              	IERR) 
+      INTEGER          IERR, LDA, LDQG, N
+      CHARACTER*1      JOBSCL
+      DOUBLE PRECISION A(LDA,N), QG(LDQG,N+1), RWORK(N*(N+1)), WI(N), 
+     $                 WR(N)
+
+      SUBROUTINE DHAEVD(N, A, LDA, QG, LDQG, WR, WI, RWORK, IERR)
+      INTEGER          IERR, LDA, LDQG, N
+      DOUBLE PRECISION A(LDA,N), QG(LDQG,N+1), RWORK(N*(N+1)), WI(N),
+     $                 WR(N)
+
+
+Detailed descriptions of argument lists appear in  prolog of the 
+subroutines source and in [1].
+The Hamiltonian matrix H is presented by its blocks A, G, and Q of (*).
+The symmetric matrices G and Q are packed together in the n-by-(n+1)
+array QG.  The lower triangle of Q occupies the lower triangle of QG,
+and the upper triangle of G occupies the upper right triangle of QG.
+Thus, if i >= j, then  Q(i,j) is stored in QG(i,j) and G(j,i) is stored
+in QG(j,i+1).
+
+DHABL returns the scaled Hamiltonian matrix (**) or (***) as directed
+by JOBSCL.  DHASRD returns the transformed Hamiltonian matrix H' of (#) 
+represented by its blocks A', G', and Q' which are returned in arrays 
+A and QG.  DHAEVS accepts the output from DHASRD and calculates the 
+eigenvalues of (*) as the square roots of the eigenvalues of K1 in (##).
+The eigenvalues are returned in the arrays WR (real parts) and WI
+(imaginary parts) making use of the symmetry of the spectrum of
+Hamiltonian matrices, i.e., only N eigenvalues with nonnegative parts
+are returned.  The other N eigenvalues are the negatives of the
+returned eigenvalues.  DHAEVD is an easy-to-use driver.
+
+Sample and validation programs appear along with DHABL, DHASRD, DHAEVS,
+and DHAEVD in directory "test".
+
+---------------------------------------------------------------------------
+
+CONTENTS:
+=========
+
+README     - This file.
+
+
+source     - Directory of fortran source codes.
+
+	dcroot.f  - 
+		The subroutine DCROOT computes the square root of a 
+		complex number using real arithmetic. This was adapted 
+		from the EISPACK subroutine CSROOT. 
+
+	dhaevs.f -  
+		Fortran source of DHAEVS.
+
+	dhaevd.f -
+		Fortran source of DHAEVD.
+
+	dhasrd.f -
+		Fortran source of DHASRD.
+
+	dhabl.f -
+		Fortran source of DHABL.
+
+
+test       - Directory of fortran source codes, sample programs, and 
+             validation programs.  The source codes from directory
+             "source" are duplicated. 
+
+	Makefile - 
+		A sample makefile for 
+			1) compiling DHABL, DHASRD, DHAEVS, DHAEVD;
+			2) compiling the example programs and 
+			   validation programs;
+			3) Running the example and validation programs.
+			   The output overwrites the ...output files 
+			   described below.
+
+	example.data - 
+		Data read by example.f.
+
+	example.f - 
+		Fortran source of a simple example demonstrating the 
+		use of DHABL, DHASRD, and DHAEVS to calculate the 
+		eigenvalues of a Hamiltonian matrix.
+
+	example.output - 
+		Sample output from example produced by 
+		example < example.data.
+
+	dhaevs_example.data - 
+		Data read by dhaevs_example.
+
+	dhaevs_example.f - 
+		Fortran source of a simple example demonstrating the 
+		use of DHAEVS.
+
+	dhaevs_example.output - 
+		Sample output from dhaevs_example produced by
+		dhaevs_example < dhaevs_example.data.
+
+	dhaevs_test.f - 
+		Fortran source of a program to validate DHAEVS.  
+		The output is self explanatory.
+
+	dhaevs_test.output -
+		Sample output from a run of dhaevs_test.
+
+	dhaevd_example.f -
+		Fortran source of a simple example demonstrating the use
+		of DHAEVD.
+
+	dhaevd_example.output -
+		Sample output from dhaevd_example produced by
+		dhaevd_example < dhaevd_example.data
+
+	dhaevd_test.f  -
+		Fortran source of a program to validate DHAEVD.  The
+		output is self explanatory.
+
+	dhaevd_test.output -
+		Sample output from a run of dhaevd_test.
+
+	dhasrd_example.data -
+		Data read by dhasrd_example.
+
+	dhasrd_example.f -
+		Fortran source of a simple example demonstrating the use
+		of DHASRD.
+
+	dhasrd_example.output -
+		Sample output from a run of dhasrd_example produced by
+		dhasrd_example < dhasrd_example.data.
+
+	dhasrd_test.f -
+		Fortran source of a program to validate DHASRD.  The 
+		output is self explanatory.
+
+	dhasrd_test.output -
+		Sample output from a run of dhasrd_test.
+
+	dhabl_example.data -
+		Data read by  dhabl_example.
+
+	dhabl_example.f -
+		Fortran source of a simple example demonstrating the 
+		use of DHABL.
+
+	dhabl_example.output -
+		Sample output from dhabl_example produced by
+		dhabl_example < dhabl_example.data.
+
+	dhabl_test.f -
+		Fortran source of a program to validate DHABL.  The
+		output is self explanatory.
+
+	dhabl_test.output -
+		Sample output from dhabl_test.
+
+---------------------------------------------------------------------------
+
+HELP AND BUGS:
+==============
+
+If you have trouble either compiling or running the codes or if you find
+any bugs please send an e-mail message reporting the problem or bug to 
+
+        benner@math.uni-bremen.de
+
+We will get in touch with you as soon as possible.
+
+---------------------------------------------------------------------------
+
+REFERENCES:
+===========
+
+[1] P. Benner, R. Byers, and E. Barth:
+    'Fortran 77 Subroutines for Computing the Eigenvalues of
+     Hamiltonian Matrices {I}: The Square Reduced Method',
+    submitted to ACM Trans. Math. Software, 1998.
+ 
+[2] C. Van Loan:
+    'A Symplectic Method for Approximating all the Eigenvalues of a
+     Hamiltonian Matrix',
+    Linear Algebra and its Applications, Vol. 16, pp. 233-251 (1984).
+
+[3] E. Anderson, Z. Bai, C. Bischof, J. Demmel, J. Dongarra, J. Du Croz,
+    A. Greenbaum, S. Hammarling, A. McKenney, S. Ostrouchov and
+    D. Sorensen: 
+    'LAPACK Users' Guide', 2nd edition, 
+    SIAM, Philadelphia, PA, 1994.
+
+[4] The Working Group on Software: WGS
+    'SLICOT Implementation and Documentation Standards 2.1',
+    WGS Report 96-1, available from http://www.win.tue.nl/wgs/reports.html.
+
+---------------------------------------------------------------------------
+ 
+CONTRIBUTORS:
+=============
+
+Peter Benner 
+Zentrum f"ur Technomathematik
+Fachbereich 3 - Mathematik und Informatik
+Universit"at Bremen 
+28334 Bremen (FRG)
+e-mail: benner@math.uni-bremen.de
+
+Ralph Byers
+Department of Mathematics
+University of Kansas
+405 Snow Hall
+Lawrence, KS 66045 (USA)
+e-mail: byers@math.ukans.edu
+
+Eric Barth
+Department of Mathematics
+Kalamazoo College
+1200 Academy Street
+Kalamazoo, MI 49006 (USA) 
+e-mail: barth@kzoo.edu
+
+---------------------------------------------------------------------------

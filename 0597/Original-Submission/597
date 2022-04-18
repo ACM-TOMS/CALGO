@@ -1,0 +1,1365 @@
+C     ALGORITHM 597, COLLECTED ALGORITHMS FROM ACM.
+C     ALGORITHM APPEARED IN ACM-TRANS. MATH. SOFTWARE, VOL.9, NO. 2,
+C     JUN., 1983, P. 242-245.
+      SUBROUTINE RIBESL(X, ALPHA, NB, IZE, B, NCALC)                    RIB   10
+C-------------------------------------------------------------------
+C
+C  THIS ROUTINE CALCULATES BESSEL FUNCTIONS I SUB(N+ALPHA) (X)
+C  FOR NON-NEGATIVE ARGUMENT X, AND NON-NEGATIVE ORDER N+ALPHA,
+C  WITH OR WITHOUT EXPONENTIAL SCALING.
+C
+C
+C EXPLANATION OF VARIABLES IN THE CALLING SEQUENCE
+C
+C X     - WORKING PRECISION NON-NEGATIVE REAL ARGUMENT FOR WHICH
+C         I'S OR EXPONENTIALLY SCALED I'S (I*EXP(-X))
+C         ARE TO BE CALCULATED.  IF I'S ARE TO BE CALCULATED,
+C         X MUST BE LESS THAN EXPARG (SEE BELOW).
+C ALPHA - WORKING PRECISION FRACTIONAL PART OF ORDER FOR WHICH
+C         I'S OR EXPONENTIALLY SCALED I'S (I*EXP(-X)) ARE
+C         TO BE CALCULATED.  0 .LE. ALPHA .LT. 1.0.
+C NB    - INTEGER NUMBER OF FUNCTIONS TO BE CALCULATED, NB .GT. 0.
+C         THE FIRST FUNCTION CALCULATED IS OF ORDER ALPHA, AND THE
+C         LAST IS OF ORDER (NB - 1 + ALPHA).
+C IZE   - INTEGER TYPE.  IZE = 1 IF UNSCALED I'S ARE TO CALCULATED,
+C         AND 2 IF EXPONENTIALLY SCALED I'S ARE TO BE CALCULATED.
+C B     - WORKING PRECISION OUTPUT VECTOR OF LENGTH NB.  IF THE ROUTINE
+C         TERMINATES NORMALLY (NCALC=NB), THE VECTOR B CONTAINS THE
+C         FUNCTIONS I/ALPHA/(X) THROUGH I/NB-1+ALPHA/(X), OR THE
+C         CORRESPONDING EXPONENTIALLY SCALED FUNCTIONS.
+C NCALC - INTEGER OUTPUT VARIABLE INDICATING POSSIBLE ERRORS.
+C         BEFORE USING THE VECTOR B, THE USER SHOULD CHECK THAT
+C         NCALC=NB, I.E., ALL ORDERS HAVE BEEN CALCULATED TO
+C         THE DESIRED ACCURACY.  SEE ERROR RETURNS BELOW.
+C
+C
+C*******************************************************************
+C*******************************************************************
+C
+C EXPLANATION OF MACHINE-DEPENDENT CONSTANTS
+C
+C NSIG   - DECIMAL SIGNIFICANCE DESIRED.  SHOULD BE SET TO
+C          IFIX(ALOG10(2)*NBIT+1), WHERE NBIT IS THE NUMBER OF
+C          BITS IN THE MANTISSA OF A WORKING PRECISION VARIABLE.
+C          SETTING NSIG LOWER WILL RESULT IN DECREASED ACCURACY
+C          WHILE SETTING NSIG HIGHER WILL INCREASE CPU TIME
+C          WITHOUT INCREASING ACCURACY.  THE TRUNCATION ERROR
+C          IS LIMITED TO A RELATIVE ERROR OF T=.5*10**(-NSIG).
+C ENTEN  - 10.0 ** K, WHERE K IS THE LARGEST INTEGER SUCH THAT
+C          ENTEN IS MACHINE-REPRESENTABLE IN WORKING PRECISION.
+C ENSIG  - 10.0 ** NSIG.
+C RTNSIG - 10.0 ** (-K) FOR THE SMALLEST INTEGER K SUCH THAT
+C          K .GE. NSIG/4.
+C ENMTEN - THE SMALLEST ABS(X) SUCH THAT X/4 DOES NOT UNDERFLOW.
+C XLARGE - UPPER LIMIT ON THE MAGNITUDE OF X WHEN IZE=2.  BEAR
+C          IN MIND THAT IF ABS(X)=N, THEN AT LEAST N ITERATIONS
+C          OF THE BACKWARD RECURSION WILL BE EXECUTED.
+C EXPARG - LARGEST WORKING PRECISION ARGUMENT THAT THE LIBRARY
+C          EXP ROUTINE CAN HANDLE AND UPPER LIMIT ON THE
+C          MAGNITUDE OF X WHEN IZE=1.
+C
+C     APPROXIMATE VALUES FOR SOME IMPORTANT MACHINES ARE:
+C
+C         IBM/195    CDC/7600  UNIVAC/1108   VAX 11/780 (UNIX)
+C          (D.P.)  (S.P.,RNDG)    (D.P.)     (S.P.)     (D.P.)
+C
+C NSIG      16         14          18           8        17
+C ENTEN   1.0D75     1.0E322     1.0D307     1.0E38    1.0D38
+C ENSIG   1.0D16     1.0E14      1.0D18      1.0E8     1.0D17
+C RTNSIG  1.0D-4     1.0E-4      1.0D-5      1.0E-2    1.0D-4
+C ENMTEN  2.2D-78    1.0E-290    1.2D-308    1.2E-37   1.2D-37
+C XLARGE  1.0D4      1.0E4       1.0D4       1.0E4     1.0D4
+C EXPARG  174.0D0    740.0E0     709.0D0     88.0E0    88.0D0
+C
+C*******************************************************************
+C*******************************************************************
+C
+C
+C ERROR RETURNS
+C
+C  IN CASE OF AN ERROR,  NCALC .NE. NB,  AND NOT ALL I'S ARE
+C  CALCULATED TO THE DESIRED ACCURACY.
+C
+C  NCALC .LT. 0:  AN ARGUMENT IS OUT OF RANGE. FOR EXAMPLE,
+C     NB .LE. 0, IZE IS NOT 1 OR 2, OR IZE=1 AND ABS(X) .GE. EXPARG.
+C     IN THIS CASE, THE B-VECTOR IS NOT CALCULATED, AND NCALC IS
+C     SET TO  MIN0(NB,0)-1  SO THAT NCALC .NE. NB.
+C
+C  NB .GT. NCALC .GT. 0: NOT ALL REQUESTED FUNCTION VALUES COULD
+C     BE CALCULATED ACCURATELY.  THIS USUALLY OCCURS BECAUSE NB IS
+C     MUCH LARGER THAN ABS(X).  IN THIS CASE, B(N) IS CALCULATED
+C     TO THE DESIRED ACCURACY FOR  N .LE. NCALC,  BUT PRECISION
+C     IS LOST FOR NCALC .LT. N .LE. NB.  IF B(N) DOES NOT VANISH
+C     FOR  N .GT. NCALC  (BECAUSE IT IS TOO SMALL TO BE REPRESENTED),
+C     AND  B(N)/B(NCALC) = 10**(-K), THEN ONLY THE FIRST NSIG-K
+C     SIGNIFICANT FIGURES OF B(N) CAN BE TRUSTED.
+C
+C
+C OTHER SUBPROGRAMS REQUIRED (SINGLE PRECISION VERSION)
+C
+C     EXP,GAMMA,AMAX1,SQRT,FLOAT,IFIX,MIN0
+C
+C OTHER SUBPROGRAMS REQUIRED (DOUBLE PRECISION VERSION)
+C
+C     DBLE,DEXP,DGAMMA,DMAX1,DSQRT,FLOAT,IFIX,MIN0,SNGL
+C
+C
+C ACKNOWLEDGEMENT
+C
+C  THIS PROGRAM IS BASED ON A PROGRAM WRITTEN BY DAVID J.
+C  SOOKNE (2) THAT COMPUTES VALUES OF THE BESSEL FUNCTIONS J OR
+C  I OF REAL ARGUMENT AND INTEGER ORDER.  MODIFICATIONS INCLUDE
+C  THE RESTRICTION OF THE COMPUTATION TO THE I BESSEL FUNCTION
+C  OF NON-NEGATIVE REAL ARGUMENT, THE EXTENSION OF THE COMPUTATION
+C  TO ARBITRARY POSITIVE ORDER, THE INCLUSION OF OPTIONAL
+C  EXPONENTIAL SCALING, AND THE ELIMINATION OF MOST UNDERFLOW.
+C
+C REFERENCES
+C
+C  (1) OLVER, F. W. J., AND SOOKNE, D. J., "A NOTE ON BACKWARD
+C        RECURRENCE ALGORITHMS," MATH. COMP. 26, 1972, PP 941-947.
+C
+C  (2) SOOKNE, D. J., "BESSEL FUNCTIONS OF REAL ARGUMENT AND
+C        INTEGER ORDER," NBS JOUR. OF RES. B. 77B, 1973, PP 125-132.
+C
+C
+C      MODIFIED BY: W. J. CODY
+C                   APPLIED MATHEMATICS DIVISION
+C                   ARGONNE NATIONAL LABORATORY
+C                   ARGONNE, IL  60439
+C
+C      LATEST MODIFICATION: MAY 18, 1982
+C
+C-------------------------------------------------------------------
+      INTEGER IZE, L, MAGX, N, NB, NBMX, NCALC, NEND, NSIG, NSTART
+CS    REAL              ALPHA,B,EM,EMPAL,EMP2AL,EN,ENMTEN,ENSIG,
+CS   2 ENTEN,EXPARG,GAMMA,HALF,HALFX,ONE,P,PLAST,POLD,PSAVE,PSAVEL,
+CS   3 RTNSIG,SUM,TEMPA,TEMPB,TEMPC,TEST,TOVER,TWO,X,XLARGE,ZERO
+      DOUBLE PRECISION ALPHA, B, EM, EMPAL, EMP2AL, EN, ENMTEN, ENSIG,
+     * ENTEN, EXPARG, DGAMMA, HALF, HALFX, ONE, P, PLAST, POLD, PSAVE,
+     * PSAVEL, RTNSIG, SUM, TEMPA, TEMPB, TEMPC, TEST, TOVER, TWO, X,
+     * XLARGE, ZERO
+      DIMENSION B(NB)
+C-------------------------------------------------------------------
+C  MATHEMATICAL CONSTANTS
+C-------------------------------------------------------------------
+CS    DATA ONE,TWO,ZERO,HALF/1.0E0,2.0E0,0.0E0,0.5E0/
+      DATA ONE, TWO, ZERO, HALF /1.0D0,2.0D0,0.0D0,0.5D0/
+C-------------------------------------------------------------------
+C  MACHINE DEPENDENT PARAMETERS
+C-------------------------------------------------------------------
+CS    DATA NSIG,XLARGE,EXPARG / 7,1.0E4,88.0E0/
+CS    DATA ENTEN,ENSIG,RTNSIG/1.0E38,1.0E7,1.0E-2/
+CS    DATA ENMTEN/1.2E-37/
+      DATA NSIG, XLARGE, EXPARG /17,1.0D4,88.0D0/
+      DATA ENTEN, ENSIG, RTNSIG /1.0D38,1.0D17,1.0D-4/
+      DATA ENMTEN /1.2D-37/
+C-------------------------------------------------------------------
+CS    MAGX = IFIX(X)
+      MAGX = IFIX(SNGL(X))
+      IF ((NB.GT.0) .AND. (X.GE.ZERO) .AND. (ALPHA.GE.ZERO) .AND.
+     * (ALPHA.LT.ONE) .AND. (((IZE.EQ.1) .AND. (X.LE.EXPARG)) .OR.
+     * ((IZE.EQ.2) .AND. (X.LE.XLARGE)))) GO TO 10
+C-------------------------------------------------------------------
+C ERROR RETURN -- X,NB,OR IZE IS OUT OF RANGE
+C-------------------------------------------------------------------
+      NCALC = MIN0(NB,0) - 1
+      RETURN
+C-------------------------------------------------------------------
+C USE 2-TERM ASCENDING SERIES FOR SMALL X
+C-------------------------------------------------------------------
+   10 NCALC = NB
+      IF (X.LT.RTNSIG) GO TO 210
+C-------------------------------------------------------------------
+C INITIALIZE THE FORWARD SWEEP, THE P-SEQUENCE OF OLVER
+C-------------------------------------------------------------------
+      NBMX = NB - MAGX
+      N = MAGX + 1
+CS    EN = FLOAT(N+N) + (ALPHA+ALPHA)
+      EN = DBLE(FLOAT(N+N)) + (ALPHA+ALPHA)
+      PLAST = ONE
+      P = EN/X
+C-------------------------------------------------------------------
+C CALCULATE GENERAL SIGNIFICANCE TEST
+C-------------------------------------------------------------------
+      TEST = ENSIG + ENSIG
+CS    IF (2*MAGX .GT. 5*NSIG) TEST = SQRT(TEST*P)
+      IF (2*MAGX.GT.5*NSIG) TEST = DSQRT(TEST*P)
+CS    IF (2*MAGX .LE. 5*NSIG) TEST = TEST / 1.585E0**MAGX
+      IF (2*MAGX.LE.5*NSIG) TEST = TEST/1.585D0**MAGX
+      IF (NBMX.LT.3) GO TO 30
+C-------------------------------------------------------------------
+C CALCULATE P-SEQUENCE UNTIL N = NB-1.  CHECK FOR POSSIBLE OVERFLOW.
+C-------------------------------------------------------------------
+      TOVER = ENTEN/ENSIG
+      NSTART = MAGX + 2
+      NEND = NB - 1
+      DO 20 N=NSTART,NEND
+        EN = EN + TWO
+        POLD = PLAST
+        PLAST = P
+        P = EN*PLAST/X + POLD
+        IF (P.GT.TOVER) GO TO 40
+   20 CONTINUE
+      N = NEND
+CS    EN = FLOAT(N+N) + (ALPHA+ALPHA)
+      EN = DBLE(FLOAT(N+N)) + (ALPHA+ALPHA)
+C-------------------------------------------------------------------
+C CALCULATE SPECIAL SIGNIFICANCE TEST FOR NBMX.GT.2.
+C-------------------------------------------------------------------
+CS    TEST = AMAX1(TEST,SQRT(PLAST*ENSIG)*SQRT(P+P))
+      TEST = DMAX1(TEST,DSQRT(PLAST*ENSIG)*DSQRT(P+P))
+C-------------------------------------------------------------------
+C CALCULATE P-SEQUENCE UNTIL SIGNIFICANCE TEST PASSES
+C-------------------------------------------------------------------
+   30 N = N + 1
+      EN = EN + TWO
+      POLD = PLAST
+      PLAST = P
+      P = EN*PLAST/X + POLD
+      IF (P.LT.TEST) GO TO 30
+      GO TO 80
+C-------------------------------------------------------------------
+C TO AVOID OVERFLOW, DIVIDE P-SEQUENCE BY TOVER.  CALCULATE
+C P-SEQUENCE UNTIL ABS(P).GT.1.
+C-------------------------------------------------------------------
+   40 TOVER = ENTEN
+      P = P/TOVER
+      PLAST = PLAST/TOVER
+      PSAVE = P
+      PSAVEL = PLAST
+      NSTART = N + 1
+   50 N = N + 1
+      EN = EN + TWO
+      POLD = PLAST
+      PLAST = P
+      P = EN*PLAST/X + POLD
+      IF (P.LE.ONE) GO TO 50
+      TEMPB = EN/X
+C-------------------------------------------------------------------
+C CALCULATE BACKWARD TEST, AND FIND NCALC, THE HIGHEST N
+C SUCH THAT THE TEST IS PASSED.
+C-------------------------------------------------------------------
+      TEST = POLD*PLAST*(HALF-HALF/(TEMPB*TEMPB))/ENSIG
+      P = PLAST*TOVER
+      N = N - 1
+      EN = EN - TWO
+      NEND = MIN0(NB,N)
+      DO 60 L=NSTART,NEND
+        NCALC = L
+        POLD = PSAVEL
+        PSAVEL = PSAVE
+        PSAVE = EN*PSAVEL/X + POLD
+        IF (PSAVE*PSAVEL.GT.TEST) GO TO 70
+   60 CONTINUE
+      NCALC = NEND + 1
+   70 NCALC = NCALC - 1
+C-------------------------------------------------------------------
+C INITIALIZE THE BACKWARD RECURSION AND THE NORMALIZATION SUM
+C-------------------------------------------------------------------
+   80 N = N + 1
+      EN = EN + TWO
+      TEMPB = ZERO
+      TEMPA = ONE/P
+CS    EM = FLOAT(N) - ONE
+      EM = DBLE(FLOAT(N)) - ONE
+      EMPAL = EM + ALPHA
+      EMP2AL = (EM-ONE) + (ALPHA+ALPHA)
+      SUM = TEMPA*EMPAL*EMP2AL/EM
+      NEND = N - NB
+      IF (NEND) 130, 110, 90
+C-------------------------------------------------------------------
+C RECUR BACKWARD VIA DIFFERENCE EQUATION, CALCULATING (BUT
+C NOT STORING) B(N), UNTIL N = NB.
+C-------------------------------------------------------------------
+   90 DO 100 L=1,NEND
+        N = N - 1
+        EN = EN - TWO
+        TEMPC = TEMPB
+        TEMPB = TEMPA
+        TEMPA = (EN*TEMPB)/X + TEMPC
+        EM = EM - ONE
+        EMP2AL = EMP2AL - ONE
+        IF (N.EQ.1) GO TO 110
+        IF (N.EQ.2) EMP2AL = ONE
+        EMPAL = EMPAL - ONE
+        SUM = (SUM+TEMPA*EMPAL)*EMP2AL/EM
+  100 CONTINUE
+C-------------------------------------------------------------------
+C STORE B(NB)
+C-------------------------------------------------------------------
+  110 B(N) = TEMPA
+      IF (NB.GT.1) GO TO 120
+      SUM = (SUM+SUM) + TEMPA
+      GO TO 190
+C-------------------------------------------------------------------
+C CALCULATE AND STORE B(NB-1)
+C-------------------------------------------------------------------
+  120 N = N - 1
+      EN = EN - TWO
+      B(N) = (EN*TEMPA)/X + TEMPB
+      IF (N.EQ.1) GO TO 180
+      EM = EM - ONE
+      EMP2AL = EMP2AL - ONE
+      IF (N.EQ.2) EMP2AL = ONE
+      EMPAL = EMPAL - ONE
+      SUM = (SUM+B(N)*EMPAL)*EMP2AL/EM
+      GO TO 150
+C-------------------------------------------------------------------
+C N.LT.NB, SO STORE B(N) AND SET HIGHER ORDERS TO ZERO
+C-------------------------------------------------------------------
+  130 B(N) = TEMPA
+      NEND = -NEND
+      DO 140 L=1,NEND
+        B(N+L) = ZERO
+  140 CONTINUE
+  150 NEND = N - 2
+      IF (NEND.EQ.0) GO TO 170
+C-------------------------------------------------------------------
+C CALCULATE VIA DIFFERENCE EQUATION AND STORE B(N), UNTIL N = 2
+C-------------------------------------------------------------------
+      DO 160 L=1,NEND
+        N = N - 1
+        EN = EN - TWO
+        B(N) = (EN*B(N+1))/X + B(N+2)
+        EM = EM - ONE
+        EMP2AL = EMP2AL - ONE
+        IF (N.EQ.2) EMP2AL = ONE
+        EMPAL = EMPAL - ONE
+        SUM = (SUM+B(N)*EMPAL)*EMP2AL/EM
+  160 CONTINUE
+C-------------------------------------------------------------------
+C CALCULATE B(1)
+C-------------------------------------------------------------------
+  170 B(1) = TWO*EMPAL*B(2)/X + B(3)
+  180 SUM = (SUM+SUM) + B(1)
+C-------------------------------------------------------------------
+C NORMALIZE.  DIVIDE ALL B(N) BY SUM.
+C-------------------------------------------------------------------
+  190 CONTINUE
+CS    IF (ALPHA.NE.ZERO)SUM=SUM*GAMMA(ONE+ALPHA)*(X*HALF)**(-ALPHA)
+      IF (ALPHA.NE.ZERO) SUM = SUM*DGAMMA(ONE+ALPHA)*(X*HALF)**(-ALPHA)
+CS    IF (IZE .EQ. 1) SUM = SUM * EXP(-X)
+      IF (IZE.EQ.1) SUM = SUM*DEXP(-X)
+      TEMPA = ENMTEN
+      IF (SUM.GT.ONE) TEMPA = TEMPA*SUM
+      DO 200 N=1,NB
+        IF (B(N).LT.TEMPA) B(N) = ZERO
+        B(N) = B(N)/SUM
+  200 CONTINUE
+      RETURN
+C-------------------------------------------------------------------
+C TWO-TERM ASCENDING SERIES FOR SMALL X
+C-------------------------------------------------------------------
+  210 TEMPA = ONE
+      EMPAL = ONE + ALPHA
+      HALFX = ZERO
+      IF (X.GT.ENMTEN) HALFX = HALF*X
+CS    IF (ALPHA .NE. ZERO) TEMPA = HALFX ** ALPHA / GAMMA(EMPAL)
+      IF (ALPHA.NE.ZERO) TEMPA = HALFX**ALPHA/DGAMMA(EMPAL)
+CS    IF (IZE .EQ. 2) TEMPA = TEMPA * EXP(-X)
+      IF (IZE.EQ.2) TEMPA = TEMPA*DEXP(-X)
+      TEMPB = ZERO
+      IF ((X+ONE).GT.ONE) TEMPB = HALFX*HALFX
+      B(1) = TEMPA + TEMPA*TEMPB/EMPAL
+      IF ((X.NE.ZERO) .AND. (B(1).EQ.ZERO)) NCALC = 0
+      IF (NB.EQ.1) GO TO 250
+      IF (X.GT.ZERO) GO TO 230
+      DO 220 N=2,NB
+        B(N) = ZERO
+  220 CONTINUE
+      GO TO 250
+C-------------------------------------------------------------------
+C CALCULATE HIGHER ORDER FUNCTIONS
+C-------------------------------------------------------------------
+  230 TEMPC = HALFX
+      TOVER = (ENMTEN+ENMTEN)/X
+      IF (TEMPB.NE.ZERO) TOVER = ENMTEN/TEMPB
+      DO 240 N=2,NB
+        TEMPA = TEMPA/EMPAL
+        EMPAL = EMPAL + ONE
+        TEMPA = TEMPA*TEMPC
+        IF (TEMPA.LE.TOVER*EMPAL) TEMPA = ZERO
+        B(N) = TEMPA + TEMPA*TEMPB/EMPAL
+        IF ((B(N).EQ.ZERO) .AND. (NCALC.GT.N)) NCALC = N - 1
+  240 CONTINUE
+  250 RETURN
+C ---------- LAST CARD OF RIBESL ----------
+      END
+      DOUBLE PRECISION FUNCTION DGAMMA(X)                               DGA   10
+CS    REAL FUNCTION GAMMA(X)
+C----------------------------------------------------------------------
+C
+C THIS ROUTINE CALCULATES THE GAMMA FUNCTION FOR A REAL ARGUMENT X.
+C     COMPUTATION IS BASED ON AN ALGORITHM OUTLINED IN W. J. CODY,
+C     'AN OVERVIEW OF SOFTWARE DEVELOPMENT FOR SPECIAL FUNCTIONS',
+C     LECTURE NOTES IN MATHEMATICS, 506, NUMERICAL ANALYSIS DUNDEE,
+C     1975, G. A. WATSON (ED.), SPRINGER VERLAG, BERLIN, 1976.  THE
+C     PROGRAM USES RATIONAL FUNCTIONS THAT APPROXIMATE THE GAMMA
+C     FUNCTION TO AT LEAST 20 SIGNIFICANT DECIMAL DIGITS.  COEFFICIENTS
+C     FOR THE APPROXIMATION OVER THE INTERVAL (1,2) ARE UNPUBLISHED.
+C     THOSE FOR THE APPROXIMATION FOR X .GE. 12 ARE FROM HART, ET. AL.,
+C     COMPUTER APPROXIMATIONS, WILEY AND SONS, NEW YORK, 1968.  LOWER
+C     ORDER APPROXIMATIONS CAN BE SUBSTITUTED FOR THESE ON MACHINES
+C     WITH LESS PRECISE ARITHMETIC.
+C
+C
+C*******************************************************************
+C*******************************************************************
+C
+C EXPLANATION OF MACHINE-DEPENDENT CONSTANTS
+C
+C EPS    - THE SMALLEST POSITIVE FLOATING-POINT NUMBER SUCH THAT
+C          1.0 + EPS .GT. 1.0
+C XBIG   - THE LARGEST ARGUMENT FOR WHICH GAMMA(X) IS REPRESENTABLE
+C          IN THE MACHINE, I.E., THE SOLUTION TO THE EQUATION
+C                  GAMMA(XBIG) = XINF.
+C XMININ - THE SMALLEST POSITIVE FLOATING-POINT NUMBER SUCH THAT
+C          1/XMININ IS MACHINE REPRESENTABLE.
+C XINF   - THE LARGEST MACHINE REPRESENTABLE FLOATING-POINT NUMBER.
+C
+C     APPROXIMATE VALUES FOR SOME IMPORTANT MACHINES ARE:
+C
+C         IBM/195    CDC/7600  UNIVAC/1108   VAX 11/780 (UNIX)
+C          (D.P.)  (S.P.,RNDG)    (D.P.)     (S.P.)     (D.P.)
+C
+C EPS     2.221D-16  3.553E-15   1.735D-18   5.961E-08  1.388D-16
+C XBIG    57.574     177.802     171.489     34.844     34.844
+C XMININ  1.382D-76  3.132E-294  1.113D-308  5.883E-39  5.883D-39
+C XINF    7.23D+75   1.26E+322   8.98D+307   1.70E+38   1.70D+38
+C
+C*******************************************************************
+C*******************************************************************
+C
+C
+C ERROR RETURNS
+C
+C  THE PROGRAM RETURNS THE VALUE XINF FOR SINGULARITIES OR
+C     WHEN OVERFLOW WOULD OCCUR.  THE COMPUTATION IS BELIEVED
+C     TO BE FREE OF UNDERFLOW AND OVERFLOW.
+C
+C
+C
+C OTHER SUBPROGRAMS REQUIRED (SINGLE PRECISION VERSION)
+C
+C     ALOG,EXP,FLOAT,IFIX,SIN
+C
+C OTHER SUBPROGRAMS REQUIRED (DOUBLE PRECISION VERSION)
+C
+C     DBLE,DEXP,DLOG,DSIN,FLOAT,IFIX,SNGL
+C
+C
+C
+C  AUTHOR: W. J. CODY
+C          APPLIED MATHEMATICS DIVISION
+C          ARGONNE NATIONAL LABORATORY
+C          ARGONNE, IL 60439
+C
+C  LATEST MODIFICATION: MAY 18, 1982
+C
+C----------------------------------------------------------------------
+CS    REAL C,EPS,FACT,HALF,ONE,P,PI,Q,RES,SQRTPI,
+CS   1     SUM,TWELVE,X,XBIG,XDEN,XINF,XMININ,XNUM,Y,Y1,YSQ,Z,ZERO
+      DOUBLE PRECISION C, EPS, FACT, HALF, ONE, P, PI, Q, RES, SQRTPI,
+     * SUM, TWELVE, X, XBIG, XDEN, XINF, XMININ, XNUM, Y, Y1, YSQ, Z,
+     * ZERO
+      INTEGER I, J, N
+      LOGICAL PARITY
+      DIMENSION C(7), P(8), Q(8)
+C----------------------------------------------------------------------
+C  MATHEMATICAL CONSTANTS
+C----------------------------------------------------------------------
+CS    DATA ONE,HALF,TWELVE,ZERO/1.0E0,0.5E0,12.0E0,0.0E0/
+CS    DATA SQRTPI/0.9189385332046727417803297E0/
+CS    DATA PI/3.1415926535897932384626434E0/
+      DATA ONE, HALF, TWELVE, ZERO /1.0D0,0.5D0,12.0D0,0.0D0/
+      DATA SQRTPI /0.9189385332046727417803297D0/
+      DATA PI /3.1415926535897932384626434D0/
+C----------------------------------------------------------------------
+C  MACHINE DEPENDENT PARAMETERS
+C----------------------------------------------------------------------
+CS    DATA XBIG,XMININ,EPS/34.844E0,5.883E-39,5.961E-08/
+CS    DATA XINF/1.7014E38/
+      DATA XBIG, XMININ, EPS /34.844D0,5.883D-39,1.388D-16/
+      DATA XINF /1.7014D38/
+C----------------------------------------------------------------------
+C  NUMERATOR AND DENOMINATOR COEFFICIENTS FOR RATIONAL MINIMAX
+C     APPROXIMATION OVER (1,2).
+C----------------------------------------------------------------------
+CS    DATA P/-1.71618513886549492533811E+0,2.47656508055759199108314E+1,
+CS   1       -3.79804256470945635097577E+2,6.29331155312818442661052E+2,
+CS   2       8.66966202790413211295064E+2,-3.14512729688483675254357E+4,
+CS   3       -3.61444134186911729807069E+4,6.64561438202405440627855E+4/
+CS    DATA Q/-3.08402300119738975254353E+1,3.15350626979604161529144E+2,
+CS   1      -1.01515636749021914166146E+3,-3.10777167157231109440444E+3,
+CS   2        2.25381184209801510330112E+4,4.75584627752788110767815E+3,
+CS   3      -1.34659959864969306392456E+5,-1.15132259675553483497211E+5/
+      DATA P /-1.71618513886549492533811D+0,2.47656508055759199108314D+1
+     * ,-3.79804256470945635097577D+2,6.29331155312818442661052D+2,
+     * 8.66966202790413211295064D+2,-3.14512729688483675254357D+4,
+     * -3.61444134186911729807069D+4,6.64561438202405440627855D+4/
+      DATA Q /-3.08402300119738975254353D+1,3.15350626979604161529144D+2
+     * ,-1.01515636749021914166146D+3,-3.10777167157231109440444D+3,
+     * 2.25381184209801510330112D+4,4.75584627752788110767815D+3,
+     * -1.34659959864969306392456D+5,-1.15132259675553483497211D+5/
+C----------------------------------------------------------------------
+C  COEFFICIENTS FOR MINIMAX APPROXIMATION OVER (12, INF).
+C----------------------------------------------------------------------
+CS    DATA C/-1.910444077728E-03,8.4171387781295E-04,
+CS   1     -5.952379913043012E-04,7.93650793500350248E-04,
+CS   2     -2.777777777777681622553E-03,8.333333333333333331554247E-02,
+CS   3      5.7083835261E-03/
+      DATA C /-1.910444077728D-03,8.4171387781295D-04,
+     * -5.952379913043012D-04,7.93650793500350248D-04,
+     * -2.777777777777681622553D-03,8.333333333333333331554247D-02,
+     * 5.7083835261D-03/
+C----------------------------------------------------------------------
+      PARITY = .FALSE.
+      FACT = ONE
+      N = 0
+      Y = X
+      IF (Y.GT.ZERO) GO TO 10
+C----------------------------------------------------------------------
+C  ARGUMENT IS NEGATIVE
+C----------------------------------------------------------------------
+      Y = -X
+CS    J = IFIX(Y)
+      J = IFIX(SNGL(Y))
+CS    RES = Y - FLOAT(J)
+      RES = Y - DBLE(FLOAT(J))
+      IF (RES.EQ.ZERO) GO TO 100
+      IF (J.NE.(J/2)*2) PARITY = .TRUE.
+CS    FACT = -PI / SIN(PI*RES)
+      FACT = -PI/DSIN(PI*RES)
+      Y = Y + ONE
+C----------------------------------------------------------------------
+C  ARGUMENT IS POSITIVE
+C----------------------------------------------------------------------
+   10 IF (Y.LT.EPS) GO TO 90
+      IF (Y.GE.TWELVE) GO TO 70
+      Y1 = Y
+      IF (Y.GE.ONE) GO TO 20
+C----------------------------------------------------------------------
+C  0.0 .LT. ARGUMENT .LT. 1.0
+C----------------------------------------------------------------------
+      Z = Y
+      Y = Y + ONE
+      GO TO 30
+C----------------------------------------------------------------------
+C  1.0 .LT. ARGUMENT .LT. 12.0, REDUCE ARGUMENT IF NECESSARY
+C----------------------------------------------------------------------
+CS210 N = IFIX(Y) - 1
+   20 N = IFIX(SNGL(Y)) - 1
+CS    Y = Y - FLOAT(N)
+      Y = Y - DBLE(FLOAT(N))
+      Z = Y - ONE
+C----------------------------------------------------------------------
+C  EVALUATE APPROXIMATION FOR 1.0 .LT. ARGUMENT .LT. 2.0
+C----------------------------------------------------------------------
+   30 XNUM = ZERO
+      XDEN = ONE
+      DO 40 I=1,8
+        XNUM = (XNUM+P(I))*Z
+        XDEN = XDEN*Z + Q(I)
+   40 CONTINUE
+      RES = XNUM/XDEN + ONE
+      IF (Y.EQ.Y1) GO TO 110
+      IF (Y1.GT.Y) GO TO 50
+C----------------------------------------------------------------------
+C  ADJUST RESULT FOR CASE  0.0 .LT. ARGUMENT .LT. 1.0
+C----------------------------------------------------------------------
+      RES = RES/Y1
+      GO TO 110
+C----------------------------------------------------------------------
+C  ADJUST RESULT FOR CASE  2.0 .LT. ARGUMENT .LT. 12.0
+C----------------------------------------------------------------------
+   50 DO 60 I=1,N
+        RES = RES*Y
+        Y = Y + ONE
+   60 CONTINUE
+      GO TO 110
+C----------------------------------------------------------------------
+C  EVALUATE FOR ARGUMENT .GE. 12.0,
+C----------------------------------------------------------------------
+   70 IF (Y.GT.XBIG) GO TO 100
+      YSQ = Y*Y
+      SUM = C(7)
+      DO 80 I=1,6
+        SUM = SUM/YSQ + C(I)
+   80 CONTINUE
+      SUM = SUM/Y - Y + SQRTPI
+CS    SUM = SUM + (Y-HALF)*ALOG(Y)
+      SUM = SUM + (Y-HALF)*DLOG(Y)
+CS    RES = EXP(SUM)
+      RES = DEXP(SUM)
+      GO TO 110
+C----------------------------------------------------------------------
+C  ARGUMENT .LT. EPS
+C----------------------------------------------------------------------
+   90 IF (Y.LT.XMININ) GO TO 100
+      RES = ONE/Y
+      GO TO 110
+C----------------------------------------------------------------------
+C  RETURN FOR SINGULARITIES, EXTREME ARGUMENTS, ETC.
+C----------------------------------------------------------------------
+CS700 GAMMA = XINF
+  100 DGAMMA = XINF
+      GO TO 120
+C----------------------------------------------------------------------
+C  FINAL ADJUSTMENTS AND RETURN
+C----------------------------------------------------------------------
+  110 IF (PARITY) RES = -RES
+      IF (FACT.NE.ONE) RES = FACT/RES
+CS    GAMMA = RES
+      DGAMMA = RES
+  120 RETURN
+C ---------- LAST CARD OF GAMMA ----------
+      END
+C     PROGRAM TO TEST RIBESL                                            MAN   10
+C                                                                       MAN   20
+C     DATA REQUIRED                                                     MAN   30
+C                                                                       MAN   40
+C        NONE                                                           MAN   50
+C                                                                       MAN   60
+C     SUBPROGRAMS REQUIRED FROM THIS PACKAGE                            MAN   70
+C                                                                       MAN   80
+C        MACHAR - AN ENVIRONMENTAL INQUIRY PROGRAM PROVIDING            MAN   90
+C                 INFORMATION ON THE FLOATING-POINT ARITHMETIC          MAN  100
+C                 SYSTEM.  NOTE THAT THE CALL TO MACHAR CAN             MAN  110
+C                 BE DELETED PROVIDED THE FOLLOWING FIVE                MAN  120
+C                 PARAMETERS ARE ASSIGNED THE VALUES INDICATED          MAN  130
+C                                                                       MAN  140
+C                 IBETA  - THE RADIX OF THE FLOATING-POINT SYSTEM       MAN  150
+C                 IT     - THE NUMBER OF BASE-IBETA DIGITS IN THE       MAN  160
+C                          SIGNIFICAND OF A FLOATING-POINT NUMBER       MAN  170
+C                 MINEXP - THE LARGEST IN MAGNITUDE NEGATIVE            MAN  180
+C                          INTEGER SUCH THAT  FLOAT(IBETA)**MINEXP      MAN  190
+C                          IS A POSITIVE FLOATING-POINT NUMBER          MAN  200
+C                 EPS    - THE SMALLEST POSITIVE FLOATING-POINT         MAN  210
+C                          NUMBER SUCH THAT 1.0+EPS .NE. 1.0            MAN  220
+C                 EPSNEG - THE SMALLEST POSITIVE FLOATING-POINT         MAN  230
+C                          NUMBER SUCH THAT 1.0-EPSNEG .NE. 1.0         MAN  240
+C                                                                       MAN  250
+C        REN(K) - A FUNCTION SUBPROGRAM RETURNING RANDOM REAL           MAN  260
+C                 NUMBERS UNIFORMLY DISTRIBUTED OVER (0,1)              MAN  270
+C                                                                       MAN  280
+C                                                                       MAN  290
+C     STANDARD FORTRAN SUBPROGRAMS REQUIRED FOR SINGLE PRECISION        MAN  300
+C                                                                       MAN  310
+C         ABS, ALOG, AMAX1, FLOAT, IFIX, SQRT                           MAN  320
+C                                                                       MAN  330
+C     STANDARD FORTRAN SUBPROGRAMS REQUIRED FOR DOUBLE PRECISION        MAN  340
+C                                                                       MAN  350
+C         DABS, DLOG, DMAX1, DBLE, FLOAT, IFIX, SNGL, DSQRT             MAN  360
+C                                                                       MAN  370
+C                                                                       MAN  380
+C     LATEST REVISION - MAY 18, 1982                                    MAN  390
+C                                                                       MAN  400
+C     AUTHOR - W. J. CODY                                               MAN  410
+C              ARGONNE NATIONAL LABORATORY                              MAN  420
+C                                                                       MAN  430
+C------------------------------------------------------------------     MAN  440
+      INTEGER I, IBETA, IEXP, II, IOUT, IRND, IT, IZE, J, JT, K1, K2,   MAN  450
+     * K3, MACHEP, MAXEXP, MB, MINEXP, N, NB, NBM1, NCALC, NEGEP, NGRD  MAN  460
+CS    REAL A,AIT,ALBETA,ALEPS,ALPHA,A1,B,BETA,C,C1,C2,DEL,DEN,DEN1,     MAN  470
+CS   1     GAMMA,REN,EPS,EPSNEG,HALF,ONE,R6,R7,SUM,TEN,TWO,U,W,X,XL,    MAN  480
+CS   2     XMAX,XMIN,XN,XNB,X1,X99,Y,YY,Z,ZERO,ZZ                       MAN  490
+      DOUBLE PRECISION A, AIT, ALBETA, ALEPS, ALPHA, A1, B, BETA, C,    MAN  500
+     * C1, C2, DEL, DEN, DEN1, DGAMMA, REN, EPS, EPSNEG, HALF, ONE, R6, MAN  510
+     * R7, SUM, TEN, TWO, U, W, X, XL, XMAX, XMIN, XN, XNB, X1, X99, Y, MAN  520
+     * YY, Z, ZERO, ZZ                                                  MAN  530
+      DIMENSION U(160)                                                  MAN  540
+CS    DATA ZERO,HALF,ONE,TWO,TEN/0.0E0,0.5E0,1.0E0,2.0E0,10.0E0/        MAN  550
+CS    DATA X99,C1,C2/-999.0E0,0.796875E0,1.0095608028653558798921E-3/   MAN  560
+      DATA ZERO, HALF, ONE, TWO, TEN /0.0D0,0.5D0,1.0D0,2.0D0,10.0D0/   MAN  570
+      DATA X99, C1, C2 /-999.0D0,0.796875D0,1.0095608028653558798921D-3/MAN  580
+      DATA IOUT /6/                                                     MAN  590
+C------------------------------------------------------------------     MAN  600
+C                                                                       MAN  610
+C   DETERMINE MACHINE PARAMETERS AND SET CONSTANTS                      MAN  620
+C                                                                       MAN  630
+C------------------------------------------------------------------     MAN  640
+      CALL MACHAR(IBETA, IT, IRND, NGRD, MACHEP, NEGEP, IEXP, MINEXP,   MAN  650
+     * MAXEXP, EPS, EPSNEG, XMIN, XMAX)                                 MAN  660
+CS    BETA = FLOAT(IBETA)                                               MAN  670
+CS    ALBETA = ALOG(BETA)                                               MAN  680
+CS    ALEPS = ALOG(EPS)                                                 MAN  690
+CS    AIT = FLOAT(IT)                                                   MAN  700
+      BETA = DBLE(FLOAT(IBETA))                                         MAN  710
+      ALBETA = DLOG(BETA)                                               MAN  720
+      ALEPS = DLOG(EPS)                                                 MAN  730
+      AIT = DBLE(FLOAT(IT))                                             MAN  740
+      A = ZERO                                                          MAN  750
+      B = TWO                                                           MAN  760
+      N = 2000                                                          MAN  770
+CS    XN = FLOAT(N)                                                     MAN  780
+      XN = DBLE(FLOAT(N))                                               MAN  790
+      JT = 0                                                            MAN  800
+      IZE = 1                                                           MAN  810
+      MB = 2                                                            MAN  820
+C-----------------------------------------------------------------      MAN  830
+C     RANDOM ARGUMENT ACCURACY TESTS                                    MAN  840
+C-----------------------------------------------------------------      MAN  850
+      DO 60 J=1,4                                                       MAN  860
+        K1 = 0                                                          MAN  870
+        K3 = 0                                                          MAN  880
+        X1 = ZERO                                                       MAN  890
+        A1 = ZERO                                                       MAN  900
+        R6 = ZERO                                                       MAN  910
+        R7 = ZERO                                                       MAN  920
+        DEL = (B-A)/XN                                                  MAN  930
+        XL = A                                                          MAN  940
+CS       IF (J .EQ. 1) NB = IFIX(5.53E0 - 0.21E0*ALEPS)                 MAN  950
+CS       IF (J .EQ. 2) NB = IFIX(7.26E0 - 0.27E0*ALEPS)                 MAN  960
+CS       IF (J .EQ. 3) NB = IFIX(12.93E0 - 0.33E0*ALEPS)                MAN  970
+CS       XNB = FLOAT(NB)                                                MAN  980
+        IF (J.EQ.1) NB = IFIX(5.53E0-0.21E0*SNGL(ALEPS))                MAN  990
+        IF (J.EQ.2) NB = IFIX(7.26E0-0.27E0*SNGL(ALEPS))                MAN 1000
+        IF (J.EQ.3) NB = IFIX(12.93E0-0.33E0*SNGL(ALEPS))               MAN 1010
+        XNB = DBLE(FLOAT(NB))                                           MAN 1020
+        NBM1 = NB - 1                                                   MAN 1030
+C                                                                       MAN 1040
+        DO 50 I=1,N                                                     MAN 1050
+          X = DEL*REN(JT) + XL                                          MAN 1060
+          IF (J.EQ.4) GO TO 20                                          MAN 1070
+C------------------------------------------------------------------     MAN 1080
+C   FIRST THREE TESTS ARE BASED ON MACLAURIN SERIES                     MAN 1090
+C------------------------------------------------------------------     MAN 1100
+          ALPHA = REN(JT)                                               MAN 1110
+          Y = X/TWO                                                     MAN 1120
+          YY = Y*Y                                                      MAN 1130
+          CALL RIBESL(X, ALPHA, MB, IZE, U, NCALC)                      MAN 1140
+          Z = U(1)                                                      MAN 1150
+          DEN = XNB                                                     MAN 1160
+          DEN1 = DEN + ALPHA                                            MAN 1170
+          SUM = ONE/DEN/DEN1                                            MAN 1180
+          DO 10 II=1,NBM1                                               MAN 1190
+            DEN = DEN - ONE                                             MAN 1200
+            DEN1 = DEN1 - ONE                                           MAN 1210
+            SUM = (YY*SUM+ONE)/DEN/DEN1                                 MAN 1220
+   10     CONTINUE                                                      MAN 1230
+          Y = Y**ALPHA                                                  MAN 1240
+CS          ZZ = (SUM * YY * Y + Y) / GAMMA(ONE+ALPHA)                  MAN 1250
+          ZZ = (SUM*YY*Y+Y)/DGAMMA(ONE+ALPHA)                           MAN 1260
+          GO TO 30                                                      MAN 1270
+C------------------------------------------------------------------     MAN 1280
+C   LAST TEST IS BASED ON ASYMPTOTIC FORM FOR ALPHA = 0.5               MAN 1290
+C------------------------------------------------------------------     MAN 1300
+   20     CALL RIBESL(X, ALPHA, MB, IZE, U, NCALC)                      MAN 1310
+          Z = U(1)                                                      MAN 1320
+CS          ZZ = C / SQRT(X)                                            MAN 1330
+          ZZ = C/DSQRT(X)                                               MAN 1340
+   30     W = (Z-ZZ)/Z                                                  MAN 1350
+          IF (W.GT.ZERO) K1 = K1 + 1                                    MAN 1360
+          IF (W.LT.ZERO) K3 = K3 + 1                                    MAN 1370
+CS          W = ABS(W)                                                  MAN 1380
+          W = DABS(W)                                                   MAN 1390
+          IF (W.LE.R6) GO TO 40                                         MAN 1400
+          R6 = W                                                        MAN 1410
+          X1 = X                                                        MAN 1420
+          A1 = ALPHA                                                    MAN 1430
+   40     R7 = R7 + W*W                                                 MAN 1440
+          XL = XL + DEL                                                 MAN 1450
+   50   CONTINUE                                                        MAN 1460
+C------------------------------------------------------------------     MAN 1470
+C   GATHER AND PRINT STATISTICS FOR TEST                                MAN 1480
+C------------------------------------------------------------------     MAN 1490
+        K2 = N - K3 - K1                                                MAN 1500
+CS       R7 = SQRT(R7/XN)                                               MAN 1510
+        R7 = DSQRT(R7/XN)                                               MAN 1520
+        IF (J.NE.4) WRITE (IOUT,99999)                                  MAN 1530
+        IF (J.EQ.4) WRITE (IOUT,99998)                                  MAN 1540
+        WRITE (IOUT,99997) N, A, B                                      MAN 1550
+        WRITE (IOUT,99996) K1, K2, K3                                   MAN 1560
+        WRITE (IOUT,99995) IT, IBETA                                    MAN 1570
+        W = X99                                                         MAN 1580
+CS       IF (R6 .NE. ZERO) W = ALOG(ABS(R6))/ALBETA                     MAN 1590
+        IF (R6.NE.ZERO) W = DLOG(DABS(R6))/ALBETA                       MAN 1600
+        WRITE (IOUT,99994) R6, IBETA, W, X1, A1                         MAN 1610
+CS       W = AMAX1(AIT+W,ZERO)                                          MAN 1620
+        W = DMAX1(AIT+W,ZERO)                                           MAN 1630
+        WRITE (IOUT,99993) IBETA, W                                     MAN 1640
+        W = X99                                                         MAN 1650
+CS       IF (R7 .NE. ZERO) W = ALOG(ABS(R7))/ALBETA                     MAN 1660
+        IF (R7.NE.ZERO) W = DLOG(DABS(R7))/ALBETA                       MAN 1670
+        WRITE (IOUT,99992) R7, IBETA, W                                 MAN 1680
+CS       W = AMAX1(AIT+W,ZERO)                                          MAN 1690
+        W = DMAX1(AIT+W,ZERO)                                           MAN 1700
+        WRITE (IOUT,99993) IBETA, W                                     MAN 1710
+C------------------------------------------------------------------     MAN 1720
+C   INITIALIZE FOR NEXT TEST                                            MAN 1730
+C------------------------------------------------------------------     MAN 1740
+        A = B                                                           MAN 1750
+        B = B + B                                                       MAN 1760
+        IF (J.EQ.2) B = TEN                                             MAN 1770
+        IF (J.NE.3) GO TO 60                                            MAN 1780
+        C = (C1+C2)*HALF                                                MAN 1790
+        ALPHA = HALF                                                    MAN 1800
+        A = -ALEPS*HALF + TWO                                           MAN 1810
+        B = A + TEN                                                     MAN 1820
+        IZE = 2                                                         MAN 1830
+   60 CONTINUE                                                          MAN 1840
+C-----------------------------------------------------------------      MAN 1850
+C   TEST OF ERROR RETURNS                                               MAN 1860
+C                                                                       MAN 1870
+C   FIRST, TEST WITH BAD PARAMETERS                                     MAN 1880
+C-----------------------------------------------------------------      MAN 1890
+      WRITE (IOUT,99991)                                                MAN 1900
+      X = ONE                                                           MAN 1910
+      ALPHA = HALF                                                      MAN 1920
+      NB = 5                                                            MAN 1930
+      IZE = 1                                                           MAN 1940
+      U(1) = ZERO                                                       MAN 1950
+      CALL RIBESL(X, ALPHA, NB, IZE, U, NCALC)                          MAN 1960
+      WRITE (IOUT,99990) X, ALPHA, NB, IZE, U(1), NCALC                 MAN 1970
+      X = -X                                                            MAN 1980
+      U(1) = ZERO                                                       MAN 1990
+      CALL RIBESL(X, ALPHA, NB, IZE, U, NCALC)                          MAN 2000
+      WRITE (IOUT,99990) X, ALPHA, NB, IZE, U(1), NCALC                 MAN 2010
+      X = -X                                                            MAN 2020
+      ALPHA = ONE + HALF                                                MAN 2030
+      CALL RIBESL(X, ALPHA, NB, IZE, U, NCALC)                          MAN 2040
+      WRITE (IOUT,99990) X, ALPHA, NB, IZE, U(1), NCALC                 MAN 2050
+      ALPHA = HALF                                                      MAN 2060
+      NB = -NB                                                          MAN 2070
+      CALL RIBESL(X, ALPHA, NB, IZE, U, NCALC)                          MAN 2080
+      WRITE (IOUT,99990) X, ALPHA, NB, IZE, U(1), NCALC                 MAN 2090
+      NB = -NB                                                          MAN 2100
+      IZE = 5                                                           MAN 2110
+      CALL RIBESL(X, ALPHA, NB, IZE, U, NCALC)                          MAN 2120
+      WRITE (IOUT,99990) X, ALPHA, NB, IZE, U(1), NCALC                 MAN 2130
+C-----------------------------------------------------------------      MAN 2140
+C   LAST TESTS ARE WITH EXTREME PARAMETERS                              MAN 2150
+C-----------------------------------------------------------------      MAN 2160
+      X = XMIN                                                          MAN 2170
+      ALPHA = ZERO                                                      MAN 2180
+      NB = 150                                                          MAN 2190
+      IZE = 1                                                           MAN 2200
+      U(1) = ZERO                                                       MAN 2210
+      CALL RIBESL(X, ALPHA, NB, IZE, U, NCALC)                          MAN 2220
+      WRITE (IOUT,99990) X, ALPHA, NB, IZE, U(1), NCALC                 MAN 2230
+      X = TEN + TEN + TEN                                               MAN 2240
+      U(1) = ZERO                                                       MAN 2250
+      CALL RIBESL(X, ALPHA, NB, IZE, U, NCALC)                          MAN 2260
+      WRITE (IOUT,99990) X, ALPHA, NB, IZE, U(1), NCALC                 MAN 2270
+      X = XMAX                                                          MAN 2280
+      U(1) = ZERO                                                       MAN 2290
+      CALL RIBESL(X, ALPHA, NB, IZE, U, NCALC)                          MAN 2300
+      WRITE (IOUT,99990) X, ALPHA, NB, IZE, U(1), NCALC                 MAN 2310
+      STOP                                                              MAN 2320
+C-----------------------------------------------------------------      MAN 2330
+99999 FORMAT (40H1TEST OF I(X,ALPHA) VS SERIES EXPANSION //)            MAN 2340
+99998 FORMAT (44H1TEST OF EXP(-X)*I(X,0.5) VS 1/SQRT(2*X*PI) //)        MAN 2350
+99997 FORMAT (I7, 48H RANDOM ARGUMENTS WERE TESTED FROM THE INTERVAL ,  MAN 2360
+     * 1H(, F5.1, 1H,, F5.1, 1H)//)                                     MAN 2370
+99996 FORMAT (22H I(X,ALPHA) WAS LARGER, I6, 7H TIMES,/15X, 7H AGREED,  MAN 2380
+     * I6, 11H TIMES, AND/11X, 11HWAS SMALLER, I6, 7H TIMES.//)         MAN 2390
+99995 FORMAT (10H THERE ARE, I4, 5H BASE, I4, 22H SIGNIFICANT DIGITS IN,MAN 2400
+     * 24H A FLOATING-POINT NUMBER//)                                   MAN 2410
+99994 FORMAT (30H THE MAXIMUM RELATIVE ERROR OF, E15.4, 3H = , I4,      MAN 2420
+     * 3H **, F7.2/4X, 16HOCCURRED FOR X =, E13.6, 10H  AND NU =, E13.6)MAN 2430
+99993 FORMAT (27H THE ESTIMATED LOSS OF BASE, I4, 18H SIGNIFICANT DIGIT,MAN 2440
+     * 4HS IS, F7.2//)                                                  MAN 2450
+99992 FORMAT (40H THE ROOT MEAN SQUARE RELATIVE ERROR WAS, E15.4, 3H = ,MAN 2460
+     * I4, 3H **, F7.2)                                                 MAN 2470
+99991 FORMAT (24H1CHECK OF ERROR RETURNS ///24H THE FOLLOWING SUMMARIZE,MAN 2480
+     * 33HS CALLS WITH INDICATED PARAMETERS//23H NCALC DIFFERENT FROM N,MAN 2490
+     * 30HB INDICATES SOME FORM OF ERROR//26H SEE DOCUMENTATION FOR RIB,MAN 2500
+     * 16HESL FOR DETAILS //7X, 3HARG, 12X, 5HALPHA, 6X, 2HNB, 3X, 2HIZ,MAN 2510
+     * 7X, 3HRES, 6X, 5HNCALC//)                                        MAN 2520
+99990 FORMAT (2E15.7, 2I5, E15.7, I5//)                                 MAN 2530
+C     ---------- LAST CARD OF RIBESL TEST PROGRAM ----------            MAN 2540
+      END                                                               MAN 2550
+C     PROGRAM TO TEST DGAMMA                                            MAN   10
+C                                                                       MAN   20
+C     DATA REQUIRED                                                     MAN   30
+C                                                                       MAN   40
+C        NONE                                                           MAN   50
+C                                                                       MAN   60
+C     SUBPROGRAMS REQUIRED FROM THIS PACKAGE                            MAN   70
+C                                                                       MAN   80
+C        MACHAR - AN ENVIRONMENTAL INQUIRY PROGRAM PROVIDING            MAN   90
+C                 INFORMATION ON THE FLOATING-POINT ARITHMETIC          MAN  100
+C                 SYSTEM.  NOTE THAT THE CALL TO MACHAR CAN             MAN  110
+C                 BE DELETED PROVIDED THE FOLLOWING FIVE                MAN  120
+C                 PARAMETERS ARE ASSIGNED THE VALUES INDICATED          MAN  130
+C                                                                       MAN  140
+C                 IBETA  - THE RADIX OF THE FLOATING-POINT SYSTEM       MAN  150
+C                 IT     - THE NUMBER OF BASE-IBETA DIGITS IN THE       MAN  160
+C                          SIGNIFICAND OF A FLOATING-POINT NUMBER       MAN  170
+C                 EPS    - THE SMALLEST POSITIVE FLOATING-POINT         MAN  180
+C                          NUMBER SUCH THAT 1.0+EPS .NE. 1.0            MAN  190
+C                 XMIN   - THE SMALLEST NON-VANISHING FLOATING-POINT    MAN  200
+C                          INTEGRAL POWER OF THE RADIX                  MAN  210
+C                 XMAX   - THE LARGEST FINITE FLOATING-POINT NUMBER     MAN  220
+C                                                                       MAN  230
+C        REN(K) - A FUNCTION SUBPROGRAM RETURNING RANDOM REAL           MAN  240
+C                 NUMBERS UNIFORMLY DISTRIBUTED OVER (0,1)              MAN  250
+C                                                                       MAN  260
+C                                                                       MAN  270
+C     STANDARD FORTRAN SUBPROGRAMS REQUIRED FOR SINGLE PRECISION        MAN  280
+C                                                                       MAN  290
+C         ABS, ALOG, AMAX1, FLOAT, INT, SQRT                            MAN  300
+C                                                                       MAN  310
+C     STANDARD FORTRAN SUBPROGRAMS REQUIRED FOR DOUBLE PRECISION        MAN  320
+C                                                                       MAN  330
+C         DABS, DLOG, DMAX1, DBLE, FLOAT, INT, SNGL, DSQRT              MAN  340
+C                                                                       MAN  350
+C                                                                       MAN  360
+C     LATEST REVISION - FEBRUARY 3, 1982                                MAN  370
+C                                                                       MAN  380
+C     AUTHOR - W. J. CODY                                               MAN  390
+C              ARGONNE NATIONAL LABORATORY                              MAN  400
+C                                                                       MAN  410
+C------------------------------------------------------------------     MAN  420
+      INTEGER I, IBETA, IEXP, IOUT, IRND, IT, J, JT, K1, K2, K3,        MAN  430
+     * MACHEP, MAXEXP, MINEXP, N, NEGEP, NGRD, NX                       MAN  440
+CS    REAL             A,AIT,ALBETA,ALNX,B,BETA,C,CL,CM,C1,C2,DEL,      MAN  450
+CS   2     GAMMA,REN,EPS,EPSNEG,HALF,ONE,R6,R7,TEN,TWO,W,X,XC,XL,       MAN  460
+CS   3     XMAX,XMIN,XMINV,XN,XNUM,XXN,XP,XPH,X99,XP99,Y,Z,ZERO,ZZ      MAN  470
+      DOUBLE PRECISION A, AIT, ALBETA, ALNX, B, BETA, C, CL, CM, C1,    MAN  480
+     * C2, DEL, DGAMMA, REN, EPS, EPSNEG, HALF, ONE, R6, R7, TEN, TWO,  MAN  490
+     * W, X, XC, XL, XMAX, XMIN, XMINV, XN, XNUM, XXN, XP, XPH, X99,    MAN  500
+     * XP99, Y, Z, ZERO, ZZ                                             MAN  510
+CS    DATA C1/2.8209479177387814347E-1/                                 MAN  520
+CS    DATA C2/9.1893853320467274178E-1/                                 MAN  530
+CS    DATA ZERO,HALF,ONE,TWO,TEN,X99,XP99/0.0E0,0.5E0,1.0E0,2.0E0,      MAN  540
+CS   1     10.0E0,-999.0E0,0.99E0/                                      MAN  550
+      DATA C1 /2.8209479177387814347D-1/                                MAN  560
+      DATA C2 /9.1893853320467274178D-1/                                MAN  570
+      DATA ZERO, HALF, ONE, TWO, TEN, X99, XP99 /0.0D0,0.5D0,1.0D0,     MAN  580
+     * 2.0D0,10.0D0,-999.0D0,0.99D0/                                    MAN  590
+      DATA IOUT /6/                                                     MAN  600
+C------------------------------------------------------------------     MAN  610
+C                                                                       MAN  620
+C   DETERMINE MACHINE PARAMETERS AND SET CONSTANTS                      MAN  630
+C                                                                       MAN  640
+C------------------------------------------------------------------     MAN  650
+      CALL MACHAR(IBETA, IT, IRND, NGRD, MACHEP, NEGEP, IEXP, MINEXP,   MAN  660
+     * MAXEXP, EPS, EPSNEG, XMIN, XMAX)                                 MAN  670
+CS    BETA = FLOAT(IBETA)                                               MAN  680
+      BETA = DBLE(FLOAT(IBETA))                                         MAN  690
+CS    ALBETA = ALOG(BETA)                                               MAN  700
+      ALBETA = DLOG(BETA)                                               MAN  710
+CS    AIT = FLOAT(IT)                                                   MAN  720
+      AIT = DBLE(FLOAT(IT))                                             MAN  730
+      A = ZERO                                                          MAN  740
+      B = ONE                                                           MAN  750
+      N = 2000                                                          MAN  760
+CS    XN = FLOAT(N)                                                     MAN  770
+      XN = DBLE(FLOAT(N))                                               MAN  780
+      JT = 0                                                            MAN  790
+C-----------------------------------------------------------------      MAN  800
+C     DETERMINE SMALLEST ARGUMENT FOR GAMMA                             MAN  810
+C-----------------------------------------------------------------      MAN  820
+CS    CM = ALOG(XMIN)                                                   MAN  830
+      CM = DLOG(XMIN)                                                   MAN  840
+CS    CL = ALOG(XMAX)                                                   MAN  850
+      CL = DLOG(XMAX)                                                   MAN  860
+      XMINV = XMIN                                                      MAN  870
+      IF (-CM.GT.CL) XMINV = ONE/XMAX                                   MAN  880
+C-----------------------------------------------------------------      MAN  890
+C     DETERMINE LARGEST ARGUMENT FOR GAMMA BY NEWTON ITERATION          MAN  900
+C-----------------------------------------------------------------      MAN  910
+      XP = HALF*CL                                                      MAN  920
+      CL = C2 - CL                                                      MAN  930
+   10 X = XP                                                            MAN  940
+CS    ALNX = ALOG(X)                                                    MAN  950
+      ALNX = DLOG(X)                                                    MAN  960
+      XNUM = (X-HALF)*ALNX - X + CL                                     MAN  970
+      XP = X - XNUM/(ALNX-HALF/X)                                       MAN  980
+CS    IF (ABS(XP-X)/X .GE. TEN*EPS) GO TO 50                            MAN  990
+      IF (DABS(XP-X)/X.GE.TEN*EPS) GO TO 10                             MAN 1000
+      CL = XP                                                           MAN 1010
+C-----------------------------------------------------------------      MAN 1020
+C     RANDOM ARGUMENT ACCURACY TESTS                                    MAN 1030
+C-----------------------------------------------------------------      MAN 1040
+      DO 40 J=1,4                                                       MAN 1050
+        K1 = 0                                                          MAN 1060
+        K3 = 0                                                          MAN 1070
+        XC = ZERO                                                       MAN 1080
+        R6 = ZERO                                                       MAN 1090
+        R7 = ZERO                                                       MAN 1100
+        DEL = (B-A)/XN                                                  MAN 1110
+        XL = A                                                          MAN 1120
+C                                                                       MAN 1130
+        DO 30 I=1,N                                                     MAN 1140
+          X = DEL*REN(JT) + XL                                          MAN 1150
+C-----------------------------------------------------------------      MAN 1160
+C      USE DUPLICATION FORMULA FOR X NOT CLOSE TO THE ZERO              MAN 1170
+C-----------------------------------------------------------------      MAN 1180
+          XP = (X*HALF+HALF) - HALF                                     MAN 1190
+          XPH = XP + HALF                                               MAN 1200
+          X = XP + XP                                                   MAN 1210
+CS          NX = INT(X)                                                 MAN 1220
+          NX = INT(SNGL(X))                                             MAN 1230
+CS          XXN = FLOAT(NX)                                             MAN 1240
+          XXN = DBLE(FLOAT(NX))                                         MAN 1250
+          C = (TWO**NX)*(TWO**(X-XXN))                                  MAN 1260
+CS          Z = GAMMA(X)                                                MAN 1270
+          Z = DGAMMA(X)                                                 MAN 1280
+CS          ZZ = ((C*C1)*GAMMA(XP)) * GAMMA(XPH)                        MAN 1290
+          ZZ = ((C*C1)*DGAMMA(XP))*DGAMMA(XPH)                          MAN 1300
+          W = (Z-ZZ)/Z                                                  MAN 1310
+          IF (W.GT.ZERO) K1 = K1 + 1                                    MAN 1320
+          IF (W.LT.ZERO) K3 = K3 + 1                                    MAN 1330
+CS          W = ABS(W)                                                  MAN 1340
+          W = DABS(W)                                                   MAN 1350
+          IF (W.LE.R6) GO TO 20                                         MAN 1360
+          R6 = W                                                        MAN 1370
+          XC = X                                                        MAN 1380
+   20     R7 = R7 + W*W                                                 MAN 1390
+          XL = XL + DEL                                                 MAN 1400
+   30   CONTINUE                                                        MAN 1410
+C------------------------------------------------------------------     MAN 1420
+C   GATHER AND PRINT STATISTICS FOR TEST                                MAN 1430
+C------------------------------------------------------------------     MAN 1440
+        K2 = N - K3 - K1                                                MAN 1450
+CS       R7 = SQRT(R7/XN)                                               MAN 1460
+        R7 = DSQRT(R7/XN)                                               MAN 1470
+        WRITE (IOUT,99999)                                              MAN 1480
+        WRITE (IOUT,99998) N, A, B                                      MAN 1490
+        WRITE (IOUT,99997) K1, K2, K3                                   MAN 1500
+        WRITE (IOUT,99996) IT, IBETA                                    MAN 1510
+        W = X99                                                         MAN 1520
+CS       IF (R6 .NE. ZERO) W = ALOG(ABS(R6))/ALBETA                     MAN 1530
+        IF (R6.NE.ZERO) W = DLOG(DABS(R6))/ALBETA                       MAN 1540
+        WRITE (IOUT,99995) R6, IBETA, W, XC                             MAN 1550
+CS       W = AMAX1(AIT+W,ZERO)                                          MAN 1560
+        W = DMAX1(AIT+W,ZERO)                                           MAN 1570
+        WRITE (IOUT,99994) IBETA, W                                     MAN 1580
+        W = X99                                                         MAN 1590
+CS       IF (R7 .NE. ZERO) W = ALOG(ABS(R7))/ALBETA                     MAN 1600
+        IF (R7.NE.ZERO) W = DLOG(DABS(R7))/ALBETA                       MAN 1610
+        WRITE (IOUT,99993) R7, IBETA, W                                 MAN 1620
+CS       W = AMAX1(AIT+W,ZERO)                                          MAN 1630
+        W = DMAX1(AIT+W,ZERO)                                           MAN 1640
+        WRITE (IOUT,99994) IBETA, W                                     MAN 1650
+C------------------------------------------------------------------     MAN 1660
+C   INITIALIZE FOR NEXT TEST                                            MAN 1670
+C------------------------------------------------------------------     MAN 1680
+        A = B                                                           MAN 1690
+        IF (J.EQ.1) B = A + A                                           MAN 1700
+        IF (J.EQ.2) B = TEN                                             MAN 1710
+        IF (J.EQ.3) B = CL - HALF                                       MAN 1720
+   40 CONTINUE                                                          MAN 1730
+C-----------------------------------------------------------------      MAN 1740
+C    SPECIAL TESTS                                                      MAN 1750
+C                                                                       MAN 1760
+C    FIRST TEST WITH SPECIAL ARGUMENTS                                  MAN 1770
+C-----------------------------------------------------------------      MAN 1780
+      WRITE (IOUT,99992)                                                MAN 1790
+      WRITE (IOUT,99991)                                                MAN 1800
+      X = -HALF                                                         MAN 1810
+CS    Y = GAMMA(X)                                                      MAN 1820
+      Y = DGAMMA(X)                                                     MAN 1830
+      WRITE (IOUT,99990) X, Y                                           MAN 1840
+      X = XMINV/XP99                                                    MAN 1850
+CS    Y = GAMMA(X)                                                      MAN 1860
+      Y = DGAMMA(X)                                                     MAN 1870
+      WRITE (IOUT,99990) X, Y                                           MAN 1880
+      X = ONE                                                           MAN 1890
+CS    Y = GAMMA(X)                                                      MAN 1900
+      Y = DGAMMA(X)                                                     MAN 1910
+      WRITE (IOUT,99990) X, Y                                           MAN 1920
+      X = TWO                                                           MAN 1930
+CS    Y = GAMMA(X)                                                      MAN 1940
+      Y = DGAMMA(X)                                                     MAN 1950
+      WRITE (IOUT,99990) X, Y                                           MAN 1960
+      X = CL*XP99                                                       MAN 1970
+CS    Y = GAMMA(X)                                                      MAN 1980
+      Y = DGAMMA(X)                                                     MAN 1990
+      WRITE (IOUT,99990) X, Y                                           MAN 2000
+C-----------------------------------------------------------------      MAN 2010
+C   TEST OF ERROR RETURNS                                               MAN 2020
+C-----------------------------------------------------------------      MAN 2030
+      WRITE (IOUT,99989)                                                MAN 2040
+      X = -ONE                                                          MAN 2050
+      WRITE (IOUT,99988) X                                              MAN 2060
+CS    Y = GAMMA(X)                                                      MAN 2070
+      Y = DGAMMA(X)                                                     MAN 2080
+      WRITE (IOUT,99987) Y                                              MAN 2090
+      X = ZERO                                                          MAN 2100
+      WRITE (IOUT,99988) X                                              MAN 2110
+CS    Y = GAMMA(X)                                                      MAN 2120
+      Y = DGAMMA(X)                                                     MAN 2130
+      WRITE (IOUT,99987) Y                                              MAN 2140
+      X = XMINV*(ONE-EPS)                                               MAN 2150
+      WRITE (IOUT,99988) X                                              MAN 2160
+CS    Y = GAMMA(X)                                                      MAN 2170
+      Y = DGAMMA(X)                                                     MAN 2180
+      WRITE (IOUT,99987) Y                                              MAN 2190
+      X = CL*(ONE+EPS)                                                  MAN 2200
+      WRITE (IOUT,99988) X                                              MAN 2210
+CS    Y = GAMMA(X)                                                      MAN 2220
+      Y = DGAMMA(X)                                                     MAN 2230
+      WRITE (IOUT,99987) Y                                              MAN 2240
+      WRITE (IOUT,99986)                                                MAN 2250
+      STOP                                                              MAN 2260
+C-----------------------------------------------------------------      MAN 2270
+99999 FORMAT (40H1TEST OF GAMMA(X) VS DUPLICATION FORMULA//)            MAN 2280
+99998 FORMAT (I7, 48H RANDOM ARGUMENTS WERE TESTED FROM THE INTERVAL ,  MAN 2290
+     * 1H(, F5.1, 1H,, F5.1, 1H)//)                                     MAN 2300
+99997 FORMAT (20H GAMMA(X) WAS LARGER, I6, 7H TIMES,/13X, 7H AGREED,    MAN 2310
+     * I6, 11H TIMES, AND/9X, 11HWAS SMALLER, I6, 7H TIMES.//)          MAN 2320
+99996 FORMAT (10H THERE ARE, I4, 5H BASE, I4, 22H SIGNIFICANT DIGITS IN,MAN 2330
+     * 24H A FLOATING-POINT NUMBER//)                                   MAN 2340
+99995 FORMAT (30H THE MAXIMUM RELATIVE ERROR OF, E15.4, 3H = , I4,      MAN 2350
+     * 3H **, F7.2/4X, 16HOCCURRED FOR X =, E13.6)                      MAN 2360
+99994 FORMAT (27H THE ESTIMATED LOSS OF BASE, I4, 18H SIGNIFICANT DIGIT,MAN 2370
+     * 4HS IS, F7.2//)                                                  MAN 2380
+99993 FORMAT (40H THE ROOT MEAN SQUARE RELATIVE ERROR WAS, E15.4, 3H = ,MAN 2390
+     * I4, 3H **, F7.2)                                                 MAN 2400
+99992 FORMAT (14H1SPECIAL TESTS//)                                      MAN 2410
+99991 FORMAT (//26H TEST OF SPECIAL ARGUMENTS//)                        MAN 2420
+99990 FORMAT (8H GAMMA (, E13.6, 4H) = , E13.6//)                       MAN 2430
+99989 FORMAT (22H1TEST OF ERROR RETURNS///)                             MAN 2440
+99988 FORMAT (39H GAMMA WILL BE CALLED WITH THE ARGUMENT, E13.6,        MAN 2450
+     * /37H THIS SHOULD TRIGGER AN ERROR MESSAGE//)                     MAN 2460
+99987 FORMAT (25H GAMMA RETURNED THE VALUE, E13.6///)                   MAN 2470
+99986 FORMAT (25H THIS CONCLUDES THE TESTS)                             MAN 2480
+C     ---------- LAST CARD OF GAMMA TEST PROGRAM ----------             MAN 2490
+      END                                                               MAN 2500
+      SUBROUTINE MACHAR(IBETA, IT, IRND, NGRD, MACHEP, NEGEP, IEXP,     MAC   10
+     * MINEXP, MAXEXP, EPS, EPSNEG, XMIN, XMAX)
+C
+      INTEGER I, IBETA, IEXP, IRND, IT, IZ, J, K, MACHEP, MAXEXP,
+     * MINEXP, MX, NEGEP, NGRD
+CS    REAL A,B,BETA,BETAIN,BETAM1,EPS,EPSNEG,ONE,XMAX,XMIN,Y,Z,ZERO
+      DOUBLE PRECISION A, B, BETA, BETAIN, BETAM1, EPS, EPSNEG, ONE,
+     * XMAX, XMIN, Y, Z, ZERO
+C
+C     THIS SUBROUTINE IS INTENDED TO DETERMINE THE CHARACTERISTICS
+C     OF THE FLOATING-POINT ARITHMETIC SYSTEM THAT ARE SPECIFIED
+C     BELOW.  THE FIRST THREE ARE DETERMINED ACCORDING TO AN
+C     ALGORITHM DUE TO M. MALCOLM, CACM 15 (1972), PP. 949-951,
+C     INCORPORATING SOME, BUT NOT ALL, OF THE IMPROVEMENTS
+C     SUGGESTED BY M. GENTLEMAN AND S. MAROVICH, CACM 17 (1974),
+C     PP. 276-277.  THE VERSION GIVEN HERE IS FOR SINGLE PRECISION.
+C     CARDS CONTAINING  CD  IN COLUMNS 1 AND 2 CAN BE USED TO
+C     CONVERT THE SUBROUTINE TO DOUBLE PRECISION BY REPLACING
+C     EXISTING CARDS IN THE OBVIOUS MANNER.
+C
+C
+C       IBETA   - THE RADIX OF THE FLOATING-POINT REPRESENTATION
+C       IT      - THE NUMBER OF BASE IBETA DIGITS IN THE FLOATING-POINT
+C                 SIGNIFICAND
+C       IRND    - 0 IF FLOATING-POINT ADDITION CHOPS,
+C                 1 IF FLOATING-POINT ADDITION ROUNDS
+C       NGRD    - THE NUMBER OF GUARD DIGITS FOR MULTIPLICATION.  IT IS
+C                 0 IF  IRND=1, OR IF  IRND=0  AND ONLY  IT  BASE  IBETA
+C                   DIGITS PARTICIPATE IN THE POST NORMALIZATION SHIFT
+C                   OF THE FLOATING-POINT SIGNIFICAND IN MULTIPLICATION
+C                 1 IF  IRND=0  AND MORE THAN  IT  BASE  IBETA  DIGITS
+C                   PARTICIPATE IN THE POST NORMALIZATION SHIFT OF THE
+C                   FLOATING-POINT SIGNIFICAND IN MULTIPLICATION
+C       MACHEP  - THE LARGEST NEGATIVE INTEGER SUCH THAT
+C                 1.0+FLOAT(IBETA)**MACHEP .NE. 1.0, EXCEPT THAT
+C                 MACHEP IS BOUNDED BELOW BY  -(IT+3)
+C       NEGEPS  - THE LARGEST NEGATIVE INTEGER SUCH THAT
+C                 1.0-FLOAT(IBETA)**NEGEPS .NE. 1.0, EXCEPT THAT
+C                 NEGEPS IS BOUNDED BELOW BY  -(IT+3)
+C       IEXP    - THE NUMBER OF BITS (DECIMAL PLACES IF IBETA = 10)
+C                 RESERVED FOR THE REPRESENTATION OF THE EXPONENT
+C                 (INCLUDING THE BIAS OR SIGN) OF A FLOATING-POINT
+C                 NUMBER
+C       MINEXP  - THE LARGEST IN MAGNITUDE NEGATIVE INTEGER SUCH THAT
+C                 FLOAT(IBETA)**MINEXP IS A POSITIVE FLOATING-POINT
+C                 NUMBER
+C       MAXEXP  - THE LARGEST POSITIVE INTEGER EXPONENT FOR A FINITE
+C                 FLOATING-POINT NUMBER
+C       EPS     - THE SMALLEST POSITIVE FLOATING-POINT NUMBER SUCH
+C                 THAT  1.0+EPS .NE. 1.0. IN PARTICULAR, IF EITHER
+C                 IBETA = 2  OR  IRND = 0, EPS = FLOAT(IBETA)**MACHEP.
+C                 OTHERWISE,  EPS = (FLOAT(IBETA)**MACHEP)/2
+C       EPSNEG  - A SMALL POSITIVE FLOATING-POINT NUMBER SUCH THAT
+C                 1.0-EPSNEG .NE. 1.0. IN PARTICULAR, IF IBETA = 2
+C                 OR  IRND = 0, EPSNEG = FLOAT(IBETA)**NEGEPS.
+C                 OTHERWISE,  EPSNEG = (IBETA**NEGEPS)/2.  BECAUSE
+C                 NEGEPS IS BOUNDED BELOW BY -(IT+3), EPSNEG MAY NOT
+C                 BE THE SMALLEST NUMBER WHICH CAN ALTER 1.0 BY
+C                 SUBTRACTION.
+C       XMIN    - THE SMALLEST NON-VANISHING FLOATING-POINT POWER OF THE
+C                 RADIX.  IN PARTICULAR,  XMIN = FLOAT(IBETA)**MINEXP
+C       XMAX    - THE LARGEST FINITE FLOATING-POINT NUMBER.  IN
+C                 PARTICULAR   XMAX = (1.0-EPSNEG)*FLOAT(IBETA)**MAXEXP
+C                 NOTE - ON SOME MACHINES  XMAX  WILL BE ONLY THE
+C                 SECOND, OR PERHAPS THIRD, LARGEST NUMBER, BEING
+C                 TOO SMALL BY 1 OR 2 UNITS IN THE LAST DIGIT OF
+C                 THE SIGNIFICAND.
+C
+C     LATEST REVISION - OCTOBER 22, 1979
+C
+C     AUTHOR - W. J. CODY
+C              ARGONNE NATIONAL LABORATORY
+C
+C-----------------------------------------------------------------
+CS    ONE = FLOAT(1)
+      ONE = DBLE(FLOAT(1))
+CS    ZERO = 0.0E0
+      ZERO = 0.0D0
+C-----------------------------------------------------------------
+C     DETERMINE IBETA,BETA ALA MALCOLM
+C-----------------------------------------------------------------
+      A = ONE
+   10 A = A + A
+      IF (((A+ONE)-A)-ONE.EQ.ZERO) GO TO 10
+      B = ONE
+   20 B = B + B
+      IF ((A+B)-A.EQ.ZERO) GO TO 20
+CS    IBETA = INT((A+B)-A)
+      IBETA = INT(SNGL((A+B)-A))
+CS    BETA = FLOAT(IBETA)
+      BETA = DBLE(FLOAT(IBETA))
+C-----------------------------------------------------------------
+C     DETERMINE IT, IRND
+C-----------------------------------------------------------------
+      IT = 0
+      B = ONE
+   30 IT = IT + 1
+      B = B*BETA
+      IF (((B+ONE)-B)-ONE.EQ.ZERO) GO TO 30
+      IRND = 0
+      BETAM1 = BETA - ONE
+      IF ((A+BETAM1)-A.NE.ZERO) IRND = 1
+C-----------------------------------------------------------------
+C     DETERMINE NEGEP, EPSNEG
+C-----------------------------------------------------------------
+      NEGEP = IT + 3
+      BETAIN = ONE/BETA
+      A = ONE
+C
+      DO 40 I=1,NEGEP
+        A = A*BETAIN
+   40 CONTINUE
+C
+      B = A
+   50 IF ((ONE-A)-ONE.NE.ZERO) GO TO 60
+      A = A*BETA
+      NEGEP = NEGEP - 1
+      GO TO 50
+   60 NEGEP = -NEGEP
+      EPSNEG = A
+      IF ((IBETA.EQ.2) .OR. (IRND.EQ.0)) GO TO 70
+      A = (A*(ONE+A))/(ONE+ONE)
+      IF ((ONE-A)-ONE.NE.ZERO) EPSNEG = A
+C-----------------------------------------------------------------
+C     DETERMINE MACHEP, EPS
+C-----------------------------------------------------------------
+   70 MACHEP = -IT - 3
+      A = B
+   80 IF ((ONE+A)-ONE.NE.ZERO) GO TO 90
+      A = A*BETA
+      MACHEP = MACHEP + 1
+      GO TO 80
+   90 EPS = A
+      IF ((IBETA.EQ.2) .OR. (IRND.EQ.0)) GO TO 100
+      A = (A*(ONE+A))/(ONE+ONE)
+      IF ((ONE+A)-ONE.NE.ZERO) EPS = A
+C-----------------------------------------------------------------
+C     DETERMINE NGRD
+C-----------------------------------------------------------------
+  100 NGRD = 0
+      IF ((IRND.EQ.0) .AND. ((ONE+EPS)*ONE-ONE).NE.ZERO) NGRD = 1
+C-----------------------------------------------------------------
+C     DETERMINE IEXP, MINEXP, XMIN
+C
+C     LOOP TO DETERMINE LARGEST I AND K = 2**I SUCH THAT
+C         (1/BETA) ** (2**(I))
+C     DOES NOT UNDERFLOW
+C     EXIT FROM LOOP IS SIGNALED BY AN UNDERFLOW.
+C-----------------------------------------------------------------
+      I = 0
+      K = 1
+      Z = BETAIN
+  110 Y = Z
+      Z = Y*Y
+C-----------------------------------------------------------------
+C        CHECK FOR UNDERFLOW HERE
+C-----------------------------------------------------------------
+      A = Z*ONE
+CS       IF ((A+A .EQ. ZERO) .OR. (ABS(Z) .GE. Y)) GO TO 410
+      IF ((A+A.EQ.ZERO) .OR. (DABS(Z).GE.Y)) GO TO 120
+      I = I + 1
+      K = K + K
+      GO TO 110
+  120 IF (IBETA.EQ.10) GO TO 130
+      IEXP = I + 1
+      MX = K + K
+      GO TO 160
+C-----------------------------------------------------------------
+C     FOR DECIMAL MACHINES ONLY
+C-----------------------------------------------------------------
+  130 IEXP = 2
+      IZ = IBETA
+  140 IF (K.LT.IZ) GO TO 150
+      IZ = IZ*IBETA
+      IEXP = IEXP + 1
+      GO TO 140
+  150 MX = IZ + IZ - 1
+C-----------------------------------------------------------------
+C     LOOP TO DETERMINE MINEXP, XMIN
+C     EXIT FROM LOOP IS SIGNALED BY AN UNDERFLOW.
+C-----------------------------------------------------------------
+  160 XMIN = Y
+      Y = Y*BETAIN
+C-----------------------------------------------------------------
+C        CHECK FOR UNDERFLOW HERE
+C-----------------------------------------------------------------
+      A = Y*ONE
+CS       IF (((A+A) .EQ. ZERO) .OR. (ABS(Y) .GE. XMIN)) GO TO 460
+      IF (((A+A).EQ.ZERO) .OR. (DABS(Y).GE.XMIN)) GO TO 170
+      K = K + 1
+      GO TO 160
+  170 MINEXP = -K
+C-----------------------------------------------------------------
+C     DETERMINE MAXEXP, XMAX
+C-----------------------------------------------------------------
+      IF ((MX.GT.K+K-3) .OR. (IBETA.EQ.10)) GO TO 180
+      MX = MX + MX
+      IEXP = IEXP + 1
+  180 MAXEXP = MX + MINEXP
+C-----------------------------------------------------------------
+C     ADJUST FOR MACHINES WITH IMPLICIT LEADING
+C     BIT IN BINARY SIGNIFICAND AND MACHINES WITH
+C     RADIX POINT AT EXTREME RIGHT OF SIGNIFICAND
+C-----------------------------------------------------------------
+      I = MAXEXP + MINEXP
+      IF ((IBETA.EQ.2) .AND. (I.EQ.0)) MAXEXP = MAXEXP - 1
+      IF (I.GT.20) MAXEXP = MAXEXP - 1
+      IF (A.NE.Y) MAXEXP = MAXEXP - 2
+      XMAX = ONE - EPSNEG
+      IF (XMAX*ONE.NE.XMAX) XMAX = ONE - BETA*EPSNEG
+      XMAX = XMAX/(BETA*BETA*BETA*XMIN)
+      I = MAXEXP + MINEXP + 3
+      IF (I.LE.0) GO TO 200
+C
+      DO 190 J=1,I
+        IF (IBETA.EQ.2) XMAX = XMAX + XMAX
+        IF (IBETA.NE.2) XMAX = XMAX*BETA
+  190 CONTINUE
+C
+  200 RETURN
+C     ---------- LAST CARD OF MACHAR ----------
+      END
+      DOUBLE PRECISION FUNCTION REN(K)                                  REN   10
+C
+C     RANDOM NUMBER GENERATOR - BASED ON ALGORITHM 266 BY PIKE AND
+C      HILL (MODIFIED BY HANSSON), COMMUNICATIONS OF THE ACM,
+C      VOL. 8, NO. 10, OCTOBER 1965.
+C
+C     THIS SUBPROGRAM IS INTENDED FOR USE ON COMPUTERS WITH
+C      FIXED POINT WORDLENGTH OF AT LEAST 29 BITS.  IT IS
+C      BEST IF THE FLOATING POINT SIGNIFICAND HAS AT MOST
+C      29 BITS.
+C
+      INTEGER IY, J, K
+      DATA IY /100001/
+C
+      J = K
+      IY = IY*125
+      IY = IY - (IY/2796203)*2796203
+      REN = DBLE(FLOAT(IY))/2796203.0D0*(1.0D0+1.0D-6+1.0D-12)
+      RETURN
+C     ---------- LAST CARD OF REN ----------
+      END

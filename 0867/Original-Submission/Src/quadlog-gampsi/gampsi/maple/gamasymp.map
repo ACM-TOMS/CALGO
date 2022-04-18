@@ -1,0 +1,193 @@
+# -*-maple-*-
+#=======================================================================
+# Experiment with the asymptotic series for ln(Gamma(x)), Abramowitz
+# and Stegen, NBS Handbook #55 (1964), p. 257, 6.1.41, to see how many
+# terms are needed at various x values.
+#
+# Sample results for the number of terms needed for IEEE 754 quadruple
+# precision (p == 113 bits) for increasing cutoff values:
+#
+#	for k from 10 to 20 do printf("%5d\t%5d\n", k, as(k,200,false)): od:
+#	   10     201
+#	   11     201
+#	   12      29
+#	   13      24
+#	   14      22
+#	   15      20
+#	   16      19
+#	   17      18
+#	   18      17
+#	   19      16
+#	   20      16
+#	for k from 10 to 100 by 10 do printf("%5d\t%5d\n", k, as(k,200,false)): od:
+#	   10     201
+#	   20      16
+#	   30      13
+#	   40      11
+#	   50      10
+#	   60      10
+#	   70       9
+#	   80       9
+#	   90       9
+#	  100       8
+#	for k from 100 to 1000 by 100 do printf("%5d\t%5d\n", k, as(k,200,false)): od:
+#	  100       8
+#	  200       7
+#	  300       7
+#	  400       6
+#	  500       6
+#	  600       6
+#	  700       6
+#	  800       6
+#	  900       6
+#	for k from 1000 to 10000 by 1000 do printf("%5d\t%5d\n", k, as(k,200,false)): od:
+#	 1000       5
+#	 2000       5
+#	 3000       5
+#	 4000       5
+#	 5000       5
+#	 6000       4
+#	 7000       4
+#	 8000       4
+#	 9000       4
+#	10000       4
+#
+# [01-Jun-2000]
+#=======================================================================
+
+with(numtheory):			# for B() function
+
+Digits := 75:
+
+b := proc(m)
+         RETURN(B(2*m)/(2*m*(2*m-1)))
+     end:
+
+aprint := proc(n,sum,relerr)
+         printf("%d\t%+.49e\t%+.2e\n", n, evalf(sum), evalf(relerr))
+     end:
+
+bprint := proc(m,sepstr)
+         printf("     X      %+.50e%s\n", b(m),sepstr)
+     end:
+
+# Asymptotic series, with printing of each term
+as := proc(x,n,show,ulp)
+	local exact, m, relerr, sum, term:
+	exact := evalf(lnGAMMA(x)):
+	if (show)
+	then
+		printf("Convergence of asymptotic series for ln(Gamma(%f))\n", x):
+		printf("%5s\t   %-56s\t   %-8s\n", "m", "sum", "relerr")
+	fi:
+	sum := evalf((x - 0.5)*ln(x) - x + 0.5*ln(2*Pi)):
+	if (show)
+	then
+		aprint(0,sum,0)
+	fi:
+	for m from 1 to n
+	do
+		term := b(m)/x^(2*m - 1):
+		sum := sum + term:
+		relerr := term / exact:
+		if (show)
+		then
+			aprint(m,sum,relerr):
+		fi:
+		if (evalf(abs(relerr)) < ulp) then break fi:
+	od:
+	if (show)
+	then
+		relerr := (exact - sum)/exact:
+		printf("\nComparision with exact result\n"):
+		printf("%5s\t   %-56s\t   %-8s\n", "ulps", "exact", "relerr"):
+		aprint(ceil(relerr/ULP), exact, relerr):
+		printf("\n")
+	fi:
+	m
+      end:
+
+# These values come from ../../common/*xbig.inc:
+xbig_dp := 171.62437695630272079085475647646959367985015842820538:
+xbig_qp := 1755.5483429044629170038892160702033617807855330336:
+xbig_sp := 35.04009840311281786536999069330671546501468835100:
+
+ULP_IEEEQP := evalf(2^(-112)):
+
+ULP_IBMSGI := evalf(2^(-105)):
+
+ULP_IEEEDP := evalf(2^(-53)):
+
+ULP_IEEESP := evalf(2^(-23)):
+
+as_table_row := proc(x,mark)
+			global n1_last, n2_last, n3_last, n4_last:
+			local n1, n2, n3, n4:
+			n1 := as(x,200,false,ULP_IEEEQP):
+			n2 := as(x,200,false,ULP_IBMSGI):
+			n3 := as(x,200,false,ULP_IEEEDP):
+			n4 := as(x,200,false,ULP_IEEESP):
+			if (evalb(mark = 2)) then
+				printf("%15d\t     **** %5d\t%15d\t%15d\t%15d\n",
+					x, n1, n2, n3, n4)
+			elif (evalb(mark = 3)) then
+				printf("%15d\t%15d\t     **** %5d\t%15d\t%15d\n",
+					x, n1, n2, n3, n4)
+			elif (evalb(mark = 4)) then
+				printf("%15d\t%15d\t%15d\t     **** %5d\t%15d\n",
+					x, n1, n2, n3, n4)
+			elif (evalb(mark = 5)) then
+				printf("%15d\t%15d\t%15d\t%15d\t     **** %5d\n",
+					x, n1, n2, n3, n4)
+			elif (evalb((n1 <> n1_last) or 
+				(n2 <> n2_last) or 
+				(n3 <> n3_last) or 
+				(n4 <> n4_last)))
+			then
+				printf("%15d\t%15d\t%15d\t%15d\t%15d\n",
+					x, n1, n2, n3, n4)
+			fi:
+			n1_last := n1:
+			n2_last := n2:
+			n3_last := n3:
+			n4_last := n4:
+		end:
+
+interface(quiet = true):
+n1_last := 0:
+n2_last := 0:
+n3_last := 0:
+n4_last := 0:
+
+printf("#%14s\t%15s\t%15s\t%15s\t%15s\n", "x", "full IEEE qp", "paired double", 
+	"IEEE dp", "IEEE sp"):
+
+# Loop cannot start from 2, because that generates exact :=
+# ln(GAMMA(1)) := 0, which gets used as a divisior in the relerr 
+for x from 3 to (xbig_qp+1) by 1
+do 
+	# generate visible table rows for the three overflow limits
+	if (evalb((xbig_sp <= (x+1)) and ((x+1) <= (xbig_sp + 1))))
+	then
+		as_table_row(x,5)
+	elif (evalb((xbig_dp <= (x+1)) and ((x+1) <= (xbig_dp + 1))))
+	then
+		as_table_row(x,3):
+		as_table_row(x,4)
+	elif (evalb((xbig_qp <= (x+1)) and ((x+1) <= (xbig_qp + 1))))
+	then
+		as_table_row(x,2)
+	else
+		as_table_row(x,0)
+	fi
+od:
+
+printf("done\n"):
+
+printf("      DATA (c(i), i = 1,19) /\n"):
+for k from 1 to 18 do bprint(k,",") od:
+bprint(19," /"):
+
+printf("      DATA (c(i), i = 20,30) /\n"):
+for k from 20 to 29 do bprint(k,",") od:
+bprint(30," /"):

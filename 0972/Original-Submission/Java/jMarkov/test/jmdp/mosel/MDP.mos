@@ -1,0 +1,154 @@
+(!***********************
+*** FILE: MDP.MOS *******
+*************************!)
+
+(!
+This is a general Markov decision process model.
+The user should leave this file intact 
+and use the model file to compute or read
+cost and probabilities matrices. 
+
+German Riano
+Universidad de los Andes 2005
+
+A model tah uses this file should define States,Actions
+Prob Costs and Admissible. This is an minimal example:
+
+model MarkovDecisionProcessExample
+options noimplicit
+uses "mmxprs", "mmetc"
+include 'MDP.mos'
+initializations from 'inventory2.dat'
+	States Actions Prob Cost Admissible
+end-initializations 
+MDP_BuildModel
+MDP_SolveModel(true)
+end-model
+
+!)
+
+
+forward function getProblemStatus(status: integer): string
+
+!This function must be implemented in the user file.
+forward procedure MDP_PrintPolicy		!Print Optimal Policy
+
+
+
+
+declarations
+	States : set of integer ! Set of states
+	Actions : set of integer !set of actions
+	Prob: array(Actions, States, States) of real; 	!Transition Probablities
+	Cost: array(States, Actions) of real; 			!Immediate cost per transition
+	Admissible: array(States, Actions) of boolean; 	!Admissible actions for each state
+	x: array(States, Actions) of mpvar 	! Joint Probability P(X=i,A=a)
+	objective : linctr 					! Objective function
+	balance: array(States) of linctr 	! Balance equations
+	normalize : linctr 					! Normalization condition
+	y : array(States, Actions) of real 	! Conditional prob P(A=a | X=i)
+	pi: array(States) of real    		! stedy state probability P(X=i)
+	val: array(States) of real    		! value funcion for state i
+	Policy: array(States) of integer	! Optimal Actions
+	built:  boolean						! wether model has been solved
+	solved: boolean						! wether has been built
+	ActionNames: array(Actions) of string
+	StateNames: array(States) of string
+	useDisc: boolean ! whether a discounted model should be used
+	NumStates: integer;
+	alpha: array(States) of real ! initial probs
+	discFactor : real ! Discount facor 0 < discFactor < 1.0
+end-declarations
+
+!default values: use AVG solver
+useDisc := false
+discFactor := 1.0
+
+procedure MDP_BuildModel
+	!create varibles only for admissible actions
+	forall (i in States, a in Actions|Admissible(i,a)) do
+		create(x(i,a))
+	end-do
+	finalize(States);finalize(Actions)
+	
+	writeln("x has "+getsize(x)+" components")
+	NumStates := getsize(States);
+
+	forall(i in States) alpha(i):= if(useDisc, 1.0/NumStates, 0.0); 
+	
+	objective:= sum(a in Actions, i in States) x(i,a)*Cost(i,a)
+	!Balance ecuations:
+	forall(j in States)
+		balance(j):= 
+			sum(a in Actions) x(j,a) - 
+			discFactor * sum(i in States,a in Actions) x(i,a)* Prob(a,i,j) =
+				alpha(j);
+	if (not useDisc) then!Normalization
+		normalize:= sum(i in States, a in Actions) x(i,a) = 1.0	
+	end-if
+	
+	forall(i in States|StateNames(i)='')  StateNames(i) := strfmt(i,0) 
+	forall(a in Actions|ActionNames(a)='')ActionNames(a) := strfmt(a,0) 
+
+	built := true
+end-procedure
+
+
+procedure MDP_SolveModel(PrintReport: boolean )
+	if not built then
+		MDP_BuildModel
+	end-if
+	if not solved then
+		minimize(objective)
+		writeln("Problem Status    : ", getProblemStatus(getprobstat) )
+		writeln("Cost: ", strfmt(getobjval,10,4))
+	end-if	
+	!Compute optimal policy
+	forall (i in States) do 
+		pi(i) := sum(a in Actions) getsol(x(i,a))
+		val(i) := getdual(balance(i));
+		forall(a in Actions|pi(i)>0) do
+			y(i,a) := getsol(x(i,a)) / pi(i)
+			if y(i,a)>0 then 
+				Policy(i):=a 
+			end-if
+		end-do	
+	end-do
+	if PrintReport then 
+		MDP_PrintPolicy 
+	end-if
+	solved:= true
+end-procedure !end MDP_SolveModel
+	
+! Prints the policy to sdout
+procedure MDP_PrintPolicy	!Print Optimal Policy
+	write("Optimal Policy:")
+	forall (i in States|pi(i)>0) do 
+		writeln
+		write("In state '"+StateNames(i)+ "' ")
+		if useDisc then
+			write("(val="+ strfmt(val(i),8,4) +") ")
+		else
+			write("(prob= " + strfmt(pi(i),8,6)+") ")
+		end-if
+		write("take action '" + ActionNames(Policy(i)) +"'" )
+	end-do
+	writeln
+	!write pi to disk
+	diskdata(ETC_OUT+ETC_DENSE,"pi.csv",pi)
+end-procedure !end MDP_PrintPolicy
+
+
+function getProblemStatus(status: integer): string
+	case status  of
+		XPRS_OPT: returned := "Optimal found."
+		XPRS_UNF: returned := "Unfinished."
+		XPRS_INF: returned := "Unfeasible."
+		XPRS_UNB: returned := "Unbounded problem."
+	else returned      := "Unknown status."
+	end-case
+end-function 
+
+(!***********************
+*** end FILE: MDP.MOS *******
+*************************!)

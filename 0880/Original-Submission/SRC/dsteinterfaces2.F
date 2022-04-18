@@ -1,0 +1,157 @@
+MODULE DSTEINTERFACES2
+!
+!==============================================================================!
+!                                                                              !
+! This module defines interfaces for auxiliary subroutines.                    !
+!                                                                              !
+!==============================================================================!
+!
+!-------------------------------------------------------------------------------
+INTERFACE DSTEBNDGAP
+   SUBROUTINE DSTEBNDGAP( N, W, GAPMIN, ILO, IUO, VLO, VUO )
+      USE DSTEDEFINITIONS
+      INTEGER :: N
+      INTEGER, INTENT( IN ), OPTIONAL :: ILO, IUO 
+      REAL( KIND=PREC ) :: GAPMIN
+      REAL( KIND=PREC ), INTENT( IN ), OPTIONAL :: VLO, VUO
+      REAL( KIND=PREC ) :: W( * )
+   END SUBROUTINE DSTEBNDGAP
+END INTERFACE
+!-------------------------------------------------------------------------------
+INTERFACE DSTEMCCALLST
+   SUBROUTINE DSTEMCCALLST( NTEST, MACRO, LIST, CALLST )
+      USE GSTEDEFINITIONS
+      USE GSTEINTERFACES1, ONLY : GETSTRNG
+      CHARACTER( LEN=MACRO_NAME_LENGTH ) :: MACRO
+      LOGICAL :: CALLST( 8 )
+      INTEGER :: NTEST
+      TYPE( DATA_FROM_RECORD ), POINTER :: LIST
+   END SUBROUTINE DSTEMCCALLST
+END INTERFACE
+!-------------------------------------------------------------------------------
+INTERFACE DSTEMCDUMP
+   SUBROUTINE DSTEMCDUMP( MACRO, LIST, DUMP )
+      USE GSTEDEFINITIONS
+      USE GSTEINTERFACES1, ONLY : GETSTRNG
+      LOGICAL :: DUMP( 7 )
+      CHARACTER( LEN=MACRO_NAME_LENGTH ) :: MACRO
+      TYPE( DATA_FROM_RECORD ), POINTER :: LIST
+   END SUBROUTINE DSTEMCDUMP
+END INTERFACE 
+!-------------------------------------------------------------------------------
+INTERFACE DSTEMCEIGVAL
+   SUBROUTINE DSTEMCEIGVAL( ECOND, EDIST, ESIGN, ISEED, MAXN, NCASE, MACRO, T )
+      USE GSTEDEFINITIONS
+      USE DSTEDEFINITIONS
+      USE GSTEINTERFACES1, ONLY : GETINTGR, PARSER
+      CHARACTER( LEN=MACRO_NAME_LENGTH ) :: MACRO
+      INTEGER :: ECOND, EDIST, ESIGN, MAXN, NCASE
+      INTEGER :: ISEED( 4 )
+      TYPE( T_LIST ), POINTER :: T
+   END SUBROUTINE DSTEMCEIGVAL
+END INTERFACE 
+!-------------------------------------------------------------------------------
+INTERFACE DSTEMCEIGVALF
+   SUBROUTINE DSTEMCEIGVALF( ISEED, MAXN, NCASE, MACRO, LIST, EIGV, T )
+      USE GSTEDEFINITIONS
+      USE GSTEINTERFACES1, ONLY : GETSTRNG
+      USE DSTEDEFINITIONS
+      CHARACTER( LEN=MACRO_NAME_LENGTH ) :: MACRO
+      INTEGER :: MAXN, NCASE
+      INTEGER :: ISEED( 4 )
+      TYPE( DATA_FROM_RECORD ), POINTER :: LIST
+      TYPE( EIGV_LIST ), POINTER :: EIGV
+      TYPE( T_LIST ), POINTER :: T
+   END SUBROUTINE DSTEMCEIGVALF
+END INTERFACE 
+!-------------------------------------------------------------------------------
+INTERFACE DSTEMCEIGVI
+   SUBROUTINE DSTEMCEIGVI( MACRO, ILIU, NILIU )
+      USE GSTEDEFINITIONS
+      USE GSTEINTERFACES1, ONLY : GETINTGR, PARSER
+      USE DSTEDEFINITIONS
+      CHARACTER( LEN=MACRO_NAME_LENGTH ) :: MACRO
+      INTEGER :: NILIU
+      TYPE( I_LIST ), POINTER :: ILIU
+   END SUBROUTINE DSTEMCEIGVI
+END INTERFACE
+!-------------------------------------------------------------------------------
+INTERFACE DSTEMCEIGVV
+   SUBROUTINE DSTEMCEIGVV( MACRO, VLVU, NVLVU )
+      USE GSTEDEFINITIONS
+      USE GSTEINTERFACES1, ONLY : PARSER
+      USE DSTEDEFINITIONS
+      USE DSTEINTERFACES1, ONLY : GETDREAL
+      CHARACTER( LEN=MACRO_NAME_LENGTH ) :: MACRO
+      INTEGER :: NVLVU
+      TYPE( V_LIST ), POINTER :: VLVU
+   END SUBROUTINE DSTEMCEIGVV
+END INTERFACE
+!-------------------------------------------------------------------------------
+INTERFACE DSTEMCGLUED
+   SUBROUTINE DSTEMCGLUED( ECOND, EDIST, ESIGN, ISEED, MAXN, NCASE, MACRO, T )
+      USE GSTEDEFINITIONS
+      USE GSTEINTERFACES1, ONLY : GETINTGR, PARSER
+      USE DSTEDEFINITIONS
+      USE DSTEINTERFACES1, ONLY : GETDREAL
+      CHARACTER( LEN=MACRO_NAME_LENGTH ) :: MACRO
+      INTEGER :: ECOND, EDIST, ESIGN, MAXN, NCASE
+      INTEGER :: ISEED( 4 )
+      TYPE( T_LIST ), POINTER :: T
+   END SUBROUTINE DSTEMCGLUED
+END INTERFACE 
+!-------------------------------------------------------------------------------
+INTERFACE DSTEMCMATRIX
+   SUBROUTINE DSTEMCMATRIX( MAXN, NCASE, MACRO, T )
+      USE GSTEDEFINITIONS
+      USE GSTEINTERFACES1, ONLY : GETINTGR, PARSER
+      USE DSTEDEFINITIONS
+      CHARACTER( LEN=MACRO_NAME_LENGTH ) :: MACRO
+      INTEGER :: MAXN, NCASE
+      TYPE( T_LIST ), POINTER :: T
+   END SUBROUTINE DSTEMCMATRIX
+END INTERFACE 
+!-------------------------------------------------------------------------------
+INTERFACE DSTEMCMATRIXF
+   SUBROUTINE DSTEMCMATRIXF( MAXN, NCASE, MACRO, LIST, MTRX, T )
+      USE GSTEDEFINITIONS
+      USE GSTEINTERFACES1, ONLY : GETSTRNG
+      USE DSTEDEFINITIONS
+      CHARACTER( LEN=MACRO_NAME_LENGTH ) :: MACRO
+      INTEGER :: MAXN, NCASE
+      TYPE( DATA_FROM_RECORD ), POINTER :: LIST
+      TYPE( MTRX_LIST ), POINTER :: MTRX
+      TYPE( T_LIST ), POINTER :: T
+   END SUBROUTINE DSTEMCMATRIXF
+END INTERFACE 
+!-------------------------------------------------------------------------------
+INTERFACE DSTEMATGEN
+   SUBROUTINE DSTEMATGEN( N, D, E, HBANDA, ISEED, WORK, LWORK, &
+                          EIGV, MTRX, T, ICASE, DUMP )
+      USE GSTEDEFINITIONS
+      USE DSTEDEFINITIONS
+      LOGICAL :: DUMP( 7 )
+      INTEGER :: ISEED( 4 )
+      INTEGER :: HBANDA, ICASE, LWORK, N
+      REAL( KIND=PREC ) :: D( * ), E( * ), WORK( * )
+      TYPE( EIGV_LIST ), POINTER :: EIGV
+      TYPE( MTRX_LIST ), POINTER :: MTRX
+      TYPE( T_LIST ), POINTER :: T
+   END SUBROUTINE DSTEMATGEN
+END INTERFACE
+!-------------------------------------------------------------------------------
+INTERFACE DSTEPRNRSLT
+   SUBROUTINE DSTEPRNRSLT( N, M, W, Z, LDZ, RESULT, INFO, ITEST, ICASE, &
+                           DUMP, IINTO, ILO, IUO, VLO, VUO, GAPMINO )
+      USE GSTEDEFINITIONS
+      USE DSTEDEFINITIONS
+      LOGICAL :: DUMP( 7 )
+      INTEGER :: ICASE, INFO, ITEST, LDZ, M, N
+      INTEGER, INTENT( IN ), OPTIONAL :: IINTO, ILO, IUO
+      REAL( KIND=PREC ), INTENT( IN ), OPTIONAL :: VLO, VUO, GAPMINO
+      REAL( KIND=PREC ) :: RESULT( 3 ), W( * ), Z( LDZ, * )
+   END SUBROUTINE DSTEPRNRSLT
+END INTERFACE
+!-------------------------------------------------------------------------------
+!
+END MODULE DSTEINTERFACES2

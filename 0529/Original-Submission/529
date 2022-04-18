@@ -1,0 +1,261 @@
+C TEST DECK FOR MC13D ... RUNS ON RANDOM MATRICES ...                   MAN   10
+      INTEGER IP(50), ICN(1000), IOR(50), IB(51), IW(150), LENR(50)     MAN   20
+      INTEGER BLANK, EX, HOLD(100)                                      MAN   30
+      LOGICAL A(50,50)                                                  MAN   40
+      DATA BLANK, EX, NOT /1H ,1HX,1H0/                                 MAN   50
+      MM = 50                                                           MAN   60
+      LICN = 1000                                                       MAN   70
+C                                                                       MAN   80
+C MAIN LOOP.                                                            MAN   90
+   10 READ (5,99999) N, IPP                                             MAN  100
+      IF (N.EQ.0) GO TO 100                                             MAN  110
+      WRITE (6,99998) N, IPP                                            MAN  120
+      DO 30 J=1,N                                                       MAN  130
+        DO 20 I=1,N                                                     MAN  140
+          A(I,J) = .FALSE.                                              MAN  150
+   20   CONTINUE                                                        MAN  160
+        A(J,J) = .TRUE.                                                 MAN  170
+   30 CONTINUE                                                          MAN  180
+      IF (IPP.EQ.0) GO TO 60                                            MAN  190
+      DO 50 K9=1,IPP                                                    MAN  200
+C THESE STATEMENTS SHOULD BE REPLACED BY CALLS TO YOUR FAVOURITE        MAN  210
+C     RANDOM NUMBER GENERATOR TO PLACE TWO PSEUDO-RANDOM NUMBERS        MAN  220
+C     BETWEEN 1 AND N IN THE VARIABLES I AND J.                         MAN  230
+   40   CALL FA01BS(N, I)                                               MAN  240
+        CALL FA01BS(N, J)                                               MAN  250
+        IF (A(I,J)) GO TO 40                                            MAN  260
+        A(I,J) = .TRUE.                                                 MAN  270
+   50 CONTINUE                                                          MAN  280
+C SETUP CONVERTS MATRIX A(I,J) TO REQUIRED SPARSITY-ORIENTED            MAN  290
+C     STORAGE FORMAT.                                                   MAN  300
+   60 CALL SETUP(N, A, MM, IP, ICN, LICN, LENR)                         MAN  310
+      CALL MC13D(N, ICN, LICN, IP, LENR, IOR, IB, NUM, IW)              MAN  320
+C OUTPUT REORDERED MATRIX WITH BLOCKING TO IMPROVE CLARITY.             MAN  330
+      IF (NUM.EQ.1) WRITE (6,99997) NUM                                 MAN  340
+      IF (NUM.NE.1) WRITE (6,99996) NUM                                 MAN  350
+      IB(NUM+1) = N + 1                                                 MAN  360
+      INDEX = 100                                                       MAN  370
+      IBLOCK = 1                                                        MAN  380
+      DO 90 I=1,N                                                       MAN  390
+        DO 70 IJ=1,INDEX                                                MAN  400
+          HOLD(IJ) = BLANK                                              MAN  410
+   70   CONTINUE                                                        MAN  420
+        IF (I.EQ.IB(IBLOCK)) WRITE (6,99995)                            MAN  430
+        IF (I.EQ.IB(IBLOCK)) IBLOCK = IBLOCK + 1                        MAN  440
+        JBLOCK = 1                                                      MAN  450
+        INDEX = 0
+        DO 80 J=1,N
+          IF (J.EQ.IB(JBLOCK)) INDEX = INDEX + 1
+          IF (J.EQ.IB(JBLOCK)) HOLD(INDEX) = BLANK
+          IF (J.EQ.IB(JBLOCK)) JBLOCK = JBLOCK + 1
+          INDEX = INDEX + 1
+          II = IOR(I)
+          JJ = IOR(J)
+          IF (A(II,JJ)) HOLD(INDEX) = EX
+          IF (.NOT.A(II,JJ)) HOLD(INDEX) = NOT
+   80   CONTINUE
+        WRITE (6,99994) HOLD
+   90 CONTINUE
+      WRITE (6,99993) (IB(I),I=1,NUM)
+      GO TO 10
+C
+C FORMAT STATEMENTS.
+  100 STOP
+99999 FORMAT (2I4)
+99998 FORMAT (1H1, 20H MATRIX IS OF ORDER , I3, 9H AND HAS , I3,
+     *  23H OFF-DIAGONAL NON-ZEROS)
+99997 FORMAT (///31H THE REORDERED MATRIX WHICH HAS, I3, 10H BLOCK IS ,
+     *  11HOF THE FORM/)
+99996 FORMAT (///31H THE REORDERED MATRIX WHICH HAS, I3, 10H BLOCKS IS,
+     *  12H OF THE FORM/)
+99995 FORMAT (3X)
+99994 FORMAT (1X, 100A1)
+99993 FORMAT (/46H THE STARTING POINT FOR EACH BLOCK IS GIVEN BY//
+     *  20(2X, I4))
+      END
+      SUBROUTINE SETUP(N, A, MM, IP, ICN, LICN, LENR)                   SET   10
+      LOGICAL A(MM,MM)
+      INTEGER IP(N), ICN(LICN), LENR(N)
+      DO 10 I=1,N
+        LENR(I) = 0
+   10 CONTINUE
+      IND = 1
+      DO 30 I=1,N
+        IP(I) = IND
+        DO 20 J=1,N
+          IF (.NOT.A(I,J)) GO TO 20
+          LENR(I) = LENR(I) + 1
+          ICN(IND) = J
+          IND = IND + 1
+   20   CONTINUE
+   30 CONTINUE
+      RETURN
+      END
+C I IS THE IBM VERSION                                               SI/MC1   10
+C S IS THE STANDARD FORTRAN VERSION                                     MC1   20
+C                                                                       MC1   30
+      SUBROUTINE MC13D(N, ICN, LICN, IP, LENR, IOR, IB, NUM, IW)        MC1   40
+C
+C DESCRIPTION OF PARAMETERS.
+C INPUT VARIABLES  .... N,ICN,LICN,IP,LENR.
+C OUTPUT VARIABLES  IOR,IB,NUM.
+C
+C N   ORDER OF THE MATRIX.
+C ICN ARRAY CONTAINING THE COLUMN INDICES OF THE NON-ZEROS.  THOSE
+C     BELONGING TO A SINGLE ROW MUST BE CONTIGUOUS BUT THE ORDERING
+C     OF COLUMN INDICES WITHIN EACH ROW IS UNIMPORTANT AND WASTED
+C     SPACE BETWEEN ROWS IS PERMITTED.
+C LICN  LENGTH OF ARRAY ICN.
+C IP  IP(I), I=1,2,...N, IS THE POSITION IN ARRAY ICN OF THE FIRST
+C     COLUMN INDEX OF A NON-ZERO IN ROW I.
+C LENR  LENR(I) IS THE NUMBER OF NON-ZEROS IN ROW I, I=1,2,...N.
+C IOR  IOR(I) GIVES THE POSITION IN THE ORIGINAL ORDERING OF THE ROW
+C     OR COLUMN WHICH IS IN POSITION I IN THE PERMUTED FORM, I=1,2,..N.
+C IB  IB(I) IS THE ROW NUMBER IN THE PERMUTED MATRIX OF THE BEGINNING
+C     OF BLOCK I, I=1,2,...NUM.
+C NUM NUMBER OF BLOCKS FOUND.
+C IW  WORK ARRAY .. SEE LATER COMMENTS.
+C
+      INTEGER IP(N)
+C     INTEGER*2 ICN(LICN),LENR(N),IOR(N),IB(N),IW(N,3)                I/
+      INTEGER ICN(LICN), LENR(N), IOR(N), IB(N), IW(N,3)
+      CALL MC13E(N, ICN, LICN, IP, LENR, IOR, IB, NUM, IW(1,1),
+     *  IW(1,2), IW(1,3))
+      RETURN
+      END
+      SUBROUTINE MC13E(N, ICN, LICN, IP, LENR, ARP, IB, NUM, LOWL,      MC1   10
+     *  NUMB, PREV)
+      INTEGER STP, DUMMY
+      INTEGER IP(N)
+C
+C ARP(I) IS ONE LESS THAN THE NUMBER OF UNSEARCHED EDGES LEAVING
+C     NODE I.  AT THE END OF THE ALGORITHM IT IS SET TO A
+C     PERMUTATION WHICH PUTS THE MATRIX IN BLOCK LOWER
+C     TRIANGULAR FORM.
+C IB(I) IS THE POSITION IN THE ORDERING OF THE START OF THE ITH
+C     BLOCK.  IB(N+1-I) HOLDS THE NODE NUMBER OF THE ITH NODE
+C     ON THE STACK.
+C LOWL(I) IS THE SMALLEST STACK POSITION OF ANY NODE TO WHICH A PATH
+C     FROM NODE I HAS BEEN FOUND.  IT IS SET TO N+1 WHEN NODE I
+C     IS REMOVED FROM THE STACK.
+C NUMB(I) IS THE POSITION OF NODE I IN THE STACK IF IT IS ON
+C     IT, IS THE PERMUTED ORDER OF NODE I FOR THOSE NODES
+C     WHOSE FINAL POSITION HAS BEEN FOUND AND IS OTHERWISE ZERO.
+C PREV(I) IS THE NODE AT THE END OF THE PATH WHEN NODE I WAS
+C     PLACED ON THE STACK.
+C     INTEGER*2 ICN(LICN),LENR(N),ARP(N),IB(N),LOWL(N),NUMB(N),       I/
+C    1PREV(N)                                                         I/
+      INTEGER ICN(LICN), LENR(N), ARP(N), IB(N), LOWL(N), NUMB(N),
+     *  PREV(N)
+C
+C
+C   ICNT IS THE NUMBER OF NODES WHOSE POSITIONS IN FINAL ORDERING HAVE
+C     BEEN FOUND.
+      ICNT = 0
+C NUM IS THE NUMBER OF BLOCKS THAT HAVE BEEN FOUND.
+      NUM = 0
+      NNM1 = N + N - 1
+C
+C INITIALIZATION OF ARRAYS.
+      DO 10 J=1,N
+        NUMB(J) = 0
+        ARP(J) = LENR(J) - 1
+   10 CONTINUE
+C
+C
+      DO 90 ISN=1,N
+C LOOK FOR A STARTING NODE
+        IF (NUMB(ISN).NE.0) GO TO 90
+        IV = ISN
+C IST IS THE NUMBER OF NODES ON THE STACK ... IT IS THE STACK POINTER.
+        IST = 1
+C PUT NODE IV AT BEGINNING OF STACK.
+        LOWL(IV) = 1
+        NUMB(IV) = 1
+        IB(N) = IV
+C
+C THE BODY OF THIS LOOP PUTS A NEW NODE ON THE STACK OR BACKTRACKS.
+        DO 80 DUMMY=1,NNM1
+          I1 = ARP(IV)
+C HAVE ALL EDGES LEAVING NODE IV BEEN SEARCHED.
+          IF (I1.LT.0) GO TO 30
+          I2 = IP(IV) + LENR(IV) - 1
+          I1 = I2 - I1
+C
+C LOOK AT EDGES LEAVING NODE IV UNTIL ONE ENTERS A NEW NODE OR
+C     ALL EDGES ARE EXHAUSTED.
+          DO 20 II=I1,I2
+            IW = ICN(II)
+C HAS NODE IW BEEN ON STACK ALREADY.
+            IF (NUMB(IW).EQ.0) GO TO 70
+C UPDATE VALUE OF LOWL(IV) IF NECESSARY.
+            IF (LOWL(IW).LT.LOWL(IV)) LOWL(IV) = LOWL(IW)
+   20     CONTINUE
+C
+C THERE ARE NO MORE EDGES LEAVING NODE IV.
+          ARP(IV) = -1
+C IS NODE IV THE ROOT OF A BLOCK.
+   30     IF (LOWL(IV).LT.NUMB(IV)) GO TO 60
+C
+C ORDER NODES IN A BLOCK.
+          NUM = NUM + 1
+          IST1 = N + 1 - IST
+          LCNT = ICNT + 1
+C PEEL BLOCK OFF THE TOP OF THE STACK STARTING AT THE TOP AND
+C     WORKING DOWN TO THE ROOT OF THE BLOCK.
+          DO 40 STP=IST1,N
+            IW = IB(STP)
+            LOWL(IW) = N + 1
+            ICNT = ICNT + 1
+            NUMB(IW) = ICNT
+            IF (IW.EQ.IV) GO TO 50
+   40     CONTINUE
+   50     IST = N - STP
+          IB(NUM) = LCNT
+C ARE THERE ANY NODES LEFT ON THE STACK.
+          IF (IST.NE.0) GO TO 60
+C HAVE ALL THE NODES BEEN ORDERED.
+          IF (ICNT.LT.N) GO TO 90
+          GO TO 100
+C
+C BACKTRACK TO PREVIOUS NODE ON PATH.
+   60     IW = IV
+          IV = PREV(IV)
+C UPDATE VALUE OF LOWL(IV) IF NECESSARY.
+          IF (LOWL(IW).LT.LOWL(IV)) LOWL(IV) = LOWL(IW)
+          GO TO 80
+C
+C PUT NEW NODE ON THE STACK.
+   70     ARP(IV) = I2 - II - 1
+          PREV(IW) = IV
+          IV = IW
+          IST = IST + 1
+          LOWL(IV) = IST
+          NUMB(IV) = IST
+          K = N + 1 - IST
+          IB(K) = IV
+   80   CONTINUE
+C
+   90 CONTINUE
+C
+C
+C PUT PERMUTATION IN THE REQUIRED FORM.
+  100 DO 110 I=1,N
+        II = NUMB(I)
+        ARP(II) = I
+  110 CONTINUE
+      RETURN
+      END
+   1   0
+   2   1
+   2   2
+   3   3
+   4   4
+   5  10
+  10  10
+  10  20
+  20  20
+  20  50
+  50  50
+  50 200
+00000000

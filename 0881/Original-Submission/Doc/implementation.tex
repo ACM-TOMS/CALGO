@@ -1,0 +1,607 @@
+\newcommand{\verba}[1]{\texttt{#1}}
+\newcommand{\Paramlabel}[1]{\mbox{\texttt{#1}}\hfill}
+\newenvironment{listparam}
+ {\begin{list}{}
+     {\renewcommand{\makelabel}{\Paramlabel}
+        \setlength{\labelwidth}{2.0cm}
+        \setlength{\itemsep}{0.05cm}
+        \setlength{\leftmargin}{2.1cm}
+     }
+  }
+ {\end{list}}
+
+\section{Implementation of FGMRES}\label{sec:interf}
+
+%
+\subsection{The user interface}
+%
+  For the sake of simplicity and portability, the FGMRES implementation
+is developed in Fortran 77 and is based on the reverse communication mechanism
+\begin{itemize}
+  \item for implementing the numerical kernels that depend on the data
+   structure selected to represent the matrix $A$ and the preconditioners,
+\item for performing the dot products.
+\end{itemize}
+This last point has been implemented to allow the use of FGMRES
+in a parallel distributed memory environment, where only the user
+knows how the data has been distributed. 
+%(we refer to~\cite{FRA.GIR.KHA.98} where  examples of parallel distributed performance are reported).
+We have one driver per arithmetic, and we use the BLAS and LAPACK
+terminology that is:
+\begin{center}
+\begin{tabularx}{\linewidth}{l X}
+ \texttt{DRIVE\_SFGMRES} & for real single precision arithmetic computation, \\
+ \texttt{DRIVE\_DFGMRES} & for real double precision arithmetic computation, \\
+ \texttt{DRIVE\_CFGMRES} & for complex single precision arithmetic computation,\\
+ \texttt{DRIVE\_ZFGMRES} & for complex double precision arithmetic computation. \\
+\end{tabularx}
+\end{center}
+Finally, to hide the numerical method from the user as much as possible,
+only a few parameters are required by the drivers, whose interfaces are
+similar for all arithmetics.
+Below we present the interface for the real double precision driver:
+\begin{verbatim}
+     CALL DRIVE_DFGMRES(N,NLOC,M,LWORK,WORK,IRC,ICNTL,CNTL,INFO,RINFO)
+\end{verbatim}
+
+
+
+\begin{listparam}
+ \item[N]       is an {INTEGER} variable that must be set by the user to
+                the order $n$ of the matrix $A$.
+                It is not altered by the subroutine.
+ \item[NLOC]    is an {INTEGER} variable that must be set by the user to
+                the size of the subset of entries of $b$ and $x$ that are
+                allocated to the calling process in a distributed memory
+                environment (See Figure~\ref{fig:distrib} for a illustration of the
+                definition of this parameter).
+                For serial or shared memory computers \texttt{NLOC} should be
+                equal to \texttt{N}.
+                It is not altered by the subroutine.
+ \item[M]       is an {INTEGER} variable that must be set by the user to
+                the projection size $m$ (restart parameter).
+                This parameter controls the amount of memory required for
+                storing the basis $V_m$ and $Z_m$  as well as the Hessenberg matrix.
+                It is not altered by the subroutine except if it was set by the
+                user to a value larger than \texttt{N} or to a value too large
+                for \texttt{LWORK}.
+                In the first case, it would be reset to  \texttt{N}.
+                In the latter case, it would be reset to the
+                maximum possible value  permitted by \texttt{LWORK}. 
+                \toms{
+                From a rate of convergence point of view, it is generally observed
+                that the larger \texttt{M} the faster the convergence.
+                } 
+ \item[LWORK]   is an INTEGER variable that must be set by the user to the
+                size of the workspace \verba{WORK}. 
+                \verba{LWORK} must be greater than or equal to \verba{LWORK\_min}:  
+ \item[~]       \hspace*{0.5cm}\verba{LWORK\_min = M*M+M*(2*NLOC+5)+5*NLOC+1} if \verba{ICNTL(7)=1},
+ \item[~]       \hspace*{0.5cm} \verba{LWORK\_min = M*M+M*(2*NLOC+5)+6*NLOC+1} otherwise.
+ \item[~]       \hspace*{0.5cm}The above value of \verba{LWORK\_min} should be incremented by \verba{M} if 
+               \verba{ICNTL(4)=2} or \verba{ICNTL(4)=3}.
+ \item[~]       It is not altered by the subroutine.
+ \item[WORK]    is a SINGLE/DOUBLE PRECISION REAL/COMPLEX array of length
+                \verba{LWORK}.
+                The first \verba{NLOC} entries contain the initial guess
+                $x_0$ in input and the computed approximation of the
+                solution in output.
+                The following \verba{NLOC} entries
+                contain the right-hand side $b$ of the linear
+                system. The remaining entries are
+                used as workspace by the subroutine.
+  \item[IRC]    is an INTEGER array of length 5 that needs not be set by the
+                user.
+                This array controls the reverse communication. Details of
+                the reverse communication management are given in
+                Section~\ref{sec:reverse}.
+  \item[ICNTL]  is an INTEGER array of length 7 that contains control
+                parameters that must be set by the user. Details of the
+                control parameters are given in Section~\ref{sec:controlPar}.
+  \item[CNTL]   is a SINGLE/DOUBLE PRECISION REAL array of length 3 that
+                contains control parameters that must be set by the user.
+                Details of the control parameters are given in
+                Section~\ref{sec:controlPar}.
+  \item[INFO]   is an INTEGER array of length 3 which contains information on
+                the reasons of exiting FGMRES. Details are given in
+                Section~\ref{sec:infoPar}.
+  \item[RINFO]  is a SINGLE/DOUBLE PRECISION REAL which
+                contains the backward error for the
+                linear systems.
+\end{listparam}
+
+In the figure below we illustrate how the parameter \verba{NLOC} and \verba{N} should be
+set for the parallel solution of a linear system in a distributed memory environment using
+2~processors.
+We assume that $(x_1, b_1)$ of size $n_1$ ($(x_2, b_2)$ of size $n_2$) are stored in the 
+local memory of the processor $P_1$ (resp. $P_2$).
+\begin{figure}[!htb]
+ \begin{center}
+ \fbox{
+  $
+  \left (
+    \begin{array}{cc} A_{11} & A_{12} \\ A_{21} & A_{22} \end{array}
+  \right )
+  \left ( \begin{array}{c} x_1 \\ x_2 \end{array} \right )
+  = 
+  \left ( \begin{array}{c} b_1 \\ b_2 \end{array} \right )
+  \quad
+    \begin{array}{c} 
+      \mbox{\rm on }P_1 : \; \verba{NLOC}=n_1, \verba{N} = n_1+n_2    \\
+      \mbox{\rm on }P_2 : \; \verba{NLOC}=n_2, \verba{N} = n_1+n_2    \\
+    \end{array}
+  $ 
+ }
+ \caption{\label{fig:distrib} Definition of \verba{NLOC} and \verba{N} on 2 processors 
+    in a parallel distributed environement}
+ \end{center}
+\end{figure}
+%
+%
+\subsection{The reverse communication management}\label{sec:reverse}
+%
+The INTEGER array \verba{IRC} allows the implementation of the reverse
+communication.
+None of its entries must be set by the user.
+
+On each exit, \verba{IRC(1)} indicates the action that must be performed
+by the user before invoking the driver again.
+Possible values of \verba{IRC(1)} and the associated actions are as follows:
+\begin{listparam}
+  \item[~0] Normal exit. 
+  \item[~1] The user must perform the matrix-vector product 
+            $z \leftarrow A x$.
+  \item[~3] The user must perform the right preconditioning
+            $z \leftarrow M_i^{-1} x$.
+  \item[~4] The user must perform one or more scalar products
+            $z \leftarrow x^Hy$.
+\end{listparam}
+ Notice that the value 2 has been skipped to be consistent with the implementation
+we proposed for GMRES in~\cite{fggl:03,fggl:05}.
+
+On each exit with \verba{IRC(1) >}~0, \verba{IRC(2)} indicates the index in
+\verba{WORK} where $x$ should be read and  \verba{IRC(4)} indicates the
+index in \verba{WORK} where $z$ should be written.\\
+
+When \verba{IRC(1) =}~4, \verba{IRC(5)} gives the number of scalar products
+to be performed. In this case, $x$ denotes an array of size $\verba{NLOC} \times
+\verba{IRC(5)}$ stored column-wise (i.e. with a leading dimension equal to $\verba{NLOC}$).
+\verba{IRC(3)} indicates the index in \verba{WORK} where $y$ should be read.
+This programming trick permits one to implement the  dot products with a level~2 BLAS
+routine: this happens when the orthogonalization scheme is either CGS or
+ICGS. 
+Furthermore, on distributed memory computers, this allows one to reduce the number
+of global synchronizations/reductions and alleviate the cost of the dot product
+computations.
+
+Finally, \verba{IRC(6)} indicates the index in \verba{WORK} where a free workspace of size
+\verba{IRC(7)} is available because it is not yet used by the solver.
+We allocate the space required to store $V_m$ and $Z_m$ 
+at the end of the workspace, as depicted in Figure~\ref{fig:memManagemt}.
+\begin{figure}[htb]
+\centerline{\epsfig{figure=memory.eps,angle=-0,width=12cm} }
+\caption{\label{fig:memManagemt} Management of the workspace: picture at the 
+$i$-th iteration of FGMRES.}
+\end{figure}
+We refer to Section~\ref{sec:example} for an example of use of the driver
+routine.
+%
+\subsection{The control parameters}\label{sec:controlPar}
+%
+The entries of the array \verba{ICNTL} control the execution of the
+\verba{DRIVE\_FGMRES} subroutine.
+All entries of \verba{ICNTL} are input parameters and some of them
+have a default value set by the routine \verba{INIT\_FGMRES}. \\
+%
+\begin{listparam}
+\item[ICNTL(1)] is the stream number for the error messages {\bf (Default is 6)}. \\
+     Must be a strictly positive value.
+ \item[ICNTL(2)] is the stream number for the warning messages {\bf (Default is 6)}. \\
+     Must be greater than or equal to zero.
+     A zero value implies that the warning messages will not be displayed.
+ \item[ICNTL(3)] is the stream number for the convergence history {\bf (Default is 0)}. \\
+     Must be greater than or equal to zero.
+     A zero value implies that the convergence history will not be displayed.
+ \item[ICNTL(4)] determines which orthogonalization scheme to apply {\bf (Default is 0, i.e. MGS)}.
+ \item[ICNTL(5)] controls whether the user wishes to supply an initial
+     guess of the solution vector
+     {\bf (Default is 0)}. \\
+      Must be equal to either 0 or 1.
+     If ICNTL(5)=0, the initial guess is set to zero.
+ \item[ICNTL(6)] is the maximum number of iterations (accumulated over the
+                 restarts) allowed
+       \trpa{{\bf (No Default:  Must be set by the user)}.}
+       \toms{{\bf (Default is arbitrary 100)}.}
+       \\
+      Must be larger than 0.
+ \item[ICNTL(7)] controls the strategy to compute the residual at the restart
+              {\bf (Default is 1)}. \\
+       Must be equal to either 0 or 1.
+\end{listparam}
+
+Possible values for \verba{ICNTL(4)} are 
+\begin{listparam}
+  \item[~0] modified Gram-Schmidt orthogonalization (MGS) {\bf (Default)},
+  \item[~1] iterative selective modified Gram-Schmidt orthogonalization (IMGS),
+  \item[~2] classical Gram-Schmidt orthogonalization (CGS),
+  \item[~3] iterative selective classical Gram-Schmidt orthogonalization (ICGS).
+\end{listparam}
+Possible values for \verba{ICNTL(7)} are
+\begin{listparam}
+  \item[~0] A recurrence formula is used to compute the residual at each restart, except if
+       the convergence was detected using the Arnoldi residual during the previous
+       restart
+  \item[~1] The residual is explicitly computed using a matrix-vector product {\bf (Default)}.
+\end{listparam}
+
+ 
+The entries of the \verba{CNTL} array define the tolerance and the
+normalizing factors \trpa{(see Section~\ref{sec:stop})} that control the 
+execution of the algorithm:
+\begin{listparam}
+ \item[CNTL(1)]  is the convergence tolerance for the backward error
+      {\bf (Default is $10^{-5}$)}. \\
+      Must be greater than or equal to zero.
+ \item[CNTL(2)]  is the normalizing factor $\alpha$
+      {\bf (Default is 0)}.  \\
+      Must be greater than or equal to zero.
+ \item[CNTL(3)]  is the normalizing factor $\beta$
+      {\bf (Default is 0)}. \\
+      Must be greater than or equal to zero.
+\end{listparam}
+Default values are used when the user's input
+is $\alpha = \beta = 0$;
+that is $\beta = \neuc{b}$ respectively.
+
+%
+%
+\subsection{The information  parameters}\label{sec:infoPar}
+%
+Once \verba{IRC(1) = }~0, the entries of the array \verba{INFO} explain 
+the circumstances under which FGMRES was exited.
+All entries of \verba{INFO} are output parameters. \\
+
+Possible values for \verba{INFO(1)} are 
+\begin{listparam}
+  \item[~0] normal exit. Convergence has been observed.
+  \item[-1] erroneous value $n < 1$.
+  \item[-2] erroneous value $m < 1$.
+  \item[-3] \verba{LWORK} too small.
+  \item[-4] convergence not achieved after \verba{ICNTL(6)} iterations.
+\end{listparam}  
+
+If \verba{INFO(1) = 0}, then \verba{INFO(2)} contains the number of
+iterations performed until achievement of the convergence and
+\verba{INFO(3)} gives the minimal size for the workspace.
+If \verba{INFO(1) = -3}, then \verba{INFO(2)} contains the minimal size
+necessary for the workspace. \\
+
+If \verba{INFO(1) = 0}, then \verba{RINFO} contains the backward error
+for the linear system.
+%
+\subsection{Initialization of the parameters}
+%
+An initialization routine is available to the user for each arithmetic:
+\begin{center}
+\begin{tabularx}{\linewidth}{l X}
+ \texttt{INIT\_SFGMRES} & for real single precision arithmetic computation, \\
+ \texttt{INIT\_DFGMRES} & for double precision arithmetic computation, \\
+ \texttt{INIT\_CFGMRES} & for complex single precision arithmetic
+                        computation,\\
+ \texttt{INIT\_ZFGMRES} & for complex double precision arithmetic computation.
+\\
+\end{tabularx}
+\end{center}
+These routines set the input control parameters \verba{ICNTL} and
+\verba{CNTL} defined above to default values.
+The generic interface is
+\begin{verbatim}
+       CALL INIT_FGMRES(ICNTL,CNTL)
+\end{verbatim}
+The default value for
+\begin{listparam}
+ \item[ICNTL(1)]  is 6,
+ \item[ICNTL(2)]  is 6,
+ \item[ICNTL(3)]  is 0: no convergence history,
+ \item[ICNTL(4)]  is 0: MGS is used,
+ \item[ICNTL(5)]  is 0: default initial guess $x_0 = 0$,
+ \trpa{
+   \item[ICNTL(6)]  is -1: the user must specify explicitly
+                  the maximum number of iterations,
+ }
+ \toms{
+   \item[ICNTL(6)]  is arbitrary set to 100,
+ }
+ \item[ICNTL(7)]  is 1: the residual is explicitly computed at each restart,
+ \item[CNTL(1)]   is $1$,
+ \item[CNTL(2)]   is $0$,
+ \item[CNTL(3)]   is $0$.
+\end{listparam}  
+%
+\subsection{Automatic correction for invalid parameters}
+%
+   To avoid an exit with an error when some parameters have been wrongly set
+by the user, we try as far as possible to correct them and
+generate a warning message in the warning stream.
+Such a situation might occur when:
+\begin{listparam}
+  \item[M] is set to a value larger than \texttt{N}, we set it to \texttt{N}.
+  \item[LWORK] is too small for the required \texttt{M}, we then compute the largest
+    possible value of M allowed for that size of the workspace.
+    If \texttt{M} is lower than 1, we exit with an error.
+  \item[ICNTL(4)] is set to an invalid value, we set it back to the default.
+  \item[ICNTL(5)] is set to an invalid value, we set it back to the default.
+  \trpa{
+    \item[ICNTL(6)] is set to an invalid value, we set it to \texttt{N}.
+  }
+  \item[ICNTL(7)] is set to an invalid value, we set it back to the default.
+\end{listparam}
+
+%
+\subsection{Unrecoverable invalid parameters}
+%
+For some invalid values of the input parameters we cannot guess what could be
+a relevant alternative and consequently we output an error message and
+return to the calling program.
+Such a situation might occur when:
+\begin{listparam}
+  \item[N] is set to a value smaller than 1.
+  \item[M] is set to a value smaller than 1.
+  \item[LWORK] is too small to enable any FGMRES iteration.
+\end{listparam}
+
+%
+%
+\trpa{
+ \section{Availability of the software}
+}
+For the sake of maintenance of the code, only one source file exists
+and is used to generate the source code for each of the four arithmetics.
+The final code is written in Fortran 77 and makes calls to BLAS
+routines, as indicated in Table~\ref{tab:blas}.
+%
+\trpa{
+The code  is free for non-commercial use only.
+The source code is available from the WEB at the URL\\
+\centerline{\tt http://www.cerfacs.fr/algor/}
+together with the software license agreement and a set of example codes.
+}
+%
+\begin{table}[!ht]
+\renewcommand{\arraystretch}{1.3}
+\begin{center}
+\begin{tabular}{|l|l|l|l|}
+\hline
+\multicolumn{2}{|c|}{Simple precision} & \multicolumn{2}{c|}{Double
+precision} \\
+\hline
+\multicolumn{1}{|c|}{real} & \multicolumn{1}{c|}{complex} &
+\multicolumn{1}{c|}{real} & \multicolumn{1}{c|}{complex} \\
+\hline
+%   SDOT   &  CDOTC &    DDOT    &   ZDOTC   \\
+%   SSCAL  &  CSSCAL&    DSCAL   &   ZDSCAL   \\
+    SAXPY  &  CAXPY &    DAXPY   &   ZAXPY    \\
+    SNRM2  &  SCNRM2&    DNRM2   &   DZNRM2    \\
+    SCOPY  &  CCOPY &    DCOPY   &   ZCOPY    \\
+    SGEMV  &  CGEMV &    DGEMV   &   ZGEMV    \\
+    SROT   &  CROT  &    DROT    &   ZROT     \\
+    SROTG  &  CROTG &    DROTG   &   ZROTG    \\
+    STRSV  &  CTRSV &    DTRSV   &   ZTRSV    \\
+\hline
+\end{tabular}
+\caption{BLAS routines called in GMRES.}
+\label{tab:blas}
+\end{center}
+\end{table}
+We should also mention that a free implementation of 
+GMRES~\cite{fggl:03,fggl:05} is also
+available at the same URL address.
+
+\section{An example of use}\label{sec:example}
+%
+
+We give below an example of use of the FGMRES driver. 
+Here the preconditioner is the GMRES method implemented as 
+in~\cite{fggl:03,fggl:05}.
+Note that, in this example, we have chosen not to allocate extra memory for
+the preconditioner: when the preconditioner is needed for FGMRES, we
+compute how many steps of GMRES are possible with the part of the workspace
+which is still free.
+The inner GMRES can be itself preconditioned: in this example we use a simple a
+Jacobi (left) preconditioner.
+
+
+
+\begin{landscape}
+\begin{small}
+\setlength{\columnseprule}{0.5pt}
+\begin{multicols}{2}
+\begin{verbatim}
+   program validation
+*
+   integer lda, ldstrt, lwork
+   parameter (lda= 1000, ldstrt = 60)
+   parameter (lwork= ldstrt**2 + ldstrt*(2*lda+5) 
+  &              + 6*lda + ldstrt)
+*
+   integer i, j, n, m, m2
+   integer revcom, colx, coly, colz, nbscal
+   integer revcom2, colx2, coly2, colz2, nbscal2
+   integer irc(7), icntl(7), info(3)
+   integer irc2(5), icntl2(8), info2(3)
+*
+   integer matvec, precondLeft, precondRight, dotProd
+   parameter (matvec=1, precondLeft=2)
+   parameter (precondRight=3, dotProd=4)
+*
+   integer nout
+*
+   complex*16  a(lda,lda), work(lwork)
+   real*8  cntl(3), rinfo, rn
+   real*8  cntl2(5), rinfo2(2)
+*
+   complex*16 ZERO, ONE
+   parameter (ZERO = (0.0d0, 0.0d0), ONE = (1.0d0, 0.0d0))
+*
+* Initialize the matrix
+*
+    ....
+* Set the right-hand side b such that b_i = 1+sqrt(-1)
+      do i = 1,n
+        work(i+n) = (1.d0,1.d0)
+      enddo
+*
+*****************************************************
+* Initialize the control parameters to default values
+*****************************************************
+   call init_zfgmres(icntl,cntl)
+   call init_zgmres(icntl2,cntl2)
+*
+**********************************
+*c Tune some parameters for FGMRES
+**********************************
+*
+* Tolerance
+   cntl(1) = 1.d-9
+* Save the convergence history in file fort.20
+   icntl(3) = 20
+* ICGS orthogonalization
+   icntl(4) = 3
+* Maximum number of iterations
+   icntl(6) = 100
+*
+*********************************
+*c Tune some parameters for GMRES
+*********************************
+*
+* Tolerance
+   cntl2(1) = 5.d-2
+* warning output stream
+   icntl2(2) = 0
+* Save the convergence history in file fort.20
+   icntl2(3) = 30
+* No preconditioning
+   icntl2(4) = 0
+   print *,' Inner GMES precond 0-none, 1:left, 2:right '
+   read(*,*) icntl2(4)
+* ICGS orthogonalization
+   icntl2(5) = 3
+* Maximum number of iterations
+   icntl2(7) = 6
+   print *,' Max Inner GMES iterations '
+   read(*,*) icntl2(7)
+*
+*****************************************
+** Reverse communication implementation
+*****************************************
+*
+10  call drive_zfgmres(n,n,m,lwork,work,
+  &         irc,icntl,cntl,info,rinfo)
+    revcom = irc(1)
+    colx   = irc(2)
+    coly   = irc(3)
+    colz   = irc(4)
+    nbscal = irc(5)
+*
+    if (revcom.eq.matvec) then
+* perform the matrix-vector product for FGMRES 
+*     work(colz) <-- A * work(colx)
+      call zgemv('N',n,n,ONE,a,lda,work(colx),1,
+  &            ZERO,work(colz),1)
+      goto 10
+*
+    else if (revcom.eq.precondRight) then
+* perform the right preconditioning for the FGMRES iteration
+*
+* Check if there is enough space left in the workspace 
+* to perform  few steps of GMRES as right preconditioner
+         rn = float(n)
+         rx         = rn + 5.0
+         rc         = 5.0*rn + 1 - float(irc(7))
+*
+* Update the linear part of the second order equation to 
+* be solved to compute the largest possible restart
+         if ((icntl2(5).eq.2).or.(icntl2(5).eq.3)) then
+           rx = rx + 1
+         endif
+* Update the constant part of the second order equation to 
+* be solved to compute the largest possible restart
+*             
+         if (icntl2(8).eq.0) then
+           rc = rc + rn
+         endif
+         m2 = ifix((-rx+sqrt(rx**2-4.0*rc))/2.0)
+*
+      if (m2.gt.0) then
+* copy colx in the workspace (right hand side location) of 
+* the inner gmres iteration
+        call zcopy(n,work(colx),1,work(irc(6)+n),1)
+ 20     call drive_zgmres(n,n,m2,irc(7),
+  &             work(irc(6)),irc2,icntl2,cntl2,info2,rinfo2)
+        revcom2 = irc2(1)
+        colx2   = irc2(2) + irc(6) -1
+        coly2   = irc2(3) + irc(6) -1
+        colz2   = irc2(4) + irc(6) -1
+        nbscal2 = irc2(5)
+        if (revcom2.eq.matvec) then
+* Perform the matrix-vector product for the 
+* inner GMRES iteration
+          call zgemv('N',n,n,ONE,a,lda,work(colx2),1,
+  &                 ZERO,work(colz2),1)
+          goto 20
+        else if (revcom2.eq.precondRight) then
+* perform the precond. for the inner GMRES iteration
+          do i =0,n-1
+            work(colz2+i) = work(colx2+i)/a(i+1,i+1)
+          enddo
+          goto 20
+        else if (revcom2.eq.precondleft) then
+* perform the precond. for the inner GMRES iteration
+          do i =0,n-1
+            work(colz2+i) = work(colx2+i)/a(i+1,i+1)
+          enddo
+          goto 20
+        else if (revcom2.eq.dotProd) then
+* perform the dot-product for the inner GMRES iteration
+* work(colz) <-- work(colx) work(coly)
+* The statement to perform the dot products can be 
+* written in a compact form.
+*    call zgemv('C',n,nbscal2,ONE,work(colx2),n,
+*  &              work(coly2),1,ZERO,work(colz2),1)
+* For sake of simplicity we write it as a do-loop
+     do i=0,nbscal2-1
+       work(colz2+i) = zdotc(n,work(colx2+i*n),1,
+   &                         work(coly2),1)
+          goto 20
+        endif
+        call zcopy(n,work(irc(6)),1,work(colz),1)
+        goto 10
+      else
+* (m2.le.0)
+        call zcopy(n,work(colx),1,work(colz),1)
+        goto 10
+      endif
+    else if (revcom.eq.dotProd) then
+*   perform the scalar product for the FGMRES iteration
+*   work(colz) <-- work(colx) work(coly)
+*
+* The statement to perform the dot products can be written in
+* a compact form.
+*    call zgemv('C',n,nbscal,ONE,work(colx),n,
+*  &              work(coly),1,ZERO,work(colz),1)
+* For sake of simplicity we write it as a do-loop
+     do i=0,nbscal-1
+       work(colz+i) = zdotc(n,work(colx+i*n),1,
+   &                         work(coly),1)
+     enddo
+     goto 10
+    endif
+*
+*******************************
+* dump the solution on a file
+*******************************
+       .....
+*
+\end{verbatim}
+\end{multicols}
+\end{small}
+\end{landscape}

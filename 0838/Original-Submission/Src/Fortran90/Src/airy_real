@@ -1,0 +1,1143 @@
+!
+! begin file airy_functions_real   
+!    version 1.0 
+!    edited 07/24/2003
+!
+!***
+!************************************************************************
+!***
+      subroutine airy_air (x, ai, dai, ierr, modify_switch)
+      real(prd), intent(out)           :: ai, dai
+      integer,   intent(out)           :: ierr
+      real(prd), intent(in)            :: x
+      logical,   intent(in), optional  :: modify_switch
+!*
+!  PUBLIC subroutine which is the driver routine that computes Ai(x)  
+!    and its derivative.  The (PRIVATE) subroutines called are:
+!     parameter_airy = determines the machine specific parameters
+!     flows   = checks for over- and under- flow regions 
+!     asymp1r = asymptotic expansion for x > 0 
+!     asymp2r = asymptotic expansion for x < 0
+!     taylorr = taylor series expansion (integration)
+!*
+      integer nn, iregion
+      real(prd) Pxi, Qxi, Rxi, Sxi, ai0s, ai1s, a, b, xi0
+      real(prd), dimension(2,2) :: tsm
+!
+!  check for some quick under- and over- flow regions
+      if (.not. is_init_airy) call parameter_airy
+      iflag  =  0
+      mod_local = .false.
+      if (present(modify_switch)) mod_local = modify_switch
+      r_global = abs(x)
+      x_global = x
+      if (x_global < zero .and. mod_local) ierr = -1
+      call flows
+      if (iflag == 0) then
+        xi_global  =  two_third*r_global*sqrt(r_global)
+!
+!  choose the region where x lies and call the appropriate subroutine
+!    to evaluate Ai(x) and/or Ai'(x)
+        iregion = 0
+        if (r_global >= r_min) then
+          if (x_global > zero) then
+            iregion = 1
+          else
+            iregion = 2
+          end if
+        else
+          if (x_global > zero) then
+            iregion = 3
+          else 
+            iregion = 4
+          end if
+        end if 
+!
+!  call the appropriate subroutine(s) to evaluate Ai(x) and/or Ai'(x)
+        select case (iregion)
+          case(1)
+            ai1s = two*sqrpi             ! dummy storage of number
+            ai0s = x_global**fourth      ! dummy storage of number
+            a    = one/(ai1s*ai0s)
+            b    = -ai0s/ai1s
+            iflag = 10           ! indicates Ai functions to asymp1r
+            call asymp1r (ai0s, ai1s)
+            ai0s = a*ai0s
+            ai1s = b*ai1s
+            if (.not. mod_local) then
+              ai0s = exp(-xi_global)*ai0s
+              ai1s = exp(-xi_global)*ai1s
+            end if
+          case(2)
+            ai1s = r_global**fourth             ! dummy storage of number
+            a    = one/(sqrpi*ai1s)
+            b    = ai1s/sqrpi
+            call asymp2r (Pxi, Qxi, Rxi, Sxi)
+            ai1s = xi_global-pi*fourth          ! dummy storage of number
+            ai0s = a*(Pxi*cos(ai1s) + Qxi*sin(ai1s))
+            ai1s = b*(Rxi*sin(ai1s) - Sxi*cos(ai1s))
+          case(3)
+            nn    = ceiling(n_parts*(one-r_global/r_min)) 
+            ai1s  = two*sqrpi             !  dummy storage of number
+            ai0s  = r_min**fourth         !  dummy storage of number
+            a     = one/(ai1s*ai0s)
+            b     = -ai0s/ai1s
+            xi0   = two_third*r_min*sqrt(r_min)
+            iflag = 10        ! indicates Ai function to subroutine asymp1r
+            call asymp1r (ai0s, ai1s, xi0)
+            call taylorr (nn, r_min, tsm)
+            a     = a*exp(-xi0)*ai0s
+            b     = b*exp(-xi0)*ai1s
+            ai0s  = tsm(1,1)*a  + tsm(1,2)*b
+            ai1s  = tsm(2,1)*a  + tsm(2,2)*b
+            if (mod_local) then
+              ai0s  = exp(xi_global)*ai0s
+              ai1s  = exp(xi_global)*ai1s
+            end if
+          case(4)
+            nn    = ceiling(n_parts*r_global/r_min)
+            call taylorr (nn, zero, tsm)
+            ai0s  = tsm(1,1)*ai0zer + tsm(1,2)*ai1zer
+            ai1s  = tsm(2,1)*ai0zer + tsm(2,2)*ai1zer
+        end select
+      end if
+!
+!  error handling and return values
+      select case (iflag)
+        case(:-1)  
+          ai  = zero
+          dai = zero
+          ierr = iflag
+        case(0:2)
+          ai  = ai0s
+          dai = ai1s
+          ierr = 0
+        case(5)
+          ai  = ai0zer   ! the value of Ai(0)
+          dai = ai1zer   ! the value of d(Ai(0))/dx
+          ierr = 0
+      end select
+      end subroutine airy_air
+!***
+!************************************************************************
+!***
+      subroutine airy_bir (x, bi, dbi, ierr, modify_switch)
+      real(prd), intent(out)           :: bi, dbi
+      integer,   intent(out)           :: ierr
+      real(prd), intent(in)            :: x
+      logical,   intent(in), optional  :: modify_switch
+!*
+!  PUBLIC subroutine which is the driver routine that computes Bi(x) and 
+!    its derivative.  The (PRIVATE) subroutines called are:
+!     parameter_airy = determines the machine specific parameters
+!     flows   = checks for over- and under- flow regions 
+!     asymp1r = asymptotic expansion for x > 0
+!     asymp2r = asymptotic expansion for x < 0
+!     taylorr = taylor series expansion (integration)
+!*
+      integer nn, iregion
+      real(prd) Pxi, Qxi, Rxi, Sxi, bi0s, bi1s, a, b
+      real(prd), dimension(2,2) :: tsm
+!
+!  check for some quick under- and over- flow regions
+      if (.not. is_init_airy) call parameter_airy
+      iflag = 0
+      mod_local = .false.
+      if (present(modify_switch)) mod_local = modify_switch
+      r_global =  abs(x)
+      x_global = x
+      if (x < zero .and. mod_local) iflag = -1
+      call flows
+      if (iflag == 0) then
+        xi_global = two_third*r_global*sqrt(r_global)
+!
+!  choose the region where x lies and call the appropriate subroutine
+!    to evaluate Bi(x) and/or Bi'(x)
+        iregion = 0
+        if (r_global >= r_min) then
+          if (x_global > zero) then
+            iregion = 1
+          else
+            iregion = 2
+          end if
+        else
+          iregion = 3
+        end if 
+        select case (iregion)
+          case(1)
+            bi0s = x_global**fourth             ! dummy storage of number
+            a    = one/(sqrpi*bi0s)
+            b    = bi0s/sqrpi
+            call asymp1r (bi0s, bi1s)
+            bi0s = a*bi0s
+            bi1s = b*bi1s
+            if (.not. mod_local) then
+              bi0s = exp(xi_global)*bi0s
+              bi1s = exp(xi_global)*bi1s
+            end if
+          case(2)        
+            bi1s = r_global**fourth             ! dummy storage of number
+            a    = one/(sqrpi*bi1s)
+            b    = bi1s/sqrpi
+            call asymp2r (Pxi, Qxi, Rxi, Sxi)
+            bi1s = xi_global-pi*fourth          ! dummy storage of number
+            bi0s = a*(-Pxi*sin(bi1s) + Qxi*cos(bi1s))
+            bi1s = b*( Rxi*cos(bi1s) + Sxi*sin(bi1s))
+          case(3)
+            nn    = ceiling(n_parts*r_global/r_min)
+            call taylorr (nn, zero, tsm)
+            bi0s  = tsm(1,1)*bi0zer + tsm(1,2)*bi1zer
+            bi1s  = tsm(2,1)*bi0zer + tsm(2,2)*bi1zer
+            if (mod_local) then
+              bi0s  = exp(-xi_global)*bi0s
+              bi1s  = exp(-xi_global)*bi1s
+            end if
+        end select
+      end if
+!
+!  error handling and return values
+      select case (iflag)
+        case(:-1)
+          bi  = zero
+          dbi = zero
+          ierr = iflag
+        case(0:2)
+          bi  = bi0s
+          dbi = bi1s
+          ierr = 0
+        case(5)
+          bi  = bi0zer     ! the value of Bi(0)
+          dbi = bi1zer     ! the value of d(Bi(0))/dx
+          ierr = 0
+      end select
+      end subroutine airy_bir
+!***
+!************************************************************************
+!***
+      subroutine flows
+!*
+!  PRIVATE subroutine to check overflow and underflow regions
+!*
+      real(prd) tol
+!
+      if (iflag /= 0) return
+! test for underflow for small |z|
+      if (r_global <= r_lolimit) then
+        iflag = 5
+        return
+      end if
+!
+! test for overflow for large |z|
+      if (r_global >= r_uplimit) then
+        iflag = -6
+        return
+      end if
+!
+! test the unscaled functions
+      if (.not.mod_local .and. x_global > zero) then
+!
+! test to see if multiplication by exp(-xi) will underflow
+!         or if multiplication by exp(xi) for x>0 will over-flow
+      tol = min( -log(two_sqrpi*r_global**fourth) - log(tiny(tol)), &
+                 -log(two_sqrpi/r_global**fourth) - log(tiny(tol)), &
+                  log(two_sqrpi/r_global**fourth) + log(huge(tol)), &
+                  log(two_sqrpi*r_global**fourth) + log(huge(tol)) ) &
+                - 15.0_prd
+        if (r_global >= (1.50_prd*tol)**two_third) then
+          iflag = -7
+          return
+        end if
+      end if
+      end subroutine flows
+!***
+!************************************************************************
+!***
+      subroutine asymp1r (F1, F2, xi_in)
+      real(prd), intent(out)          :: F1, F2
+      real(prd), intent(in), optional :: xi_in
+!*
+!  PRIVATE subroutine to compute the asymptotic expansions as x->infty
+!*
+      integer i
+      real(prd) xir
+!
+!  summation of asymptotic series is done using nested multiplication
+!  Compute G(xi), G'(xi)
+      F1 = ucoef(n_asymp)
+      F2 = vcoef(n_asymp)
+      if ( present(xi_in) ) then
+        xir = one/xi_in
+      else
+        xir = one/xi_global
+      end if
+      if (iflag == 10) xir = -xir  ! Ai(x) is an alternating series
+      do i = n_asymp-1, 1, -1
+        F1  = ucoef(i) + xir*F1
+        F2  = vcoef(i) + xir*F2
+      end do
+      F1  = (one + xir*F1)
+      F2  = (one + xir*F2)
+      iflag = 0
+      end subroutine asymp1r
+!***
+!************************************************************************
+!***
+      subroutine asymp2r (Pxi, Qxi, Rxi, Sxi)
+      real(prd), intent(out) :: Pxi, Qxi, Rxi, Sxi
+!*
+!  PRIVATE subroutine to compute the asymptotic expansions as x->-infty
+!*
+      integer i, itemp
+      real(prd) xir
+!
+!  summation of asymptotic series is done using nested multiplication
+!  Compute G(xi), G'(xi)
+      itemp = floor(half*n_asymp - half)
+      if (mod(itemp,2) /= 0) itemp = itemp - 1
+      Pxi = ucoef(itemp)
+      Qxi = ucoef(itemp-1)
+      Rxi = vcoef(itemp)
+      Sxi = vcoef(itemp-1)
+      xir = one/xi_global**2
+      do i = itemp-2, 2, -2
+        Pxi = ucoef(i ) - xir*Pxi
+        Rxi = vcoef(i ) - xir*Rxi
+        Qxi = ucoef(i-1) - xir*Qxi
+        Sxi = vcoef(i-1) - xir*Sxi
+      end do
+      Pxi = one - xir*Pxi
+      Rxi = one - xir*Rxi
+      Qxi = Qxi/xi_global
+      Sxi = Sxi/xi_global
+      end subroutine asymp2r
+!***
+!************************************************************************
+!***
+      subroutine taylorr (nn, x_start, tsm)
+      integer,                      intent(in)  :: nn
+      real(prd),                    intent(in)  :: x_start
+      real(prd), dimension(2,2),    intent(out) :: tsm
+!*
+!  PRIVATE subroutine to integrate along a ray
+!*
+      integer i, j
+      real(prd) h, xm
+      real (prd), dimension(0:n_taylor) :: pterm, qterm
+      real (prd), dimension(nn,2,2) :: Phi
+!
+      h  = (x_global - x_start)/nn  ! step size and integration direction
+!
+! compute the Taylor series in each partition
+      do i = 1, nn
+        xm       = (x_start+h*(i-1)) !  xm always appears with h**2
+!
+! compute the reduced derivatives:
+        pterm(0) = one
+        pterm(1) = zero
+        pterm(2) = xm*pterm(0)*half
+        qterm(0) = zero
+        qterm(1) = one
+        qterm(2) = zero
+        do j = 3, n_taylor
+!
+! compute the next Taylor series term for each partition.
+          pterm(j) = (xm*pterm(j-2) + pterm(j-3))/real(j*j-j,prd)
+          qterm(j) = (xm*qterm(j-2) + qterm(j-3))/real(j*j-j,prd)
+        end do
+!
+! now sum the series
+        Phi(i,1,1) = pterm(n_taylor)
+        Phi(i,2,1) = pterm(n_taylor)*n_taylor
+        Phi(i,1,2) = qterm(n_taylor)
+        Phi(i,2,2) = qterm(n_taylor)*n_taylor
+        do j = n_taylor-1,1,-1
+          Phi(i,1,1) = pterm(j)   + h*Phi(i,1,1)
+          Phi(i,2,1) = pterm(j)*j + h*Phi(i,2,1)
+          Phi(i,1,2) = qterm(j)   + h*Phi(i,1,2)
+          Phi(i,2,2) = qterm(j)*j + h*Phi(i,2,2)
+        end do
+        Phi(i,1,1) = pterm(0) + h*Phi(i,1,1)
+        Phi(i,1,2) = qterm(0) + h*Phi(i,1,2)
+      end do
+!
+! multiply all the matrices together
+      do i = 1,nn-1
+        Phi(i+1,:,:) = matmul(Phi(i+1,:,:),Phi(i,:,:))
+      end do
+!
+! return values
+      tsm(:,:) = Phi(nn,:,:)
+      end subroutine taylorr
+!***
+!************************************************************************
+!***
+!
+!  end file airy_functions_real
+!
+! begin file airy_aux
+!    version 1.0 
+!    edited 07/25/2003
+!
+!***
+!************************************************************************
+!***
+      subroutine airy_auxr (x, airy_mod, airy_phase, ierr, &
+                dairy_mod, dairy_phase)
+      real(prd), intent(in)            :: x
+      real(prd), intent(out)           :: airy_mod, airy_phase
+      real(prd), intent(out), optional :: dairy_mod, dairy_phase
+      integer,   intent(out)           :: ierr
+!*
+!  PUBLIC subroutine is the driver routine that computes the modulus 
+!    and phase functions for Ai(x) and Bi(x).  The (PRIVATE) subroutines 
+!    called are:
+!     parameter_airy = determines the machine specific parameters
+!     aux_parameter_airy = determines the machine specific parameters
+!        specific to the auxiliary functions
+!     asymp_aux = asymptotic expansion for auxiliary functions
+!     taylor_modulus = taylor series integration for modulus functions M(x)
+!        and N(x)
+!     taylor_phase = taylor series integration for phase functions theta(x)
+!        and phi(x)
+!*
+      real(prd) m_inter, n_inter, theta_inter, phi_inter
+      real(prd), dimension(3) :: tsm
+!
+! initialize all parameters
+      if (.not. is_aux_init_airy) call aux_parameter_airy
+!
+! check to see if the main grid has been allocated and populated.
+      if ( .not.big_integrate_aux ) then
+        call taylor_modulus (n_parts_aux, tsm)
+        call taylor_phase (n_parts_aux, theta_inter)
+      end if
+      iflag  =  0
+      x_global = x
+      r_global = abs(x)
+      call flows
+      if (x > zero) iflag = -2
+      if (iflag == 0) then
+!
+!  choose the region where x lies and call the appropriate subroutine
+!    to evaluate Ai(x) and/or Ai'(x)
+        rtest:  if (x_global <= -aux_min) then
+          call asymp_aux (m_inter, n_inter, theta_inter, phi_inter)
+        else
+!
+!  integrate the odes to obtain the functions and phases values
+!   using one step from the grid point to the desired point
+          call taylor_modulus (1, tsm)
+          call taylor_phase (1, theta_inter)
+          m_inter = sqrt(tsm(1))
+          if ( present(dairy_mod) ) &
+            n_inter = sqrt(tsm(2)**2*fourth/tsm(1) + one/(pi**2*tsm(1)))
+          if ( present(dairy_phase) ) &
+	    phi_inter = theta_inter - atan(two/tsm(2)/pi)
+        end if rtest
+      end if
+!
+!  error handling and return values
+      select case (iflag)
+        case(:-1) 
+          airy_mod = zero
+          airy_phase = zero
+          if ( present(dairy_mod) )   dairy_mod   = zero
+          if ( present(dairy_phase) ) dairy_phase = zero 
+	  ierr = iflag
+        case(0)
+          airy_mod = m_inter
+          airy_phase = theta_inter
+          if ( present(dairy_mod) )   dairy_mod   = n_inter
+          if ( present(dairy_phase) ) dairy_phase = phi_inter
+	  ierr = 0
+        case(5)
+          airy_mod =  sqrt(m2grid(0,1))
+          airy_phase =  pi/six
+          if ( present(dairy_mod) )   dairy_mod   = sqrt(ai1zer**2 + bi1zer**2)
+          if ( present(dairy_phase) ) dairy_phase = -pi/six
+	  ierr = 0
+      end select
+      end subroutine airy_auxr
+!***
+!************************************************************************
+!***
+      subroutine asymp_aux (m_inter, n_inter, theta_inter, phi_inter)
+      real(prd), intent(out)   :: m_inter, n_inter, theta_inter, phi_inter
+!*
+!  PRIVATE subroutine to compute the asymptotic expansions as x->-infty
+!*
+      integer i
+      real(prd) darg1, darg2, darg3
+!
+!  summation of asymptotic series is done using nested multiplication
+!  Compute the modulus functions
+      darg1 = mcoef(n_asymp_mod)
+      darg2 = ncoef(n_asymp_mod)
+      darg3 = one/(x_global**3)
+      do i = n_asymp_mod-1, 1, -1
+        darg1  = mcoef(i) + darg3*darg1
+        darg2  = ncoef(i) + darg3*darg2
+      end do
+      darg1  = (one + darg3*darg1)/pi/sqrt(-x_global)
+      darg2  = (one + darg3*darg2)*sqrt(-x_global)/pi
+      m_inter = sqrt(darg1)
+      n_inter = sqrt(darg2)
+!
+!  Compute the phase functions
+      darg1 = thetacoeff(n_asymp_phase)
+      darg2 = phicoeff(n_asymp_phase)
+      do i = n_asymp_phase-1, 1, -1
+        darg1  = thetacoeff(i) + darg3*darg1
+        darg2  = phicoeff(i) + darg3*darg2
+      end do
+      darg1  = (thetacoeff(0) + darg3*darg1)*two_third*sqrt(-x_global)**3
+      darg2  = (phicoeff(0) + darg3*darg2)*two_third*sqrt(-x_global)**3
+      theta_inter = pi*fourth + darg1
+      phi_inter = -pi*fourth + darg2
+!
+      end subroutine asymp_aux
+!***
+!************************************************************************
+!***
+      subroutine taylor_modulus (nn, tsm)
+      integer,                    intent(in)  :: nn
+      real(prd), dimension(3),    intent(out) :: tsm
+!*
+!  PRIVATE subroutine to integrate for the modulus function M^2(x)
+!   and the corresponding phase function theta(x).
+!   we check to see if the main grid has been computed and 
+!   integrate from the closest partition point to the one desired.
+!*
+      integer iplace, j, i
+      real(prd) h, xright, xm
+      real(prd), dimension(0:n_taylor_aux) :: pterm, qterm, rterm
+      real(prd), dimension(nn,3,3) :: Phi
+!
+      h = -aux_min/n_parts_aux
+      if ( nn == 1 ) then
+!
+! find the grid points between which x lies
+        do i = n_parts_aux-1,0,-1
+          if ( x_global <= h*i ) then
+            xright  = h*i
+            iplace  = i
+            exit
+          end if
+        end do
+        h = x_global-xright
+      end if
+!
+! compute the Taylor series in each partition
+      do i = 1, nn
+        xm = h*(i-1) 
+        if ( nn == 1 ) xm = xright
+!
+! compute the reduced derivatives:
+        pterm(0) = one;  pterm(1) = zero; pterm(2) = zero
+        qterm(0) = zero; qterm(1) = one;  qterm(2) = zero
+        rterm(0) = zero; rterm(1) = zero; rterm(2) = half
+        do j = 3, n_taylor_aux
+          pterm(j) = (pterm(j-3)*(4*j-10) &
+                 + four*xm*(j-2)*pterm(j-2))/real(j*(j-1)*(j-2),prd)
+          qterm(j) = (qterm(j-3)*(4*j-10) &
+                 + four*xm*(j-2)*qterm(j-2))/real(j*(j-1)*(j-2),prd)
+          rterm(j) = (rterm(j-3)*(4*j-10) &
+                 + four*xm*(j-2)*rterm(j-2))/real(j*(j-1)*(j-2),prd)
+        end do
+!
+! sum the series
+       Phi(i,:,1) = pterm(n_taylor_aux)
+       Phi(i,:,2) = qterm(n_taylor_aux)
+       Phi(i,:,3) = rterm(n_taylor_aux)
+       Phi(i,2,:) = Phi(i,2,:)*n_taylor_aux
+       Phi(i,3,:) = Phi(i,3,:)*n_taylor_aux*(n_taylor_aux-1)
+       do j = n_taylor_aux-1,2,-1
+          Phi(i,1,1) = h*Phi(i,1,1) + pterm(j)
+          Phi(i,2,1) = h*Phi(i,2,1) + pterm(j)*j
+          Phi(i,3,1) = h*Phi(i,3,1) + pterm(j)*j*(j-1)
+          Phi(i,1,2) = h*Phi(i,1,2) + qterm(j)
+          Phi(i,2,2) = h*Phi(i,2,2) + qterm(j)*j
+          Phi(i,3,2) = h*Phi(i,3,2) + qterm(j)*j*(j-1)
+          Phi(i,1,3) = h*Phi(i,1,3) + rterm(j)
+          Phi(i,2,3) = h*Phi(i,2,3) + rterm(j)*j
+          Phi(i,3,3) = h*Phi(i,3,3) + rterm(j)*j*(j-1)
+        end do
+! j = 1 term
+        Phi(i,1,1) = h*Phi(i,1,1) + pterm(1)
+        Phi(i,2,1) = h*Phi(i,2,1) + pterm(1)
+        Phi(i,1,2) = h*Phi(i,1,2) + qterm(1)
+        Phi(i,2,2) = h*Phi(i,2,2) + qterm(1)
+        Phi(i,1,3) = h*Phi(i,1,3) + rterm(1)
+        Phi(i,2,3) = h*Phi(i,2,3) + rterm(1)
+! j = 0 term
+        Phi(i,1,1) = h*Phi(i,1,1) + pterm(0)
+        Phi(i,1,2) = h*Phi(i,1,2) + qterm(0)
+        Phi(i,1,3) = h*Phi(i,1,3) + rterm(0)
+      end do
+!
+! return values
+      if ( nn == 1 ) then
+        tsm(:) = Phi(1,:,1)*m2grid(iplace,1) + Phi(1,:,2)*m2grid(iplace,2) &
+              + Phi(1,:,3)*m2grid(iplace,3)
+      else
+!
+! obtain the function, first, and second derivative 
+!   values at each partition point and store them 
+!   into a global module variable
+        allocate ( m2grid(0:n_parts_aux,3) )
+!
+! initial conditions for M^2(0)
+        m2grid(0,1)  = ai0zer**2 + bi0zer**2 
+        m2grid(0,2)  = two*(ai0zer*ai1zer + bi0zer*bi1zer)
+        m2grid(0,3)  = two*(ai1zer**2 + bi1zer**2)
+!
+! build the rest of the two grids
+        do i = 1,n_parts_aux
+          m2grid(i,:) = Phi(i,:,1)*m2grid(i-1,1) + Phi(i,:,2)*m2grid(i-1,2) &
+                        + Phi(i,:,3)*m2grid(i-1,3)
+        end do
+      end if
+      end subroutine taylor_modulus
+!***
+!************************************************************************
+!***
+      subroutine taylor_phase (nn, theta_inter)
+      integer,   intent(in)  :: nn
+      real(prd), intent(out) :: theta_inter
+!*
+!  PRIVATE subroutine to integrate for the phase functions M^2(x)
+!   and the corresponding phase function theta(x).
+!   we check to see if the main grid has been computed and 
+!   integrate from the closest partition point to the one desired.
+!*
+      integer iplace, j, i, k
+      real(prd) h, xright, xm, xloc, darg
+      real(prd), dimension(0:n_taylor_aux)  :: M2taylor, theta
+!
+      h = -aux_min/n_parts_aux  
+      if ( nn == 1 ) then
+!
+! find the partition point closest to the desire value 
+        do i = n_parts_aux-1,0,-1
+          if ( x_global <= h*i ) then
+            xright  = h*i
+            iplace  = i
+            exit
+          end if
+        end do
+        h = x_global-xright
+      else 
+!
+! compute and populate a vector of function values for 
+!   theta(x) on the same grid points.  
+!   build the Taylor series expansion for M^2(x) 
+!   at each grid point, then calculate theta(x) from the 
+!   first order ODE
+        allocate ( theta_grid(0:n_parts_aux) )
+!
+! initial conditions for theta(0)
+        theta_grid(0) =  pi/six
+      end if
+!
+! compute the Taylor series for M^2 in each partition
+      do i = 1,nn
+        if (nn == 1) then
+          xm = xright
+          xloc = x_global
+        else
+          iplace = i-1
+          xm = h*(i-1)
+          xloc = h*i
+        end if
+        M2taylor(0) = m2grid(iplace,1)
+        M2taylor(1) = m2grid(iplace,2)
+        M2taylor(2) = m2grid(iplace,3)*half
+        do j = 3,n_taylor_aux
+            M2taylor(j) = (four*(j-2)*xm*M2taylor(j-2) &
+             + M2taylor(j-3)*(4*j-10))/real(j*(j-1)*(j-2),prd)
+        end do
+!
+! now build the Taylor series for the phase function theta(x)
+        theta(0) =  theta_grid(iplace)
+        theta(1) = -one/pi/M2taylor(0)
+        theta(2) = -theta(1)*M2taylor(1)*half/M2taylor(0)
+        do k = 3,n_taylor_aux
+          darg = zero
+          do j = 0,k-2
+            darg = darg + theta(j+1)*(j+1)*M2taylor(k-j-1)
+          end do
+          theta(k) = -darg/M2taylor(0)/real(k,prd)
+        end do
+!
+! now sum the Taylor series to obtain the value of theta.
+        darg = theta(n_taylor_aux)
+        do j = n_taylor_aux-1,1,-1
+          darg = h*darg + theta(j)
+        end do
+        theta_inter = h*darg + theta(0)
+        if ( nn == n_parts_aux ) theta_grid(i) = theta_inter
+      end do
+!
+! reset the logical and exit
+      if ( nn == n_parts_aux )  big_integrate_aux = .true.
+      end subroutine taylor_phase   
+!***
+!************************************************************************
+!***
+!
+!  end file airy_aux
+
+!
+! begin file airy_zeros
+!    version 1.0 
+!    edited 07/24/2002
+!
+!***
+!************************************************************************
+!***
+      subroutine ai_zeror (n, ai_zero, ierr, ai_assoc, dai_zero, dai_assoc)
+      integer,   intent(in)            :: n
+      real(prd), intent(out)           :: ai_zero
+      integer,   intent(out)           :: ierr
+      real(prd), intent(out), optional :: ai_assoc, dai_zero, dai_assoc
+!*
+!  PUBLIC subroutine which is the driver routine that computes the 
+!    zeros of Ai(x) and optionally of Ai'(x), and the associated 
+!    values Ai'(a_n) and Ai(a_n') for scalar arguments.  The first 25 
+!    zeros are stored in an array and the rest are computed by summing 
+!    approriate asymptotic expansions.  The (PRIVATE) subroutines called are: 
+!     parameters_airy = determines the machine specific parameters 
+!     zero_parameters_airy = populates the vectors containing the  
+!	stored zeros and the coefficients of the asymptotic expansions 
+!     airy_air = computes the associated function value for stored zeros 
+!     ae_zero_r = sums the appropriate asymptotic expansion for the  
+!	zeros of the Airy functions and their associated function values
+!*
+      integer itemp 
+      real(prd) xai, xdai, lam 
+!
+      if (.not. is_zero_init_airy) call zero_parameter_airy
+      iflag = 0 
+      if (n <= 0)     iflag = - 3
+      itemp = floor(0.25*(huge(itemp)-1)) 
+      if (n >= itemp) iflag = -4  ! zero requested cannot be computed
+      if (iflag < 0) then 
+        ai_zero = zero
+        if (present(ai_assoc))   ai_assoc = zero
+        if (present(dai_zero))   dai_zero = zero
+        if (present(dai_assoc)) dai_assoc = zero
+        ierr = iflag
+        return
+      end if
+      if (n <= n_zeros) then
+        ai_zero = aizr(n)
+        if (present(ai_assoc)) then
+          call airy_air (aizr(n), xai, xdai, ierr) 
+          ai_assoc = xdai
+        end if 
+        if (present(dai_zero)) dai_zero = daizr(n)
+        if (present(dai_assoc)) then
+          call airy_air (daizr(n), xai, xdai, ierr) 
+          dai_assoc = xai
+        end if
+      else
+        lam = three_pi_ate*real(4*n-1,prd)
+        call ae_zero_r (xai, lam, 1)
+        ai_zero = -xai
+        call ae_zero_r (xai, lam, 3)
+        if (present(ai_assoc)) then
+          ai_assoc = xai
+          if ( mod(n-1,2) == 1 ) ai_assoc = -ai_assoc
+        end if
+        if (present(dai_zero) .or. present(dai_assoc)) then
+          lam = three_pi_ate*(4*n-3)
+          call ae_zero_r (xai, lam, 2)
+          if (present(dai_zero)) dai_zero = -xai
+          call ae_zero_r (xdai, lam, 4)
+          if (present(dai_assoc)) then
+            dai_assoc = xdai 
+            if ( mod(n-1,2) == 1 ) dai_assoc = -dai_assoc
+          end if
+        end if
+      end if
+      end subroutine ai_zeror
+!***
+!************************************************************************
+!***
+      subroutine bi_zeror (n, bi_zero, ierr, bi_assoc, dbi_zero, dbi_assoc)
+      integer,   intent(in)            :: n
+      real(prd), intent(out)           :: bi_zero
+      integer,   intent(out)           :: ierr
+      real(prd), intent(out), optional :: bi_assoc, dbi_zero, dbi_assoc
+!*
+!  PUBLIC subroutine which is the driver routine that computes the   
+!    zeros of Bi(x) and optionally of Bi'(x), and the associated 
+!    values Bi'(b_n) and Bi(b_n') for scalar arguments.  The first 25  
+!    zeros are stored in an array and the rest are computed by summing 
+!    approriate asymptotic expansions.  The (PRIVATE) subroutines called are: 
+!     parameters_airy = determines the machine specific parameters 
+!     zero_parameters_airy = populates the vectors containing the  
+!	stored zeros and the coefficients of the asymptotic expansions 
+!     airy_bir = computes the associated function value for stored zeros 
+!     ae_zero_r = sums the appropriate asymptotic expansion for the  
+!	zeros of the Airy functions and their associated function values 
+!*
+      integer itemp
+      real(prd) xbi, xdbi, lam
+!
+      if (.not. is_zero_init_airy) call zero_parameter_airy 
+      iflag = 0
+      if (n <= 0)     iflag = -3
+      itemp = floor(0.25*(huge(itemp)-1))
+      if (n >= itemp) iflag = -4   ! zero requested cannot be computed
+      if (iflag < 0) then
+        bi_zero = zero
+        if (present(bi_assoc))   bi_assoc = zero
+        if (present(dbi_zero))   dbi_zero = zero
+        if (present(dbi_assoc)) dbi_assoc = zero
+        ierr = iflag
+        return
+      end if
+      if (n <= n_zeros) then
+        bi_zero = bizr(n) 
+        if (present(bi_assoc)) then 
+          call airy_bir (bi_zero, xbi, xdbi, ierr) 
+          bi_assoc = xdbi
+        end if 
+        if (present(dbi_zero)) dbi_zero = dbizr(n) 
+        if (present(dbi_assoc)) then
+          call airy_bir (dbizr(n), xbi, xdbi, ierr) 
+          dbi_assoc = xbi
+        end if
+      else 
+        lam = three_pi_ate*real(4*n-3,prd)  
+        call ae_zero_r (xbi, lam, 1)
+        bi_zero = -xbi 
+        call ae_zero_r (xbi, lam, 3)
+        if (present(bi_assoc)) then
+          bi_assoc = xbi 
+          if ( mod(n-1,2) == 1 ) bi_assoc = -bi_assoc 
+        end if
+        if (present(dbi_zero) .or. present(dbi_assoc)) then
+          lam = three_pi_ate*(4*n-1)  
+          call ae_zero_r (xbi, lam, 2)
+          if (present(dbi_zero)) dbi_zero = -xbi 
+          call ae_zero_r (xdbi, lam, 4)
+          if (present(dbi_assoc)) then
+            dbi_assoc = xdbi  
+            if ( mod(n,2) == 1 ) dbi_assoc = -dbi_assoc 
+          end if
+        end if
+      end if
+      end subroutine bi_zeror
+!***
+!************************************************************************
+!***
+      subroutine ae_zero_r (zr, lam, in)
+      real(prd), intent (out) :: zr
+      real(prd), intent (in)  :: lam
+      integer,   intent (in)  :: in
+!*
+!  PRIVATE subroutine to sum the asymptotic expansions for the zeros 
+!   of the Airy functions and their associated functions
+!*
+      real(prd) zrsum, lamr
+      integer i
+!
+      lamr  =  one/lam**2
+      select case (in)
+      case(1)                   ! sum the T(x) expansion
+        zrsum =  Tcoeff(n_asymp_zero)
+        do i = n_asymp_zero-1,0,-1
+          zrsum = Tcoeff(i) + zrsum*lamr
+        end do
+        zr = zrsum*lam**two_third
+      case(2)                   ! sum the U(x) expansion
+        zrsum =  Ucoeff(n_asymp_zero)
+        do i = n_asymp_zero-1,0,-1
+          zrsum = Ucoeff(i) + zrsum*lamr
+        end do
+        zr = zrsum*lam**two_third
+      case(3)                   ! sum the V(x) expansion
+        zrsum =  Vcoeff(n_asymp_asso)
+        do i = n_asymp_asso-1,0,-1
+          zrsum = Vcoeff(i) + zrsum*lamr
+        end do
+        zr = zrsum*lam**(half/three)/sqrpi
+      case(4)                   ! sum the W(x) expansion
+        zrsum =  Wcoeff(n_asymp_asso)
+        do i = n_asymp_asso-1,0,-1
+          zrsum = Wcoeff(i) + zrsum*lamr
+        end do
+        zr = zrsum/lam**(half/three)/sqrpi
+      end select
+      end subroutine ae_zero_r
+!***
+!************************************************************************
+!***
+      subroutine ai_zerorv (n, ai_zero, ierr, ai_assoc, dai_zero, dai_assoc)
+      integer,   intent(in)                          :: n
+      real(prd), intent(out), dimension(:)           :: ai_zero
+      integer,   intent(out)                         :: ierr
+      real(prd), intent(out), dimension(:), optional :: &
+                                            ai_assoc, dai_zero, dai_assoc
+!*
+!*
+!  PUBLIC subroutine which is the driver routine that computes the 
+!    zeros of Ai(x) and optionally of Ai'(x), and the associated 
+!    values Ai'(a_n) and Ai(a_n') for vector arguments.  The first 25 
+!    zeros are stored in an array and the rest are computed by summing 
+!    approriate asymptotic expansions.  The (PRIVATE) subroutines called are: 
+!     parameters_airy = determines the machine specific parameters 
+!     zero_parameters_airy = populates the vectors containing the  
+!	stored zeros and the coefficients of the asymptotic expansions 
+!     airy_air = computes the associated function value for stored zeros 
+!     ae_zero_rv = sums the appropriate asymptotic expansion for the  
+!	zeros of the Airy functions and their associated function values
+!*
+      integer itemp, K, i, iflag_zero
+      real(prd) xai, xdai 
+      real(prd), dimension(:), allocatable :: lam
+!
+!
+      if (.not. is_zero_init_airy) call zero_parameter_airy 
+      iflag_zero = 0
+      if (n <= 0)     iflag_zero = -3
+      itemp = floor(0.25*(huge(itemp)-1))
+      if (n >= itemp) iflag_zero = -4  ! zero requested cannot be computed
+      K = size(ai_zero)
+  !
+  ! check to see if the last zero requested is computable
+  !        and change the last zero returned accordingly.
+      if (n+K >= itemp .and. iflag_zero /= -4) then
+        do i = n+K-1,n,-1
+          if ( i < itemp ) then
+            K = i-n
+            iflag_zero = 50  
+            exit
+          end if
+        end do
+      end if
+      if ( iflag_zero < 0) then
+        ai_zero(:) = zero
+        if (present(ai_assoc))   ai_assoc(:) = zero
+        if (present(dai_zero))   dai_zero(:) = zero
+        if (present(dai_assoc)) dai_assoc(:) = zero
+        ierr = iflag_zero
+        return
+      end if
+      if (n <= n_zeros) then
+        itemp = min(n+K,n_zeros)
+        ai_zero(1:itemp-n+1) = aizr(n:itemp)  
+        if (present(ai_assoc)) then
+          do i = n, itemp
+            call airy_air (aizr(i), xai, xdai, ierr) 
+            ai_assoc(i-n+1) = xdai
+          end do
+        end if 
+        if (present(dai_zero)) dai_zero(1:itemp-n+1) = daizr(n:itemp)
+        if (present(dai_assoc)) then
+          do i = n, itemp
+            call airy_air (daizr(i), xai, xdai, ierr) 
+            dai_assoc(i-n+1) = xai
+          end do
+        end if
+      end if
+      if (n+K > n_zeros) then
+        itemp = max(n,n_zeros+1)
+        allocate (lam(itemp:n+K-1))
+        do i = itemp,n+K-1
+          lam(i) = three_pi_ate*real(4*i-1,prd)
+        end do
+        call ae_zero_rv (ai_zero(itemp-n+1:K), lam, 1)
+        ai_zero(itemp-n+1:K) = -ai_zero(itemp-n+1:K)
+        if (present(ai_assoc)) then
+          call ae_zero_rv (ai_assoc(itemp-n+1:K), lam, 3)
+          do i = itemp,n+K-1
+            if ( mod(i-1,2) == 1 ) ai_assoc(i-n+1) = -ai_assoc(i-n+1)
+          end do
+        end if
+        deallocate (lam)
+        if (present(dai_zero) .or. present(dai_assoc)) then
+          allocate (lam(itemp:n+K-1))
+          do i = itemp,n+K-1
+            lam(i) = three_pi_ate*real(4*i-3,prd)
+          end do
+          if (present(dai_zero)) then
+            call ae_zero_rv (dai_zero(itemp-n+1:K), lam, 2)
+            dai_zero(itemp-n+1:K) = -dai_zero(itemp-n+1:K)
+          end if
+          if (present(dai_assoc)) then
+            call ae_zero_rv (dai_assoc(itemp-n+1:K), lam, 4)
+            do i = itemp,n+K-1
+              if ( mod(i-1,2) == 1 ) dai_assoc(i-n+1) = -dai_assoc(i-n+1)
+            end do
+          end if
+          deallocate (lam)
+        end if
+      end if
+      ierr = iflag_zero
+      end subroutine ai_zerorv
+!***
+!************************************************************************
+!***
+      subroutine bi_zerorv (n, bi_zero, ierr, bi_assoc, dbi_zero, dbi_assoc)
+      integer,   intent(in)                          :: n
+      real(prd), intent(out), dimension(:)           :: bi_zero
+      integer,   intent(out)                         :: ierr
+      real(prd), intent(out), dimension(:), optional :: &
+                                          bi_assoc, dbi_zero, dbi_assoc
+!*
+!*
+!  PUBLIC subroutine which is the driver routine that computes the   
+!    zeros of Bi(x) and optionally of Bi'(x), and the associated 
+!    values Bi'(b_n) and Bi(b_n') for vector arguments.  The first 25  
+!    zeros are stored in an array and the rest are computed by summing 
+!    approriate asymptotic expansions.  The (PRIVATE) subroutines called are: 
+!     parameters_airy = determines the machine specific parameters 
+!     zero_parameters_airy = populates the vectors containing the  
+!	stored zeros and the coefficients of the asymptotic expansions 
+!     airy_bir = computes the associated function value for stored zeros 
+!     ae_zero_rv = sums the appropriate asymptotic expansion for the  
+!	zeros of the Airy functions and their associated function values 
+!*
+      integer itemp, K, i, iflag_zero
+      real(prd) xbi, xdbi  
+      real(prd), dimension(:), allocatable :: lam
+!
+      if (.not. is_zero_init_airy) call zero_parameter_airy 
+      iflag_zero = 0
+      if (n <= 0)     iflag_zero = -3
+      itemp = floor(0.25*(huge(itemp)-1))
+      if (n >= itemp) iflag_zero = -4  ! zero requested cannot be computed
+      K = size(bi_zero)
+!
+! check to see if the last zero requested is computable
+!        and change the last zero returned accordingly.
+      if (n+K >= itemp .and. iflag_zero /= -4) then
+        do i = n+K-1,n,-1
+          if ( i < itemp ) then
+            K = i-n
+            iflag_zero = 50  
+            exit
+          end if
+        end do
+      end if
+      if (iflag_zero < 0) then
+        bi_zero(:) = zero
+        if (present(bi_assoc))   bi_assoc(:) = zero
+        if (present(dbi_zero))   dbi_zero(:) = zero
+        if (present(dbi_assoc)) dbi_assoc(:) = zero
+	ierr = iflag_zero
+        return
+      end if
+      if (n <= n_zeros) then
+        itemp = min(n+K,n_zeros)
+        bi_zero(1:itemp-n+1) = bizr(n:itemp)
+        if (present(bi_assoc)) then
+          do i = n, itemp 
+            call airy_bir (bizr(i), xbi, xdbi, ierr) 
+            bi_assoc(i-n+1) = xdbi
+          end do
+        end if 
+        if (present(dbi_zero)) dbi_zero(1:itemp-n+1) = dbizr(n:itemp)
+        if (present(dbi_assoc)) then
+          do i = n, itemp
+            call airy_bir (dbizr(i), xbi, xdbi, ierr) 
+            dbi_assoc(i-n+1) = xbi
+          end do
+        end if
+      end if
+      if (n+K > n_zeros) then
+        itemp = max(n,n_zeros+1)
+        allocate (lam(itemp:n+K-1))
+        do i = itemp,n+K-1
+          lam(i) = three_pi_ate*real(4*i-3,prd) 
+        end do
+        call ae_zero_rv (bi_zero(itemp-n+1:K), lam, 1)
+        bi_zero(itemp-n+1:K) = -bi_zero(itemp-n+1:K) 
+        if (present(bi_assoc)) then
+          call ae_zero_rv (bi_assoc(itemp-n+1:K), lam, 3)
+          do i = itemp,n+K-1
+            if ( mod(i-1,2) == 1 ) bi_assoc(i-n+1) = -bi_assoc(i-n+1) 
+          end do
+        end if
+        deallocate (lam)
+        if (present(dbi_zero) .or. present(dbi_assoc)) then
+          allocate (lam(itemp:n+K-1))
+          do i = itemp,n+K-1
+            lam(i) = three_pi_ate*real(4*i-1,prd) 
+          end do
+          if (present(dbi_zero)) then
+            call ae_zero_rv (dbi_zero(itemp-n+1:K), lam, 2)
+            dbi_zero(itemp-n+1:K) = -dbi_zero(itemp-n+1:K) 
+          end if
+          if (present(dbi_assoc)) then
+            call ae_zero_rv (dbi_assoc(itemp-n+1:K), lam, 4)
+            do i = itemp,n+K-1
+              if ( mod(i,2) == 1 ) dbi_assoc(i-n+1) = -dbi_assoc(i-n+1) 
+            end do
+          end if
+          deallocate (lam)
+        end if
+      end if
+      ierr = iflag_zero
+      end subroutine bi_zerorv
+!***
+!************************************************************************
+!***
+      subroutine ae_zero_rv (zr, lam, in)
+      real(prd), intent (out), dimension(1:) :: zr
+      real(prd), intent (in), dimension(1:)  :: lam
+      integer,   intent (in)                 :: in
+      real(prd), dimension(size(zr))         :: zrsum, lamr
+!*
+!  PRIVATE subroutine to sum the asymptotic expansions for the zeros 
+!   of the Airy functions and their associated functions for the 
+!   vector case
+!*
+      integer k, i, j
+!
+      k = size(zr)
+      do i = 1,k
+        lamr(i)  =  one/lam(i)**2
+      end do
+      if (in == 1) then                  ! sum the T(x) expansion
+        do j = 1,k
+          zrsum(j) =  Tcoeff(n_asymp_zero)
+          do i = n_asymp_zero-1,0,-1
+            zrsum(j) = Tcoeff(i) + zrsum(j)*lamr(j)
+          end do
+        end do
+        zr(:) = zrsum(:)*lam(:)**two_third
+      elseif (in == 2) then               ! sum the U(x) expansion
+        do j = 1,k
+          zrsum(j) =  Ucoeff(n_asymp_zero)
+          do i = n_asymp_zero,0,-1
+            zrsum(j) = Ucoeff(i) + zrsum(j)*lamr(j)
+          end do
+        end do
+        zr(:) = zrsum(:)*lam(:)**two_third
+      elseif (in == 3) then               ! sum the V(x) expansion
+        do j = 1,k
+          zrsum(j) =  Vcoeff(n_asymp_asso)
+          do i = n_asymp_asso-1,0,-1
+            zrsum(j) = Vcoeff(i) + zrsum(j)*lamr(j)
+          end do
+        end do
+        zr(:) = zrsum(:)*lam(:)**(half/three)/sqrpi
+      else                                  ! sum the W(x) expansion
+        do j = 1,k
+          zrsum(j) =  Wcoeff(n_asymp_asso)
+          do i = n_asymp_asso-1,0,-1
+            zrsum(j) = Wcoeff(i) + zrsum(j)*lamr(j)
+          end do
+        end do
+        zr(:) = zrsum(:)/lam(:)**(half/three)/sqrpi
+      end if
+      end subroutine ae_zero_rv
+!***
+!************************************************************************
+!***
+!
+!  end file airy_zeros

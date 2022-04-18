@@ -1,0 +1,300 @@
+In this section we introduce an example to illustrate the use of jMarkov,
+particularly the \codeln{jQBD} and \codeln{jPhase} modules. We do not aim to
+describe the implementation in full here, which is available
+at~\cite{jMarkovWeb}, but to highlight some of the key steps in modeling with
+jMarkov. 
+%We also report the execution times obtained with jMarkov, and compare them to an alternative tool.
+
+%\subsection{A priority-queue model}
+We consider a first-come-first-serve queue with a single server and
+two classes of jobs that receive service, one with high priority and the other
+with low priority. We also refer to high and low priority jobs as being of
+class 1 and 2, respectively. For class-$i$ jobs, arrivals follow a Poisson
+process with rate $\lambda_i$, while services follow a PH distribution with
+parameters $(\balpha^{(i)}, \bA^{(i)})$. We assume a finite buffer for
+high-priority jobs as its size must be chosen to keep the blocking probability
+below a certain threshold. Instead, for low-priority jobs we assume the buffer
+has infinite capacity. We further assume a preemptive scheduling policy, where
+low-priority jobs start service only when no high-priority jobs are present,
+and a low-priority job in service is pushed back to the head of its buffer if a
+high-priority job arrives.
+
+
+Given the assumptions above, and since only one event occurs at any given time,
+the number of jobs of either type increases or decreases by one. We can
+therefore model this queue as a QBD where the \emph{level} holds the number of
+low-priority jobs, while all other information necessary to describe the system
+state is left for the \emph{phase}. The phase thus holds the number of
+high-priority jobs in the system and the service phase of the job currently in
+service. 
+We also include in the phase the type of the job currently in service, which is
+not strictly necessary but is helpful to describe the model and to extend it.
+Our first step is therefore to define the system \emph{state} as in the
+following code snippet.
+\begin{lstlisting}
+class PriorityQueueMPHPHPreemptState extends PropertiesState {
+	public PriorityQueueMPHPHPreemptState(int numberHiJobs, int servicePhase, int serviceType) {
+		super(3);
+		setProperty(0, numberHiJobs);
+		setProperty(1, servicePhase);
+		setProperty(2, serviceType);
+	}
+}
+\end{lstlisting}
+Note that our class \codeln{PriorityQueueMPHPHPreemptState} extends the
+jMarkov abstract class \codeln{PropertiesState}, which allows us to define the
+state as an array of integers. The state is thus defined by three integers that hold the number of high priority jobs, the service phase, and the type of the job 
+in service. Notice that we only need to define the \emph{phase}, as the level 
+behaves as in a QBD, taking values on the non-negative integers and
+increasing/decreasing by at most one in a single transition. 
+The constructor simply calls the super-class
+specifying that the phase is described with 3 integers, and sets each of them
+in their corresponding position.
+
+We now move on to define the \emph{events} via the
+\codeln{PriorityQueueMPHPHPreemptEvent} class as follows.
+\begin{lstlisting}
+class PriorityQueueMPHPHPreemptEvent extends Event {
+	public enum Type {
+		ARRIVAL_HI,
+		SERVICE_END_HI,
+		SERVICE_PHASECHG_HI,
+		ARRIVAL_LOW,
+		SERVICE_END_LOW,
+		SERVICE_PHASECHG_LOW
+	}
+	Type eventType;
+	int eventPhase;
+}
+\end{lstlisting}
+Here we see that this class extends the abstract class \codeln{Event} and
+defines an enumeration \codeln{Type} to list all the possible events: arrivals,
+service completion, and service phase change without completion, for both high
+and low priority jobs. Lines 10-11 then show that the two properties that
+define an event are the type of the event, and the \emph{service phase} in
+which the event occurs. Note that here by phase we refer to the phase of the
+job in service, which we set to 0 if the system is idle.
+
+With the definition of states and events we then define our main class
+\codeln{PriorityQueueMPHPHPreempt}, which, as shown in the following snippet,
+extends the \codeln{GeomProcess} class since our model is a QBD.
+\begin{lstlisting}
+public class PriorityQueueMPHPHPreempt extends 
+	GeomProcess<PriorityQueueMPHPHPreemptState, PriorityQueueMPHPHPreemptEvent>{
+	double lambda_hi;
+	double lambda_low;
+	PhaseVar servTime_hi;
+	PhaseVar servTime_low;
+	int bufferCapacity;
+}
+\end{lstlisting}
+Here lines 2 and 3 define the properties associated to the arrival rates, while
+lines 4 and 5 define the PH variables that describe the service process. These
+are \codeln{jPhase} objects. The final property is the capacity of the
+high-priority buffer. As part of this class we need to define the
+\codeln{active}, \codeln{dests}, and \codeln{rates} methods. The following code
+illustrates part of the \codeln{active} method.
+\begin{lstlisting}
+switch (event.eventType) {
+	case ARRIVAL_HI:
+		if ( state.getNumberHiJobs() < bufferCapacity )
+			result = true;
+		break;
+	case SERVICE_END_HI:
+		result =  (state.getServiceType()==1 && state.getServicePhase() == event.eventPhase);
+		result = result && servTime_hi.getMat0().get(state.getServicePhase()-1) > 0;
+		break;
+}
+\end{lstlisting}
+In case the event is a high-priority arrival, lines 3-5 allow it to be
+active if there is spare capacity in the buffer. Instead, if the event is a
+high-priority service completion, line 7 first checks if the
+current job in service is of class 1 and if its
+service phase matches that of the event. Next, line 8 checks if
+it is actually possible to have a service completion in such phase, i.e.,
+if the entry of the exit vector $-\bA^{(1)}\one$ corresponding
+to the current service phase is positive. This vector is obtained with the
+\jPhase \codeln{getMat0} method. Similar checks are performed for all other
+events.
+
+Next, in the \Dests and \Rate methods we define the destination state for each
+event in each state, and the corresponding transition rate. In the interest of
+space, the next snippet depicts a small section of the \Rate method, where we
+define the transition rate in case of a high-priority arrival.
+\begin{lstlisting}
+switch (event.eventType) {
+	case ARRIVAL_HI:
+		if (curState.getNumberHiJobs() == 0){
+			rate = lambda_hi*servTime_hi.getVector().get(newPhase-1);
+		}else
+			rate = lambda_hi;
+	break;
+...
+}
+\end{lstlisting}
+Here lines 3-4 consider the case where the number of high-priority jobs in the
+current state is zero, which allows the new high-priority job to start service,
+even if a low-priority job is present. The transition rate is then the arrival
+rate times the probability that a new high-priority service starts in the phase
+marked by the destination state. This probability is obtained with the \jPhase
+\codeln{getVector} method. Instead, lines 5-6 cover the case where a
+high-priority job is already in service, thus the new job simply joins the
+queue with transition rate given by its arrival rate.
+
+With all the previous definitions we now state the \codeln{main} method, where
+we set up the parameters of the model, and call the jMarkov routines to build
+the model, solve it, and compute the measures of performance, as shown next.
+\begin{lstlisting}
+public static void main(String[] a) {
+	double lambda_hi = 0.2;
+	double lambda_low = 0.2;
+
+	double[] data = readTextFile("src/examples/jphase/W2.txt");
+	EMHyperErlangFit fitter_hi = new EMHyperErlangFit(data);
+	ContPhaseVar servTime_hi = fitter_hi.fit(4);
+
+	MomentsACPHFit fitter_low = new MomentsACPHFit(2, 6, 25);
+	ContPhaseVar servTime_low = fitter_low.fit();
+			
+	int bufferCapacity = 100;
+	PriorityQueueMPHPHPreempt model = new PriorityQueueMPHPHPreempt(lambda_hi, lambda_low, 
+			servTime_hi, servTime_low, bufferCapacity);
+	model.generate();
+	model.printMOPs();
+}
+\end{lstlisting}
+Here lines 2-3 define the arrival rates of both job types. Next, lines 5-7
+build the PH distribution for the high-priority services. To this end, we first
+read a data trace into a double array, which we pass to a \jPhase
+\codeln{EMHyperErlangFit} fitter to obtain the fitted PH distribution. Lines
+9-10 perform a similar step, but in this case we use a moment-matching method to
+obtain a low-priority service-time PH distribution with a given set of first
+three moments. After this, line 12 defines the buffer capacity and line 13
+builds the model object with all the parameters. Lines 15-16 ask jMarkov to
+generate the model and compute the measures of performance, and we obtain the
+following result.
+\begin{lstlisting}
+MEASURES OF PERFORMANCE
+NAME                                 MEAN      SDEV
+Expected Level                    6.47779
+Number High Jobs                  1.02821   1.79758
+High Jobs Blocking Probability    0.00494   0.07010
+Utilization                       0.84043   0.36621
+\end{lstlisting}
+Thus, with the parameters as above, the mean number of high and low priority
+jobs is 1.02 and 6.47, respectively, while the blocking probability of
+high-priority jobs is 0.0049. The output also includes the mean server
+utilization and the standard deviation of the performance measures.
+
+
+We highlight three central takeaways from the above example. (i) The definition
+of the model is made at a high level, referring to events (arrivals, service
+completions, service phase transitions), and their effect on the system state.
+At no point one needs to explicitly define the entries of the matrices $\bA_0$,
+$\bA_1$, or $\bA_2$ in~\eqref{eq:QBDMatrix}, which is not a trivial task when
+the model is made of several variables as in this example.\ jMarkov takes care
+of this task. (ii) Once the model is defined, it is relatively simple to
+introduce a modification in the operational rules. Consider for instance
+modifying the preemptive policy by a non-preemptive one. If one is in charge of
+building the transition matrix~\eqref{eq:QBDMatrix}, this would require an
+almost completely new model. Instead, with jMarkov we can start with the
+current model and modify the \Dests and \Rate methods, specifically the cases
+where a high priority arrival occurs. This facilitates the evaluation of
+different policies, which is a common task in system modeling. (iii) The
+integration of the \jQBD and \jPhase modules allows us to use the
+representation of PH variables when defining the QBD model with the \Active,
+\Dests, and \Rate methods. In these methods we can explicitly refer to the
+initial phase probabilities, or to the rates of service completion at any given
+phase. Further, we can exploit the fitting methods in \jPhase to define the
+model parameters, using either trace data or statistics such as the mean or
+variance. The integration of these modules in jMarkov thus facilitates the
+development and evaluation of complex models.
+
+%\subsection{Numerical experiments}
+%\label{sc:numerics}
+%
+%
+%To validate the algorithms implemented in jMarkov we have performed exhaustive
+%tests on jMarkov. In \cite{jMarkovWeb} we currently provide over 20 tests, in
+%the form of jUnit~\cite{junit} test cases, where we compare the results of many
+%models against results obtained with alternative tools. These test cases cover
+%the main module, as well as the \jQBD, \jMDP, and \jPhase modules.
+%
+%To illustrate the execution times that can be expected with jMarkov we make use
+%of the priority queue example introduced earlier in this section. We set the
+%arrival rates to achieve three levels of server utilization $\rho$, namely 0.1,
+%0.5, and 0.9. The utilization is the fraction of time that the server is busy
+%and influences the execution time of the logarithmic-reduction algorithm used
+%to solve the QBD model. Also, we set the service time distributions to have 2
+%phases, and we consider values for the buffer capacity $C$ between 100 and
+%2000. Table~\ref{tab:qTimes} reports the size $m$ of the $\bA_i$ matrices that
+%define the QBD in~\eqref{eq:QBDMatrix}. Table~\ref{tab:qTimes} also compares the execution times, in seconds, obtained with jMarkov against those obtained with SMCSolver~\cite{bini09}, which executes in MATLAB. These times were obtained on a MAC with a 2.9 GHz Intel Core i7 with 2 cores, 8 GB of memory, and running OS X 10.11.4. First we note that jMarkov is able to solve large systems, with block sizes up to 4000. jMarkov is however about 2-5 times slower than SMCSolver. This comes at no surprise since SMCSolver relies on the very efficient matrix manipulation in MATLAB. In spite of this, jMarkov is
+%well-suited to consider middle-sized problems, requiring less than a second to
+%solve problems with block size 200, and just 30 seconds for problems with block
+%size 1000.
+%
+%
+%\begin{table}%
+%\tbl{Execution times (sec) with jMarkov and SMC Solver for the priority queue model\label{tab:qTimes}}{%
+%\begin{tabular}{c|c|ccc|ccc}
+%\multicolumn{1}{c}{}&\multicolumn{1}{c}{}&\multicolumn{3}{c}{jMarkov}	& \multicolumn{3}{c}{SMCSolver}\\ \hline% \cline{3-8}
+%\multirow{ 2}{*}{$C$} 	&\multirow{ 2}{*}{$m$}	& \multicolumn{3}{|c|}{$\rho$}	& \multicolumn{3}{|c}{$\rho$}\\ %\cline{3-8}
+%&&	0.1 	& 0.5 	&0.9 		&	0.1 & 0.5 &0.9\\ 			\hline
+%100	&202	&	0.38	&0.36	&0.34	&0.06	&0.07	&0.08\\
+%200	&402	& 1.76	&2.26	&2.49	&0.44	&0.37	&0.45\\
+%500	&1002 & 31.12	&31.10&29.87&13.99&10.83&9.82\\
+%1000&2002	&	252.5	&292.4&297.7&63.70	&144.9&134.6\\
+%2000&4002	& 2151	&2298	&2586	&435.5&659.3&997.7\\
+%\end{tabular}}
+%\end{table}%
+%
+%As we have highlighted, the key benefits of jMarkov lie in its modeling
+%capabilities, but we have seen above that its solvers are also well-suited for
+%middle-sized problems. In addition, the flexibility of jMarkov, and its
+%implementation in Java, offer a number of options to solve larger problems, or
+%to exploit the reduced execution times offered by tools like SMCSolver on
+%MATLAB. It is possible for instance to generate the MC/QBD model in jMarkov,
+%save the associated matrices in files, which are then loaded in a different
+%tool to solve the model. Alternatively, in the following code snippet we show
+%how to directly import the jMarkov routines from MATLAB to exploit the solvers
+%in SMCSolver. The first step is to include the jMarkov library in the static
+%Java classpath of MATLAB. This allows us, as shown in the first 4 lines of the
+%code snippet, to import the jMarkov routines, as well as the MTJ library for
+%some matrix manipulations. In particular, the third line imports the model
+%\codeln{PriorityQueueMPHPHPreempt} we defined in the previous section. Lines
+%6-14 define the model parameters in a similar manner as in the previous
+%section, exploiting the \jPhase routines to fit PH distributions. Line 16
+%creates the model object and line 17 generates the model parameters. The next
+%step, in lines 19-21, is to extract the matrices that define the QBD from the
+%jMarkov \codeln{model} object. Finally, we use these matrices to call the
+%routines in SMCSolver to solve the model, as in lines 23-24. This illustrates
+%that the modeling capabilities of jMarkov can be exploited to build complex
+%models, and the user can easily employ alternative solvers if this is required
+%or preferred.
+%
+%\begin{lstlisting}
+%import jphase.fit.EMHyperErlangFit;
+%import jphase.fit.MomentsACPHFit;
+%import examples.jmarkov.PriorityQueueMPHPHPreempt;
+%import no.uib.cipr.matrix.Matrices;
+%
+%lambda_hi = 0.2; lambda_low = 0.2;
+%bufferCapacity = 10;
+%
+%data = csvread('data/W2.txt');
+%fitter_hi = EMHyperErlangFit(data);
+%servTime_hi = fitter_hi.fit(4);
+%
+%fitter_low = MomentsACPHFit(2, 6, 25);
+%servTime_low = fitter_low.fit();
+%
+%model = PriorityQueueMPHPHPreempt(lambda_hi, lambda_low, servTime_hi, servTime_low, bufferCapacity);
+%model.generate();
+%
+%As = model.getAMatrices(); Bs = model.getBMatrices();
+%A0 = Matrices.getArray(As(1)); A1 = Matrices.getArray(As(2)); A2 = Matrices.getArray(As(3));
+%B00 = Matrices.getArray(Bs(1));	B01 = Matrices.getArray(Bs(2)); B10 = Matrices.getArray(Bs(3));
+%
+%[G,R] = QBD_LR(A2,A1,A0);
+%pi = QBD_pi(B10,B00, R, 'Boundary', [B01; A1 + R*A2]);
+%\end{lstlisting}

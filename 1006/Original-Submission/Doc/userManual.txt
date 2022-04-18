@@ -1,0 +1,569 @@
+#+TITLE: Fast and accurate evaluation of a generalized incomplete gamma function
+
+* Note
+
+  We kindly advise you to open this .org file using Emacs to benefit from the
+  power of *Orgmode*, making for instance possible to *show/hide* all sections
+  by placing the cursor on the corresponding line (begins with character `*`)
+  and pressing the <TAB> key on your keyboard. The same functionality holds for
+  list items (starting with `+`) or code blocks (starting with
+  "#+begin_src"). You will also enjoy other surprises (such as code coloration,
+  bold and italic fonts, etc.), and much more (see [[http://orgmode.org/]]).
+
+* Copyright
+
+  DELTAGAMMAINC Fast and Accurate Evaluation of a Generalized Incomplete Gamma
+  Function. Copyright (C) 2016 Remy Abergel (remy.abergel AT parisdescartes.fr),
+  Lionel Moisan (Lionel.Moisan AT parisdescartes.fr).
+
+  DELTAGAMMAINC is a software dedicated to the computation of a generalized
+  incomplete gammafunction. See the Companion paper for a complete description
+  of the algorithm.
+
+  ``Fast and accurate evaluation of a generalized incomplete gamma function''
+  (Rémy Abergel, Lionel Moisan), to appear in ACM Transactions on Mathematical
+  Softwares.
+
+  This program is free software: you can redistribute it and/or modify it under
+  the terms of the GNU General Public License as published by the Free Software
+  Foundation, either version 3 of the License, or (at your option) any later
+  version.
+
+  This program is distributed in the hope that it will be useful, but WITHOUT
+  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+  FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+  details.
+
+  You should have received a copy of the GNU General Public License along with
+  this program.  If not, see <http://www.gnu.org/licenses/>.
+
+* Installation
+** Dependancies and content
+
+  This software has *very low dependencies*. Only the following standard
+  libraries are required :
+
+  + stdio
+  + stdlib
+  + math
+  + string
+
+  This software is made of *eight files*:
+
+           | source file name | short description           |
+           |------------------+-----------------------------|
+           | kernel.c         | core of the algorithm       |
+           | Gfunc.c          | evaluation of G             |
+           | deltagammainc.c  | evaluation of I             |
+           | check.c          | unit tests                  |
+           | kernel.h         | header file                 |
+           | INSTALL          | executable installer (bash) |
+           | README.org       | this documentation          |
+           | COPYING          | GNU General Public License  |
+
+  More details about the content of theses files will be given at section
+  entitled *Description of the software*.
+
+** Compilation
+
+  See below how the program can be compiled using gcc (the compilation commands
+  can be adapted to others C-compiler).
+
+  You can compile the program using the INSTALL executable. From the src
+  directory of this program, run the command displayed below (between
+  the #+begin_src and #+end_src tags)
+
+  #+begin_src sh
+  ./INSTALL
+  #+end_src
+
+  You can check below (betwen the #+begin_stdout and #+end_stdout tags) the
+  message that should be displayed in the standard output if the installation
+  was successful:
+
+  #+begin_stdout
+
+  *************************************************************
+  *           COMPILATION OF DELTAGAMMAINC MODULES            *
+  *************************************************************
+
+  + compilation of module 'Gfunc': success
+  + compilation of module 'deltagammainc': success
+
+  #+end_stdout
+
+  After compulation, the executable files *deltagammainc*, *Gfunc* and *check*
+  are created into the src directory of this program.
+
+  Notice that you can also manually compile the program using the following
+  commands:
+
+  #+begin_src sh
+  gcc -O3 kernel.c Gfunc.c -lm -o Gfunc
+  gcc -O3 kernel.c deltagammainc.c -lm -o deltagammainc
+  #+end_src
+
+** Unit tests
+
+   The *check* module can be used to launch unit tests. Its purpose is to
+   validate that each unit of the software performs as designed. Place yourself
+   into the src directory of this program, and run the check module using
+
+   #+begin_src sh
+   ./check
+   #+end_src
+
+   This will compute and display G(p,x) for several values of (p,x) and
+   I(x,y,mu,p) for several values of (x,y,mu,p). Each computed value of I and G
+   will be compared to pretabulated reference values that were computed using
+   MAPLE. This should end up with a message displayed in the standard output
+   similar to the following:
+
+   #+begin_stdout
+
+   Unit tests for module 'deltagammainc': compute (rho,sigma) such as
+   rho * exp(sigma) = I = integral over [x,y] of s^{p-1} * exp(-mu*s) ds.
+
+   (Check for results displayed in Table V of the companion paper).
+
+   + (p=1 , x=9  , y=11 , mu=1 ) : I=1.06708103296433956e-04, relative error (expected~6e-16, actual=7e-16), status = PASSED
+   + (p=5 , x=9  , y=11 , mu=1 ) : I=9.56616980230237002e-01, relative error (expected~1e-15, actual=1e-15), status = PASSED
+   + (p=10, x=9  , y=11 , mu=1 ) : I=8.95942017652369832e   +04, relative error (expected~1e-14, actual=1e-14), status = PASSED
+   + (p=12, x=9  , y=11 , mu=1 ) : I=8.93104948155387491e   +06, relative error (expected~3e-15, actual=3e-15), status = PASSED
+   + (p=14, x=9  , y=11 , mu=1 ) : I=9.02034141170808077e   +08, relative error (expected~2e-15, actual=3e-15), status = PASSED
+   + (p=1 , x=100, y=120, mu=1 ) : I=3.72007596835316975e-44, relative error (expected~5e-15, actual=5e-15), status = PASSED
+   + (p=5 , x=100, y=120, mu=1 ) : I=3.87343326443147300e-36, relative error (expected~4e-15, actual=4e-15), status = PASSED
+   + (p=10, x=100, y=120, mu=1 ) : I=4.08366058817005206e-26, relative error (expected~8e-15, actual=8e-15), status = PASSED
+   + (p=20, x=100, y=120, mu=1 ) : I=4.57980828029284739e-06, relative error (expected~2e-14, actual=2e-14), status = PASSED
+   + (p=1 , x=5  , y=10 , mu=-1) : I=2.18780526357041635e   +04, relative error (expected~1e-15, actual=1e-15), status = PASSED
+   + (p=3 , x=5  , y=10 , mu=-1) : I=1.80364717146940669e   +06, relative error (expected~1e-16, actual=1e-16), status = PASSED
+   + (p=10, x=5  , y=10 , mu=-1) : I=1.12951155494985059e   +13, relative error (expected~4e-15, actual=4e-15), status = PASSED
+   + (p=1 , x=20 , y=25 , mu=-1) : I=7.15197341419759674e   +10, relative error (expected~2e-15, actual=2e-15), status = PASSED
+   + (p=10, x=20 , y=25 , mu=-1) : I=2.00168223708455400e   +23, relative error (expected~9e-16, actual=9e-16), status = PASSED
+   + (p=20, x=20 , y=25 , mu=-1) : I=1.47339480836645000e   +37, relative error (expected~1e-15, actual=1e-15), status = PASSED
+
+
+   Unit tests for module 'Gfunc': compute G(p,x) such as
+   if x <= p: G(p,x) = exp(x-p*log(|x|)) * integral over [0,|x|] of s^{p-1} * exp(-sign(x)*s) ds
+   otherwise: G(p,x) =  exp(x-p*log(x))  * integral over [x,inf] of s^{p-1} * exp(-s) ds.
+
+   + (p=1e   +01, x=1e   +01) : G=4.33274822761945899e-01, relative error (expected~5e-16, actual=6e-16), status = PASSED
+   + (p=1e   +01, x=1e   +02) : G=1.09773581433105089e-02, relative error (expected~1e-16, actual=1e-16), status = PASSED
+   + (p=1e   +01, x=1e   +03) : G=1.00907250703918057e-03, relative error (expected~1e-16, actual=1e-16), status = PASSED
+   + (p=1e   +01, x=1e   +04) : G=1.00090072050430250e-04, relative error (expected~1e-16, actual=1e-16), status = PASSED
+   + (p=1e   +01, x=1e   +05) : G=1.00009000720050387e-05, relative error (expected~2e-16, actual=2e-16), status = PASSED
+   + (p=1e   +02, x=1e   +01) : G=1.10975931173828909e-02, relative error (expected~2e-16, actual=2e-16), status = PASSED
+   + (p=1e   +02, x=1e   +02) : G=1.28772193213532504e-01, relative error (expected~2e-15, actual=2e-15), status = PASSED
+   + (p=1e   +02, x=1e   +03) : G=1.10974291120600902e-03, relative error (expected~1e-16, actual=2e-16), status = PASSED
+   + (p=1e   +02, x=1e   +04) : G=1.00999797021514461e-04, relative error (expected~1e-16, actual=2e-16), status = PASSED
+   + (p=1e   +02, x=1e   +05) : G=1.00099097114199825e-05, relative error (expected~1e-16, actual=1e-16), status = PASSED
+   + (p=1e   +03, x=1e   +01) : G=1.01009071471357299e-03, relative error (expected~1e-16, actual=2e-16), status = PASSED
+   + (p=1e   +03, x=1e   +02) : G=1.11097413973301469e-03, relative error (expected~7e-16, actual=8e-16), status = PASSED
+   + (p=1e   +03, x=1e   +03) : G=3.99699388464567068e-02, relative error (expected~3e-15, actual=3e-15), status = PASSED
+   + (p=1e   +03, x=1e   +04) : G=1.11097397244931716e-04, relative error (expected~2e-16, actual=2e-16), status = PASSED
+   + (p=1e   +03, x=1e   +05) : G=1.01009070421084093e-05, relative error (expected~1e-16, actual=1e-16), status = PASSED
+   + (p=1e   +04, x=1e   +01) : G=1.00100090071046928e-04, relative error (expected~1e-16, actual=1e-16), status = PASSED
+   + (p=1e   +04, x=1e   +02) : G=1.01009997959810311e-04, relative error (expected~1e-16, actual=2e-16), status = PASSED
+   + (p=1e   +04, x=1e   +03) : G=1.11109739572180782e-04, relative error (expected~2e-16, actual=2e-16), status = PASSED
+   + (p=1e   +04, x=1e   +04) : G=1.25665794460619144e-02, relative error (expected~1e-14, actual=1e-14), status = PASSED
+   + (p=1e   +04, x=1e   +05) : G=1.11109739404560907e-05, relative error (expected~2e-16, actual=2e-16), status = PASSED
+   + (p=1e   +05, x=1e   +01) : G=1.00010000900071030e-05, relative error (expected~3e-16, actual=2e-16), status = PASSED
+   + (p=1e   +05, x=1e   +02) : G=1.00100099097104160e-05, relative error (expected~1e-16, actual=1e-16), status = PASSED
+   + (p=1e   +05, x=1e   +03) : G=1.01010090704106742e-05, relative error (expected~1e-16, actual=1e-16), status = PASSED
+   + (p=1e   +05, x=1e   +04) : G=1.11110973938932034e-05, relative error (expected~1e-16, actual=1e-16), status = PASSED
+   + (p=1e   +05, x=1e   +05) : G=3.96666393667664558e-03, relative error (expected~5e-14, actual=5e-14), status = PASSED
+
+   All unit tests were successfully passed!
+
+   #+end_stdout
+
+   Notice that, due to differences between compilators, you may observe slight
+   differences between the values displayed above and that obtain on your own
+   computer.
+
+   For each unit test, we compute the relative error between the computed value
+   of I or G to the corresponding pretabulated reference value of I or G
+   computed using MAPLE. Each "actual" relative error is compared to an
+   "expected" relative error, corresponding to the relative error that the user
+   is expected to obtain when the installation is done correctly.
+
+   For instance, for (p=1,x=9,y=11,mu=1), we expect the software to compute
+   I=1.06708103296433956e-04 while the actual value of I computed using MAPLE is
+   I=1.06708103296433890e-04. Therefore, the "expected" relative error between
+   the computed value of I and the pretabulated one is 6e-16. In case the user
+   computes, on its own computer, a different value of I, the "actual" relative
+   error will be different from the "expected" relative error. The unit test is
+   considered as PASSED if the ratio between "actual" and "expected" relative
+   error is smaller or equal to 10.
+
+   Notice that the "expected" relative errors were computed using MAPLE (with 30
+   digits of precision) while the "actual" relative errors are computed in
+   standard double precision (16 digits of precision). Therefore, it is normal
+   to observe slight differences between "actual" and "expected" relative
+   errors.
+
+* Definitions (G-function and generalized incomplete gamma function)
+
+  + G-function
+
+    for any positive real number p > 0, and any real number x, we define G(p,x) as follows:
+
+    + if x <= p :: G(p,x) = exp(x-p*log(|x|)) * integral of s^{p-1} * exp(-sign(x)*s) ds from s=0 to |x|
+    + otherwise :: G(p,x) =  exp(x-p*log(x))  * integral of s^{p-1} * exp(-s) ds from s=x to infinity
+
+  + Generalized *incomplete* gamma function
+
+    For any nonzero number mu, positive real number p, nonnegative real number
+    x, and nonnegative number y (possibly infinite, at the condition that mu >
+    0), we set :
+
+    I_{x,y}^{mu,p} = integral of s^{p-1} e^{-mu s} ds from s=x to y
+
+* Description of the software
+
+  + kernel.c :: *does not* contain any main function
+
+    This file only contains the routines for the evaluation of the G-function
+    and the generalized incomplete gamma function, using either some continued
+    fractions, a recursive integration by parts, or a Romberg approximation.
+
+  + Gfunc.c :: contains a main function and a parser (interactive)
+
+    This program is dedicated to computation of the G-function. The input
+    parameters (p,x) must be entered by the user, then, the program displays the
+    value of G(p,x) on the standard output with 17 digits of precision.
+
+  + deltagammainc.c :: contains a main function and a parser (interactive)
+
+    This program is dedicated to computation of the of the generalized
+    incomplete gamma function, I_{x,y}^{mu,p}, with a mantissa-exponent
+    representation. The input parameters (x,y,mu,p) must be entered by the
+    user. The computation method for the integral is automatically selected by
+    the algorithm, according to the value of (x,y,mu,p).
+
+    This program displays into the standard output the following quantities:
+
+    + The computed *mantissa* rho, with 17 digits (double precision)
+    + The computed *exponent* sigma, with 17 digits (double precision)
+    + The *value of the integral* rho*exp(sigma), with 17 digits.
+
+  + *check.c* :: contains a main function but no parser (non interactive)
+
+    Perform unit tests for the whole software, as described in section "Unit
+    tests" above.
+
+* Companion paper
+
+  Details and explanations about the algorithm are available in the *companion
+  paper* of this algorithm:
+
+  Rémy Abergel and Lionel Moisan. Fast and Accurate evaluation of a generalized
+  incomplete gamma function. To appear in ACM Transactions on Mathematical
+  Softwares.
+
+  Feel free to use and adapt this code. However, if you use it for your research
+  or in software code, please be so kind as to cite the paper.
+
+* Examples
+** Evaluate the G-function using Gfunc
+*** Command line usage
+
+    As usual, optional arguments are indicated inside brackets.
+
+    Usage: Gfunc [--help] x p
+
+       --help : display help
+       x      : (double) a real number, possibly infinite (0 <= x <= inf)
+       p      : (double) a positive real number (p > 0)
+
+    Description: compute G(p,x) such as
+
+      if x <= p: G(p,x) = exp(x-p*log(|x|)) * integral over [0,|x|] of s^{p-1} * exp(-sign(x)*s) ds
+      otherwise: G(p,x) =  exp(x-p*log(x))  * integral over [x,inf] of s^{p-1} * exp(-s) ds
+
+*** A commented basic example
+
+    Let us compute G(p,x) for x=0.1 and p=100. From the src directory of this
+    program, run the following command
+
+    #+begin_src sh
+    ./Gfunc 0.1 100
+    #+end_src
+
+    This should result in the following displayed information (without the line
+    numerotation, that were added here to improve the quality of the
+    explanations)
+
+    #+begin_src output
+    1.  Computing G(p,x) = exp(x-p*log(|x|)) * integral over [0,|x|] of s^{p-1} * exp(-sign(x)*s) ds,
+    2.  where (hexadecimal): x=0x1.999999999999ap-4, p=0x1.9p+6,
+    3.  (in decimal approx): x=0.1000000000000000055511151231257827, p=100.
+    4.
+    5.  Computed G(p,x) = 1.00099107063852440e-02
+    6.
+    #+end_src
+
+    Let us comment this result line by line:
+
+    + line 1 :: we recall the definition of G(p,x)
+    + line 2 :: we display the values of the inputs (x,y,mu,p) in hexadecimal
+                floating-point format. The interest of using this format is that
+                all hexadecimal floating-point constants have exact
+                representations in binary floating-point, unlike decimal
+                floating-point constants, which in general do not (for further
+                details on the syntax of hexadecimal floating-point constants,
+                see pages 57-58 of the C99 specification).
+    + line 3 :: decimal approximation of the inputs (x,y,mu,p). When an input
+                value is not exactly representable in double floating-point
+                precision (such as x=0.1), it is replaced by the nearest double
+                floating-point number (here, the actual value of x will be
+                approximatively equal to 0.1000000000000000055511151231257827,
+                see line 2. for the exact representation of x in hexadecimal
+                floating-point format).
+    + line 4-6 :: we display the computed value of G(p,x), in scientific
+                  notation with 17 digits of precision.
+
+*** Several evaluations of the G-function
+
+    In this section, we compute the values of G(p,x) for several values of the
+    parameters (p,x).
+
+    Open a terminal, then from the src directory of this program, run the (bash)
+    commands displayed below (between the #+begin_src and #END_SRC tags)
+
+    #+begin_src sh
+
+      #************************************************************#
+      #*                       display help                       *#
+      #************************************************************#
+      ./Gfunc --help
+
+      #************************************************************#
+      #*             compute G(p,x) for x=9 and p=119             *#
+      #************************************************************#
+      ./Gfunc 8 119
+
+      #************************************************************#
+      #*            compute G(p,x) for x=30 and p=500             *#
+      #************************************************************#
+      ./Gfunc 30 500
+
+      #************************************************************#
+      #*            compute G(p,x) for x=900 and p=20             *#
+      #************************************************************#
+      ./Gfunc 900 20
+
+      #************************************************************#
+      #*           compute G(p,x) for x=7000 and p=4000           *#
+      #************************************************************#
+      ./Gfunc
+
+    #+end_src
+
+** Evaluate the generalized incomplete gamma function using deltagammainc
+*** Command line usage
+
+    As usual, optional arguments are indicated inside brackets.
+
+    Usage: deltagammainc [--help] [--verbose] x y mu p
+
+       --help    : display help
+       --verbose : verbose mode (display how the integral was computed)
+       x         : (double) a nonnegative number, possibly infinite (inf)
+       y         : (double) a number, possibly infinite (inf), greater than x
+       mu        : (double) a nonzero real number
+       p         : (double) a positive real number (must be integer if mu<0)
+
+    Description:
+
+    Compute (rho,sigma) such as I = rho * exp(sigma), where
+    I = integral over [x,y] of s^{p-1} * exp(-mu*s) ds.
+
+*** A commented basic example
+
+    Let us compute the generalized incomplete gamma function, I_{x,y}^{mu,p} for
+    x=0.1, y=200, p=100 and mu=1. From the src directory of this program, run
+    the following command
+
+    #+begin_src sh
+    ./deltagammainc --verbose 0.1 200 1 100
+    #+end_src
+
+    This should result in the following displayed information (without the line
+    numerotation, that were added here to improve the quality of the
+    explanations)
+
+    #+begin_src output
+     1.  Computing I = integral over [x,y] of s^{p-1} * exp(-mu*s) ds,
+     2.  where (hexadecimal): x=0x1.999999999999ap-4, y=0x1.9p+7, mu=0x1p+0, p=0x1.9p+6,
+     3.  (in decimal approx): x=0.1000000000000000055511151231257827, y=200, mu=1, p=100.
+     4.
+     5.  Details: I will be computed as a difference of integrals I=A-B.
+     6.
+     7.  Output: I = 9.33262154439491644e+155
+     8.
+     9.  Representation with double numbers: I = rho*exp(sigma), where
+    10.  rho   = 9.99999999999998113e-01
+    11.  sigma = 3.59134205369575454e+02
+    12.
+    #+end_src
+
+    Let us comment this result line by line:
+
+    + line 1 :: we recall the definition of I_{x,y}^{mu,p}
+    + line 2 :: we display the values of the inputs (x,y,mu,p) in hexadecimal
+                floating-point format. The interest of using this format is that
+                all hexadecimal floating-point constants have exact
+                representations in binary floating-point, unlike decimal
+                floating-point constants, which in general do not (for further
+                details on the syntax of hexadecimal floating-point constants,
+                see pages 57-58 of the C99 specification).
+    + line 3 :: decimal approximation of the inputs (x,y,mu,p). When an input
+                value is not exactly representable in double floating-point
+                precision (such as x=0.1), it is replaced by the nearest double
+                floating-point number (here, the actual value of x will be
+                approximatively equal to 0.1000000000000000055511151231257827,
+                see line 2. for the exact representation of x in hexadecimal
+                floating-point format).
+    + lines 4-6 :: because the option --verbose was used, we can read here
+                   wether I_{x,y}^{mu,p} was numerically computed using a
+                   difference or using Romberg's numerical integration method
+                   (we refer to the companion paper for more details about the
+                   effective numerical procedure).
+    + line 7 :: we display the computed value of I_{x,y}^{mu,p}, in scientific
+                notation.
+    + lines 8-12 :: I_{x,y}^{mu,p} was first computed with a mantissa-exponent
+                    representation of the type I_{x,y}^{mu,p} = rho*exp(sigma),
+                    where rho and sigma where evaluated in double precision
+                    (their computed values are displayed in scientific notation
+                    with 17 digits of precision).
+
+*** Several evaluations of the generalized incomplete gamma function
+
+    In this section, we reproduce the numerical experiments displayed in Tables
+    V and VI of the companion paper.
+
+    Open a terminal, then from the src directory of this program, run the (bash)
+    commands displayed below (between the #+begin_src and #END_SRC tags)
+
+    + Reproduce results of Table V (mu > 0) ::
+
+      #+begin_src sh
+
+      #********************************************#
+      #*               display help               *#
+      #********************************************#
+      ./deltagammainc --help
+
+      #********************************************#
+      #* set mu=1, x=9, y=11, p in {1,5,10,12,14} *#
+      #********************************************#
+      mu=1; x=9; y=11;
+      for p in 1 5 10 12 14
+      do
+        ./deltagammainc $x $y $mu $p
+      done
+
+      #********************************************#
+      #* set mu=1, x=100, y=120, p in {1,5,10,20} *#
+      #********************************************#
+      mu=1; x=100; y=120;
+      for p in 1 5 10 20
+      do
+        ./deltagammainc $x $y $mu $p
+      done
+      #+end_src
+
+    + Reproduce results of Table V (mu < 0) ::
+
+      #+begin_src sh
+
+      #*****************************************#
+      #*              display help             *#
+      #*****************************************#
+      ./deltagammainc --help
+
+      #*****************************************#
+      #*  set mu=-1, x=5, y=10, p in {1,3,10}  *#
+      #*****************************************#
+      mu=-1; x=5; y=10;
+      for p in 1 3 10
+      do
+        ./deltagammainc $x $y $mu $p
+      done
+
+      #*****************************************#
+      #* set mu=-1, x=20, y=25, p in {1,10,20} *#
+      #*****************************************#
+      mu=-1; x=20; y=25;
+      for p in 1 10 20
+      do
+        ./deltagammainc $x $y $mu $p
+      done
+      #+end_src
+
+    + Reproduce results of Table IV (x close to y) ::
+
+      #+begin_src sh
+      #********************************************************#
+      #*                     display help                     *#
+      #********************************************************#
+      ./deltagammainc --help
+
+      #********************************************************#
+      #* set mu=1, y=5, p=10, x=y-10^{-a}, a in {0,1,3,4,5,6} *#
+      #********************************************************#
+      mu=1; y=5; p=10;
+      for x in 4 4.9 4.999 4.9999 4.99999 4.999999
+      do
+        ./deltagammainc $x $y $mu $p
+      done
+
+      #*******************************************************#
+      #*  set mu=1, y=17, p=17, x=y-10^{-a}, a in {0,1,3,4}  *#
+      #*******************************************************#
+      mu=1; y=17; p=17;
+      for x in 16 16.9 16.999 16.9999
+      do
+        ./deltagammainc $x $y $mu $p
+      done
+
+      #*******************************************************#
+      #*  set mu=-1, y=21, p=10, x=y-10^{-a}, a in {0,1,3,5} *#
+      #*******************************************************#
+      mu=-1; y=21; p=10;
+      for x in 20 20.9 20.999 20.99999
+      do
+        ./deltagammainc $x $y $mu $p
+      done
+     #+end_src
+
+* Versionning
+
+  The current version of this software is: 2.2
+
+  + version 2.2 (September 2019): added a module for unit tests, updated the
+    documentation.
+
+  + version 2.1 (November 2018): minor modifications in the documentation
+    (this README.org file).
+
+  + version 2.0 (July 2017): software corresponding to our first revision of
+    the paper (added the G-function).
+
+  + version 1.0 (June 2016): software corresponding to our first submission
+    (see preprint on HAL: https://hal.archives-ouvertes.fr/hal-01329669/)
+
+* Contact
+
+  This work was done at
+
+  Université Paris Descartes, Laboratoire MAP5, CNRS UMR 8145.
+  45 rue des Saints-Pères 75270 Paris Cedex 06, FRANCE.
+
+  If you use, adapt or improve the code, we would love to hear about it!
+
+  [[mailto:Remy.Abergel@parisdescartes.fr][Remy.Abergel@parisdescartes.fr]]
+  [[mailto:Lionel.Moisan@parisdescartes.fr][Lionel.Moisan@parisdescartes.fr]]
+
+  Rémy Abergel & Lionel Moisan.

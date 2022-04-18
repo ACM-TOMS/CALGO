@@ -1,0 +1,3492 @@
+C     ALGORITHM 596, COLLECTED ALGORITHMS FROM ACM.
+C     ALGORITHM APPEARED IN ACM-TRANS. MATH. SOFTWARE, VOL.9, NO. 2,
+C     JUN., 1983, P. 236-241; also P. 215-235.
+C***********************************************************************MAN   10
+C                                                                       MAN   20
+C  TEST MAIN PROGRAM FOR CONTINUATION CODE                              MAN   30
+C  AIRCRAFT STABILITY PROBLEM                                           MAN   40
+C                                                                       MAN   50
+C  RUN WITH X(6) = VAL1 =  -.05, -.008, 0.0, 0.1                        MAN   60
+C                                                                       MAN   70
+C  SEEKING LIMIT POINTS IN X(7).                                        MAN   80
+C                                                                       MAN   90
+C  X(1) = ROLL                                                          MAN  100
+C  X(2) = PITCH                                                         MAN  110
+C  X(3) = YAW                                                           MAN  120
+C  X(4) = ANGLE OF ATTACK                                               MAN  130
+C  X(5) = SIDESLIP                                                      MAN  140
+C  X(6) = ELEVATOR                                                      MAN  150
+C  X(7) = AILERON                                                       MAN  160
+C  X(8) = RUDDER                                                        MAN  170
+C                                                                       MAN  180
+C***********************************************************************MAN  190
+C                                                                       MAN  200
+      EXTERNAL FXAIR, FPAIR, FSOLVE                                     MAN  210
+      REAL RWORK(104)                                                   MAN  220
+      INTEGER IPIVOT(8)                                                 MAN  230
+      COMMON /COEF/ BARRAY(5,8)                                         MAN  240
+      COMMON /CONTRL/ IFIX1, IFIX2, VAL1, VAL2                          MAN  250
+      COMMON /COUNT1/ ICRSL, ITNSL, NSTCR, NCNCR, NTRCR, NLMCR, NLMRT   MAN  260
+      COMMON /COUNT2/ IFEVAL, IPEVAL, ISOLVE, NREDXF, NRDSUM, NCORXR,   MAN  270
+     * NCRSUM                                                           MAN  280
+      COMMON /DETEXP/ IEXTXL, IEXTXC, IEXTXR, IEXNXR                    MAN  290
+      COMMON /DETMAN/ DETTXL, DETTXC, DETTXR, DETNXR                    MAN  300
+      COMMON /OUTPUT/ IWRITE                                            MAN  310
+      COMMON /POINT/ CURVCF, CORDXF, ALPHLC, HSECLC, FNRM               MAN  320
+      IWRITE = 1                                                        MAN  330
+      LUNIT = 6                                                         MAN  340
+      MAXSTP = 25                                                       MAN  350
+C                                                                       MAN  360
+C  IFIX1 AND IFIX2 RECORD THE INDICES OF X WHICH ARE TO BE HELD FIXED.  MAN  370
+C  VAL1 AND VAL2 ARE THE VALUES AT WHICH THESE QUANTITIES ARE HELD.     MAN  380
+C                                                                       MAN  390
+      IFIX1 = 6                                                         MAN  400
+      IFIX2 = 8                                                         MAN  410
+      VAL1 = -.05                                                       MAN  420
+      VAL2 = 0.0                                                        MAN  430
+C                                                                       MAN  440
+C  SET PITCON ARGUMENTS                                                 MAN  450
+C                                                                       MAN  460
+      NVAR = 8                                                          MAN  470
+      LIM = 7                                                           MAN  480
+      IT = 0                                                            MAN  490
+      XIT = 0.0                                                         MAN  500
+      KSTEP2 = -3                                                       MAN  510
+      KSTEP1 = -2                                                       MAN  520
+      KSTEP = -1                                                        MAN  530
+      IPC = 7                                                           MAN  540
+      IPCFIX = 0                                                        MAN  550
+      DIRIPC = -1.0                                                     MAN  560
+      HTANCF = .3                                                       MAN  570
+      IRET = 0                                                          MAN  580
+      MODCON = 0                                                        MAN  590
+      HMAX = 100.0                                                      MAN  600
+      HMIN = .001                                                       MAN  610
+      HFACT = 3.0                                                       MAN  620
+      ABSERR = .00001                                                   MAN  630
+      RELERR = .00001                                                   MAN  640
+      RWORK(1) = 0.0                                                    MAN  650
+      RWORK(2) = 0.0                                                    MAN  660
+      RWORK(3) = 0.0                                                    MAN  670
+      RWORK(4) = 0.0                                                    MAN  680
+      RWORK(5) = 0.0                                                    MAN  690
+      RWORK(6) = 0.0                                                    MAN  700
+      RWORK(7) = 0.0                                                    MAN  710
+      RWORK(8) = 0.0                                                    MAN  720
+      RWORK(IFIX1) = VAL1                                               MAN  730
+      RWORK(IFIX2) = VAL2                                               MAN  740
+      ISIZE = 104                                                       MAN  750
+      NROW = NVAR                                                       MAN  760
+      NCOL = NVAR                                                       MAN  770
+C                                                                       MAN  780
+C  SET LOCATION POINTERS                                                MAN  790
+C                                                                       MAN  800
+      JXR = 0                                                           MAN  810
+      IXR = 1                                                           MAN  820
+      JXC = JXR + NVAR                                                  MAN  830
+      IXC = IXR + NVAR                                                  MAN  840
+      JXF = JXC + NVAR                                                  MAN  850
+      IXF = IXC + NVAR                                                  MAN  860
+      JTL = JXF + NVAR                                                  MAN  870
+      ITL = IXF + NVAR                                                  MAN  880
+      JTC = JTL + NVAR                                                  MAN  890
+      ITC = ITL + NVAR                                                  MAN  900
+      JFP = JTC + NVAR                                                  MAN  910
+      IFP = ITC + NVAR                                                  MAN  920
+C                                                                       MAN  930
+C  SET B MATRIX                                                         MAN  940
+C                                                                       MAN  950
+      CALL STORE(BARRAY)                                                MAN  960
+      WRITE (LUNIT,99987) RWORK(6), RWORK(7), RWORK(8)                  MAN  970
+      WRITE (LUNIT,99988) ABSERR, RELERR, HTANCF, HFACT, HMIN, HMAX,    MAN  980
+     * MODCON                                                           MAN  990
+      IF (LIM.NE.0) WRITE (LUNIT,99984) LIM                             MAN 1000
+      IF (IPCFIX.NE.0) WRITE (LUNIT,99983) IPC                          MAN 1010
+C                                                                       MAN 1020
+C  BEGIN TRACING OUT THE CURVE                                          MAN 1030
+C                                                                       MAN 1040
+      DO 20 I=1,MAXSTP                                                  MAN 1050
+        CALL PITCON(NVAR, LIM, IT, XIT, KSTEP, IPC, IPCFIX, DIRIPC,     MAN 1060
+     *   HTANCF, IRET, MODCON, IPIVOT, HMAX, HMIN, HFACT, ABSERR,       MAN 1070
+     *   RELERR, RWORK, ISIZE, NROW, NCOL, FXAIR, FPAIR, FSOLVE, LUNIT) MAN 1080
+        IF (IRET.LT.(-1)) GO TO 30                                      MAN 1090
+        IF (IRET.LT.0) GO TO 20                                         MAN 1100
+        IF (IRET.EQ.1) GO TO 40                                         MAN 1110
+        IF (IRET.EQ.2) GO TO 10                                         MAN 1120
+C                                                                       MAN 1130
+C  NORMAL CONTINUATION POINT RETURN                                     MAN 1140
+C                                                                       MAN 1150
+        KSTEP1 = KSTEP - 1                                              MAN 1160
+        KSTEP2 = KSTEP1 - 1                                             MAN 1170
+        IF (KSTEP.GT.1) WRITE (LUNIT,99996) KSTEP2, KSTEP1, HSECLC      MAN 1180
+        IHI = JTC + NVAR                                                MAN 1190
+        WRITE (LUNIT,99995) KSTEP1                                      MAN 1200
+        WRITE (LUNIT,99982) (RWORK(J),J=ITC,JFP)                        MAN 1210
+        WRITE (LUNIT,99994) KSTEP, HTANCF                               MAN 1220
+        WRITE (LUNIT,99993) KSTEP                                       MAN 1230
+        WRITE (LUNIT,99982) (RWORK(J),J=IXR,JXC)                        MAN 1240
+        WRITE (LUNIT,99992) FNRM                                        MAN 1250
+        GO TO 20                                                        MAN 1260
+C                                                                       MAN 1270
+C  LIMIT POINT FOUND, PRINT OUT AND CONTINUE                            MAN 1280
+C                                                                       MAN 1290
+   10   WRITE (LUNIT,99991)                                             MAN 1300
+        WRITE (LUNIT,99986)                                             MAN 1310
+        WRITE (LUNIT,99982) (RWORK(J),J=IXR,JXC)                        MAN 1320
+        WRITE (LUNIT,99989)                                             MAN 1330
+        WRITE (LUNIT,99982) (RWORK(J),J=ITL,JTC)                        MAN 1340
+        WRITE (LUNIT,99992) FNRM                                        MAN 1350
+   20 CONTINUE                                                          MAN 1360
+C                                                                       MAN 1370
+C  LOOP COMPLETED WITHOUT REACHING TARGET POINT                         MAN 1380
+C                                                                       MAN 1390
+      WRITE (LUNIT,99999)                                               MAN 1400
+      GO TO 50                                                          MAN 1410
+C                                                                       MAN 1420
+C  ERROR RETURN FROM CONTINUATION CODE                                  MAN 1430
+C                                                                       MAN 1440
+   30 WRITE (LUNIT,99998) IRET                                          MAN 1450
+      GO TO 50                                                          MAN 1460
+C                                                                       MAN 1470
+C  TARGET POINT REACHED                                                 MAN 1480
+C                                                                       MAN 1490
+   40 WRITE (LUNIT,99997)                                               MAN 1500
+      WRITE (LUNIT,99986)                                               MAN 1510
+      WRITE (LUNIT,99982) (RWORK(J),J=IXR,JXC)                          MAN 1520
+      WRITE (LUNIT,99992) FNRM                                          MAN 1530
+   50 WRITE (LUNIT,99990) NROW, NCOL, KSTEP, NCRSUM, NRDSUM, IFEVAL,    MAN 1540
+     * IPEVAL, ISOLVE                                                   MAN 1550
+      WRITE (LUNIT,99985) ICRSL, ITNSL, NSTCR, NCNCR, NTRCR, NLMCR,     MAN 1560
+     * NLMRT                                                            MAN 1570
+      STOP                                                              MAN 1580
+C                                                                       MAN 1590
+C***********************************************************************MAN 1600
+C                                                                       MAN 1610
+99999 FORMAT (47H0PROGRAM TOOK FULL NUMBER OF CONTINUATION STEPS)       MAN 1620
+99998 FORMAT (24H0ERROR RETURN WITH IRET=, I4)                          MAN 1630
+99997 FORMAT (19H0TARGET FOUND, STOP)                                   MAN 1640
+99996 FORMAT (17H0SECANT STEP FROM, I3, 4H TO , I3, 3H = , G14.7)       MAN 1650
+99995 FORMAT (18H TANGENT AT POINT , I3, 5H WAS )                       MAN 1660
+99994 FORMAT (16H TO REACH POINT , I3, 22H TANGENT STEPSIZE WAS , G14.7)MAN 1670
+99993 FORMAT (7H POINT , I3, 4H IS )                                    MAN 1680
+99992 FORMAT (15H FUNCTION NORM=, G14.7)                                MAN 1690
+99991 FORMAT (18H0LIMIT POINT FOUND)                                    MAN 1700
+99990 FORMAT (17H0MATRIX SIZE     , I4, 1HX, I4/17H STEPS TAKEN     ,   MAN 1710
+     * I4/17H NEWTON STEPS    , I4/17H STEP REDUCTIONS , I4/9H FUNCTION,MAN 1720
+     * 8H CALLS  , I4/17H PRIME CALLS     , I4/17H SOLVE CALLS     , I4)MAN 1730
+99989 FORMAT (9H TANGENT )                                              MAN 1740
+99988 FORMAT (43H0UNIVERSITY OF PITTSBURGH CONTINUATION CODE/8H ABSERR=,MAN 1750
+     * G14.7, 8H RELERR=, G14.7/8H H=     , G14.7, 8H HFACT= ,          MAN 1760
+     * G14.7/8H HMIN=  , G14.7, 8H HMAX=  , G14.7/18H NEWTON METHOD OPT,MAN 1770
+     * 4HION=, I2)                                                      MAN 1780
+99987 FORMAT (27H1AIRCRAFT STABILITY PROBLEM/10H ELEVATOR=,             MAN 1790
+     * G14.7/10H AILERON =, G14.7/10H RUDDER  =, G14.7)                 MAN 1800
+99986 FORMAT (9H POINT   )                                              MAN 1810
+99985 FORMAT (8H0CALLS -/40H SOLVE CALLED FOR CORRECTION            ,   MAN 1820
+     * I3/40H SOLVE CALLED FOR TANGENT               , I3/10H0CORRECTOR,MAN 1830
+     * 30H CALLED FOR STARTING POINT    , I3/23H CORRECTOR CALLED FOR C,MAN 1840
+     * 17HONTINUATION POINT, I3/36H CORRECTOR CALLED FOR TARGET POINT  ,MAN 1850
+     * 4H    , I3/40H CORRECTOR CALLED FOR LIMIT POINT       ,          MAN 1860
+     * I3/40H0ROOTFINDER CALLED FOR LIMIT POINT      , I3)              MAN 1870
+99984 FORMAT (33H0LIMIT POINTS SOUGHT FOR VARIABLE, I3)                 MAN 1880
+99983 FORMAT (36H CONTINUATION VARIABLE FORCED TO BE , I3)              MAN 1890
+99982 FORMAT (1X, 5G14.7)                                               MAN 1900
+      END                                                               MAN 1910
+      SUBROUTINE STORE(BARRAY)                                          STO   10
+C
+C***********************************************************************
+C
+      REAL BARRAY(5,8)
+      BARRAY(1,1) = -3.933
+      BARRAY(2,1) = 0.0
+      BARRAY(3,1) = 0.002
+      BARRAY(4,1) = 0.0
+      BARRAY(5,1) = 0.0
+      BARRAY(1,2) = 0.107
+      BARRAY(2,2) = -0.987
+      BARRAY(3,2) = 0.0
+      BARRAY(4,2) = 1.0
+      BARRAY(5,2) = 0.0
+      BARRAY(1,3) = 0.126
+      BARRAY(2,3) = 0.0
+      BARRAY(3,3) = -0.235
+      BARRAY(4,3) = 0.0
+      BARRAY(5,3) = -1.0
+      BARRAY(1,4) = 0.0
+      BARRAY(2,4) = -22.95
+      BARRAY(3,4) = 0.0
+      BARRAY(4,4) = -1.0
+      BARRAY(5,4) = 0.0
+      BARRAY(1,5) = -9.99
+      BARRAY(2,5) = 0.0
+      BARRAY(3,5) = 5.67
+      BARRAY(4,5) = 0.0
+      BARRAY(5,5) = -0.196
+      BARRAY(1,6) = 0.0
+      BARRAY(2,6) = -28.37
+      BARRAY(3,6) = 0.0
+      BARRAY(4,6) = -0.168
+      BARRAY(5,6) = 0.0
+      BARRAY(1,7) = -45.83
+      BARRAY(2,7) = 0.0
+      BARRAY(3,7) = -0.921
+      BARRAY(4,7) = 0.0
+      BARRAY(5,7) = -0.0071
+      BARRAY(1,8) = -7.64
+      BARRAY(2,8) = 0.0
+      BARRAY(3,8) = -6.51
+      BARRAY(4,8) = 0.0
+      BARRAY(5,8) = 0.0
+      RETURN
+C
+C***********************************************************************
+C
+      END
+      SUBROUTINE FXAIR(NVAR, X, FX)                                     FXA   10
+C
+C***********************************************************************
+C
+C  THE FUNCTION IS OF THE FOLLOWING FORM
+C
+C  FOR INDICES I=1 THROUGH 5,
+C
+C  F(I)=SUM ON J AND K OF  B(I,J)*X(J)+PHI(I,J,K)*X(J)*X(K)
+C
+C  F(6)=X(IFIX1)-VAL1
+C  F(7)=X(IFIX2)-VAL2
+C
+C***********************************************************************
+C
+      REAL X(NVAR), FX(NVAR)
+      COMMON /COEF/ BARRAY(5,8)
+      COMMON /CONTRL/ IFIX1, IFIX2, VAL1, VAL2
+C
+C  COMPUTE LINEAR TERMS
+C
+      DO 20 I=1,5
+        FX(I) = 0.0
+        DO 10 J=1,8
+          FX(I) = FX(I) + BARRAY(I,J)*X(J)
+   10   CONTINUE
+   20 CONTINUE
+C
+C  COMPUTE NONLINEAR TERMS
+C
+      PHI = -.727*X(2)*X(3) + 8.39*X(3)*X(4) - 684.4*X(4)*X(5) +
+     * 63.5*X(4)*X(7)
+      FX(1) = FX(1) + PHI
+      PHI = .949*X(1)*X(3) + .173*X(1)*X(5)
+      FX(2) = FX(2) + PHI
+      PHI = -.716*X(1)*X(2) - 1.578*X(1)*X(4) + 1.132*X(4)*X(7)
+      FX(3) = FX(3) + PHI
+      PHI = -X(1)*X(5)
+      FX(4) = FX(4) + PHI
+      PHI = X(1)*X(4)
+      FX(5) = FX(5) + PHI
+C
+C  SET FUNCTION VALUES FOR TWO FIXED VARIABLES
+C
+      FX(6) = X(IFIX1) - VAL1
+      FX(7) = X(IFIX2) - VAL2
+      RETURN
+C
+C***********************************************************************
+C
+      END
+      SUBROUTINE FPAIR(NVAR, X, FPRYM, NROW, NCOL)                      FPA   10
+C
+C***********************************************************************
+C
+      REAL X(NVAR), FPRYM(NROW,NCOL)
+      COMMON /COEF/ BARRAY(5,8)
+      COMMON /CONTRL/ IFIX1, IFIX2, VAL1, VAL2
+C
+C  COMPUTE TERMS FROM LINEAR PART OF FUNCTION
+C
+      DO 20 I=1,5
+        DO 10 J=1,8
+          FPRYM(I,J) = BARRAY(I,J)
+   10   CONTINUE
+   20 CONTINUE
+      DO 40 I=6,7
+        DO 30 J=1,8
+          FPRYM(I,J) = 0.0
+   30   CONTINUE
+   40 CONTINUE
+      FPRYM(6,IFIX1) = 1.0
+      FPRYM(7,IFIX2) = 1.0
+C
+C  COMPUTE TERMS FROM NONLINEAR PART OF FUNCTION
+C
+      FPRYM(1,2) = FPRYM(1,2) - .727*X(3)
+      FPRYM(1,3) = FPRYM(1,3) - .727*X(2) + 8.39*X(4)
+      FPRYM(1,4) = FPRYM(1,4) + 8.39*X(3) - 684.4*X(5) + 63.5*X(7)
+      FPRYM(1,5) = FPRYM(1,5) - 684.4*X(4)
+      FPRYM(1,7) = FPRYM(1,7) + 63.5*X(4)
+      FPRYM(2,1) = FPRYM(2,1) + .949*X(3) + .173*X(5)
+      FPRYM(2,3) = FPRYM(2,3) + .949*X(1)
+      FPRYM(2,5) = FPRYM(2,5) + .173*X(1)
+      FPRYM(3,1) = FPRYM(3,1) - .716*X(2) - 1.578*X(4)
+      FPRYM(3,2) = FPRYM(3,2) - .716*X(1)
+      FPRYM(3,4) = FPRYM(3,4) - 1.578*X(1) + 1.132*X(7)
+      FPRYM(3,7) = FPRYM(3,7) + 1.132*X(4)
+      FPRYM(4,1) = FPRYM(4,1) - X(5)
+      FPRYM(4,5) = FPRYM(4,5) - X(1)
+      FPRYM(5,1) = FPRYM(5,1) + X(4)
+      FPRYM(5,4) = FPRYM(5,4) + X(1)
+      RETURN
+C
+C***********************************************************************
+C
+      END
+      SUBROUTINE PITCON(NVAR, LIM, IT, XIT, KSTEP, IPC, IPCFIX, DIRIPC, PIT   10
+     * HTANCF, IRET, MODCON, IPIVOT, HMAX, HMIN, HFACT, ABSERR, RELERR,
+     * RWORK, ISIZE, NROW, NCOL, FXNAME, FPNAME, SLNAME, LUNIT)
+C
+C***********************************************************************
+C
+C  1.  INTRODUCTION
+C
+C    THIS IS THE 30 JUNE 1982 VERSION OF PITCON,
+C  THE UNIVERSITY OF PITTSBURGH CONTINUATION PACKAGE.
+C  THIS VERSION USES SINGLE PRECISION AND FULL MATRIX STORAGE.
+C
+C    THIS PACKAGE WAS PREPARED WITH THE PARTIAL SUPPORT OF
+C  THE NATIONAL SCIENCE FOUNDATION, UNDER GRANT MCS-78-05299,
+C  BY WERNER C. RHEINBOLDT AND JOHN V. BURKARDT,
+C  UNIVERSITY OF PITTSBURGH, PITTSBURGH, PA 15261.
+C
+C    SUBROUTINE PITCON COMPUTES POINTS ALONG A SOLUTION CURVE OF AN
+C  UNDERDETERMINED SYSTEM OF NONLINEAR EQUATIONS OF THE FORM FX=0.
+C  THE CURVE IS SPECIFIED TO BEGIN AT A GIVEN STARTING SOLUTION
+C  X OF THE SYSTEM.  HERE X DENOTES A REAL VECTOR OF NVAR
+C  COMPONENTS AND FX A REAL VECTOR OF NVAR-1 COMPONENTS.
+C  NORMALLY EACH CALL TO PITCON PRODUCES A NEW POINT FURTHER ALONG
+C  THE SOLUTION CURVE IN A USER-SPECIFIED DIRECTION.
+C
+C    AN OPTION ALLOWS THE SEARCH FOR AND COMPUTATION OF TARGET POINTS,
+C  THAT IS, SOLUTION POINTS X FOR WHICH X(IT) = XIT FOR SOME USER
+C  SPECIFIED VALUES OF IT AND XIT.
+C
+C    A FURTHER OPTION ALLOWS THE SEARCH FOR AND COMPUTATION OF LIMIT
+C  POINTS FOR SPECIFIED COORDINATE LIM, THAT IS, SOLUTION POINTS FOR
+C  WHICH THE LIM-TH COMPONENT OF THE TANGENT VECTOR IS ZERO.
+C
+C    EXPLANATIONS OF THE ALGORITHMS USED IN THIS PACKAGE MAY
+C  BE FOUND IN
+C
+C  WERNER RHEINBOLDT,
+C  SOLUTION FIELD OF NONLINEAR EQUATIONS AND CONTINUATION METHODS
+C  SIAM JOURNAL OF NUMERICAL ANALYSIS, 17, 1980, PP 221-237
+C
+C  COR DEN HEIJER AND WERNER RHEINBOLDT,
+C  ON STEPLENGTH ALGORITHMS FOR A CLASS OF CONTINUATION METHODS,
+C  SIAM JOURNAL OF NUMERICAL ANALYSIS 18, 1981, PP 925-947
+C
+C  WERNER RHEINBOLDT,
+C  NUMERICAL ANALYSIS OF CONTINUATION METHODS FOR NONLINEAR
+C  STRUCTURAL PROBLEMS,
+C  COMPUTERS AND STRUCTURES, 13, 1981, PP 103-114
+C
+C***********************************************************************
+C
+C  2.  SUBROUTINES USED
+C
+C
+C  2A.  USER SPECIFIED SUBROUTINES
+C
+C    THE FOLLOWING THREE SUBROUTINES MUST BE SPECIFIED BY THE
+C  USER.  THE ACTUAL NAMES OF THESE THREE ROUTINES MUST
+C  BE DECLARED EXTERNAL IN THE CALLING PROGRAM, AND PASSED
+C  TO THE CONTINUATION PROGRAM.  THE SUBROUTINES ARE LISTED
+C  HERE WITH THE DUMMY EXTERNAL NAMES USED BY THE
+C  CONTINUATION PACKAGE.  NOTE THAT A FULL STORAGE SOLVER
+C  IS AVAILABLE IN PITCON, AND WILL BE USED IF THE USER
+C  PASSES THE NAME  FSOLVE   FOR SLNAME.
+C
+C  FXNAME  EVALUATES THE NVAR-1 COMPONENT FUNCTION FX GIVEN X, AN NVAR
+C          COMPONENT VECTOR. THIS FUNCTION DESCRIBES THE NONLINEAR
+C          SYSTEM.  THE AUGMENTING EQUATION IS HANDLED BY THE
+C          CONTINUATION PACKAGE.  THE FUNCTION MUST BE DECLARED
+C          EXTERNAL IN THE CALLING PROGRAM, FOR EXAMPLE,
+C          EXTERNAL FCTN, AND MUST HAVE THE FORM -
+C
+C          SUBROUTINE FCTN(NVAR,X,FX)
+C          REAL X(NVAR),FX(NVAR)
+C          USING INPUT X, EVALUATE NVAR-1 COMPONENTS OF F(X).
+C
+C  FPNAME  EVALUATES THE NVAR-1 BY NVAR JACOBIAN FPRYM (X) AT X
+C          AND STORES IT IN THE NROW BY NCOL ARRAY FPRYM,  WITH THE
+C          ACTUAL STORAGE OF THE I,J ENTRY BEING DETERMINED BY THE
+C          SOLVER USED.  NOTE THAT THE LAST ROW OF
+C          FPRYM (FOR THE AUGMENTING EQUATION) IS INSERTED BY THE
+C          SOLVING SUBROUTINE.  THE JACOBIAN ROUTINE MUST BE DECLARED
+C          EXTERNAL IN THE CALLING PROGRAM.  FOR EXAMPLE,
+C          EXTERNAL FPRIME, AND MUST HAVE THE FORM-
+C
+C          SUBROUTINE FPRIME(NVAR,X,FPRYM,NROW,NCOL)
+C          REAL X(NVAR),FPRYM(NROW,NCOL)
+C          AND MUST STORE THE JACOBIAN ELEMENTS D FI/D XJ
+C          IN THE MATRIX FPRYM USING A FORMAT COMPATIBLE WITH THE
+C          SOLVER CHOSEN.
+C
+C  SLNAME  THE SOLVING ROUTINE FOR THE CONTINUATION CODE.
+C          SLNAME MUST BE DECLARED EXTERNAL IN THE CALLING PROGRAM,
+C          FOR EXAMPLE, EXTERNAL SOLVE.  SLNAME MAY BE FSOLVE
+C          IF THE FULL SOLVER SUPPLIED WITH THIS CODE IS USED.
+C          THE SOLVER MUST HAVE THE FORM-
+C
+C          SUBROUTINE SOLVE(NVAR,X,Y,IHOLD,DET,IEX,IERR,ICALL,
+C                MODNEW,FPRYM,NROW,NCOL,IPIVOT,FPNAME)
+C          EXTERNAL FPNAME
+C          REAL X(NVAR),Y(NVAR),FPRYM(NROW,NCOL)
+C          INTEGER IPIVOT(NVAR)
+C
+C          THE SOLVER MUST PERFORM THE FOLLOWING OPERATIONS-
+C
+C          IF (ICALL.EQ.1.OR.MODNEW.EQ.0) REEVALUATE THE JACOBIAN BY
+C          CALLING THE JACOBIAN SUBROUTINE NAMED BY FPNAME.
+C          OTHERWISE, USE THE JACOBIAN AS STORED IN FPRYM.
+C
+C          MODIFY FPRYM SO THAT THE NVAR-TH ROW IS ALL 0 EXCEPT
+C          THAT THE (NVAR,IHOLD) ENTRY IS 1.0.
+C
+C          STORE THE DETERMINANT OF THE RESULTING MATRIX IN TWO
+C          PARTS, DET AND IEX, SO THAT DETERMINANT=DET*2**IEX.
+C          DETA SHOULD SATISFY (1.0.LE.ABS(DETA).AND.ABS(DETA).LT.2.0)
+C
+C          SOLVE FPRYM*Y=Y, OVERWRITING RIGHT HAND SIDE WITH SOLUTION.
+C          SET IERR=0 FOR SATISFACTORY SOLUTION.
+C          SET IERR=1 IF ANY FATAL ERROR WAS DETECTED (IN PARTICULAR,
+C          SINGULARITY).
+C
+C          IPIVOT IS ONLY USED BY THE SOLVING ROUTINE, AND IS SUPPLIED
+C          FOR PIVOT STORAGE.  A USER DESIGNED SOLVER MAY NOT
+C          NEED IPIVOT, IN WHICH CASE THE CODE MAY BE CHANGED TO
+C          DISPENSE WITH IT ENTIRELY.
+C
+C
+C  2B.  SUBROUTINES IN THE PITCON PACKAGE ARE
+C
+C
+C  PITCON  DRIVING ROUTINE OF CONTINUATION CODE.  INITIALIZES
+C          INFORMATION, DETERMINES WHETHER LIMIT, TARGET OR
+C          CONTINUATION POINT WILL BE SOUGHT THIS STEP, COMPUTES
+C          STEPLENGTHS, CONTROLS CORRECTOR PROCESS, AND HANDLES ERROR
+C          RETURNS.
+C
+C  *NOTE*  SUBROUTINE PITCON CONTAINS MACHINE DEPENDENT CONSTANTS.
+C
+C  CORECT  USES A FORM OF NEWTON'S METHOD TO SOLVE THE AUGMENTED
+C          NONLINEAR SYSTEM FA(X)=0 WITH AUGMENTING EQUATION
+C          X(IHOLD)=B, THAT IS, X(IHOLD) IS HELD FIXED DURING THE
+C          CORRECTION PROCESS.
+C
+C  TANGNT  SETS UP THE TANGENT SYSTEM DFA(XC,IPL)*TC=E(NVAR),
+C          SOLVING FOR A VECTOR IN THE TANGENT PLANE.  THE VECTOR
+C          IS NORMALIZED, AND ITS MAXIMUM ENTRY DETERMINES THE
+C          NEW CONTINUATION PARAMETER UNLESS THE CONTINUATION
+C          PARAMETER HAS BEEN FIXED BY THE USER OR THE PROGRAM.
+C
+C  ROOT    ROOT FINDER USED TO LOCATE LIMIT POINTS.  THIS ROUTINE IS A
+C          MODIFIED VERSION OF THE FORTRAN FUNCTION ZERO GIVEN IN
+C          ALGORITHMS FOR MINIMIZATION WITHOUT DERIVATIVES
+C          BY RICHARD P BRENT, PRENTICE HALL, 1973.
+C
+C  FSOLVE  A FULL STORAGE LINEAR EQUATION SOLVER, WHICH MAY BE USED
+C          AS THE EXTERNAL PARAMETER  SLNAME  WHEN CALLING PITCON.
+C          IT SETS UP AND SOLVES DFA(X,IP)*Y(OUTPUT)=Y(INPUT)
+C          WHERE DFA(X,IP) IS THE JACOBIAN OF FA AT X,
+C          AND Y IS A SUPPLIED RIGHT HAND SIDE.
+C
+C  *NOTE*  SUBROUTINE FSOLVE USES FULL MATRIX STORAGE TO SOLVE THE
+C          SYSTEM.  THE USER MAY WISH TO REPLACE THIS ROUTINE WITH ONE
+C          MORE SUITABLE.  JUST PASS THE NAME OF THE SOLVER IN SLNAME.
+C
+C
+C  2C.  SUBROUTINES FROM THE LINPACK LIBRARY ARE
+C
+C
+C  ISAMAX  INTEGER FUNCTION RETURNS THE POSITION OF LARGEST ELEMENT OF
+C          THE VECTOR SX.
+C
+C  SAXPY   SETS VECTOR SY(I) = SA*SX(I)+SY(I).
+C
+C  SCOPY   COPIES SY(I)=SX(I).
+C
+C  SDOT    SDOT = SUM(I=1 TO N) SX(I)*SY(I).
+C
+C  SNRM2   SNRM2 = EUCLIDEAN NORM OF VECTOR SX.
+C
+C  *NOTE*  SNRM2 HAS MACHINE DEPENDENT CUTOFF CONSTANTS.
+C
+C  SSCAL   SETS SX(I)=SA*SX(I).
+C
+C  SGEFA   FACTORS MATRIX A WHOSE LEADING DIMENSION IS LDA
+C          AND WHOSE ACTUAL USED DIMENSION IS N, SETS UP PIVOT
+C          INFORMATION IN VECTOR IPIVOT AND WARNS OF ZERO PIVOTS.
+C
+C  SGESL   ACCEPTS OUTPUT OF SGEFA, AND A RIGHT HAND SIDE B, AND
+C          SOLVES SYSTEM A*X=B, RETURNING X IN B.  FOR MODIFIED
+C          NEWTON'S METHOD, ONCE MATRIX IS FACTORED BY SGEFA, ONLY
+C          SGESL IS CALLED FOR SUCCESSIVE RIGHT HAND SIDES.
+C
+C  *NOTE*  IF SUBROUTINE FSOLVE IS REPLACED TO TAKE ADVANTAGE
+C          OF THE SPARSITY OF THE JACOBIAN, THEN THE SUBROUTINES
+C          SGEFA AND SGESL, WHICH ARE ONLY CALLED BY FSOLVE,
+C          ARE NO LONGER NEEDED.
+C
+C
+C  LINPACK REFERENCE
+C
+C  LINPACK USER'S GUIDE,
+C  J J DONGARRA, J R BUNCH, C B MOLER AND G W STEWART,
+C  SOCIETY FOR INDUSTRIAL AND APPLIED MATHEMATICS,
+C  PHILADELPHIA, 1979.
+C
+C
+C  2D.  FORTRAN LIBRARY SUBROUTINES USED ARE
+C
+C
+C  ABS, ALOG, AMAX1, AMIN1, ATAN2, DBLE, FLOAT, SIGN, SIN, SNGL, SQRT
+C
+C***********************************************************************
+C
+C  3.  PROGRAMMING NOTES
+C
+C  THE USER MUST -
+C
+C  3A.  WRITE AND PASS SUBROUTINES
+C
+C    THE CALLING PROGRAM MUST DECLARE EXTERNAL THE NAMES TO BE PASSED
+C  AS THE ARGUMENTS FXNAME, FPNAME AND SLNAME.  THE FUNCTION AND
+C  JACOBIAN ROUTINES MUST BE WRITTEN BY THE USER.  THE SOLVER MUST
+C  BE WRITTEN BY THE USER UNLESS  FSOLVE  IS
+C  TO BE USED, IN WHICH CASE  FSOLVE  SHOULD BE PASSED AS
+C  THE SLNAME ARGUMENT.
+C
+C  3B.  DIMENSION AND PASS STORAGE AREAS
+C
+C    DECLARE A REAL VECTOR RWORK OF SIZE ISIZE,
+C  WHERE ISIZE.GE.(5*NVAR+NROW*NCOL)  (DEPENDS ON SOLVER USED)
+C  AND AN INTEGER VECTOR IPIVOT OF SIZE NVAR.
+C
+C  3C.  PASS CERTAIN NON-DEFAULTABLE VALUES
+C
+C    PASS NVAR GREATER THAN ONE, ISIZE.GE.(5*NVAR+NROW*NCOL) AND SET
+C  IRET=0, KSTEP=-1 OR KSTEP=0 ON FIRST CALL FOR A NEW PROBLEM.
+C  SET VALUE OF LUNIT TO FORTRAN OUTPUT UNIT NUMBER.
+C
+C  3D.  STORE A STARTING POINT
+C
+C    A POINT XR SHOULD BE STORED IN THE FIRST NVAR ENTRIES OF RWORK
+C  WHICH IS AN APPROXIMATE SOLUTION TO THE EQUATION.  THE USER MAY
+C  REQUEST THAT THIS POINT BE IMPROVED TO THE TOLERANCE ABSERR
+C  BY ALSO SETTING KSTEP=-1.
+C
+C  THE USER SHOULD -
+C
+C  3E.  RESPOND TO ERROR RETURNS FROM PITCON
+C
+C    CERTAIN ERROR RETURNS FROM PITCON INDICATE THAT THE RUN SHOULD
+C  BE ABORTED.  OTHERS IMPLY THAT SOME INFORMATION RETURNING MAY
+C  BE FAULTY OR UNRELIABLE.  SOME ERROR RETURNS MAY POINT AS WELL
+C  TO AN INCORRECT JACOBIAN, POOR STEPSIZE LIMITS OR INAPPROPRIATE
+C  ERROR TOLERANCES.
+C
+C  THE USER MAY -
+C
+C  3F.  OBSERVE THE PASSING OF BIFURCATION POINTS
+C
+C    DETTXL AND DETTXC ARE THE WEIGHTED MANTISSAS OF THE
+C  TANGENT SYSTEMS AT XL AND XC RESPECTIVELY.  ON RETURN WITH XF,
+C  IF DETTXL AND DETTXC DIFFER IN SIGN, THEN A SIMPLE BIFURCATION
+C  POINT LIES BETWEEN XL AND XC.  DETTXL AND DETTXC ARE AVAILABLE IN
+C  COMMON /DETMAN/.
+C
+C  3G.  NOTE WORK
+C
+C    BY EXAMINING THE CONTENTS OF COMMON BLOCKS /COUNT1/ AND /COUNT2/
+C  THE USER MAY SEE WHERE THE GREATEST WORK IS BEING EXPENDED.
+C  IN PARTICULAR, THIS INFORMATION IS USEFUL WHEN DECIDING WHETHER
+C  TO EMPLOY FULL OR MODIFIED NEWTON'S METHOD ON A SECOND RUN OF
+C  THE PROBLEM.
+C
+C  3H.  RESET PARAMETERS
+C
+C    IT IS POSSIBLE TO CHANGE THE PITCON PARAMETERS (ERROR TOLERANCES,
+C  TARGET OR LIMIT POINT INDICES, STEPSIZES AND SO FORTH) IN THE MIDST
+C  OF TRACING A CURVE.  IT IS SUGGESTED, HOWEVER, THAT THE CODE BE
+C  WARNED OF THIS CHANGE BY PASSING IN THE VALUE -1 FOR KSTEP
+C  SO THAT CERTAIN AUXILLIARY DATA MAY BE RESET.
+C
+C  3I.  RUN SEVERAL PROBLEMS
+C
+C    BECAUSE THE NAMES OF THE FUNCTION, JACOBIAN, AND SOLVER ARE
+C  EXTERNAL PARAMETERS, IT IS FAIRLY EASY TO RUN SEVERAL PROBLEMS
+C  INVOLVING SYSTEMS OF DIFFERENT SIZES OR FORMS, TO SOLVE SOME
+C  SYSTEMS WITH A FULL SOLVER AND OTHERS WITH A BANDED SOLVER,
+C  AND SO FORTH.  AGAIN, THE CODE SHOULD BE WARNED OF A SWITCH
+C  TO A NEW PROBLEM BY SETTING KSTEP=-1 BEFORE PROCEEDING.
+C
+C
+C***********************************************************************
+C
+C  4.  PITCON PARAMETERS, THEIR DEFINITIONS, TYPES AND DEFAULTS.
+C
+C
+C  NVAR  = THE NUMBER OF VARIABLES IN THE NONLINEAR SYSTEM.  NVAR IS
+C          THE DIMENSION OF THE PIVOT VECTOR IPIVOT, AND OF THE
+C          VECTORS XR, XC, XF, TL AND TC WHICH ARE CONTAINED IN RWORK.
+C          NVAR MUST BE GREATER THAN 1, AND MUST NOT BE CHANGED DURING
+C          THE COURSE OF A PROBLEM RUN.  NVAR HAS NO DEFAULT VALUE.
+C
+C  LIM   = LIMIT POINT FLAG AND INDEX.  IF (LIM.EQ.0), LIMIT POINTS
+C          ARE NOT TO BE LOOKED FOR.  OTHERWISE, THE USER SHOULD SET
+C          LIM TO THE INDEX OF THE VARIABLE FOR WHICH LIMIT
+C          POINTS ARE TO BE SOUGHT.  LIM DEFAULTS TO ZERO.
+C          LIM MUST SATISFY 0.LE.LIM.LE.NVAR.
+C
+C  IT    = TARGET POINT FLAG AND INDEX.  IF (IT.EQ.0), TARGET POINTS
+C          ARE NOT TO BE LOOKED FOR.  OTHERWISE, THE USER SHOULD SET
+C          IT TO THE INDEX OF THE VARIABLE FOR WHICH TARGET
+C          VALUES XIT ARE DESIRED.  IT HAS THE DEFAULT VALUE ZERO.
+C          IT MAY BE RESET BY THE USER AT ANY TIME DURING A RUN.
+C          IT MUST SATISFY 0.LE.IT.LE.NVAR.
+C
+C  XIT   = THE VALUE OF THE TARGET VECTOR COMPONENT SOUGHT, IF IT.NE.0.
+C          TARGET POINTS XR SATISFY XR(IT)=XIT.  XIT HAS NO DEFAULT.
+C
+C  KSTEP = THE NUMBER OF CONTINUATION STEPS TAKEN.  THIS DOES NOT
+C          INCLUDE FAILURES, OR TARGET AND LIMIT POINTS. THE PROGRAM
+C          INCREMENTS KSTEP EACH TIME A NEW POINT XF IS COMPUTED.
+C          ON THE FIRST CALL TO PITCON FOR A PARTICULAR PROBLEM, THE
+C          USER SHOULD SET KSTEP TO 0 OR -1.  IF KSTEP=-1, THE PROGRAM
+C          WILL CHECK THE ACCURACY OF THE STARTING POINT XR, AND IF
+C          NECESSARY, ATTEMPT TO CORRECT IT USING NEWTON'S METHOD.
+C          IF KSTEP=0, THE PROGRAM PERFORMS NO CHECK ON THE STARTING
+C          POINT, AND PROCEEDS TO THE CONTINUATION LOOP.  IF THE USER
+C          WISHES TO RUN A DIFFERENT PROBLEM THEN A CALL TO PITCON
+C          WITH KSTEP=-1 OR 0 WILL RESET THE CODE, DESTROYING THE
+C          INFORMATION FROM THE PREVIOUS RUN.  KSTEP DEFAULTS TO -1.
+C
+C  IPC   = THE COMPONENT OF XC TO BE USED AS CONTINUATION PARAMETER.
+C          ON INITIAL CALLS WITH KSTEP.EQ.-1 OR KSTEP.EQ.0, THE USER
+C          SUPPLIES A VALUE FOR IPC OR THE DEFAULT IS USED.  NOTE
+C          THAT POOR CHOICES OF IPC CAN CAUSE PROGRAM FAILURE.  IN
+C          PARTICULAR, ON INITIAL CALL, IF KSTEP.EQ.-1, THE PROGRAM
+C          TRIES TO IMPROVE THE APPROXIMATE INPUT SOLUTION XR TO AN
+C          ACCEPTABLE SOLUTION, WITH THE IPC-TH COMPONENT OF XR
+C          HELD FIXED DURING THE NEWTON ITERATION BUT FOR SOME
+C          VALUES OF IPC, NO SUCH SOLUTION MAY EXIST.  FURTHERMORE
+C          IF KSTEP.EQ.0, THE PROGRAM SOLVES A TANGENT SYSTEM ASSUMING
+C          THAT THE TANGENT AT THE POINT HAS A NONZERO IPC-TH
+C          COMPONENT.  A POOR CHOICE OF IPC MAY THEN CAUSE THE TANGENT
+C          CALCULATION TO FAIL.  IPC DEFAULTS TO NVAR.
+C
+C  IPCFIX= A FLAG WHICH CAN FORCE THE CONTINUATION PARAMETER IPC TO
+C          REMAIN UNCHANGED.  IF (IPCFIX.NE.1) THE PROGRAM IS FREE
+C          TO CHOOSE THE CONTINUATION PARAMETER, GENERALLY
+C          AS THE INDEX OF THE MAXIMUM ENTRY OF THE TANGENT.
+C          IF (IPCFIX.EQ.1) THE INPUT VALUE OF IPC IS USED FOR THE
+C          CONTINUATION PARAMETER ON THE CURRENT STEP.  NOTE THAT THE
+C          CHOICE IPCFIX=1 ASSERTS THAT THE CURVE MAY BE GLOBALLY
+C          PARAMETERIZED BY A SINGLE FIXED VARIABLE.  THE PROGRAM
+C          WILL FAIL IF THIS PARAMETERIZATION DETERIORATES OR
+C          FAILS, PARTICULARLY AT A LIMIT POINT IN THE PARAMETER.
+C          IPCFIX DEFAULTS TO 0.
+C
+C  DIRIPC= LOCAL CONTINUATION DIRECTION WITH RESPECT TO CURRENT
+C          CONTINUATION PARAMETER IPC.  DIRIPC IS PLUS OR MINUS
+C          ONE, DENOTING CURRENT CONTINUATION IN THE DIRECTION
+C          OF INCREASING OR DECREASING X(IPC) RESPECTIVELY.
+C          ON INITIAL CALL, DIRIPC SHOULD BE PASSED BY THE USER.
+C          THEREAFTER, DIRIPC IS COMPUTED BY THE CODE TO PRESERVE
+C          THE SENSE IN WHICH THE CURVE IS BEING FOLLOWED.
+C          DIRIPC DEFAULTS TO +1.0.
+C
+C  HTANCF= STEPSIZE TO BE USED ON NEXT PREDICTOR STEP ALONG THE
+C          UNIT TANGENT.  ON FIRST CALL, THE USER SHOULD SUPPLY A
+C          VALUE OF HTANCF.  THEREAFTER, THE VALUE OF HTANCF IS
+C          DETERMINED BY THE PROGRAM, SUBJECT TO THE CONSTRAINTS
+C          IMPOSED BY HMAX, HMIN, AND HFACT, AS WELL AS INFORMATION
+C          FROM RECENT STEPS TAKEN BY THE PROGRAM.  HTANCF SHOULD
+C          BE POSITIVE.  HTANCF DEFAULTS TO .5*(HMAX+HMIN).
+C
+C  IRET  = A RETURN FLAG TO INDICATE ERRORS OR THE TYPE OF POINT
+C          RETURNED IN XR.  NONNEGATIVE VALUES OF IRET REPRESENT
+C          NORMAL RETURNS.  NEGATIVE VALUES OF IRET INDICATE THAT
+C          SOME ERROR OR DIFFICULTY HAS BEEN ENCOUNTERED.  VALUES
+C          OF IRET BETWEEN -1 AND -4 ARE SIMPLY REPORTS THAT AN
+C          ATTEMPT TO COMPUTE A LIMIT OR TARGET POINT FAILED.  THESE
+C          DO NOT AFFECT FURTHER CONTINUATION STEPS, AND THE USER NEED
+C          NOT MODIFY ANY VARIABLES BEFORE PROCEEDING.
+C          VALUES OF IRET OF -5 AND -6 REFER TO DANGEROUS SITUATIONS
+C          THAT MAY BE CORRECTABLE.
+C          VALUES OF IRET FROM -7 TO -10 ARE SERIOUS, FATAL ERRORS.
+C          THE USER SHOULD HALT THE PROGRAM AND EXAMINE THE INPUT
+C          AND THE INTERIM RESULTS.
+C          IRET SHOULD BE ZERO ON THE FIRST CALL FOR A PROBLEM.
+C          THE SPECIFIC VALUES OF IRET AND THEIR MEANINGS ARE
+C
+C          IRET=2    NORMAL RETURN WITH LIMIT POINT IN XR AND TANGENT
+C                    AT XR CONTAINED IN TL.
+C
+C          IRET=1    NORMAL RETURN WITH TARGET POINT IN XR.
+C
+C          IRET=0    NORMAL RETURN WITH NEW CONTINUATION POINT IN XR.
+C
+C          IRET=-1   AN ERROR OCCURRED DURING COMPUTATION OF
+C                    A LIMIT POINT.
+C
+C          IRET=-2   CORECT CALLED FOR TARGET POINT CALCULATION FAILED
+C                    TO CONVERGE IN MAXCOR ITERATIONS.
+C
+C          IRET=-3   THE SOLVER WAS CALLED BY CORECT FOR TARGET POINT
+C                    CALCULATION, AND FAILED.
+C
+C          IRET=-4   UNACCEPTABLE CORRECTOR STEP IN TARGET POINT
+C                    CALCULATION.
+C
+C          IRET=-5   PREDICTION STEP HTANCF IS LESS THAN HMIN, PERHAPS
+C                    BECAUSE OF REPEATED FAILURE OF CORRECTOR, AND
+C                    CONSEQUENT STEPSIZE REDUCTION.  USER MIGHT REDUCE
+C                    HMIN, OR SWITCH FROM MODCON=1 TO MODCON=0, OR
+C                    INCREASE ABSERR AND RELERR.  BUT BE AWARE THAT
+C                    REPEATED STEPSIZE REDUCTIONS MAY INDICATE AN
+C                    INTRACTABLE FUNCTION OR AN INCORRECT JACOBIAN.
+C
+C          IRET=-6   FUNCTION VALUE FNRM OF INPUT XR IS TOO LARGE
+C                    AND COULD NOT BE IMPROVED BY CORRECTOR.  USER
+C                    SHOULD CHECK IF THE VALUE OF IPC IS APPROPRIATE,
+C                    OR WHETHER ABSERR AND RELERR SHOULD BE INCREASED,
+C                    OR WHETHER THE INPUT POINT XR MIGHT BE IMPROVED
+C                    BEFORE CALLING PROGRAM, AS WELL AS WHETHER THE
+C                    FUNCTION AND JACOBIAN EVALUATORS ARE CORRECT.
+C
+C          IRET=-7   THE SOLVER FAILED IN A CALL FROM TANGNT.
+C                    THIS RETURN MAY MEAN THAT THE PROGRAM'S CHOICE
+C                    OF IPC WAS FAULTY, IN WHICH CASE A RESTART
+C                    WITH A NEW VALUE OF IPC AND KSTEP.EQ.0 MAY
+C                    ALLOW THE USER TO RECOVER.
+C
+C          IRET=-8   THE SOLVER FAILED IN A CALL FROM CORECT.
+C                    THIS RETURN MAY MEAN THAT THE JACOBIAN IS
+C                    TOO ILL CONDITIONED FOR THE SOLVER, OR THAT
+C                    A SINGULARITY OF THE JACOBIAN IS NEARBY.
+C
+C          IRET=-9   THE TANGENT VECTOR TC AT XC IS ZERO.
+C                    THIS RETURN INDICATES AN ERROR IN THE ROUTINE
+C                    WHICH SOLVES THE LINEAR SYSTEMS.
+C
+C          IRET=-10  IMPROPER INPUT, NVAR.LE.1, OR
+C                    ISIZE.LT.5*NVAR+NROW*NCOL, OR
+C                    PROGRAM HAS BEEN CALLED AGAIN AFTER FATAL ERROR.
+C
+C  MODCON= FLAG FOR TYPE OF NEWTON METHOD TO BE USED IN CORRECTING
+C          CONTINUATION AND TARGET POINTS.  (NOTE THAT FOR LIMIT
+C          POINTS, MODIFIED NEWTON'S METHOD IS TRIED FIRST, AND
+C          FULL NEWTON'S METHOD IS APPLIED ONLY IF THE MODIFIED
+C          METHOD DOES NOT CONVERGE.)
+C
+C          MODCON=0  UPDATE JACOBIAN FOR TANGENT CALCULATION,
+C                    UPDATE JACOBIAN FOR EACH CORRECTION STEP
+C                    OF CONTINUATION POINTS.
+C
+C          MODCON=1  UPDATE JACOBIAN FOR TANGENT CALCULATION,
+C                    EVALUATE JACOBIAN ONLY AT FIRST CORRECTION STEP
+C                    OF CONTINUATION POINTS.
+C
+C  IPIVOT= INTEGER VECTOR USER DECLARED TO BE OF SIZE NVAR,
+C          USED DURING THE MATRIX FACTORIZATION TO STORE PIVOT
+C          INFORMATION.
+C
+C  HMAX  = THE MAXIMUM PREDICTOR STEP SIZE ALLOWED.  HTANCF WILL
+C          ALWAYS BE FORCED TO BE LESS THAN OR EQUAL TO HMAX.
+C          IF (HMAX.LE.0.0) ON INITIAL CALL, THE DEFAULT VALUE IS USED.
+C          HMAX DEFAULTS TO SQRT(NVAR).
+C
+C  HMIN  = THE MINIMUM PREDICTOR STEP SIZE ALLOWED.  HTANCF WILL
+C          ALWAYS BE FORCED TO BE GREATER THAN OR EQUAL TO HMIN.
+C          IF HTANCF FALLS BELOW HMIN BECAUSE OF STEP SIZE REDUCTIONS
+C          CAUSED BY FAILURE OF NEWTON'S METHOD, AN ERROR RETURN IS
+C          FORCED.  IF (HMIN.LE.EPSQRT) ON INITIAL CALL, THE DEFAULT
+C          VALUE IS USED.  THE DEFAULT VALUE OF HMIN IS
+C          EPSQRT=SQRT(EPMACH) WHERE EPMACH IS THE MACHINE PRECISION
+C          CONSTANT, THE SMALLEST NUMBER X SO THAT COMPUTATIONALLY,
+C          (1.0.LT.(1.0+X)).
+C
+C  HFACT = MAXIMUM GROWTH FACTOR FOR PREDICTOR STEP SIZE HTANCF
+C          BASED ON PREVIOUS SECANT STEP SIZE HSECLC.  THE BOUNDS
+C          SATISFIED ARE (HSECLC/HFACT).LE.HTANCF.LE.(HSECLC*HFACT).
+C          IF THE CORRECTOR STEP FAILS, THEN HFACT IS ALSO USED TO
+C          REDUCE THE PREDICTOR STEP HTANCF TO (HTANCF/HFACT).
+C          IF (HFACT.LE.1.0) ON INITIAL CALL, HFACT DEFAULTS TO 3.0.
+C
+C  ABSERR= ABSOLUTE ERROR CONTROL.  A POINT X IS ACCEPTED AS A
+C          SOLUTION OF FX=0 IF THE LARGEST COMPONENT
+C          OF F(X) IS STILL LESS THAN ABSERR IN ABSOLUTE VALUE.
+C          NOTE THAT POINTS WHICH DO NOT SATISFY THIS CRITERION
+C          MAY NONETHELESS BE ACCEPTED BY THE CORRECTOR.
+C          IF (ABSERR.LE.0.0) ON FIRST CALL, ABSERR IS SET TO
+C          THE DEFAULT VALUE OF SQRT(EPMACH).
+C
+C  RELERR= RELATIVE ERROR CONTROL.  DURING THE CORRECTOR ITERATION,
+C          A CONVERGENCE TEST IS APPLIED TO THE SIZE OF THE CORRECTOR
+C          STEPS.  RELERR IS USED IN COMPUTING THE STEPSIZE TOLERANCE
+C          TEST=ABSERR+RELERR*XNRM, WHERE XNRM IS THE MAXIMUM NORM
+C          OF THE CURRENT ITERATE.  NOTE THAT STEPS MAY BE ACCEPTED
+C          WHICH DO NOT SATISFY THIS CRITERION.  IF (RELERR.LE.0.0)
+C          ON FIRST CALL, RELERR IS SET TO THE DEFAULT VALUE.
+C          RELERR DEFAULTS TO SQRT(EPMACH) WHERE EPMACH IS THE
+C          MACHINE PRECISION CONSTANT.
+C
+C  RWORK = USER DECLARED VECTOR OF SIZE ISIZE=(5*NVAR+NROW*NCOL).
+C          RWORK STORES FIVE VECTORS AND AN ARRAY IN THE ORDER
+C          (XR,XC,XF,TL,TC,FPRYM).  THEIR BEGINNING LOCATIONS
+C          ARE IXR=1, IXC=NVAR+1, IXF=2*NVAR+1, ITL=3*NVAR+1,
+C          ITC=4*NVAR+1, IFP=5*NVAR+1.  FPRYM IS AN ARRAY OF
+C          SIZE NROW X NCOL.  THE MEANINGS OF THESE COMPONENTS OF
+C          RWORK ARE DESCRIBED BELOW.  THE USER SHOULD SET XR
+C          ON FIRST CALL, BUT NO OTHER PORTIONS OF RWORK SHOULD BE
+C          SET.  AFTER THE FIRST CALL, NO ENTRIES OF RWORK
+C          SHOULD BE ALTERED.
+C
+C (XR)   = REAL VECTOR OF LENGTH NVAR, FIRST NVAR ENTRIES OF RWORK.
+C          ON FIRST CALL, A USER SUPPLIED STARTING POINT, WHICH MAY BE
+C          IMPROVED BY THE PROGRAM IF KSTEP=-1.  ON NORMAL RETURN FROM
+C          PITCON, XR WILL HOLD THE MOST RECENTLY FOUND POINT, WHETHER
+C          A CONTINUATION POINT, TARGET POINT, OR LIMIT POINT.
+C
+C (XC)   = REAL VECTOR OF LENGTH NVAR, ENTRIES NVAR+1 TO 2*NVAR OF
+C          RWORK.  THE PREVIOUS CONTINUATION POINT.
+C
+C (XF)   = REAL VECTOR OF LENGTH NVAR, ENTRIES 2*NVAR+1 TO 3*NVAR OF
+C          RWORK.  THE CURRENT CONTINUATION POINT.
+C
+C (TL)   = REAL VECTOR OF LENGTH NVAR, ENTRIES 3*NVAR+1 TO 4*NVAR OF
+C          RWORK.  THE CONTENTS OF TL ON RETURN VARY.
+C          ON RETURN WITH CONTINUATION POINT, TL CONTAINS THE PREVIOUS
+C          VALUE OF TC, A TANGENT VECTOR CORRESPONDING TO THE
+C          CONTINUATION POINT XL WHICH IS NOT STORED.
+C          ON RETURN WITH A TARGET POINT, TL CONTAINS THE FUNCTION
+C          VALUES AT THE TARGET POINT.
+C          ON RETURN WITH A LIMIT POINT, TL CONTAINS THE VALUE
+C          OF THE TANGENT VECTOR AT THE LIMIT POINT.
+C
+C (TC)   = REAL VECTOR OF LENGTH NVAR, ENTRIES 4*NVAR+1 TO 5*NVAR OF
+C          RWORK.  THE TANGENT VECTOR AT THE PREVIOUS CONTINUATION
+C          POINT XC.
+C
+C (FPRYM)= REAL ARRAY OF DIMENSIONS (NROW,NCOL).  ENTRIES 5*NVAR+1 TO
+C          5*NVAR+NROW*NCOL OF RWORK.  FPRYM IS USED TO STORE THE
+C          AUGMENTED JACOBIAN OF THE SYSTEM.  THE METHOD OF STORAGE
+C          USED BY THE JACOBIAN ROUTINE MUST BE COMPATIBLE WITH THE
+C          METHOD OF RETRIEVAL AND SOLUTION USED BY THE SOLVER.
+C          IF USING THE PREPROGRAMMED ROUTINE FSOLVE, THE
+C          MATRIX FPRYM IS SQUARE OF DIMENSIONS (NVAR,NVAR) AND
+C          FPRYM(I,J)=D FI(X)/D X(J).
+C
+C  ISIZE = USER SET DIMENSION FOR VECTOR RWORK, WHICH MUST BE AT
+C          LEAST OF SIZE (5*NVAR+NROW*NCOL).
+C          FULL MATRIX STORAGE USING SLNAME=FSOLVE REQUIRES NROW=NVAR,
+C          NCOL=NVAR.
+C
+C  NROW  = NUMBER OF ROWS OF MATRIX STORAGE TO BE USED IN RWORK.
+C          NROW=NVAR FOR FULL MATRIX STORAGE AND SLNAME=FSOLVE.
+C
+C  NCOL  = NUMBER OF COLUMNS OF MATRIX STORAGE TO BE USED IN RWORK.
+C          NCOL=NVAR FOR FULL MATRIX STORAGE AND SLNAME=FSOLVE.
+C
+C  FXNAME= EXTERNAL QUANTITY, THE NAME OF THE FUNCTION ROUTINE
+C          WHICH WAS DECLARED EXTERNAL IN THE CALLING PROGRAM.
+C          FOR DETAILS OF THE FORMAT OF THE ROUTINE, SEE PART 2A.
+C
+C  FPNAME= EXTERNAL QUANTITY, THE NAME OF THE DERIVATIVE ROUTINE
+C          WHICH WAS DECLARED EXTERNAL IN THE CALLING PROGRAM.
+C          FOR DETAILS ON THE FORMAT OF THIS ROUTINE, SEE PART 2A.
+C
+C  SLNAME= EXTERNAL QUANTITY, THE NAME OF THE SOLVING ROUTINE
+C          WHICH WAS DECLARED EXTERNAL IN THE CALLING PROGRAM
+C          FOR DETAILS ON THE FORMAT OF THIS ROUTINE, SEE PART 2A.
+C
+C  LUNIT = INTEGER VARIABLE WHICH CONTAINS THE LOGICAL OUTPUT UNIT
+C          FOR ERROR MESSAGES AND DIAGNOSTICS FROM THE PROGRAM.
+C          ALL WRITE STATEMENTS IN THE PROGRAM HAVE THE FORM
+C          WRITE(LUNIT,FORMAT NUMBER)QUANTITIES
+C
+C***********************************************************************
+C
+C  5.  LABELED COMMON BLOCKS
+C
+C  /COUNT1/ COUNTS THE NUMBER OF CALLS BY ONE ROUTINE OF ANOTHER.
+C
+C  ICRSL  = NUMBER OF CALLS BY CORRECTOR TO SOLVER.
+C  ITNSL  = NUMBER OF CALLS BY TANGNT TO SOLVER.
+C  NSTCR  = NUMBER OF CORRECTOR STEPS TAKEN FOR IMPROVING
+C           STARTING POINTS.
+C  NCNCR  = NUMBER OF CORRECTOR STEPS TAKEN FOR COMPUTING
+C           CONTINUATION POINTS.
+C  NTRCR  = NUMBER OF CORRECTOR STEPS TAKEN FOR COMPUTING
+C           TARGET POINTS.
+C  NLMCR  = NUMBER OF CORRECTOR STEPS TAKEN FOR COMPUTING
+C           LIMIT POINTS.
+C  NLMRT  = NUMBER OF ROOT FINDING STEPS TAKEN FOR COMPUTING
+C           LIMIT POINTS.
+C
+C  /COUNT2/  KEEPS PERFORMANCE AND WORK STATISTICS.
+C
+C  IFEVAL = NUMBER OF CALLS TO FUNCTION EVALUATOR.
+C  IPEVAL = NUMBER OF CALLS TO JACOBIAN EVALUATOR.
+C  ISOLVE = NUMBER OF CALLS TO SOLVER.
+C  NREDXF = NUMBER OF STEPSIZE REDUCTIONS MADE BEFORE PREDICTOR
+C           POINT CONVERGED TO THE NEW CONTINUATION POINT.
+C  NRDSUM = TOTAL NUMBER OF STEPSIZE REDUCTIONS.
+C  NCORXR = NUMBER OF CORRECTOR ITERATION STEPS TAKEN IN MOST RECENT
+C           CALL TO CORECT.
+C  NCRSUM = TOTAL NUMBER OF CORRECTOR ITERATION STEPS.
+C
+C  /DETEXP/ CONTAINS THE BINARY EXPONENTS OF RECENT DETERMINANTS.
+C  LET DET1 DENOTE THE WEIGHTED MANTISSA OF THE DETERMINANT
+C  AT X1 AND IEX1 DENOTE THE BINARY EXPONENT OF THE
+C  DETERMINANT AT X1. THEN THE DETERMINANT MAY BE
+C  RECOVERED AS DETERMINANT=DET1*2.0**IEX1.
+C
+C  IEXTXL = EXPONENT FOR DETERMINANT OF TANGENT SYSTEM AT XL.
+C  IEXTXC = EXPONENT FOR DETERMINANT OF TANGENT SYSTEM AT XC.
+C  IEXTXR = EXPONENT FOR DETERMINANT OF TANGENT SYSTEM AT XR
+C           WHERE XR IS A LIMIT POINT.
+C  IEXNXR = EXPONENT FOR DETERMINANT OF NEWTON SYSTEM WHICH
+C           PRODUCED XR, WHERE XR MAY BE XF OR A TARGET OR
+C           LIMIT POINT.
+C
+C  /DETMAN/ CONTAINS THE MANTISSAS OF RECENT DETERMINANTS.
+C
+C  DETTXL = MANTISSA FOR DETERMINANT OF TANGENT SYSTEM AT XL.
+C  DETTXC = MANTISSA FOR DETERMINANT OF TANGENT SYSTEM AT XC.
+C  DETTXR = MANTISSA FOR DETERMINANT OF TANGENT SYSTEM AT XR
+C           WHERE XR IS A LIMIT POINT.
+C  DETNXR = MANTISSA FOR DETERMINANT OF NEWTON SYSTEM WHICH
+C           PRODUCED XR, WHERE XR MAY BE XF OR A TARGET OR
+C           LIMIT POINT.
+C
+C  /OUTPUT/
+C
+C  IWRITE = USER ACCESSIBLE OUTPUT INDICATOR.
+C           IWRITE=0, NO OUTPUT PRINTED BY PITCON.
+C           IWRITE=1, ERROR MESSAGES PRINTED BY PITCON.
+C           IWRITE=2, CERTAIN OUTPUT WILL BE PRINTED BY PITCON.
+C
+C  /POINT/ CONTAINS DATA ABOUT THE SOLUTION CURVE.
+C
+C  CURVCF = ESTIMATED CURVATURE BETWEEN XC AND XF.
+C  CORDXF = NORM OF THE CORRECTOR STEP FROM PREDICTED POINT TO
+C           CORRECTED POINT, WITH MAXIMUM ABSOLUTE VALUE AS THE NORM.
+C           THIS QUANTITY IS MODIFIED TO AN OPTIMAL VALUE.
+C  ALPHLC = ANGLE BETWEEN OLD AND NEW TANGENTS TL AND TC
+C  HSECLC = EUCLIDEAN NORM OF SECANT BETWEEN XL AND XC.
+C  FNRM   = MAXIMUM NORM OF FUNCTION VALUE AT CURRENT POINT XR.
+C
+C  /TOL/ CONTAINS MACHINE DEPENDENT TOLERANCES.
+C  THE QUANTITY EPMACH IS THE MACHINE PRECISION CONSTANT OR
+C  SMALLEST RELATIVE SPACING.  THE VALUES FOR EPMACH IN THE
+C  CODE FOR DIFFERENT MACHINES ARE TAKEN FROM THE BELL LABS
+C  PORT FUNCTION R1MACH AND CORRESPOND TO R1MACH(3).
+C
+C  EPMACH= SMALLEST NUMBER SUCH THAT 1.0+EPMACH.GT.EPMACH
+C          .5*BETA**(1-TAU) FOR ROUNDED, TAU-DIGIT ARITHMETIC
+C          BASE BETA.  TWICE THIS VALUE FOR TRUNCATED ARITHMETIC.
+C          THIS IS THE RELATIVE MACHINE PRECISION.
+C          EPMACH=2**(-27) FOR DEC-10.
+C  EPSATE= 8*EPMACH.
+C  EPSQRT= SQUARE ROOT OF EPMACH.
+C
+C  REFERENCE FOR MACHINE CONSTANTS-
+C
+C  MACHINE CONSTANTS FOR PORTABLE FORTRAN LIBRARIES,
+C  PHYLLIS FOX, A D HALL, N L SCHRYER,
+C  COMPUTING SCIENCE TECHNICAL REPORT 37,
+C  BELL LABORATORIES,
+C  MURRAY HILL, NEW JERSEY, AUGUST 1975.
+C
+C***********************************************************************
+C
+C  6.  NOMENCLATURE FOR STEP DEPENDENT VARIABLES
+C
+C
+C    THE PROGRAM ACCUMULATES INFORMATION THAT IS ASSOCIATED WITH
+C  SEVERAL PREVIOUS CONTINUATION POINTS OR THE STEPS MADE BETWEEN
+C  THEM.  IN INTERPRETING THE CODE OR ITS OUTPUT, IT IS IMPORTANT
+C  TO KNOW WHERE SUCH QUANTITIES APPLY.
+C
+C    THE POINTS XLL AND XL WILL HAVE BEEN DISCARDED BY THE PROGRAM,
+C  BUT SOME QUANTITIES ASSOCIATED WITH THEM STILL SURVIVE.
+C
+C  QUANTITIES ASSOCIATED WITH STEP FROM XLL TO XL
+C
+C  HSECLL = SIZE OF SECANT FROM XLL TO XL, EUCLIDEAN NORM(XLL-XL)
+C
+C  QUANTITIES ASSOCIATED WITH THE POINT XL
+C
+C  DETTXL = BINARY MANTISSA OF DETERMINANT OF DFA(XL,IPLL), DIVIDED
+C           BY IPLL-TH COMPONENT OF TANGENT AT XL.
+C  IEXTXL = BINARY EXPONENT OF DETERMINANT OF TANGENT SYSTEM AT XL.
+C  IPL    = THE LOCATION OF THE FIRST OR SECOND LARGEST COMPONENT
+C           OF THE TANGENT VECTOR AT XL.
+C  TLLIM  = VALUE OF LIM-TH COMPONENT OF TANGENT VECTOR AT XL.
+C  TL     = TANGENT VECTOR AT XL, ALTHOUGH LIMIT OR TARGET POINT
+C           CALCULATIONS COULD HAVE OVERWRITTEN THIS VECTOR.
+C
+C  QUANTITIES ASSOCIATED WITH INTERVAL FROM XL TO XC
+C
+C  ALPHLC = THE ANGLE BETWEEN THE TANGENTS AT XL AND XC.
+C  CURVLC = ESTIMATED CURVATURE BETWEEN XL AND XC.
+C  HSECLC = SIZE OF SECANT BETWEEN XL AND XC, EUCLIDEAN NORM(XL-XC).
+C
+C  QUANTITIES ASSOCIATED WITH THE POINT XC
+C
+C  DETTXC = BINARY MANTISSA OF DETERMINANT OF TANGENT SYSTEM AT XC.
+C  DIRIPC = SIGN OF DETTXC, DETERMINES SENSE OF CONTINUATION.
+C  IEXTXC = BINARY EXPONENT OF DETERMINANT OF TANGENT SYSTEM AT XC.
+C  IPC    = LOCATION OF FIRST OR SECOND LARGEST COMPONENT OF TANGENT
+C           VECTOR AT XC.
+C  TC     = TANGENT VECTOR AT XC.
+C  TCLIM  = VALUE OF LIM-TH COMPONENT OF TANGENT AT XC.
+C  TCIPC  = VALUE OF TC(IPC).
+C
+C  QUANTITIES ASSOCIATED WITH THE INTERVAL FROM XC TO XF
+C
+C  CURVCF = ESTIMATED CURVATURE BETWEEN XC AND XF.
+C  HTANCF = STEPSIZE USED ALONG TANGENT TO GET PREDICTED POINT
+C           WHICH WAS CORRECTED TO SOLUTION POINT XF.
+C
+C  QUANTITIES ASSOCIATED WITH THE POINT XF
+C
+C  CORDXF = SIZE OF THE TOTAL CORRECTION FROM PREDICTED POINT
+C           X=XC+HTANCF*TC TO CORRECTED POINT XF.
+C           NOTE THAT THIS HAS BEEN MODIFIED TO AN OPTIMAL VALUE.
+C  CURVXF = A PREDICTED VALUE OF THE CURVATURE AT XF.
+C  NREDXF = NUMBER OF STEPSIZE REDUCTIONS MADE BEFORE THE CORRECTOR
+C           ITERATION WOULD CONVERGE TO XF.
+C
+C  QUANTITIES ASSOCIATED WITH THE POINT XR, WHICH MAY BE THE CURRENT
+C  CONTINUATION POINT XF, OR A LIMIT OR TARGET POINT
+C
+C  DETNXR = BINARY MANTISSA OF DETERMINANT OF NEWTON SYSTEM WHICH
+C           CONVERGED TO XR.
+C  DETTXR = BINARY MANTISSA OF DETERMINANT OF TANGENT SYSTEM AT XR,
+C           IF XR IS A LIMIT POINT.
+C  FNRM   = MAXIMUM NORM OF FUNCTION VALUE AT XR.
+C  FPRYM  = CONTAINS THE FACTORED NEWTON SYSTEM AT THE PENULTIMATE
+C           NEWTON ITERATE FOR CONTINUATION OR TARGET POINT RETURNS,
+C           OR THE FACTORED TANGENT SYSTEM FOR LIMIT POINT RETURNS.
+C  IEXNXR = BINARY EXPONENT OF DETERMINANT OF NEWTON SYSTEM WHICH
+C           CONVERGED TO XR.
+C  IEXTXR = BINARY EXPONENT OF DETERMINANT OF TANGENT SYSTEM AT XR,
+C           IF XR IS A LIMIT POINT.
+C  NCORXR = NUMBER OF NEWTON STEPS TAKEN IN LAST CORRECTOR ITERATION.
+C  XSTEP  = SIZE OF THE LAST CORRECTOR STEP TAKEN IN CONVERGING TO XR.
+C
+C***********************************************************************
+C
+      EXTERNAL FXNAME, FPNAME, SLNAME
+      INTEGER IPIVOT(NVAR)
+      REAL RWORK(ISIZE)
+      REAL WRGE(8), ACOF(12)
+      DOUBLE PRECISION DTLIPC, DTCIPC, DADJUS, COSALF
+      COMMON /COUNT1/ ICRSL, ITNSL, NSTCR, NCNCR, NTRCR, NLMCR, NLMRT
+      COMMON /COUNT2/ IFEVAL, IPEVAL, ISOLVE, NREDXF, NRDSUM, NCORXR,
+     * NCRSUM
+      COMMON /DETEXP/ IEXTXL, IEXTXC, IEXTXR, IEXNXR
+      COMMON /DETMAN/ DETTXL, DETTXC, DETTXR, DETNXR
+      COMMON /OUTPUT/ IWRITE
+      COMMON /POINT/ CURVCF, CORDXF, ALPHLC, HSECLC, FNRM
+      COMMON /TOL/ EPMACH, EPSATE, EPSQRT
+      DATA IDONE /0/
+      DATA TENM1 /0.1/
+      DATA TENM2 /0.01/
+      DATA TENM3 /0.001/
+C
+C***********************************************************************
+C
+C  RMACH3 IS A MACHINE DEPENDENT QUANTITY.
+C  THE APPROPRIATE DATA STATEMENT SHOULD BE ACTIVATED.
+C
+C***********************************************************************
+C
+C  RMACH3 FOR HONEYWELL 6000 SERIES FOLLOWS
+C
+C     DATA RMACH3 /0714400000000/
+C
+C  RMACH3 FOR IBM 360 AND 370 AND SEL SYSTEMS 85/86 FOLLOWS
+C
+C    DATA RMACH3 /Z3B100000/
+C
+C  RMACH3 FOR CDC 6000 AND 7000 SERIES FOLLOWS
+C
+C     DATA RMACH3 /16404000000000000000B/
+C
+C  RMACH3 FOR PDP-10 KA OR KI PROCESSOR FOLLOWS
+C
+      DATA RMACH3 /"146400000000/
+C
+C  RMACH3 FOR THE PDP-11 FOLLOWS
+C
+C     DATA RMACH3 /0.59604644775E-07/
+C
+C  RMACH3 FOR THE UNIVAC 1100 SERIES FOLLOWS
+C
+C     DATA RMACH3 /0146400000000/
+C
+C***********************************************************************
+C
+C  1.  PREPARATIONS.
+C  ON FIRST CALL FOR THIS PROBLEM, INITIALIZE COUNTERS AND VARIABLES,
+C  CHECK USER INFORMATION AND SET DEFAULTS, AND IF (KSTEP.EQ.-1),
+C  CHECK NORM OF F(XR) AND CORRECT XR IF NECESSARY.
+C  ON EACH CALL, IF INPUT IRET HAS NONFATAL VALUE, RESET IRET
+C  SO THAT CONTINUATION LOOP PICKS UP WHERE IT WAS HALTED.
+C
+C***********************************************************************
+C
+      IERR = 0
+      IF (IRET.EQ.(-1)) IRET = 2
+      IF (IRET.EQ.(-2) .OR. IRET.EQ.(-3) .OR. IRET.EQ.(-4)) IRET = 1
+      IF (IRET.EQ.(-5) .OR. IRET.EQ.(-6)) IRET = 0
+C
+C  IF CODE WAS CALLED AGAIN AFTER FATAL VALUE OF IRET,
+C  THEN RETURN WITH ERROR VALUE IRET=-10.
+C
+      IF (IRET.LT.0) GO TO 470
+C
+C  PERFORM ONE-TIME ONLY INITIALIZATIONS
+C
+      IF (IDONE.NE.0) GO TO 10
+      WRGE(1) = 0.8735115
+      WRGE(2) = 0.1531947
+      WRGE(3) = 0.03191815
+      WRGE(4) = 0.3339946E-10
+      WRGE(5) = 0.4677788
+      WRGE(6) = 0.6970123E-03
+      WRGE(7) = 0.1980863E-05
+      WRGE(8) = 0.1122789E-08
+      ACOF(1) = 0.9043128
+      ACOF(2) = -0.7075675
+      ACOF(3) = -4.667383
+      ACOF(4) = -3.677482
+      ACOF(5) = 0.8516099
+      ACOF(6) = -0.1953119
+      ACOF(7) = -4.830636
+      ACOF(8) = -0.9770528
+      ACOF(9) = 1.040061
+      ACOF(10) = 0.03793395
+      ACOF(11) = 1.042177
+      ACOF(12) = 0.04450706
+C
+C  SET THE MACHINE DEPENDENT VARIABLE EPMACH, THE SMALLEST NUMBER
+C  SO THAT (1.0+EPMACH.GT.1.0)
+C
+      EPMACH = RMACH3
+C
+C  SET EPSATE=8*EPMACH, EPSQRT=SQRT(EPMACH)
+C
+      EPSATE = 8.0*EPMACH
+      EPSQRT = SQRT(EPMACH)
+      TCOS = 1.0 - EPMACH
+      TSIN = SQRT(1.0-TCOS*TCOS)
+      ALFMIN = 2.0*ATAN2(TSIN,TCOS)
+      IF (KSTEP.LT.(-1) .OR. KSTEP.GT.0) KSTEP = -1
+      KSTEPL = -2
+      IDONE = 1
+C
+C  PERFORM INITIALIZATIONS AND CHECKS FOR NEW PROBLEM ONLY
+C
+   10 IF (KSTEP.GT.0) GO TO 30
+      IF (KSTEPL.EQ.(-1) .AND. KSTEP.EQ.0) GO TO 20
+      IF (NVAR.LE.1) GO TO 470
+      IF (ISIZE.LT.(5*NVAR+NROW*NCOL)) GO TO 470
+      IXR = 1
+      JXR = 0
+      IXC = IXR + NVAR
+      JXC = JXR + NVAR
+      IXF = IXC + NVAR
+      JXF = JXC + NVAR
+      ITL = IXF + NVAR
+      JTL = JXF + NVAR
+      ITC = ITL + NVAR
+      JTC = JTL + NVAR
+      IFP = ITC + NVAR
+      JFP = JTC + NVAR
+      DETTXL = 0.0
+      DETTXC = 0.0
+      DETTXR = 0.0
+      DETNXR = 0.0
+      IEXTXL = 0
+      IEXTXC = 0
+      IEXTXR = 0
+      IEXNXR = 0
+      TCIPC = 0.0
+      CORDXF = 0.0
+      CURVCF = 0.0
+      HSECLL = 0.0
+      HSECLC = 0.0
+      XITO = 0.0
+      ITO = 0
+      NEQN = NVAR - 1
+      NREDXF = 0
+      NCRSUM = 0
+      NRDSUM = 0
+      ICRSL = 0
+      ITNSL = 0
+      NSTCR = 0
+      NCNCR = 0
+      NTRCR = 0
+      NLMCR = 0
+      NLMRT = 0
+      IFEVAL = 0
+      ISOLVE = 0
+      IPEVAL = 0
+      IF (HMIN.LE.EPSQRT) HMIN = EPSQRT
+      IF (HMAX.LE.0.0) HMAX = SQRT(FLOAT(NVAR))
+      HDEF = .5*(HMAX+HMIN)
+      IF (HFACT.LE.1.0) HFACT = 3.0
+      HRED = 1.0/HFACT
+      IF (ABSERR.LE.0.0) ABSERR = EPSQRT
+      IF (RELERR.LE.0.0) RELERR = EPSQRT
+      IF (IPCFIX.NE.1) IPCFIX = 0
+      IF (IPC.LE.0 .OR. IPC.GT.NVAR) IPC = NVAR
+      IF (LIM.LT.0 .OR. LIM.GT.NVAR) LIM = 0
+      IF (HTANCF.LE.0.0) HTANCF = HDEF
+      IF (DIRIPC.NE.(-1.0)) DIRIPC = 1.0
+C
+C  IF (KSTEP.LT.0) CHECK NORM OF F(XR) AT STARTING POINT,
+C  IF ACCEPTABLE, RETURN IMMEDIATELY WITH KSTEP=0,
+C  OTHERWISE APPLY NEWTON'S METHOD, HOLDING VALUE OF
+C  IPC-TH COMPONENT FIXED.
+C
+      IF (KSTEP.GE.0) GO TO 20
+      CALL CORECT(NVAR, RWORK(IXR), IPC, RWORK(ITL), IERR, MODCON,
+     * RWORK(IFP), NROW, NCOL, IPIVOT, ABSERR, RELERR, XSTEP, NEQN,
+     * FNRM, FXNAME, FPNAME, SLNAME, LUNIT, DETNXR, IEXNXR)
+      NSTCR = NSTCR + NCORXR
+C
+C  IF NO ACCEPTABLE POINT FOUND, ERROR RETURN
+C
+      IF (IERR.NE.0) GO TO 430
+      KSTEPL = -1
+      KSTEP = 0
+      GO TO 370
+   20 IF (KSTEP.EQ.0) CALL SCOPY(NVAR, RWORK(IXR), 1, RWORK(IXC), 1)
+      IF (KSTEP.EQ.0) CALL SCOPY(NVAR, RWORK(IXR), 1, RWORK(IXF), 1)
+C
+C***********************************************************************
+C
+C  2.  TARGET POINT CHECK.  IF (IT.NE.0) TARGET POINTS ARE SOUGHT.
+C  CHECK TO SEE IF TARGET COMPONENT IT HAS VALUE XIT LYING
+C  BETWEEN XC(IT) AND XF(IT).  IF SO, GET LINEARLY INTERPOLATED
+C  STARTING POINT, AND USE NEWTON'S METHOD TO GET TARGET POINT
+C
+C***********************************************************************
+C
+   30 IF (IT.LT.0 .OR. IT.GT.NVAR) IT = 0
+      IF (IT.EQ.0) GO TO 40
+      IF (IRET.EQ.1 .AND. XIT.EQ.XITO .AND. IT.EQ.ITO) GO TO 40
+      INDEX = JXC + IT
+      XCIT = RWORK(INDEX)
+      INDEX = JXF + IT
+      XFIT = RWORK(INDEX)
+      IF ((XIT.LE.XCIT) .AND. (XIT.LT.XFIT)) GO TO 40
+      IF ((XIT.GE.XCIT) .AND. (XIT.GT.XFIT)) GO TO 40
+      DEL = XFIT - XCIT
+      RAT = 0.0
+      IF (ABS(DEL).GT.EPSQRT) RAT = (XIT-XCIT)/DEL
+      CALL SCOPY(NVAR, RWORK(IXF), 1, RWORK(IXR), 1)
+      CALL SAXPY(NVAR, -1.0, RWORK(IXC), 1, RWORK(IXR), 1)
+      CALL SSCAL(NVAR, RAT, RWORK(IXR), 1)
+      CALL SAXPY(NVAR, 1.0, RWORK(IXC), 1, RWORK(IXR), 1)
+      INDEX = JXR + IT
+      RWORK(INDEX) = XIT
+      CALL CORECT(NVAR, RWORK(IXR), IT, RWORK(ITL), IERR, MODCON,
+     * RWORK(IFP), NROW, NCOL, IPIVOT, ABSERR, RELERR, XSTEP, NEQN,
+     * FNRM, FXNAME, FPNAME, SLNAME, LUNIT, DETNXR, IEXNXR)
+      NTRCR = NTRCR + NCORXR
+      ITO = IT
+      XITO = XIT
+      IF (IERR.EQ.0) GO TO 360
+      IF (IERR.EQ.(-1)) GO TO 400
+      IF (IERR.EQ.(-2)) GO TO 390
+      IF (IERR.EQ.(-3)) GO TO 410
+C
+C***********************************************************************
+C
+C  3.  TANGENT AND LOCAL CONTINUATION PARAMETER CALCULATION.  UNLESS
+C  THE TANGENT AND LIMIT POINT CALCULATIONS WERE ALREADY PERFORMED
+C  (BECAUSE THE LOOP WAS INTERRUPTED FOR A LIMIT POINT), SET UP AND
+C  SOLVE THE EQUATION FOR THE TANGENT VECTOR.  FORCE THE TANGENT
+C  TO BE OF UNIT LENGTH, AND FORCE THE IPL-COMPONENT TO HAVE THE SAME
+C  SIGN AS THE IPL-TH COMPONENT OF THE PREVIOUS TANGENT VECTOR, OR (ON
+C  FIRST STEP) THE SAME SIGN AS THE INPUT DIRECTION DIRIPC.  SET THE
+C  LOCAL PARAMETER IPC TO THE LOCATION OF THE LARGEST COMPONENT
+C  OF THE TANGENT VECTOR, UNLESS A LIMIT POINT IN THAT DIRECTION
+C  APPEARS TO BE APPROACHING AND ANOTHER CHOICE IS AVAILABLE.
+C
+C***********************************************************************
+C
+   40 IF (IRET.NE.2) GO TO 50
+      IRET = 0
+      GO TO 200
+C
+C  STORE OLD TANGENT IN TL, COMPUTE NEW TANGENT FOR XC
+C
+   50 IPL = IPC
+      IF (KSTEP.GT.0) CALL SCOPY(NVAR, RWORK(ITC), 1, RWORK(ITL), 1)
+      ICALL = 1
+      DETTXL = DETTXC
+      IEXTXL = IEXTXC
+      CALL TANGNT(NVAR, RWORK(IXF), IPC, RWORK(ITC), IRET, ICALL,
+     * RWORK(IFP), IPIVOT, NEQN, DETTXC, IEXTXC, IPCFIX, ABSERR,
+     * RELERR, NROW, NCOL, FPNAME, SLNAME)
+      IF (IRET.EQ.(-2)) GO TO 460
+      IF (IRET.EQ.(-1)) GO TO 440
+C
+C  TANGNT RETURNED IPC, THE LOCATION OF THE LARGEST COMPONENT
+C  OF THE TANGENT VECTOR.  THIS WILL BE USED FOR THE LOCAL
+C  PARAMETERIZATION OF THE CURVE UNLESS A LIMIT POINT IN IPC SEEMS
+C  TO BE COMING.  TO CHECK THIS, WE COMPARE TCIPC =TC(IPC) AND THE
+C  SECOND LARGEST COMPONENT TCJPC =TC(JPC).  IF TCJPC IS NO LESS
+C  THAN .1 OF TCIPC, AND TC(JPC) IS LARGER THAN TL(JPC),
+C  WHEREAS TC(IPC) IS LESS THAN TL(IPC), WE WILL RESET THE
+C  LOCAL PARAMETER IPC =JPC.
+C
+C  BUT IF IPCFIX.EQ.1, IGNORE THE CHECK
+C
+      TLIPL = TCIPC
+      INDEX = JTC + IPC
+      TCIPC = RWORK(INDEX)
+      JPC = IPC
+      INDEX = JTL + IPC
+      IF (IPCFIX.EQ.1) GO TO 60
+      IF (ABS(TCIPC).GE.ABS(RWORK(INDEX))) GO TO 60
+      IF (TLIPL.EQ.0.0) GO TO 60
+      INDEX = JTC + IPC
+      RWORK(INDEX) = 0.0
+      JPC = ISAMAX(NVAR,RWORK(ITC),1)
+      INDEX = JTC + JPC
+      TCJPC = RWORK(INDEX)
+      INDEX = JTC + IPC
+      RWORK(INDEX) = TCIPC
+      IF (ABS(TCJPC).LT.TENM1*ABS(TCIPC)) GO TO 60
+      INDEX = JTL + JPC
+      IF (ABS(TCJPC).LT.ABS(RWORK(INDEX))) GO TO 60
+      IF (IWRITE.GE.2) WRITE (LUNIT,99981) IPC
+      IPC = JPC
+   60 INDEX = JTC + IPL
+      TCIPL = RWORK(INDEX)
+      INDEX = JTL + IPC
+      DTLIPC = DBLE(RWORK(INDEX))
+      DETTXC = DETTXC/TCIPL
+C
+C  ADJUST SIGN OF TANGENT.
+C  COMPARE THE SIGN OF TC(IPL) WITH SIGN OF TL(IPL), EXCEPT ON
+C  FIRST STEP, COMPARE SIGN OF TC(IPL) WITH USER INPUT DIRIPC.
+C  IF THESE SIGNS DIFFER, CHANGE THE SIGN OF TC TO FORCE AGREEMENT,
+C  AND THE SIGN OF DETTXC.
+C  THEN RECORD DIRIPC = SIGN OF DETERMINANT = SIGN(DETTXC).
+C
+      STLIPL = DIRIPC
+      IF (TLIPL.NE.0.0) STLIPL = SIGN(1.0,TLIPL)
+      IF (SIGN(1.0,TCIPL).EQ.STLIPL) GO TO 70
+      CALL SSCAL(NVAR, -1.0, RWORK(ITC), 1)
+      DETTXC = -DETTXC
+      TCIPL = -TCIPL
+   70 INDEX = JTC + IPC
+      TCIPC = RWORK(INDEX)
+      INDEX = JTC + JPC
+      TCJPC = RWORK(INDEX)
+      DTCIPC = DBLE(TCIPC)
+      DIRIPC = SIGN(1.0,DETTXC)
+      IF (LIM.EQ.0) GO TO 80
+      TLLIM = TCLIM
+      INDEX = JTC + LIM
+      TCLIM = RWORK(INDEX)
+C
+C  COMPUTE ALPHLC, THE ANGLE BETWEEN TANGENT AT XL AND TANGENT AT XC
+C  AND HSECLC, THE EUCLIDEAN NORM OF SECANT FROM XL TO XC.
+C
+   80 IF (KSTEP.LE.0) GO TO 200
+      COSALF = 0.0D0
+      DO 90 I=1,NVAR
+        INDEX = JTC + I
+        JNDEX = JTL + I
+        COSALF = COSALF + DBLE(RWORK(INDEX))*DBLE(RWORK(JNDEX))
+        INDEX = JXR + I
+        JNDEX = JXF + I
+        KNDEX = JXC + I
+        RWORK(INDEX) = RWORK(JNDEX) - RWORK(KNDEX)
+   90 CONTINUE
+      HSECLL = HSECLC
+      HSECLC = SNRM2(NVAR,RWORK(IXR),1)
+      TCOS = SNGL(COSALF)
+      IF (TCOS.GT.1.0) TCOS = 1.0
+      IF (TCOS.LT.(-1.0)) TCOS = -1.0
+      TSIN = SQRT(1.0-TCOS*TCOS)
+      ALPHLC = ATAN2(TSIN,TCOS)
+      IF (IWRITE.GE.2) WRITE (LUNIT,99989) ALPHLC
+C
+C***********************************************************************
+C
+C  4.  LIMIT POINT CHECK.  IF (LIM.NE.0) CHECK TO SEE IF
+C  OLD AND NEW TANGENTS DIFFER IN SIGN OF LIM-TH COMPONENT.
+C  IF SO, ATTEMPT TO COMPUTE A POINT XR BETWEEN XC AND XF
+C  FOR WHICH TANGENT COMPONENT VANISHES
+C
+C***********************************************************************
+C
+      IF (LIM.LE.0 .OR. KSTEP.LE.0) GO TO 200
+C
+C  CHECK FOR LIMIT INTERVAL
+C
+      IF (SIGN(1.0,TCLIM).EQ.SIGN(1.0,TLLIM)) GO TO 200
+C
+C  TEST FOR ACCEPTABLE ENDPOINTS
+C
+      ATLLIM = ABS(TLLIM)
+      IF (ATLLIM.GT.0.5*ABSERR) GO TO 110
+C
+C  IF XC IS LIMIT POINT, TL ALREADY CONTAINS TANGENT AT XC
+C
+  100 CALL SCOPY(NVAR, RWORK(IXC), 1, RWORK(IXR), 1)
+      GO TO 350
+  110 ATCLIM = ABS(TCLIM)
+      IF (ATCLIM.GT.0.5*ABSERR) GO TO 130
+  120 CALL SCOPY(NVAR, RWORK(IXF), 1, RWORK(IXR), 1)
+      CALL SCOPY(NVAR, RWORK(ITC), 1, RWORK(ITL), 1)
+      GO TO 350
+C
+C  TEST FOR SMALL INTERVAL
+C
+  130 INDEX = JXC + LIM
+      XCLIM = RWORK(INDEX)
+      INDEX = JXF + LIM
+      XFLIM = RWORK(INDEX)
+      DEL = ABS(XFLIM-XCLIM)
+      XABS = AMAX1(ABS(XCLIM),ABS(XFLIM))
+      IF (DEL.GT.(ABSERR+RELERR*XABS)) GO TO 140
+      IF (ATLLIM.GT.ATCLIM) GO TO 120
+      GO TO 100
+C
+C  BEGIN ROOT-FINDING ITERATION WITH INTERVAL (0,1) AND
+C  FUNCTION VALUES TL(LIM), TC(LIM).
+C
+  140 KOUNT = 0
+      A = 0.0
+      FA = TLLIM
+      B = 1.0
+      FB = TCLIM
+C
+C  SET LPC TO THE INDEX OF MAXIMUM ENTRY OF SECANT
+C  (EXCEPT THAT LPC MUST NOT EQUAL LIM)
+C  AND SAVE THE SIGN OF THE MAXIMUM COMPONENT IN DIRLPC
+C  SO THAT NEW TANGENTS MAY BE PROPERLY SIGNED.
+C
+      CALL SCOPY(NVAR, RWORK(IXF), 1, RWORK(IXR), 1)
+      CALL SAXPY(NVAR, -1.0, RWORK(IXC), 1, RWORK(IXR), 1)
+      INDEX = JXR + LIM
+      RWORK(INDEX) = 0.0
+      LPC = ISAMAX(NVAR,RWORK(IXR),1)
+      INDEX = JXR + LPC
+      DIRLPC = SIGN(1.0,RWORK(INDEX))
+C
+C  SET FIRST APPROXIMATION TO ROOT TO WHICHEVER ENDPOINT
+C  HAS SMALLEST LIM-TH COMPONENT OF TANGENT
+C
+      IF (ATCLIM.LT.ATLLIM) GO TO 150
+      SN = 0.0
+      TSN = TLLIM
+      CALL SCOPY(NVAR, RWORK(IXC), 1, RWORK(IXR), 1)
+      GO TO 160
+  150 SN = 1.0
+      TSN = TCLIM
+      CALL SCOPY(NVAR, RWORK(IXF), 1, RWORK(IXR), 1)
+C
+C  CALL ROOTFINDER FOR APPROXIMATE ROOT SN.  USE LINEAR COMBINATION
+C  OF PREVIOUS ROOT SNL, AND ONE OF 0.0 AND 1.0 TO GET A STARTING
+C  POINT FOR CORRECTION.  RETURN TO CURVE ON LINE X(LPC)=CONSTANT,
+C  COMPUTE TANGENT THERE, AND SET FUNCTION VALUE TO TANGENT(LIM)
+C
+  160 SNL = SN
+      CALL ROOT(A, FA, B, FB, SN, TSN, KOUNT, IFLAG)
+      NLMRT = NLMRT + 1
+      IF (IFLAG.LT.(-1)) GO TO 380
+      IF (IFLAG.EQ.(-1) .OR. IFLAG.EQ.0) GO TO 350
+C
+C  FIND WHETHER SN LIES IN (0.0,SNL) OR (SNL,1.0).
+C  USE APPROPRIATE LINEAR COMBINATION TO GET STARTING POINT.
+C
+      IF (SN.GT.SNL) GO TO 170
+C
+C  SET X(SN)=(SNL-SN)/(SNL-0.0)*X(0.0)+(SN-0.0)/(SNL-0.0)*X(SNL)
+C
+      IF (SNL.LE.0.0) SCALER = 0.0
+      IF (SNL.GT.0.0) SCALER = SN/SNL
+      CALL SSCAL(NVAR, SCALER, RWORK(IXR), 1)
+      SCALER = 1.0 - SCALER
+      CALL SAXPY(NVAR, SCALER, RWORK(IXC), 1, RWORK(IXR), 1)
+      GO TO 180
+C
+C  SET X(SN)=(SN-SNL)/(1.0-SNL)*X(1.0)+(1.0-SN)/(1.0-SNL)*X(SNL)
+C
+  170 IF (SNL.GE.1.0) SCALER = 0.0
+      IF (SNL.LT.1.0) SCALER = (1.0-SN)/(1.0-SNL)
+      CALL SSCAL(NVAR, SCALER, RWORK(IXR), 1)
+      SCALER = 1.0 - SCALER
+      CALL SAXPY(NVAR, SCALER, RWORK(IXF), 1, RWORK(IXR), 1)
+C
+C  NOTE THAT CORRECTION IS ALWAYS DONE WITH MODIFIED NEWTON PROCESS.
+C  MODLIM=1 UNLESS CORRECTOR RETURNS A NON FATAL ERROR, WHEN WE SET
+C  MODLIM=0 AND TRY AGAIN.
+C
+  180 MODLIM = 1
+  190 CALL CORECT(NVAR, RWORK(IXR), LPC, RWORK(ITL), IERR, MODLIM,
+     * RWORK(IFP), NROW, NCOL, IPIVOT, ABSERR, RELERR, XSTPLM, NEQN,
+     * FNRM, FXNAME, FPNAME, SLNAME, LUNIT, DETNXR, IEXNXR)
+      NLMCR = NLMCR + NCORXR
+      IF (IERR.NE.0 .AND. MODLIM.EQ.0) GO TO 380
+      IF (IERR.NE.0) MODLIM = 0
+      IF (IERR.NE.0) GO TO 190
+      ICALL = 1
+      LPCFIX = 1
+      CALL TANGNT(NVAR, RWORK(IXR), LPC, RWORK(ITL), IRET, ICALL,
+     * RWORK(IFP), IPIVOT, NEQN, DETTXR, IEXTXR, LPCFIX, ABSERR,
+     * RELERR, NROW, NCOL, FPNAME, SLNAME)
+      IF (IRET.LT.0) GO TO 380
+C
+C  ADJUST THE SIGN OF THE TANGENT SO THAT THE LPC-TH COMPONENT
+C  HAS THE SAME SIGN AS THE LPC-TH COMPONENT OF THE SECANT
+C
+      INDEX = JTL + LPC
+      IF (DIRLPC.NE.SIGN(1.0,RWORK(INDEX))) CALL SSCAL(NVAR, -1.0,
+     * RWORK(ITL), 1)
+C
+C  SEE IF WE CAN ACCEPT THE NEW POINT BECAUSE TANGENT(LIM) IS SMALL
+C  OR IF WE MUST GO ON.
+C
+      INDEX = JTL + LIM
+      TSN = RWORK(INDEX)
+      IF (ABS(TSN).LE.0.5*ABSERR) GO TO 350
+      GO TO 160
+C
+C***********************************************************************
+C
+C  5.  STEP LENGTH COMPUTATION.  COMPUTE STEPLENGTH HTANCF
+C
+C  THE FORMULAS UNDERLYING THE ALGORITHM ARE
+C
+C  LET
+C
+C  ALPHLC = MAXIMUM OF ARCCOS(TL,TC) AND ALFMIN = 2*ARCCOS(1-EPMACH)
+C  HSECLC = NORM(XL-XC)
+C  HSECLL = NORM(XL-XLL)
+C  ABSIN  = ABS(SIN(.5*ALPHLC))
+C  CURVLC = LAST VALUE OF CURVCF
+C  CURVCF = 2*ABSIN/HSECLC
+C  CORDXF = OPTIMIZED CORRECTOR DISTANCE TO CURRENT CONTINUATION
+C           POINT.
+C           BUT CORDXF FORCED TO LIE BETWEEN .01*HSECLC AND HSECLC.
+C           UNLESS (CORDXF.EQ.0.0), BECAUSE THE PREDICTED POINT WAS
+C           ACCEPTED.  IN SUCH A CASE, SET HTANCF=HFACT*HSECLC
+C           INSTEAD OF USING FIRST ESTIMATE FOR HTANCF.
+C
+C  THEN
+C
+C  CURVXF = CURVCF + HSECLC*(CURVCF-CURVLC)/(HSECLC+HSECLL)
+C  A SIMPLER FORMULA IS USED IF WE DO NOT HAVE DATA AT TWO PREVIOUS
+C  POINTS.
+C
+C  IF (HSECLC.GT.0.0) CURVXF MUST BE AT LEAST AS LARGE AS .01/HSECLC
+C  IF (HSECLC.EQ.0.0) CURVXF MUST BE AT LEAST .001
+C
+C  FIRST ESTIMATE   (UNLESS (CORDXF.EQ.0.0) )
+C
+C  HTANCF  = SQRT(2*CORDXF/CURVXF)
+C
+C  ADJUSTED VALUE
+C
+C  HTANCF = HTANCF*(1.0 + HTANCF*(TC(IPC)-TL(IPC))/(2*HSECLC*TC(IPC)))
+C
+C  READJUSTMENT AND TRUNCATIONS
+C
+C  IF STEPSIZE REDUCTION OCCURRED DURING LAST CORRECTOR PROCESS,
+C  HTANCF IS FORCED TO BE LESS THAN (HFACT-1)*HSECLC/2.
+C
+C  HTANCF MUST LIE BETWEEN (HSECLC/HFACT) AND (HSECLC*HFACT).
+C
+C  HTANCF IS ALWAYS FORCED TO LIE BETWEEN HMIN AND HMAX.
+C
+C***********************************************************************
+C
+C  CHECK IF DEFAULT STEP MUST BE USED
+C  IF PREVIOUS STEP WAS OF SIZE ZERO, USE STEPSIZE HDEF=(HMIN+HMAX)/2
+C
+  200 IF (KSTEP.GT.0 .AND. HSECLC.GT.0.0) GO TO 210
+      IF (KSTEP.GT.0) HTANCF = HDEF
+      GO TO 230
+  210 IF (ALPHLC.LT.ALFMIN) ALPHLC = ALFMIN
+      ABSIN = ABS(SIN(.5*ALPHLC))
+C
+C  COMPUTE NEW CURVATURE DATA
+C
+      CURVLC = CURVCF
+      CURVCF = 2.0*ABSIN/HSECLC
+      CURVXF = CURVCF
+      IF (HSECLL.NE.0.0) CURVXF = CURVCF + HSECLC*(CURVCF-CURVLC)/
+     * (HSECLC+HSECLL)
+      TEMP = TENM3
+      IF (HSECLC.GT.0.0) TEMP = TENM2/HSECLC
+      CURVXF = AMAX1(CURVXF,TEMP)
+      IF (IWRITE.GE.2) WRITE (LUNIT,99988) CURVCF
+      IF (IWRITE.GE.2) WRITE (LUNIT,99987) CURVXF
+C
+C  IF CONVERGENCE DISTANCE IS ZERO, SET ESTIMATE TO HFACT*HSECLC.
+C  OTHERWISE, TRUNCATE CORDXF TO LIE BETWEEN .01*HSECLC AND HSECLC.
+C
+      HTANCF = HFACT*HSECLC
+      IF (CORDXF.EQ.0.0) GO TO 220
+      TEMP = TENM2*HSECLC
+      CORDXF = AMAX1(CORDXF,TEMP)
+      CORDXF = AMIN1(CORDXF,HSECLC)
+C
+C  SET HTANCF, THEN ADJUST FOR CURVATURE IN CONTINUATION
+C  PARAMETER DIRECTION, THEN TRUNCATE
+C
+      HTANCF = SQRT(2.0*CORDXF/CURVXF)
+  220 IF (NREDXF.GT.0) HTANCF = AMIN1(HTANCF,(HFACT-1.0)*HSECLC*.5)
+      DADJUS = 1.0D0 + (1.0D0-DTLIPC/DTCIPC)*DBLE(.5*HTANCF)/
+     * DBLE(HSECLC)
+      HTANCF = HTANCF*SNGL(DADJUS)
+      HTANCF = AMAX1(HTANCF,HSECLC*HRED)
+      HTANCF = AMIN1(HTANCF,HSECLC*HFACT)
+      HTANCF = AMAX1(HTANCF,HMIN)
+      HTANCF = AMIN1(HTANCF,HMAX)
+C
+C***********************************************************************
+C
+C  6.  PREDICTION AND CORRECTION STEPS.  USING XR=XC+HTANCF*TC
+C  AS STARTING POINT, CORRECT XR WITH A FULL OR MODIFIED NEWTON
+C  ITERATION.  IF CORECT FAILS, REDUCE STEPSIZE USED FOR PREDICTOR
+C  POINT, AND TRY AGAIN.  CORRECTION WILL BE ABANDONED IF STEPSIZE
+C  FALLS BELOW HMIN.
+C
+C***********************************************************************
+C
+  230 KSTEPL = KSTEP
+      KSTEP = KSTEP + 1
+      NREDXF = 0
+  240 CALL SCOPY(NVAR, RWORK(IXF), 1, RWORK(IXR), 1)
+      CALL SAXPY(NVAR, HTANCF, RWORK(ITC), 1, RWORK(IXR), 1)
+  250 IF (IWRITE.GE.2) WRITE (LUNIT,99986) HTANCF
+      INDEX = JXR + 1
+      JNDEX = JXR + NVAR
+      IF (IWRITE.GE.3) WRITE (LUNIT,99985) (RWORK(I),I=INDEX,JNDEX)
+      CALL CORECT(NVAR, RWORK(IXR), IPC, RWORK(ITL), IERR, MODCON,
+     * RWORK(IFP), NROW, NCOL, IPIVOT, ABSERR, RELERR, XSTEP, NEQN,
+     * FNRM, FXNAME, FPNAME, SLNAME, LUNIT, DETNXR, IEXNXR)
+      NCNCR = NCNCR + NCORXR
+      IF (IERR.EQ.0) GO TO 270
+      IF (IERR.EQ.(-1)) GO TO 450
+C
+C  NO CONVERGENCE, TRY A SMALLER STEPSIZE
+C
+      HTANCF = HRED*HTANCF
+      IF (HTANCF.LT.HMIN) GO TO 420
+      NREDXF = NREDXF + 1
+      IF (IERR.EQ.(-2)) GO TO 260
+      GO TO 240
+  260 CALL SAXPY(NVAR, -1.0, RWORK(IXF), 1, RWORK(IXR), 1)
+      CALL SSCAL(NVAR, HRED, RWORK(IXR), 1)
+      CALL SAXPY(NVAR, 1.0, RWORK(IXF), 1, RWORK(IXR), 1)
+      GO TO 250
+C
+C***********************************************************************
+C
+C  7.  SUCCESSFUL STEP.  STORE INFORMATION BEFORE RETURN.
+C  UPDATE OLD AND CURRENT CONTINUATION POINTS.
+C  COMPUTE CORDXF, THE SIZE OF THE CORRECTOR STEP.  COMPUTE
+C  A FACTOR THETA WHICH RESCALES CORDXF TO A VALUE WHICH WOULD
+C  CORRESPOND TO A DESIRABLE NUMBER OF CORRECTOR STEPS
+C  (4 FOR FULL NEWTON, 10 FOR MODIFIED NEWTON).
+C  SEE REFERENCE DEN HEIJER AND RHEINBOLDT, LOC. CIT.
+C
+C***********************************************************************
+C
+  270 NRDSUM = NRDSUM + NREDXF
+      IF (NREDXF.NE.0 .AND. IWRITE.GE.2) WRITE (LUNIT,99984) NREDXF
+C
+C  COMPUTE CORRECTOR STEP = XC+HTANCF*TC-XF
+C  SET CORDXF = MAX NORM OF CORRECTOR STEP
+C
+      CALL SCOPY(NVAR, RWORK(IXF), 1, RWORK(IXC), 1)
+      CALL SAXPY(NVAR, -1.0, RWORK(IXR), 1, RWORK(IXC), 1)
+      CALL SAXPY(NVAR, HTANCF, RWORK(ITC), 1, RWORK(IXC), 1)
+      IMAX = ISAMAX(NVAR,RWORK(IXC),1)
+      INDEX = JXC + IMAX
+      CORDXF = ABS(RWORK(INDEX))
+      IF (NCORXR.EQ.0) CORDXF = 0.0
+C
+C  MODIFY CORDXF TO A VALUE THAT WOULD CORRESPOND TO THE
+C  DESIRED NUMBER OF CORRECTOR STEPS
+C
+      IF (CORDXF.EQ.0.0) GO TO 340
+      OMEGA = XSTEP/CORDXF
+      THETA = 0.0
+      IF (MODCON.EQ.1) GO TO 300
+C
+C  FULL NEWTON METHOD FOR CORRECTOR STEPS
+C
+      IF (NCORXR.LE.1) THETA = 8.0
+      IF (NCORXR.EQ.4) THETA = 1.0
+      IF (THETA.NE.0.0) GO TO 330
+      IF (NCORXR.GT.4) GO TO 280
+      LK = 4*NCORXR - 7
+      THETA = 1.0
+      IF (OMEGA.GE.WRGE(LK)) GO TO 330
+      LST = LK
+      INDEX = LK + 1
+      IF (OMEGA.GE.WRGE(INDEX)) GO TO 290
+      LST = LK + 2
+      IF (OMEGA.GE.WRGE(LST)) GO TO 290
+      THETA = 8.0
+      GO TO 330
+  280 THETA = 0.125
+      IF (NCORXR.GE.7) GO TO 330
+      LK = 4*NCORXR - 16
+      IF (OMEGA.LE.WRGE(LK)) GO TO 330
+      LST = 2*NCORXR - 1
+  290 INDEX = LST + 1
+      THETA = ACOF(LST) + ACOF(INDEX)*ALOG(OMEGA)
+      GO TO 330
+C
+C  MODIFIED NEWTON METHOD FOR CORRECTOR STEPS
+C
+  300 IF (NCORXR.LE.1) THETA = 8.0
+      IF (NCORXR.EQ.10) THETA = 1.0
+      IF (THETA.NE.0.0) GO TO 330
+      EXPON = FLOAT(NCORXR-1)/FLOAT(NCORXR-10)
+C
+C  AVOID OVERFLOW OR UNDERFLOW BY ANTICIPATING
+C  CUTOFF VALUES OF THETA
+C
+      TEST = 8.0**EXPON
+      IF (NCORXR.GT.10) GO TO 310
+      IF (TEST.GT.OMEGA) THETA = 8.0
+      IF (1.0.LT.(TEST*OMEGA)) THETA = .125
+      IF (THETA.NE.0.0) GO TO 330
+      GO TO 320
+  310 IF (TEST.LT.OMEGA) THETA = 8.0
+      IF (1.0.GT.(TEST*OMEGA)) THETA = .125
+      IF (THETA.NE.0.0) GO TO 330
+  320 EXPON = 1.0/EXPON
+      THETA = OMEGA**EXPON
+      THETA = AMAX1(THETA,0.125)
+      THETA = AMIN1(THETA,8.0)
+C
+C  SET THE MODIFIED VALUE OF CORDXF
+C
+  330 CORDXF = THETA*CORDXF
+      IF (IWRITE.GE.3) WRITE (LUNIT,99983) OMEGA, THETA
+      IF (IWRITE.GE.2) WRITE (LUNIT,99982) CORDXF
+  340 CALL SCOPY(NVAR, RWORK(IXF), 1, RWORK(IXC), 1)
+      CALL SCOPY(NVAR, RWORK(IXR), 1, RWORK(IXF), 1)
+      GO TO 370
+C
+C***********************************************************************
+C
+C  RETURNS.  SET VALUE OF IRET.  IF AN ERROR OCCURRED, PRINT
+C  A MESSAGE AS WELL.
+C
+C***********************************************************************
+C
+C
+C  RETURN LIMIT POINT
+C
+  350 IRET = 2
+      RETURN
+C
+C  RETURN WITH TARGET POINT
+C
+  360 IRET = 1
+      RETURN
+C
+C  RETURN WITH CONTINUATION POINT
+C
+      CALL SCOPY(NVAR, RWORK(IXF), 1, RWORK(IXR), 1)
+  370 IRET = 0
+      RETURN
+C
+C  ERROR RETURNS
+C
+  380 IRET = -1
+      IF (IWRITE.GE.1) WRITE (LUNIT,99999)
+      RETURN
+  390 IRET = -2
+      IF (IWRITE.GE.1) WRITE (LUNIT,99998)
+      RETURN
+  400 IRET = -3
+      IF (IWRITE.GE.1) WRITE (LUNIT,99997)
+      RETURN
+  410 IRET = -4
+      IF (IWRITE.GE.1) WRITE (LUNIT,99996)
+      RETURN
+  420 IRET = -5
+      IF (IWRITE.GE.1) WRITE (LUNIT,99995) HTANCF, HMIN
+      RETURN
+  430 IRET = -6
+      IF (IWRITE.GE.1) WRITE (LUNIT,99994)
+      RETURN
+  440 IRET = -7
+      IF (IWRITE.GE.1) WRITE (LUNIT,99993)
+      RETURN
+  450 IRET = -8
+      IF (IWRITE.GE.1) WRITE (LUNIT,99992)
+      RETURN
+  460 IRET = -9
+      IF (IWRITE.GE.1) WRITE (LUNIT,99991)
+      RETURN
+  470 IRET = -10
+      IF (IWRITE.GE.1) WRITE (LUNIT,99990) NVAR, ISIZE
+      RETURN
+C
+C***********************************************************************
+C
+99999 FORMAT (26H0LIMIT POINT FINDER FAILED)
+99998 FORMAT (53H0CORRECTOR, SEEKING TARGET POINT, TOOK TOO MANY STEPS)
+99997 FORMAT (54H0CORRECTOR, SEEKING TARGET, CALLED SOLVER WHICH FAILED)
+99996 FORMAT (48H0CORRECTOR, SEEKING TARGET, FAILED WITH BAD STEP)
+99995 FORMAT (10H0STEPSIZE , G14.7, 15H LESS THAN HMIN, G14.7)
+99994 FORMAT (42H0NORM OF F(X) IS TOO LARGE ON INITIAL CALL)
+99993 FORMAT (34H0SOLVER FAILED IN CALL FROM TANGNT)
+99992 FORMAT (34H0SOLVER FAILED IN CALL FROM CORECT)
+99991 FORMAT (23H0TANGENT VECTOR IS ZERO)
+99990 FORMAT (26H0UNACCEPTABLE INPUT  NVAR=, I10, 7H ISIZE=, I10)
+99989 FORMAT (36H ANGLE BETWEEN OLD AND NEW TANGENTS=, G14.7, 7H RADIAN,
+     * 1HS)
+99988 FORMAT (21H OLD CURVATURE       , G14.7)
+99987 FORMAT (21H PREDICTED CURVATURE , G14.7)
+99986 FORMAT (29H PREDICTOR IS USING STEPSIZE=, G14.7)
+99985 FORMAT (12H PREDICTED X/1X, 5G14.7)
+99984 FORMAT (1H , I2, 20H STEPSIZE REDUCTIONS)
+99983 FORMAT (7H OMEGA=, G14.7, 7H THETA=, G14.7)
+99982 FORMAT (43H ROUGH RADIUS OF CONVERGENCE FOR CORRECTOR , G14.7)
+99981 FORMAT (43H TANGNT ANTICIPATES LIMIT POINT IN VARIABLE, I3)
+      END
+      SUBROUTINE CORECT(NVAR, X, IHOLD, WORK, IERR, MODNEW, FPRYM,      COR   10
+     * NROW, NCOL, IPIVOT, ABSERR, RELERR, XSTEP, NEQN, FNRM, FXNAME,
+     * FPNAME, SLNAME, LUNIT, DET, IEX)
+C
+C***********************************************************************
+C
+C  SUBROUTINE CORECT PERFORMS THE CORRECTION OF AN APPROXIMATE
+C  SOLUTION OF THE EQUATION F(X)=0.0.  THE CORRECTION METHOD IS EITHER
+C  FULL OR MODIFIED NEWTON'S METHOD.  FOR MODIFIED NEWTON'S METHOD,
+C  THE JACOBIAN IS TO BE EVALUATED ONLY AT THE STARTING POINT.
+C  IF B IS THE VALUE OF X(IHOLD) FOR THE INPUT STARTING POINT,
+C  THEN THE AUGMENTING EQUATION IS X(IHOLD)=B, THAT IS, THE IHOLD-TH
+C  COMPONENT OF X IS TO BE HELD FIXED.  THE AUGMENTED SYSTEM TO BE
+C  SOLVED IS THEN DFA(X,IHOLD)*(-DELX)=FA(X)
+C
+C  ACCEPTANCE AND REJECTION CRITERIA-
+C
+C  LET NCORXR BE THE CURRENT ITERATION STEP.  NCORXR=0 FOR INPUT
+C  PREDICTED POINT.
+C  AFTER EACH ITERATION, THE CURRENT POINT IS ACCEPTED
+C  IF ANY OF THE FOLLOWING HOLD-
+C
+C  STRONG ACCEPTANCE CRITERION
+C
+C  1.  ABS(F(X)).LE.ABSERR AND XSTEP.LE.(ABSERR+RELERR*XNRM))
+C
+C  WEAK ACCEPTANCE CRITERIA
+C
+C  2.  (NCORXR.EQ.0) AND
+C      ABS(F(X)).LE.(.5*ABSERR)
+C  3.  ABS(F(X)).LE.EPSATE
+C  4.  (NCORXR.GE.2) AND
+C      (ABS(F(X))+ABS(FOLD(X)).LE.ABSERR AND
+C      XSTEP.LE.8*(ABSERR+RELERR*XNRM)
+C  5.  (NCORXR.GE.2) AND
+C      ABS(F(X).LE.8.0*ABSERR AND
+C      (XSTEP+XSTEPOLD).LE.(ABSERR+RELERR*XNRM)
+C
+C  AFTER EACH ITERATION, THE ITERATION IS TO BE ABORTED IF
+C  ANY OF THE FOLLOWING HOLD
+C
+C  1.  FNRM.GT.(FMP*FNRML+ABSERR)
+C  2.  (NCORXR.GE.2) AND
+C      (XSTEP.GT.(FMP*XSTEPL+ABSERR))
+C  3.  NCORXR.GE.MAXCOR (NUMBER OF ITERATIONS EXCEEDED).
+C
+C  (FMP=2.0 FOR NCORXR.EQ.1, FMP=1.05 FOR NCORXR.GT.1)
+C
+C
+C  INPUT
+C  NVAR  = NUMBER OF VARIABLES.
+C  X     = THE STARTING POINT FOR THE CORRECTOR ITERATION.
+C  IHOLD = COMPONENT OF X THAT WILL NOT BE CHANGED DURING ITERATION.
+C  WORK  = WORK SPACE OF DIMENSION NVAR.
+C  MODNEW= FLAG FOR TYPE OF NEWTON'S METHOD TO BE USED.
+C          IF (MODNEW.EQ.0), JACOBIAN IS TO BE EVALUATED AT EVERY
+C          CORRECTOR ITERATE.  MAXCOR IS SET TO 10.
+C          IF (MODNEW.EQ.1), THE JACOBIAN IS ONLY EVALUATED AT THE
+C          STARTING POINT, AND MAXCOR IS SET TO 20.
+C  FPRYM = STORAGE SPACE FOR AUGMENTED JACOBIAN OF SIZE (NROW,NCOL).
+C  NROW  = NUMBER OF ROWS USED FOR STORING FPRYM.
+C  NCOL  = NUMBER OF COLUMNS USED FOR STORING FPRYM.
+C  IPIVOT= STORAGE SPACE FOR PIVOT INDICES OF SIZE NVAR.
+C  ABSERR= ABSOLUTE ERROR TOLERANCE.
+C  RELERR= RELATIVE ERROR TOLERANCE.
+C  NEQN  = NUMBER OF EQUATIONS = NVAR-1.
+C  FXNAME= EXTERNAL NAME OF FUNCTION EVALUATOR.
+C  FPNAME= EXTERNAL NAME OF JACOBIAN EVALUATOR.
+C  SLNAME= EXTERNAL NAME OF SOLVER.
+C  LUNIT = LOGICAL FORTRAN OUTPUT UNIT.
+C
+C  OUTPUT
+C  X     = SOLUTION VECTOR ON A SUCCESSFUL CALL TO CORECT.
+C  WORK  = THE RESIDUAL F(X), AFTER A SUCCESSFUL CALL TO CORECT.
+C  IERR  = THE RETURN FLAG WITH THE FOLLOWING VALUES
+C          0 SUCCESSFUL CORRECTION.  VECTOR X RETURNED USUALLY
+C            SATISIFIES ABS(F(X)).LE.ABSERR.
+C         -1 ERROR RETURN FROM SOLVER CALLED BY CORECT.
+C         -2 MAXIMUM NUMBER OF CORRECTOR ITERATIONS WERE TAKEN.
+C         -3 CORRECTOR STEP WAS UNACCEPTABLE, CORRECTION FAILED.
+C  XSTEP = ABSOLUTE VALUE OF MAXIMUM COMPONENT OF LAST CORRECTION
+C          TO X.
+C  FNRM  = ABSOLUTE VALUE OF MAXIMUM COMPONENT OF FUNCTION VALUE
+C          OF CORRECTED X.
+C  DET   = MANTISSA OF DETERMINANT OF NEWTON SYSTEM ON LAST
+C          EVALUATION.
+C  IEX   = BINARY EXPONENT OF DETERMINANT OF NEWTON SYSTEM ON LAST
+C          EVALUATION.
+C
+C  OUTPUT THROUGH COMMON /COUNT2/
+C  NCORXR= THE NUMBER OF CORRECTOR ITERATIONS TAKEN ON THIS CALL.
+C
+C  THIS SUBROUTINE IS CALLED BY
+C    PITCON
+C  AND CALLS
+C    SOLVER (SLNAME)
+C    FUNCTION (FXNAME)
+C    FORTRAN ABS
+C    LINPAK ISAMAX
+C    LINPAK SAXPY
+C
+C***********************************************************************
+C
+      EXTERNAL FXNAME, FPNAME, SLNAME
+      REAL X(NVAR), WORK(NVAR), FPRYM(NROW,NCOL)
+      INTEGER IPIVOT(NVAR)
+      COMMON /COUNT1/ ICRSL, ITNSL, NSTCR, NCNCR, NTRCR, NLMCR, NLMRT
+      COMMON /COUNT2/ IFEVAL, IPEVAL, ISOLVE, NREDXF, NRDSUM, NCORXR,
+     * NCRSUM
+      COMMON /OUTPUT/ IWRITE
+      COMMON /TOL/ EPMACH, EPSATE, EPSQRT
+C
+C  INITIALIZE
+C
+      NCORXR = 0
+      MAXCOR = 10
+      IF (MODNEW.EQ.1) MAXCOR = 20
+      IERR = 0
+      FMP = 2.0
+      ICALL = 1
+      XSTEP = 0.0
+C
+C  GET INITIAL FUNCTION VALUE
+C
+      CALL FXNAME(NVAR, X, WORK)
+      IFEVAL = IFEVAL + 1
+      IFMAX = ISAMAX(NEQN,WORK,1)
+      FNRM = ABS(WORK(IFMAX))
+      IF (IWRITE.GE.2) WRITE (LUNIT,99992) FNRM
+      WORK(NVAR) = 0.0
+C
+C  CHECK WEAK ACCEPTANCE OF PREDICTED POINT
+C
+      IF (FNRM.LE.0.5*ABSERR) GO TO 70
+C
+C  NEWTON ITERATION LOOP BEGINS
+C
+      DO 30 I=1,MAXCOR
+        NCORXR = I
+C
+C  SOLVE SYSTEM FPRYM*(-DELX)=FX
+C
+        CALL SLNAME(NVAR, X, WORK, IHOLD, DET, IEX, IERR, ICALL,
+     *   MODNEW, FPRYM, NROW, NCOL, IPIVOT, FPNAME)
+        ICRSL = ICRSL + 1
+        IF (MODNEW.EQ.1) ICALL = 0
+        ISOLVE = ISOLVE + 1
+        IF (IERR.NE.0) GO TO 60
+C
+C  STORE OLD INFORMATION, THEN GET NORMS OF
+C  FUNCTION VALUE, SOLUTION POINT X, AND STEP FROM
+C  PREVIOUS X TO CURRENT ONE.
+C
+        FNRML = FNRM
+        XSTEPL = XSTEP
+        CALL SAXPY(NVAR, -1.0, WORK, 1, X, 1)
+        ISMAX = ISAMAX(NVAR,WORK,1)
+        XSTEP = ABS(WORK(ISMAX))
+        IF (IWRITE.GE.2) WRITE (LUNIT,99993) XSTEP
+        IXMAX = ISAMAX(NVAR,X,1)
+        XNRM = ABS(X(IXMAX))
+        CALL FXNAME(NVAR, X, WORK)
+        IFEVAL = IFEVAL + 1
+        IFMAX = ISAMAX(NEQN,WORK,1)
+        FNRM = ABS(WORK(IFMAX))
+        IF (IWRITE.GE.2) WRITE (LUNIT,99992) FNRM
+        WORK(NVAR) = 0.0
+C
+C  CHECK FOR STRONG ACCEPTANCE CRITERION
+C
+        IF (FNRM.LE.ABSERR .AND. XSTEP.LE.(ABSERR+RELERR*XNRM)) GO TO 80
+C
+C  CHECK FOR WEAK ACCEPTANCE CRITERIA
+C
+        IF (FNRM.LE.EPSATE) GO TO 70
+        IF (NCORXR.LE.1) GO TO 20
+        IF ((FNRM+FNRML).LE.ABSERR .AND. XSTEP.LE.8.0*(ABSERR+RELERR*
+     *   XNRM)) GO TO 70
+        IF (FNRM.LE.8.0*ABSERR .AND. (XSTEP+XSTEPL).LE.(ABSERR+RELERR*
+     *   XNRM)) GO TO 70
+        GO TO 10
+C
+C  SEE IF NEWTON ITERATION SHOULD BE ABORTED
+C
+   10   IF (XSTEP.GT.(FMP*XSTEPL+ABSERR)) GO TO 40
+   20   IF (FNRM.GT.(FMP*FNRML+ABSERR)) GO TO 40
+        FMP = 1.05
+   30 CONTINUE
+C
+C  FALL THROUGH LOOP IF MAXIMUM NUMBER OF STEPS TAKEN
+C  WITHOUT ACCEPTANCE OR REJECTION
+C
+      GO TO 50
+C
+C  UNSUCCESSFUL STEP
+C
+   40 IERR = -3
+      IF (IWRITE.GE.2) WRITE (LUNIT,99995)
+      GO TO 90
+C
+C  MAXIMUM NUMBER OF CORRECTOR STEPS REACHED
+C
+   50 IERR = -2
+      IF (IWRITE.GE.2) WRITE (LUNIT,99996)
+      GO TO 90
+C
+C  ERROR RETURN FROM SOLVING ROUTINE
+C
+   60 IERR = -1
+      IF (IWRITE.GE.2) WRITE (LUNIT,99997)
+      GO TO 90
+C
+C  ACCEPTED POINT SATISFIED A WEAK CRITERION
+C
+   70 IF (IWRITE.GE.1) WRITE (LUNIT,99994)
+      GO TO 80
+C
+C  ACCEPTED POINT SATISFIED THE STRONG CRITERION
+C
+   80 IERR = 0
+   90 NCRSUM = NCRSUM + NCORXR
+      IF (IWRITE.GE.2) WRITE (LUNIT,99999) NCORXR
+      IF (IWRITE.GE.2) WRITE (LUNIT,99998) IHOLD
+      RETURN
+C
+C***********************************************************************
+C
+99999 FORMAT (16H CORRECTOR TOOK , I2, 6H STEPS)
+99998 FORMAT (24H CORRECTOR HELD VARIABLE, I3, 6H FIXED)
+99997 FORMAT (35H0SOLVER FAILED, CALLED BY CORRECTOR)
+99996 FORMAT (25H0TOO MANY CORRECTOR STEPS)
+99995 FORMAT (24H0CORRECTOR STEP REJECTED)
+99994 FORMAT (40H ACCEPTED POINT SATISFIED WEAK CRITERION)
+99993 FORMAT (23H CORRECTOR STEP LENGTH=, G14.7)
+99992 FORMAT (15H FUNCTION NORM=, G14.7)
+      END
+      SUBROUTINE TANGNT(NVAR, X, IP, TAN, IRET, ICALL, FPRYM, IPIVOT,   TAN   10
+     * NEQN, DET, IEX, IPCFIX, ABSERR, RELERR, NROW, NCOL, FPNAME,
+     * SLNAME)
+C
+C***********************************************************************
+C
+C  SUBROUTINE TANGNT COMPUTES A UNIT TANGENT VECTOR TO THE SOLUTION
+C  CURVE OF THE UNDERDETERMINED NONLINEAR SYSTEM FX = 0.  THE
+C  TANGENT VECTOR TAN IS THE SOLUTION OF THE LINEAR SYSTEM
+C
+C        DFA(X,IPL)*TAN = E(NVAR)
+C
+C  WHERE DFA(X,IPL) IS THE AUGMENTED JACOBIAN WHOSE FIRST NEQN ROWS
+C  ARE DFX/DX (X), THE DERIVATIVE OF FX EVALUATED AT X, AND WHOSE LAST
+C  ROW IS (E(IPL)) TRANSPOSE, THE NVAR COMPONENT EUCLIDEAN COORDINATE
+C  VECTOR WITH 1 IN THE IPL-TH ENTRY AND ZEROS ELSEWHERE.  E(NVAR) IS
+C  THE NVAR COMPONENT EUCLIDEAN COORDINATE VECTOR WITH ONE IN THE
+C  LAST COMPONENT.
+C
+C    THE TANGENT VECTOR IS THEN NORMALIZED.  ADJUSTMENT OF SIGN
+C  IS DONE OUTSIDE THIS ROUTINE.
+C
+C  INPUT
+C
+C  NVAR  = THE NUMBER OF VARIABLES.
+C  X     = POINT AT WHICH THE TANGENT SYSTEM IS TO BE SOLVED.
+C  IP    = INDEX USED FOR LAST EQUATION IN TANGENT SYSTEM.
+C  TAN   = WORK SPACE OF SIZE NVAR.
+C  ICALL = JACOBIAN EVALUATION SWITCH, SET TO 1 TO FORCE SOLVER
+C          TO EVALUATE AUGMENTED JACOBIAN AT X.
+C  FPRYM = WORK SPACE TO HOLD AUGMENTED JACOBIAN, OF SIZE (NROW,NCOL).
+C  IPIVOT= WORK SPACE TO HOLD PIVOT INDICES, OF SIZE NVAR.
+C  NEQN  = NUMBER OF EQUATIONS, NVAR-1.
+C  IPCFIX= SWITCH WHICH CAN OVERRIDE CHOICE OF NEW CONTINUATION
+C          VARIABLE, FORCING OLD ONE TO BE USED INSTEAD.
+C          IPCFIX.NE.1 MEANS CHOOSE NEW CONTINUATION VARIABLE.
+C          IPCFIX.EQ.1 MEANS MUST USE OLD CONTINUATION VARIABLE.
+C  ABSERR= ABSOLUTE ERROR TOLERANCE.
+C  RELERR= RELATIVE ERROR TOLERANCE.
+C  NROW  = NUMBER OF ROWS USED IN STORING FPRYM.
+C  NCOL  = NUMBER OF COLUMNS USED IN STORING FPRYM.
+C  FPNAME= EXTERNAL NAME OF JACOBIAN EVALUATION ROUTINE.
+C  SLNAME= EXTERNAL NAME OF SOLVING ROUTINE.
+C
+C  OUTPUT
+C
+C  IP    = UNCHANGED IF IPCFIX.EQ.1.  OTHERWISE, IP IS THE
+C          LOCATION OF LARGEST COMPONENT OF TANGENT VECTOR TAN,
+C          THE CANDIDATE FOR NEW CONTINUATION COMPONENT.
+C  TAN   = A UNIT TANGENT VECTOR AT X WHOSE SIGN MUST STILL BE SET.
+C  IRET  = ERROR FLAG.
+C          0 NO ERROR.
+C         -1 ERROR RETURN FROM SOLVER.
+C         -2 NORM OF TANGENT VECTOR IS ZERO.
+C  DET   = BINARY MANTISSA OF DETERMINANT OF JACOBIAN DFA(X,IPL)
+C  IEX   = BINARY EXPONENT OF THE DETERMINANT OF JACOBIAN DFA(X,IPL)
+C
+C  THIS SUBROUTINE IS CALLED BY
+C    PITCON
+C  AND CALLS
+C    SOLVER (SLNAME)
+C    LINPAK ISAMAX
+C    LINPAK SNRM2
+C    LINPAK SSCAL
+C
+C***********************************************************************
+C
+      EXTERNAL FPNAME, SLNAME
+      REAL X(NVAR), TAN(NVAR), FPRYM(NROW,NCOL)
+      INTEGER IPIVOT(NVAR)
+      COMMON /COUNT1/ ICRSL, ITNSL, NSTCR, NCNCR, NTRCR, NLMCR, NLMRT
+      COMMON /COUNT2/ IFEVAL, IPEVAL, ISOLVE, NREDXF, NRDSUM, NCORXR,
+     * NCRSUM
+      COMMON /OUTPUT/ IWRITE
+      COMMON /TOL/ EPMACH, EPSATE, EPSQRT
+C
+C  COMPUTE TANGENT VECTOR
+C
+      DO 10 I=1,NEQN
+        TAN(I) = 0.0
+   10 CONTINUE
+      TAN(NVAR) = 1.0
+      IERR = 0
+      MODTAN = 0
+      CALL SLNAME(NVAR, X, TAN, IP, DET, IEX, IERR, ICALL, MODTAN,
+     * FPRYM, NROW, NCOL, IPIVOT, FPNAME)
+      ITNSL = ITNSL + 1
+      ISOLVE = ISOLVE + 1
+      IF (IERR.NE.0) IRET = -1
+      IF (IRET.LT.0) RETURN
+C
+C  UNLESS IPCFIX.EQ.1, SET IP TO MAXIMUM ENTRY OF TAN
+C
+      IF (IPCFIX.NE.1) IP = ISAMAX(NVAR,TAN,1)
+C
+C  OBTAIN EUCLIDEAN NORM OF TANGENT VECTOR
+C
+      TNORM = SNRM2(NVAR,TAN,1)
+      IF (TNORM.EQ.0.0) IRET = -2
+      IF (IRET.LT.0) RETURN
+C
+C  NORMALIZE THE VECTOR
+C
+      SCALER = 1.0/TNORM
+      CALL SSCAL(NVAR, SCALER, TAN, 1)
+      RETURN
+C
+C***********************************************************************
+C
+      END
+      SUBROUTINE ROOT(A, FA, B, FB, U, FU, KOUNT, IFLAG)                ROO   10
+C
+C***********************************************************************
+C
+C  SUBROUTINE ROOT SEEKS A ROOT OF THE EQUATION F(X)=0.0,
+C  GIVEN A STARTING INTERVAL (A,B) ON WHICH F CHANGES SIGN.
+C  ON FIRST CALL TO ROOT, THE INTERVAL AND FUNCTION VALUES FA AND FB
+C  ARE INPUT AND AN APPROXIMATION U FOR THE ROOT IS RETURNED.
+C  BEFORE EACH SUBSEQUENT CALL, THE USER EVALUATES FU=F(U), AND THE
+C  PROGRAM TRIES TO RETURN A BETTER APPROXIMATION U.
+C
+C  THIS PROGRAM IS BASED ON THE FORTRAN FUNCTION ZERO
+C  GIVEN IN THE BOOK
+C  ALGORITHMS FOR MINIMIZATION WITHOUT DERIVATIVES
+C  BY RICHARD P. BRENT, PRENTICE HALL,INC, 1973
+C
+C  THE MODIFICATIONS WERE DONE BY JOHN BURKARDT.
+C
+C  ON INPUT
+C
+C  A      - IS ONE ENDPOINT OF AN INTERVAL IN WHICH F CHANGES SIGN.
+C  FA     - THE VALUE OF F(A).  THE USER MUST EVALUATE F(A) BEFORE
+C           FIRST CALL ONLY.  THEREAFTER THE PROGRAM SETS FA.
+C  B      - IS THE OTHER ENDPOINT OF THE INTERVAL IN WHICH
+C           F CHANGES SIGN.  NOTE THAT THE PROGRAM WILL RETURN
+C           IMMEDIATELY WITH AN ERROR FLAG IF FB*FA.GT.0.0.
+C  FB     - THE VALUE OF F(B).  THE USER MUST EVALUATE F(B) BEFORE
+C           FIRST CALL ONLY.  THERAFTER THE PROGRAM SETS FB.
+C  U      - ON FIRST CALL, U SHOULD NOT BE SET BY THE USER.
+C           ON SUBSEQUENT CALLS, U SHOULD NOT BE CHANGED
+C           FROM ITS OUTPUT VALUE, THE CURRENT APPROXIMANT
+C           TO THE ROOT.
+C  FU     - ON FIRST CALL, FU SHOULD NOT BE SET BY THE USER.
+C           THEREAFTER, THE USER SHOULD EVALUATE THE FUNCTION
+C           AT THE OUTPUT VALUE U, AND RETURN FU=F(U).
+C  KOUNT  - A COUNTER FOR THE NUMBER OF CALLS TO ROOT.  KOUNT
+C           SHOULD BE SET TO ZERO ON THE FIRST CALL FOR A GIVEN
+C           ROOT PROBLEM.
+C  IFLAG  - AN ERROR RETURN FLAG WHOSE INPUT VALUE IS IMMATERIAL.
+C
+C  ON RETURN FROM A CALL TO ROOT
+C
+C  A      - ONE ENDPOINT OF CHANGE OF SIGN INTERVAL.
+C  FA     - THE VALUE OF F(A).
+C  B      - OTHER ENDPOINT OF CHANGE IN SIGN INTERVAL.
+C  FB     - THE VALUE OF F(B).
+C  U      - CURRENT APPROXIMATION TO THE ROOT.  BEFORE ANOTHER
+C           CALL TO ROOT, EVALUATE F(U).
+C  FU     - FU WILL BE OVERWRITTEN BY THE USER BEFORE ANOTHER
+C           CALL.  ITS VALUE ON RETURN IS ONE OF FA, FU OR FB.
+C  KOUNT  - CURRENT NUMBER OF CALLS TO ROOT.
+C  IFLAG  - PROGRAM RETURN FLAG
+C           IFLAG=-2 MEANS THAT ON FIRST CALL, FA*FB.GT.0.0.
+C                    THIS IS AN ERROR RETURN, SINCE A BRACKETING
+C                    INTERVAL SHOULD BE SUPPLIED ON FIRST CALL.
+C           IFLAG=-1 MEANS THAT THE CURRENT BRACKETING INTERVAL
+C                    WHOSE ENDPOINTS ARE STORED IN A AND B
+C                    IS SO SMALL (LESS THAN 4*EPMACH*ABS(U)+EPMACH)
+C                    THAT U SHOULD BE ACCEPTED AS THE ROOT.
+C                    THE FUNCTION VALUE F(U) IS STORED IN FU.
+C           IFLAG= 0 MEANS THAT THE INPUT VALUE FU IS EXACTLY
+C                    ZERO, AND U SHOULD BE ACCEPTED AS THE ROOT.
+C
+C           IFLAG.GT.0  MEANS THAT THE CURRENT APPROXIMATION TO
+C                    THE ROOT IS CONTAINED IN U.  IF A BETTER
+C                    APPROXIMATION IS DESIRED, SET FU=F(U)
+C                    AND CALL ROOT AGAIN.  IFLAG INDICATES
+C                    THE METHOD THAT WAS USED TO PRODUCE U.
+C
+C           IFLAG= 1 BISECTION WAS USED.
+C           IFLAG= 2 LINEAR INTERPOLATION (SECANT METHOD).
+C           IFLAG= 3 INVERSE QUADRATIC INTERPOLATION.
+C
+C  LOCAL VARIABLES INCLUDE
+C
+C  EPMACH- SMALLEST POSITIVE NUMBER SUCH THAT 1.0+EPMACH.GT.1.0
+C          .5*BETA**(1-TAU) FOR ROUNDED, TAU-DIGIT ARITHMETIC
+C          BASE BETA.  TWICE THAT VALUE FOR TRUNCATED ARITHMETIC.
+C          THIS IS THE RELATIVE MACHINE PRECISION.
+C  HALFUB- SIGNED HALFWIDTH OF INTERVAL.  DURING SEGMENT 3, THE
+C          CHANGE OF SIGN INTERVAL IS (U,B) OR (B,U).  THE MIDPOINT
+C          IS XMID=U+HALFUB, REGARDLESS OF ORIENTATION.
+C  SDEL1 - SIZE OF CHANGE IN SIGN INTERVAL.
+C  SDEL2 - PREVIOUS VALUE OF SDEL1.
+C  SDEL3 - PREVIOUS VALUE OF SDEL2.
+C  SDEL4 - PREVIOUS VALUE OF SDEL3.
+C  STEP  - THE NEW ROOT IS COMPUTED AS A CORRECTION TO U OF THE
+C          FORM U(NEW)=U(OLD)+STEP.
+C  TOLER - A NUMBER WE ACCEPT AS SMALL WHEN EXAMINING INTERVAL
+C          SIZE OR STEP SIZE.  TOLER=2.0*EPMACH*ABS(U) + EPMACH IS
+C          A MINIMUM BELOW WHICH WE DO NOT ALLOW SUCH VALUES TO FALL.
+C
+C  THIS SUBROUTINE IS CALLED BY
+C    PITCON
+C  AND CALLS
+C    FORTRAN ABS
+C    FORTRAN SIGN
+C
+C***********************************************************************
+C
+      REAL A, B, U, FA, FB, FU, STEP, TOLER, P, Q, R, S
+      COMMON /TOL/ EPMACH, EPSATE, EPSQRT
+C
+C  SEGMENT 1   FIRST CALL HANDLED SPECIALLY.  DO BOOKKEEPING.
+C
+C  SET CERTAIN VALUES ONLY FOR INITIAL CALL WITH KOUNT=0
+C
+      IF (KOUNT.GT.0) GO TO 10
+      IF (FA.GT.0.0 .AND. FB.GT.0.0) GO TO 110
+      IF (FA.LT.0.0 .AND. FB.LT.0.0) GO TO 110
+      KOUNT = 1
+      SDEL1 = 2.0*ABS(B-A)
+      SDEL2 = 2.0*SDEL1
+      SDEL3 = 2.0*SDEL2
+      U = B
+      FU = FB
+      GO TO 20
+C
+C  ON EVERY CALL, INCREMENT COUNTER
+C
+   10 KOUNT = KOUNT + 1
+C
+C  RETURN IF HIT MACHINE ZERO FOR F(U)
+C
+      IF (FU.EQ.0.0) GO TO 90
+C
+C  SEGMENT 2   REARRANGE POINTS AND FUNCTION VALUES IF
+C  NECESSARY SO THAT FU*FB.LT.0.0, AND SO THAT
+C  ABS(FU).LT.ABS(FB)
+C
+      IF ((FU.LE.0.0) .AND. (FB.GT.0.0)) GO TO 30
+      IF ((FU.GT.0.0) .AND. (FB.LE.0.0)) GO TO 30
+C
+C  FU AND FB ARE OF SAME SIGN.
+C  (ROOT CHANGED SIGN)
+C  OVERWRITE B WITH VALUE OF A
+C
+   20 B = A
+      FB = FA
+C
+C  IF NECESSARY, SET A =U, U =B, B =U
+C  TO ENSURE THAT ABS(FU).LE.ABS(FB)
+C
+   30 IF (ABS(FB).GE.ABS(FU)) GO TO 40
+      A = U
+      U = B
+      B = A
+      FA = FU
+      FU = FB
+      FB = FA
+C
+C  SEGMENT 3   CHECK FOR ACCEPTANCE BECAUSE OF SMALL INTERVAL
+C  CURRENT CHANGE IN SIGN INTERVAL IS (B,U) OR (U,B).
+C
+   40 TOLER = 2.0*EPMACH*ABS(U) + EPMACH
+      HALFUB = 0.5*(B-U)
+      SDEL4 = SDEL3
+      SDEL3 = SDEL2
+      SDEL2 = SDEL1
+      SDEL1 = ABS(B-U)
+      IF (ABS(HALFUB).LE.TOLER) GO TO 100
+C
+C  SEGMENT 4   COMPUTE NEW APPROXIMANT TO ROOT OF THE FORM
+C  U(NEW)=U(OLD)+STEP.
+C  METHODS AVAILABLE ARE LINEAR INTERPOLATION
+C  INVERSE QUADRATIC INTERPOLATION
+C  AND BISECTION.
+C
+      IF (ABS(FU).GE.ABS(FA)) GO TO 70
+      IF (A.NE.B) GO TO 50
+C
+C  ATTEMPT LINEAR INTERPOLATION IF ONLY TWO POINTS AVAILABLE
+C  COMPUTE P AND Q FOR APPROXIMATION U(NEW)=U(OLD)+P/Q
+C
+      IFLAG = 2
+      S = FU/FA
+      P = 2.0*HALFUB*S
+      Q = 1.0 - S
+      GO TO 60
+C
+C  ATTEMPT INVERSE QUADRATIC INTERPOLATION IF THREE POINTS AVAILABLE
+C  COMPUTE P AND Q FOR APPROXIMATION U(NEW)=U(OLD)+P/Q
+C
+   50 IFLAG = 3
+      S = FU/FA
+      Q = FA/FB
+      R = FU/FB
+      P = S*(2.0*HALFUB*Q*(Q-R)-(U-A)*(R-1.0))
+      Q = (Q-1.0)*(R-1.0)*(S-1.0)
+C
+C  CORRECT THE SIGNS OF P AND Q
+C
+   60 IF (P.GT.0.0) Q = -Q
+      P = ABS(P)
+C
+C  IF P/Q IS TOO LARGE, GO BACK TO BISECTION
+C
+      IF (8.0*SDEL1.GT.SDEL4) GO TO 70
+      IF (P.GE.1.5*ABS(HALFUB*Q)-ABS(TOLER*Q)) GO TO 70
+      STEP = P/Q
+      GO TO 80
+C
+C  PERFORM BISECTION
+C   IF ABS(FU).GE.ABS(FA)
+C   OR INTERPOLATION IS UNSAFE (P/Q IS LARGE)
+C   OR IF THREE CONSECUTIVE STEPS HAVE NOT DECREASED
+C      THE SIZE OF THE INTERVAL BY A FACTOR OF 8.0
+C
+   70 IFLAG = 1
+      STEP = HALFUB
+      GO TO 80
+C
+C  SEGMENT 5   VALUE OF STEP HAS BEEN COMPUTED.
+C  UPDATE INFORMATION  A =U, FA =FU, U =U+STEP.
+C  CHANGE IN SIGN INTERVAL IS NOW (A,B) OR (B,A).
+C
+   80 A = U
+      FA = FU
+      IF (ABS(STEP).LE.TOLER) STEP = SIGN(TOLER,HALFUB)
+      U = U + STEP
+      RETURN
+C
+C  SPECIAL RETURNS
+C
+C  INPUT POINT U IS EXACT ROOT
+C
+   90 IFLAG = 0
+      RETURN
+C
+C  CHANGE IN SIGN INTERVAL IS OF SIZE LESS THAN 4*EPMACH*ABS(U)+EPMACH
+C  INTERVAL RETURNED AS (U,B) OR (B,U).
+C  ACCEPT U AS ROOT WITH RESIDUAL F(U) STORED IN FU.
+C
+  100 IFLAG = -1
+      A = U
+      FA = FU
+      RETURN
+C
+C  CHANGE OF SIGN CONDITION VIOLATED
+C
+  110 IFLAG = -2
+      KOUNT = 0
+      RETURN
+C
+C***********************************************************************
+C
+      END
+      SUBROUTINE FSOLVE(NVAR, X, Y, IP, DET, IEX, IERR, ICALL, MODNEW,  FSO   10
+     * FPRYM, NROW, NCOL, IPIVOT, FPNAME)
+C
+C***********************************************************************
+C
+C  THIS SUBROUTINE IS CALLED BY
+C    CORECT
+C    TANGNT
+C  AND CALLS
+C    JACOBIAN (FPNAME)
+C    FORTRAN ABS
+C    LINPAK SGEFA
+C    LINPAK SGESL
+C
+C  THIS SUBROUTINE SOLVES THE LINEAR SYSTEM  DFA(X,IP)*Y = Y
+C  WHERE DFA(X,IP) IS THE (NVAR)X(NVAR) MATRIX WHOSE FIRST NVAR - 1
+C  ROWS ARE THE JACOBIAN OF THE FUNCTION, AND WHOSE LAST
+C  ROW IS ALL 0 EXCEPT FOR A 1 IN THE IP-TH COMPONENT.
+C
+C    ON INPUT, Y CONTAINS THE RIGHT HAND SIDE.  ON OUTPUT,
+C  Y SHOULD CONTAIN THE SOLUTION TO THE SYSTEM.
+C
+C  **NOTE** SUBROUTINE FSOLVE USES FULL MATRIX STORAGE TO SOLVE THE
+C  LINEAR SYSTEM.  THE USER MAY WISH TO REPLACE THIS ROUTINE WITH
+C  ONE MORE SUITABLE.
+C
+C  DET    BINARY MANTISSA OF THE DETERMINANT OF JACOBIAN DFA(X,IP)
+C  IEX    BINARY EXPONENT OF THE DETERMINANT OF JACOBIAN DFA(X,IP)
+C  MODNEW NEWTON METHOD FLAG.
+C         MODNEW=0, JACOBIAN IS TO BE EVALUATED EVERY CORRECTOR STEP
+C                 AND EVERY TANGENT CALCULATION
+C         MODNEW=1, JACOBIAN IS TO BE EVALUATED FOR FIRST CORRECTOR
+C                 STEP ONLY, AND EVERY TANGENT CALCULATION.
+C  ICALL  SET UP FLAG.
+C         IF (ICALL.EQ.0.AND.MODNEW.NE.0) DO NOT RE-EVALUATE JACOBIAN
+C  INFO   OUTPUT FROM SGEFA.  IF INFO.NE.0, SGEFA FOUND A ZERO
+C         PIVOT WHEN ELIMINATING INFO-TH VARIABLE.
+C  IERR   RETURN FLAG, 0 MEANS SUCCESSFUL SOLUTION, 1 MEANS FAILURE
+C  NVAR   THE NUMBER OF VARIABLES IN THE NONLINEAR SYSTEM
+C  X      THE POINT AT WHICH TO EVALUATE FPRYM
+C  Y      THE RIGHT HAND SIDE ON INPUT, THE SOLUTION
+C         ON OUTPUT
+C  FPRYM  ARRAY WHERE DFA(X,IP) IS TO BE STORED.
+C  IPIVOT INTEGER WORK SPACE FOR PIVOT ROW SWITCHES DEMANDED BY SGEFA
+C  IP     THE VARIABLE USED IN THE AUGMENTING EQUATION THAT IS OF THE
+C         FORM X(IP)=B.  HENCE THE LAST ROW OF DFA(X,IP) IS ALL
+C         ZERO EXCEPT FOR A 1.0 IN THE IP-TH COLUMN.
+C  NROW   NUMBER OF ROWS USED TO STORE FPRYM.
+C  NCOL   NUMBER OF COLUMNS USED TO STORE FPRYM.
+C  FPNAME EXTERNAL NAME OF JACOBIAN EVALUATOR.
+C
+C***********************************************************************
+C
+      EXTERNAL FPNAME
+      REAL X(NVAR), Y(NVAR), FPRYM(NROW,NCOL)
+      INTEGER IPIVOT(NVAR)
+      COMMON /COUNT2/ IFEVAL, IPEVAL, ISOLVE, NREDXF, NRDSUM, NCORXR,
+     * NCRSUM
+C
+C  DEPENDING ON VALUES OF ICALL AND MODNEW, EITHER SET UP
+C  AUGMENTED JACOBIAN, DECOMPOSE INTO L-U FACTORS, AND GET DETERMINANT,
+C  OR USE CURRENT FACTORED JACOBIAN WITH NEW RIGHT HAND SIDE.
+C
+      IF (ICALL.EQ.0 .AND. MODNEW.NE.0) GO TO 50
+      CALL FPNAME(NVAR, X, FPRYM, NROW, NCOL)
+      IPEVAL = IPEVAL + 1
+      DO 10 I=1,NVAR
+        FPRYM(NVAR,I) = 0.0
+   10 CONTINUE
+      FPRYM(NVAR,IP) = 1.0
+C
+C  CARRY OUT IN CORE LU DECOMPOSITION OF NVAR BY NVAR MATRIX
+C  AND USE PIVOT INFORMATION TO COMPUTE DETERMINANT
+C
+      CALL SGEFA(FPRYM, NROW, NROW, IPIVOT, INFO)
+      DET = 1.0
+      IEX = 0
+      TWO = 2.0
+      DO 40 I=1,NVAR
+        IF (IPIVOT(I).NE.I) DET = -DET
+        DET = FPRYM(I,I)*DET
+        IF (DET.EQ.0.0) GO TO 60
+   20   IF (ABS(DET).GE.1.0) GO TO 30
+        DET = DET*TWO
+        IEX = IEX - 1
+        GO TO 20
+   30   IF (ABS(DET).LT.TWO) GO TO 40
+        DET = DET/TWO
+        IEX = IEX + 1
+        GO TO 30
+   40 CONTINUE
+      IF (INFO.NE.0) GO TO 60
+C
+C  USING L-U FACTORED MATRIX, SOLVE SYSTEM USING FORWARD-BACKWARD
+C  ELIMINATION, AND OVERWRITE RIGHT HAND SIDE WITH SOLUTION
+C
+   50 JOB = 0
+      CALL SGESL(FPRYM, NROW, NROW, IPIVOT, Y, JOB)
+      IERR = 0
+      RETURN
+   60 IERR = 1
+      INFO = 0
+      RETURN
+C
+C***********************************************************************
+C
+      END
+      INTEGER FUNCTION ISAMAX(N, SX, INCX)                              ISA   10
+C
+C***********************************************************************
+C
+C
+C     FINDS THE INDEX OF ELEMENT HAVING MAX. ABSOLUTE VALUE.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SX(1), SMAX
+      INTEGER I, INCX, IX, N
+C
+      ISAMAX = 0
+      IF (N.LT.1) RETURN
+      ISAMAX = 1
+      IF (N.EQ.1) RETURN
+      IF (INCX.EQ.1) GO TO 30
+C
+C        CODE FOR INCREMENT NOT EQUAL TO 1
+C
+      IX = 1
+      SMAX = ABS(SX(1))
+      IX = IX + INCX
+      DO 20 I=2,N
+        IF (ABS(SX(IX)).LE.SMAX) GO TO 10
+        ISAMAX = I
+        SMAX = ABS(SX(IX))
+   10   IX = IX + INCX
+   20 CONTINUE
+      RETURN
+C
+C        CODE FOR INCREMENT EQUAL TO 1
+C
+   30 SMAX = ABS(SX(1))
+      DO 40 I=2,N
+        IF (ABS(SX(I)).LE.SMAX) GO TO 40
+        ISAMAX = I
+        SMAX = ABS(SX(I))
+   40 CONTINUE
+      RETURN
+C
+C***********************************************************************
+C
+      END
+      REAL FUNCTION SASUM(N, SX, INCX)                                  SAS   10
+C
+C***********************************************************************
+C
+C
+C     TAKES THE SUM OF THE ABSOLUTE VALUES.
+C     USES UNROLLED LOOPS FOR INCREMENT EQUAL TO ONE.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SX(1), STEMP
+      INTEGER I, INCX, M, MP1, N, NINCX
+C
+      SASUM = 0.0E0
+      STEMP = 0.0E0
+      IF (N.LE.0) RETURN
+      IF (INCX.EQ.1) GO TO 20
+C
+C        CODE FOR INCREMENT NOT EQUAL TO 1
+C
+      NINCX = N*INCX
+      DO 10 I=1,NINCX,INCX
+        STEMP = STEMP + ABS(SX(I))
+   10 CONTINUE
+      SASUM = STEMP
+      RETURN
+C
+C        CODE FOR INCREMENT EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,6)
+      IF (M.EQ.0) GO TO 40
+      DO 30 I=1,M
+        STEMP = STEMP + ABS(SX(I))
+   30 CONTINUE
+      IF (N.LT.6) GO TO 60
+   40 MP1 = M + 1
+      DO 50 I=MP1,N,6
+        STEMP = STEMP + ABS(SX(I)) + ABS(SX(I+1)) + ABS(SX(I+2)) +
+     *   ABS(SX(I+3)) + ABS(SX(I+4)) + ABS(SX(I+5))
+   50 CONTINUE
+   60 SASUM = STEMP
+      RETURN
+C
+C***********************************************************************
+C
+      END
+      SUBROUTINE SAXPY(N, SA, SX, INCX, SY, INCY)                       SAX   10
+C
+C***********************************************************************
+C
+C
+C     CONSTANT TIMES A VECTOR PLUS A VECTOR.
+C     USES UNROLLED LOOP FOR INCREMENTS EQUAL TO ONE.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SX(1), SY(1), SA
+      INTEGER I, INCX, INCY, IX, IY, M, MP1, N
+C
+      IF (N.LE.0) RETURN
+      IF (SA.EQ.0.0) RETURN
+      IF (INCX.EQ.1 .AND. INCY.EQ.1) GO TO 20
+C
+C        CODE FOR UNEQUAL INCREMENTS OR EQUAL INCREMENTS
+C          NOT EQUAL TO 1
+C
+      IX = 1
+      IY = 1
+      IF (INCX.LT.0) IX = (-N+1)*INCX + 1
+      IF (INCY.LT.0) IY = (-N+1)*INCY + 1
+      DO 10 I=1,N
+        SY(IY) = SY(IY) + SA*SX(IX)
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      RETURN
+C
+C        CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,4)
+      IF (M.EQ.0) GO TO 40
+      DO 30 I=1,M
+        SY(I) = SY(I) + SA*SX(I)
+   30 CONTINUE
+      IF (N.LT.4) RETURN
+   40 MP1 = M + 1
+      DO 50 I=MP1,N,4
+        SY(I) = SY(I) + SA*SX(I)
+        SY(I+1) = SY(I+1) + SA*SX(I+1)
+        SY(I+2) = SY(I+2) + SA*SX(I+2)
+        SY(I+3) = SY(I+3) + SA*SX(I+3)
+   50 CONTINUE
+      RETURN
+C
+C***********************************************************************
+C
+      END
+      SUBROUTINE SCOPY(N, SX, INCX, SY, INCY)                           SCO   10
+C
+C***********************************************************************
+C
+C
+C     COPIES A VECTOR, X, TO A VECTOR, Y.
+C     USES UNROLLED LOOPS FOR INCREMENTS EQUAL TO 1.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SX(1), SY(1)
+      INTEGER I, INCX, INCY, IX, IY, M, MP1, N
+C
+      IF (N.LE.0) RETURN
+      IF (INCX.EQ.1 .AND. INCY.EQ.1) GO TO 20
+C
+C        CODE FOR UNEQUAL INCREMENTS OR EQUAL INCREMENTS
+C          NOT EQUAL TO 1
+C
+      IX = 1
+      IY = 1
+      IF (INCX.LT.0) IX = (-N+1)*INCX + 1
+      IF (INCY.LT.0) IY = (-N+1)*INCY + 1
+      DO 10 I=1,N
+        SY(IY) = SX(IX)
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      RETURN
+C
+C        CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,7)
+      IF (M.EQ.0) GO TO 40
+      DO 30 I=1,M
+        SY(I) = SX(I)
+   30 CONTINUE
+      IF (N.LT.7) RETURN
+   40 MP1 = M + 1
+      DO 50 I=MP1,N,7
+        SY(I) = SX(I)
+        SY(I+1) = SX(I+1)
+        SY(I+2) = SX(I+2)
+        SY(I+3) = SX(I+3)
+        SY(I+4) = SX(I+4)
+        SY(I+5) = SX(I+5)
+        SY(I+6) = SX(I+6)
+   50 CONTINUE
+      RETURN
+C
+C***********************************************************************
+C
+      END
+      REAL FUNCTION SDOT(N, SX, INCX, SY, INCY)                         SDO   10
+C
+C***********************************************************************
+C
+C
+C     FORMS THE DOT PRODUCT OF TWO VECTORS.
+C     USES UNROLLED LOOPS FOR INCREMENTS EQUAL TO ONE.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SX(1), SY(1), STEMP
+      INTEGER I, INCX, INCY, IX, IY, M, MP1, N
+C
+      STEMP = 0.0E0
+      SDOT = 0.0E0
+      IF (N.LE.0) RETURN
+      IF (INCX.EQ.1 .AND. INCY.EQ.1) GO TO 20
+C
+C        CODE FOR UNEQUAL INCREMENTS OR EQUAL INCREMENTS
+C          NOT EQUAL TO 1
+C
+      IX = 1
+      IY = 1
+      IF (INCX.LT.0) IX = (-N+1)*INCX + 1
+      IF (INCY.LT.0) IY = (-N+1)*INCY + 1
+      DO 10 I=1,N
+        STEMP = STEMP + SX(IX)*SY(IY)
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      SDOT = STEMP
+      RETURN
+C
+C        CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,5)
+      IF (M.EQ.0) GO TO 40
+      DO 30 I=1,M
+        STEMP = STEMP + SX(I)*SY(I)
+   30 CONTINUE
+      IF (N.LT.5) GO TO 60
+   40 MP1 = M + 1
+      DO 50 I=MP1,N,5
+        STEMP = STEMP + SX(I)*SY(I) + SX(I+1)*SY(I+1) + SX(I+2)*SY(I+2)
+     *   + SX(I+3)*SY(I+3) + SX(I+4)*SY(I+4)
+   50 CONTINUE
+   60 SDOT = STEMP
+      RETURN
+C
+C***********************************************************************
+C
+      END
+      REAL FUNCTION SNRM2(N, SX, INCX)                                  SNR   10
+C
+C***********************************************************************
+C
+      INTEGER NEXT
+      REAL SX(1), CUTLO, CUTHI, HITEST, SUM, XMAX, ZERO, ONE
+      DATA ZERO, ONE /0.0E0,1.0E0/
+C
+C     EUCLIDEAN NORM OF THE N-VECTOR STORED IN SX() WITH STORAGE
+C     INCREMENT INCX .
+C     IF    N .LE. 0 RETURN WITH RESULT = 0.
+C     IF N .GE. 1 THEN INCX MUST BE .GE. 1
+C
+C           C.L.LAWSON, 1978 JAN 08
+C
+C     FOUR PHASE METHOD     USING TWO BUILT-IN CONSTANTS THAT ARE
+C     HOPEFULLY APPLICABLE TO ALL MACHINES.
+C         CUTLO = MAXIMUM OF  SQRT(U/EPS)  OVER ALL KNOWN MACHINES.
+C         CUTHI = MINIMUM OF  SQRT(V)      OVER ALL KNOWN MACHINES.
+C     WHERE
+C         EPS = SMALLEST NO. SUCH THAT EPS + 1. .GT. 1.
+C         U   = SMALLEST POSITIVE NO.   (UNDERFLOW LIMIT)
+C         V   = LARGEST  NO.            (OVERFLOW  LIMIT)
+C
+C     BRIEF OUTLINE OF ALGORITHM..
+C
+C     PHASE 1    SCANS ZERO COMPONENTS.
+C     MOVE TO PHASE 2 WHEN A COMPONENT IS NONZERO AND .LE. CUTLO
+C     MOVE TO PHASE 3 WHEN A COMPONENT IS .GT. CUTLO
+C     MOVE TO PHASE 4 WHEN A COMPONENT IS .GE. CUTHI/M
+C     WHERE M = N FOR X() REAL AND M = 2*N FOR COMPLEX.
+C
+C     VALUES FOR CUTLO AND CUTHI..
+C     FROM THE ENVIRONMENTAL PARAMETERS LISTED IN THE IMSL CONVERTER
+C     DOCUMENT THE LIMITING VALUES ARE AS FOLLOWS..
+C     CUTLO, S.P.   U/EPS = 2**(-102) FOR  HONEYWELL.  CLOSE SECONDS ARE
+C                   UNIVAC AND DEC AT 2**(-103)
+C                   THUS CUTLO = 2**(-51) = 4.44089E-16
+C     CUTHI, S.P.   V = 2**127 FOR UNIVAC, HONEYWELL, AND DEC.
+C                   THUS CUTHI = 2**(63.5) = 1.30438E19
+C     CUTLO, D.P.   U/EPS = 2**(-67) FOR HONEYWELL AND DEC.
+C                   THUS CUTLO = 2**(-33.5) = 8.23181D-11
+C     CUTHI, D.P.   SAME AS S.P.  CUTHI = 1.30438D19
+C     DATA CUTLO, CUTHI / 8.232D-11,  1.304D19 /
+C     DATA CUTLO, CUTHI / 4.441E-16,  1.304E19 /
+      DATA CUTLO, CUTHI /4.441E-16,1.304E19/
+C
+      IF (N.GT.0) GO TO 10
+      SNRM2 = ZERO
+      GO TO 140
+C
+   10 ASSIGN 30 TO NEXT
+      SUM = ZERO
+      NN = N*INCX
+C                                                 BEGIN MAIN LOOP
+      I = 1
+   20 GO TO NEXT, (30, 40, 70, 80)
+   30 IF (ABS(SX(I)).GT.CUTLO) GO TO 110
+      ASSIGN 40 TO NEXT
+      XMAX = ZERO
+C
+C                        PHASE 1.  SUM IS ZERO
+C
+   40 IF (SX(I).EQ.ZERO) GO TO 130
+      IF (ABS(SX(I)).GT.CUTLO) GO TO 110
+C
+C                                PREPARE FOR PHASE 2.
+      ASSIGN 70 TO NEXT
+      GO TO 60
+C
+C                                PREPARE FOR PHASE 4.
+C
+   50 I = J
+      ASSIGN 80 TO NEXT
+      SUM = (SUM/SX(I))/SX(I)
+   60 XMAX = ABS(SX(I))
+      GO TO 90
+C
+C                   PHASE 2.  SUM IS SMALL.
+C                             SCALE TO AVOID DESTRUCTIVE UNDERFLOW.
+C
+   70 IF (ABS(SX(I)).GT.CUTLO) GO TO 100
+C
+C                     COMMON CODE FOR PHASES 2 AND 4.
+C                     IN PHASE 4 SUM IS LARGE.  SCALE TO AVOID OVERFLOW.
+C
+   80 IF (ABS(SX(I)).LE.XMAX) GO TO 90
+      SUM = ONE + SUM*(XMAX/SX(I))**2
+      XMAX = ABS(SX(I))
+      GO TO 130
+C
+   90 SUM = SUM + (SX(I)/XMAX)**2
+      GO TO 130
+C
+C
+C                  PREPARE FOR PHASE 3.
+C
+  100 SUM = (SUM*XMAX)*XMAX
+C
+C
+C     FOR REAL OR D.P. SET HITEST = CUTHI/N
+C     FOR COMPLEX      SET HITEST = CUTHI/(2*N)
+C
+  110 HITEST = CUTHI/FLOAT(N)
+C
+C                   PHASE 3.  SUM IS MID-RANGE.  NO SCALING.
+C
+      DO 120 J=I,NN,INCX
+        IF (ABS(SX(J)).GE.HITEST) GO TO 50
+        SUM = SUM + SX(J)**2
+  120 CONTINUE
+      SNRM2 = SQRT(SUM)
+      GO TO 140
+C
+  130 CONTINUE
+      I = I + INCX
+      IF (I.LE.NN) GO TO 20
+C
+C              END OF MAIN LOOP.
+C
+C              COMPUTE SQUARE ROOT AND ADJUST FOR SCALING.
+C
+      SNRM2 = XMAX*SQRT(SUM)
+  140 CONTINUE
+      RETURN
+C
+C***********************************************************************
+C
+      END
+      SUBROUTINE SSCAL(N, SA, SX, INCX)                                 SSC   10
+C
+C***********************************************************************
+C
+C
+C     SCALES A VECTOR BY A CONSTANT.
+C     USES UNROLLED LOOPS FOR INCREMENT EQUAL TO 1.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SA, SX(1)
+      INTEGER I, INCX, M, MP1, N, NINCX
+C
+      IF (N.LE.0) RETURN
+      IF (INCX.EQ.1) GO TO 20
+C
+C        CODE FOR INCREMENT NOT EQUAL TO 1
+C
+      NINCX = N*INCX
+      DO 10 I=1,NINCX,INCX
+        SX(I) = SA*SX(I)
+   10 CONTINUE
+      RETURN
+C
+C        CODE FOR INCREMENT EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,5)
+      IF (M.EQ.0) GO TO 40
+      DO 30 I=1,M
+        SX(I) = SA*SX(I)
+   30 CONTINUE
+      IF (N.LT.5) RETURN
+   40 MP1 = M + 1
+      DO 50 I=MP1,N,5
+        SX(I) = SA*SX(I)
+        SX(I+1) = SA*SX(I+1)
+        SX(I+2) = SA*SX(I+2)
+        SX(I+3) = SA*SX(I+3)
+        SX(I+4) = SA*SX(I+4)
+   50 CONTINUE
+      RETURN
+C
+C***********************************************************************
+C
+      END
+      SUBROUTINE SGEFA(A, LDA, N, IPVT, INFO)                           SGE   10
+C
+C***********************************************************************
+C
+      INTEGER LDA, N, IPVT(1), INFO
+      REAL A(LDA,1)
+C
+C     SGEFA FACTORS A REAL MATRIX BY GAUSSIAN ELIMINATION.
+C
+C     SGEFA IS USUALLY CALLED BY SGECO, BUT IT CAN BE CALLED
+C     DIRECTLY WITH A SAVING IN TIME IF  RCOND  IS NOT NEEDED.
+C     (TIME FOR SGECO) = (1 + 9/N)*(TIME FOR SGEFA) .
+C
+C     ON ENTRY
+C
+C        A       REAL(LDA, N)
+C                THE MATRIX TO BE FACTORED.
+C
+C        LDA     INTEGER
+C                THE LEADING DIMENSION OF THE ARRAY  A .
+C
+C        N       INTEGER
+C                THE ORDER OF THE MATRIX  A .
+C
+C     ON RETURN
+C
+C        A       AN UPPER TRIANGULAR MATRIX AND THE MULTIPLIERS
+C                WHICH WERE USED TO OBTAIN IT.
+C                THE FACTORIZATION CAN BE WRITTEN  A = L*U  WHERE
+C                L  IS A PRODUCT OF PERMUTATION AND UNIT LOWER
+C                TRIANGULAR MATRICES AND  U  IS UPPER TRIANGULAR.
+C
+C        IPVT    INTEGER(N)
+C                AN INTEGER VECTOR OF PIVOT INDICES.
+C
+C        INFO    INTEGER
+C                = 0  NORMAL VALUE.
+C                = K  IF  U(K,K) .EQ. 0.0 .  THIS IS NOT AN ERROR
+C                     CONDITION FOR THIS SUBROUTINE, BUT IT DOES
+C                     INDICATE THAT SGESL OR SGEDI WILL DIVIDE BY ZERO
+C                     IF CALLED.  USE  RCOND  IN SGECO FOR A RELIABLE
+C                     INDICATION OF SINGULARITY.
+C
+C     LINPACK. THIS VERSION DATED 08/14/78 .
+C     CLEVE MOLER, UNIVERSITY OF NEW MEXICO, ARGONNE NATIONAL LAB.
+C
+C     SUBROUTINES AND FUNCTIONS
+C
+C     BLAS SAXPY,SSCAL,ISAMAX
+C
+C     INTERNAL VARIABLES
+C
+      REAL T
+      INTEGER ISAMAX, J, K, KP1, L, NM1
+C
+C
+C     GAUSSIAN ELIMINATION WITH PARTIAL PIVOTING
+C
+      INFO = 0
+      NM1 = N - 1
+      IF (NM1.LT.1) GO TO 70
+      DO 60 K=1,NM1
+        KP1 = K + 1
+C
+C        FIND L = PIVOT INDEX
+C
+        L = ISAMAX(N-K+1,A(K,K),1) + K - 1
+        IPVT(K) = L
+C
+C        ZERO PIVOT IMPLIES THIS COLUMN ALREADY TRIANGULARIZED
+C
+        IF (A(L,K).EQ.0.0E0) GO TO 40
+C
+C           INTERCHANGE IF NECESSARY
+C
+        IF (L.EQ.K) GO TO 10
+        T = A(L,K)
+        A(L,K) = A(K,K)
+        A(K,K) = T
+   10   CONTINUE
+C
+C           COMPUTE MULTIPLIERS
+C
+        T = -1.0E0/A(K,K)
+        CALL SSCAL(N-K, T, A(K+1,K), 1)
+C
+C           ROW ELIMINATION WITH COLUMN INDEXING
+C
+        DO 30 J=KP1,N
+          T = A(L,J)
+          IF (L.EQ.K) GO TO 20
+          A(L,J) = A(K,J)
+          A(K,J) = T
+   20     CONTINUE
+          CALL SAXPY(N-K, T, A(K+1,K), 1, A(K+1,J), 1)
+   30   CONTINUE
+        GO TO 50
+   40   CONTINUE
+        INFO = K
+   50   CONTINUE
+   60 CONTINUE
+   70 CONTINUE
+      IPVT(N) = N
+      IF (A(N,N).EQ.0.0E0) INFO = N
+      RETURN
+C
+C***********************************************************************
+C
+      END
+      SUBROUTINE SGESL(A, LDA, N, IPVT, B, JOB)                         SGE   10
+C
+C***********************************************************************
+C
+      INTEGER LDA, N, IPVT(1), JOB
+      REAL A(LDA,1), B(1)
+C
+C     SGESL SOLVES THE REAL SYSTEM
+C     A * X = B  OR  TRANS(A) * X = B
+C     USING THE FACTORS COMPUTED BY SGECO OR SGEFA.
+C
+C     ON ENTRY
+C
+C        A       REAL(LDA, N)
+C                THE OUTPUT FROM SGECO OR SGEFA.
+C
+C        LDA     INTEGER
+C                THE LEADING DIMENSION OF THE ARRAY  A .
+C
+C        N       INTEGER
+C                THE ORDER OF THE MATRIX  A .
+C
+C        IPVT    INTEGER(N)
+C                THE PIVOT VECTOR FROM SGECO OR SGEFA.
+C
+C        B       REAL(N)
+C                THE RIGHT HAND SIDE VECTOR.
+C
+C        JOB     INTEGER
+C                = 0         TO SOLVE  A*X = B ,
+C                = NONZERO   TO SOLVE  TRANS(A)*X = B  WHERE
+C                            TRANS(A)  IS THE TRANSPOSE.
+C
+C     ON RETURN
+C
+C        B       THE SOLUTION VECTOR  X .
+C
+C     ERROR CONDITION
+C
+C        A DIVISION BY ZERO WILL OCCUR IF THE INPUT FACTOR CONTAINS A
+C        ZERO ON THE DIAGONAL.  TECHNICALLY THIS INDICATES SINGULARITY
+C        BUT IT IS OFTEN CAUSED BY IMPROPER ARGUMENTS OR IMPROPER
+C        SETTING OF LDA .  IT WILL NOT OCCUR IF THE SUBROUTINES ARE
+C        CALLED CORRECTLY AND IF SGECO HAS SET RCOND .GT. 0.0
+C        OR SGEFA HAS SET INFO .EQ. 0 .
+C
+C     TO COMPUTE  INVERSE(A) * C  WHERE  C  IS A MATRIX
+C     WITH  P  COLUMNS
+C           CALL SGECO(A,LDA,N,IPVT,RCOND,Z)
+C           IF (RCOND IS TOO SMALL) GO TO ...
+C           DO 10 J = 1, P
+C              CALL SGESL(A,LDA,N,IPVT,C(1,J),0)
+C        10 CONTINUE
+C
+C     LINPACK. THIS VERSION DATED 08/14/78 .
+C     CLEVE MOLER, UNIVERSITY OF NEW MEXICO, ARGONNE NATIONAL LAB.
+C
+C     SUBROUTINES AND FUNCTIONS
+C
+C     BLAS SAXPY,SDOT
+C
+C     INTERNAL VARIABLES
+C
+      REAL SDOT, T
+      INTEGER K, KB, L, NM1
+C
+      NM1 = N - 1
+      IF (JOB.NE.0) GO TO 50
+C
+C        JOB = 0 , SOLVE  A * X = B
+C        FIRST SOLVE  L*Y = B
+C
+      IF (NM1.LT.1) GO TO 30
+      DO 20 K=1,NM1
+        L = IPVT(K)
+        T = B(L)
+        IF (L.EQ.K) GO TO 10
+        B(L) = B(K)
+        B(K) = T
+   10   CONTINUE
+        CALL SAXPY(N-K, T, A(K+1,K), 1, B(K+1), 1)
+   20 CONTINUE
+   30 CONTINUE
+C
+C        NOW SOLVE  U*X = Y
+C
+      DO 40 KB=1,N
+        K = N + 1 - KB
+        B(K) = B(K)/A(K,K)
+        T = -B(K)
+        CALL SAXPY(K-1, T, A(1,K), 1, B(1), 1)
+   40 CONTINUE
+      GO TO 100
+   50 CONTINUE
+C
+C        JOB = NONZERO, SOLVE  TRANS(A) * X = B
+C        FIRST SOLVE  TRANS(U)*Y = B
+C
+      DO 60 K=1,N
+        T = SDOT(K-1,A(1,K),1,B(1),1)
+        B(K) = (B(K)-T)/A(K,K)
+   60 CONTINUE
+C
+C        NOW SOLVE TRANS(L)*X = Y
+C
+      IF (NM1.LT.1) GO TO 90
+      DO 80 KB=1,NM1
+        K = N - KB
+        B(K) = B(K) + SDOT(N-K,A(K+1,K),1,B(K+1),1)
+        L = IPVT(K)
+        IF (L.EQ.K) GO TO 70
+        T = B(L)
+        B(L) = B(K)
+        B(K) = T
+   70   CONTINUE
+   80 CONTINUE
+   90 CONTINUE
+  100 CONTINUE
+      RETURN
+C
+C***********************************************************************
+C
+      END
+1AIRCRAFT STABILITY PROBLEM
+ ELEVATOR=-0.5000000E-01
+ AILERON = 0.0000000E+00
+ RUDDER  = 0.0000000E+00
+0UNIVERSITY OF PITTSBURGH CONTINUATION CODE
+ ABSERR= 0.1000000E-04 RELERR= 0.1000000E-04
+ H=      0.3000000     HFACT=   3.000000
+ HMIN=   0.1000000E-02 HMAX=    100.0000
+ NEWTON METHOD OPTION= 0
+0LIMIT POINTS SOUGHT FOR VARIABLE  7
+ ACCEPTED POINT SATISFIED WEAK CRITERION
+ TANGENT AT POINT  -1 WAS
+  0.0000000E+00 0.0000000E+00 0.0000000E+00 0.0000000E+00 0.0000000E+00
+  0.0000000E+00 0.0000000E+00 0.0000000E+00
+ TO REACH POINT   0 TANGENT STEPSIZE WAS  0.3000000
+ POINT   0 IS
+  0.1060012E-02 0.5120612E-01 0.5799534E-04 0.5960608E-01 0.2646838E-04
+ -0.5000000E-01 0.0000000E+00 0.0000000E+00
+ FUNCTION NORM= 0.2621267E-07
+ TANGENT AT POINT   0 WAS
+  0.9928986     0.3971849E-04 0.5807782E-01 0.3491732E-05 0.9383239E-02
+  0.0000000E+00-0.1033984     0.0000000E+00
+ TO REACH POINT   1 TANGENT STEPSIZE WAS  0.3000000
+ POINT   1 IS
+  0.2989296     0.5224776E-01 0.1752600E-01 0.5978443E-01 0.2888085E-02
+ -0.5000000E-01-0.3108907E-01 0.0000000E+00
+ FUNCTION NORM= 0.1303852E-07
+ ACCEPTED POINT SATISFIED WEAK CRITERION
+0SECANT STEP FROM  0 TO   1 =  0.3000121
+ TANGENT AT POINT   1 WAS
+  0.9927709     0.6996797E-02 0.5851547E-01 0.1185679E-02 0.9848173E-02
+  0.0000000E+00-0.1040892     0.0000000E+00
+ TO REACH POINT   2 TANGENT STEPSIZE WAS  0.7085235
+ POINT   2 IS
+  0.9812587     0.6401174E-01 0.5894670E-01 0.6152920E-01 0.1109039E-01
+ -0.5000000E-01-0.1048387     0.0000000E+00
+ FUNCTION NORM= 0.2980232E-07
+0SECANT STEP FROM  1 TO   2 =  0.6877037
+ TANGENT AT POINT   2 WAS
+  0.9911383     0.2978522E-01 0.6259765E-01 0.3870231E-02 0.1520790E-01
+  0.0000000E+00-0.1122183     0.0000000E+00
+ TO REACH POINT   3 TANGENT STEPSIZE WAS   2.063111
+ POINT   3 IS
+   2.440764     0.2531042     0.1521706     0.6774194E-01 0.7938589E-01
+ -0.5000000E-01-0.3363575     0.0000000E+00
+ FUNCTION NORM= 0.5960464E-07
+0SECANT STEP FROM  2 TO   3 =   1.494291
+ TANGENT AT POINT   3 WAS
+  0.8966243     0.3538527     0.3001525E-01-0.3850312E-02 0.1173910
+  0.0000000E+00-0.2369742     0.0000000E+00
+ TO REACH POINT   4 TANGENT STEPSIZE WAS   1.496469
+ POINT   4 IS
+   2.952565     0.7826338     0.8401720E-01 0.4403858E-01 0.2529988
+ -0.5000000E-01-0.5039722     0.0000000E+00
+ FUNCTION NORM= 0.1192093E-06
+0SECANT STEP FROM  3 TO   4 =  0.7783215
+ TANGENT AT POINT   4 WAS
+  0.2754016     0.8876920    -0.2103540    -0.5578997E-01 0.2959480
+ -0.3963379E-10-0.3478882E-01 0.0000000E+00
+ TO REACH POINT   5 TANGENT STEPSIZE WAS   1.444062
+ POINT   5 IS
+   2.916958      2.064516    -0.2698410    -0.4357284E-01 0.7255810
+ -0.5000000E-01 0.7422988E-01 0.0000000E+00
+ FUNCTION NORM= 0.5960464E-07
+0LIMIT POINT FOUND
+ POINT
+   2.964867     0.8255649     0.7366088E-01 0.4130952E-01 0.2673494
+ -0.5000000E-01-0.5048105     0.0000000E+00
+ TANGENT
+  0.2362643     0.8957867    -0.2197420    -0.5755886E-01 0.3002430
+  0.0000000E+00-0.4514060E-07 0.0000000E+00
+ FUNCTION NORM= 0.3576279E-06
+0SECANT STEP FROM  4 TO   5 =   1.528081
+ TANGENT AT POINT   5 WAS
+ -0.1237267     0.7033410    -0.1898283    -0.4611499E-01 0.2877072
+  0.0000000E+00 0.6075083     0.0000000E+00
+ TO REACH POINT   6 TANGENT STEPSIZE WAS   4.584244
+ POINT   6 IS
+   2.496304      4.058408    -0.7461970    -0.1579089      1.692389
+ -0.5000000E-01  2.859196     0.0000000E+00
+ FUNCTION NORM= 0.5960464E-07
+0SECANT STEP FROM  5 TO   6 =   3.617084
+ TANGENT AT POINT   6 WAS
+ -0.9773980E-01 0.4392467    -0.9534489E-01-0.2223779E-01 0.2511305
+  0.0000000E+00 0.8513857     0.0000000E+00
+ TO REACH POINT   7 TANGENT STEPSIZE WAS   10.85125
+ POINT   7 IS
+   1.807083      7.067870     -1.413138    -0.2922075      4.077554
+ -0.5000000E-01  12.09780     0.0000000E+00
+ FUNCTION NORM= 0.7629395E-05
+0SECANT STEP FROM  6 TO   7 =   10.05164
+ TANGENT AT POINT   7 WAS
+ -0.4952314E-01 0.2046322    -0.5205488E-01-0.8192124E-02 0.2295179
+  0.0000000E+00 0.9487981     0.0000000E+00
+ TO REACH POINT   8 TANGENT STEPSIZE WAS   30.15492
+ POINT   8 IS
+  0.9593399      10.01302     -2.803647    -0.4014672      10.86465
+ -0.5000000E-01  40.70873     0.0000000E+00
+ FUNCTION NORM= 0.1192093E-06
+0SECANT STEP FROM  7 TO   8 =   29.59710
+ TANGENT AT POINT   8 WAS
+ -0.1635089E-01 0.4301921E-01-0.4714328E-01-0.1489147E-02 0.2315707
+  0.0000000E+00 0.9705835     0.0000000E+00
+ TO REACH POINT   9 TANGENT STEPSIZE WAS   88.79130
+ POINT   9 IS
+  0.3628370      11.12638     -7.312350    -0.4391644      31.89847
+ -0.5000000E-01  126.8881     0.0000000E+00
+ FUNCTION NORM= 0.9536743E-06
+0SECANT STEP FROM  8 TO   9 =   88.83260
+ TANGENT AT POINT   9 WAS
+ -0.2632842E-02 0.2777145E-02-0.5267731E-01-0.9206447E-04 0.2393715
+  0.0000000E+00 0.9694905     0.0000000E+00
+ TO REACH POINT  10 TANGENT STEPSIZE WAS   100.0000
+ POINT  10 IS
+  0.2096539      11.25436     -12.62353    -0.4433980      55.83562
+ -0.5000000E-01  223.4916     0.0000000E+00
+ FUNCTION NORM= 0.7450581E-07
+0SECANT STEP FROM  9 TO  10 =   99.66683
+ TANGENT AT POINT  10 WAS
+ -0.8934377E-03 0.5492248E-03-0.5365569E-01-0.1813405E-04 0.2406490
+  0.0000000E+00 0.9691275     0.0000000E+00
+ TO REACH POINT  11 TANGENT STEPSIZE WAS   100.0000
+ POINT  11 IS
+  0.1469338      11.28720     -18.00007    -0.4444822      79.90052
+ -0.5000000E-01  320.3178     0.0000000E+00
+ FUNCTION NORM= 0.3814697E-05
+0SECANT STEP FROM 10 TO  11 =   99.91665
+ TANGENT AT POINT  11 WAS
+ -0.4407084E-03 0.1906852E-03-0.5391949E-01-0.6291352E-05 0.2409916
+  0.0000000E+00 0.9690281     0.0000000E+00
+ TO REACH POINT  12 TANGENT STEPSIZE WAS   100.0000
+ POINT  12 IS
+  0.1130149      11.30020     -23.39625    -0.4449112      103.9997
+ -0.5000000E-01  417.1873     0.0000000E+00
+ FUNCTION NORM= 0.7629395E-05
+0SECANT STEP FROM 11 TO  12 =   99.96792
+ TANGENT AT POINT  12 WAS
+ -0.2611652E-03 0.8714148E-04-0.5402515E-01-0.2877278E-05 0.2411286
+  0.0000000E+00 0.9689882     0.0000000E+00
+ TO REACH POINT  13 TANGENT STEPSIZE WAS   33.33333
+ POINT  13 IS
+  0.1049311      11.30280     -25.19735    -0.4449971      112.0373
+ -0.5000000E-01  449.4848     0.0000000E+00
+ FUNCTION NORM= 0.3814697E-05
+0SECANT STEP FROM 12 TO  13 =   33.33136
+ TANGENT AT POINT  13 WAS
+ -0.2252165E-03 0.6982322E-04-0.5404638E-01-0.2306299E-05 0.2411561
+  0.0000000E+00 0.9689802     0.0000000E+00
+ TO REACH POINT  14 TANGENT STEPSIZE WAS   33.33327
+ POINT  14 IS
+  0.9792452E-01  11.30490     -26.99910    -0.4450665      120.0758
+ -0.5000000E-01  481.7825     0.0000000E+00
+ FUNCTION NORM= 0.5722046E-05
+0SECANT STEP FROM 13 TO  14 =   33.33168
+ TANGENT AT POINT  14 WAS
+ -0.1961974E-03 0.5683755E-04-0.5406353E-01-0.1876989E-05 0.2411783
+  0.0000000E+00 0.9689737     0.0000000E+00
+ TO REACH POINT  15 TANGENT STEPSIZE WAS   47.14118
+ POINT  15 IS
+  0.8947291E-01  11.30724     -29.54805    -0.4451439      131.4452
+ -0.5000000E-01  527.4584     0.0000000E+00
+ FUNCTION NORM= 0.3129244E-06
+0SECANT STEP FROM 14 TO  15 =   47.13864
+ TANGENT AT POINT  15 WAS
+ -0.1638424E-03 0.4340454E-04-0.5408267E-01-0.1434397E-05 0.2412031
+  0.0000000E+00 0.9689665     0.0000000E+00
+ TO REACH POINT  16 TANGENT STEPSIZE WAS   66.66896
+ POINT  16 IS
+  0.7973719E-01  11.30969     -33.15418    -0.4452246      147.5260
+ -0.5000000E-01  592.0545     0.0000000E+00
+ FUNCTION NORM= 0.7629395E-05
+0SECANT STEP FROM 15 TO  16 =   66.66518
+ TANGENT AT POINT  16 WAS
+ -0.1301677E-03 0.3078870E-04-0.5410261E-01-0.1017784E-05 0.2412290
+  0.0000000E+00 0.9689590     0.0000000E+00
+ TO REACH POINT  17 TANGENT STEPSIZE WAS   94.28594
+ POINT  17 IS
+  0.6910028E-01  11.31204     -38.25599    -0.4453023      170.2705
+ -0.5000000E-01  683.4083     0.0000000E+00
+ FUNCTION NORM= 0.1028180E-05
+0SECANT STEP FROM 16 TO  17 =   94.28075
+ TANGENT AT POINT  17 WAS
+ -0.9778527E-04 0.2009472E-04-0.5412181E-01-0.6646108E-06 0.2412538
+  0.0000000E+00 0.9689517     0.0000000E+00
+ TO REACH POINT  18 TANGENT STEPSIZE WAS   33.33333
+ POINT  18 IS
+  0.6598751E-01  11.31266     -40.06011    -0.4453230      178.3123
+ -0.5000000E-01  715.7062     0.0000000E+00
+ FUNCTION NORM= 0.3814697E-05
+0SECANT STEP FROM 17 TO  18 =   33.33286
+ TANGENT AT POINT  18 WAS
+ -0.8918105E-04 0.1751778E-04-0.5412691E-01-0.5794362E-06 0.2412604
+  0.0000000E+00 0.9689498     0.0000000E+00
+ TO REACH POINT  19 TANGENT STEPSIZE WAS   33.33332
+ POINT  19 IS
+  0.6314289E-01  11.31321     -41.86439    -0.4453411      186.3543
+ -0.5000000E-01  748.0041     0.0000000E+00
+ FUNCTION NORM= 0.3814697E-05
+0SECANT STEP FROM 18 TO  19 =   33.33291
+ TANGENT AT POINT  19 WAS
+ -0.8166372E-04 0.1535104E-04-0.5413137E-01-0.5082582E-06 0.2412662
+  0.0000000E+00 0.9689481     0.0000000E+00
+ TO REACH POINT  20 TANGENT STEPSIZE WAS   47.14066
+ POINT  20 IS
+  0.5951433E-01  11.31387     -44.41628    -0.4453630      197.7278
+ -0.5000000E-01  793.6802     0.0000000E+00
+ FUNCTION NORM= 0.1902226E-06
+0SECANT STEP FROM 19 TO  20 =   47.13995
+ TANGENT AT POINT  20 WAS
+ -0.7255367E-04 0.1291316E-04-0.5413678E-01-0.4262529E-06 0.2412732
+  0.0000000E+00 0.9689460     0.0000000E+00
+ TO REACH POINT  21 TANGENT STEPSIZE WAS   66.66732
+ POINT  21 IS
+  0.5504079E-01  11.31464     -48.02558    -0.4453884      213.8128
+ -0.5000000E-01  858.2760     0.0000000E+00
+ FUNCTION NORM= 0.3814697E-05
+0SECANT STEP FROM 20 TO  21 =   66.66616
+ TANGENT AT POINT  21 WAS
+ -0.6206258E-04 0.1019965E-04-0.5414301E-01-0.3379401E-06 0.2412813
+  0.0000000E+00 0.9689437     0.0000000E+00
+ TO REACH POINT  22 TANGENT STEPSIZE WAS   31.42747
+ POINT  22 IS
+  0.5315705E-01  11.31494     -49.72719    -0.4453984      221.3957
+ -0.5000000E-01  888.7272     0.0000000E+00
+ FUNCTION NORM= 0.3814697E-05
+0SECANT STEP FROM 21 TO  22 =   31.42726
+ TANGENT AT POINT  22 WAS
+ -0.5788949E-04 0.9184560E-05-0.5414549E-01-0.3047140E-06 0.2412845
+  0.0000000E+00 0.9689428     0.0000000E+00
+ TO REACH POINT  23 TANGENT STEPSIZE WAS   31.42746
+ POINT  23 IS
+  0.5139791E-01  11.31522     -51.42887    -0.4454076      228.9786
+ -0.5000000E-01  919.1784     0.0000000E+00
+ FUNCTION NORM= 0.3814697E-05
+0PROGRAM TOOK FULL NUMBER OF CONTINUATION STEPS
+0MATRIX SIZE        8X   8
+ STEPS TAKEN       23
+ NEWTON STEPS      77
+ STEP REDUCTIONS    3
+ FUNCTION CALLS   107
+ PRIME CALLS      100
+ SOLVE CALLS      103
+0CALLS -
+ SOLVE CALLED FOR CORRECTION             77
+ SOLVE CALLED FOR TANGENT                26
+0CORRECTOR CALLED FOR STARTING POINT      2
+ CORRECTOR CALLED FOR CONTINUATION POINT 69
+ CORRECTOR CALLED FOR TARGET POINT        0
+ CORRECTOR CALLED FOR LIMIT POINT         6
+0ROOTFINDER CALLED FOR LIMIT POINT        3

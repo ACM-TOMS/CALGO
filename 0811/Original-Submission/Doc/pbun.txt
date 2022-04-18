@@ -1,0 +1,519 @@
+***********************************************************************
+*                                                                     *
+*         PBUN - A PROXIMAL BUNDLE ALGORITHM FOR NONSMOOTH            *
+*                OPTIMIZATION.                                        *
+*                                                                     *
+***********************************************************************
+
+
+1. Introduction:
+----------------
+
+      The double-precision FORTRAN 77 basic subroutine PBUN is designed
+to find a close approximation to a local minimum of a nonlinear
+nonsmooth function F(X) with simple bounds on variables and general
+linear constraints. Here X is a vector of N variables and F(X), is
+assumed to be a locally Lipschitz continuous function. Simple bounds
+are assumed in the form
+
+               X(I) unbounded if  IX(I) = 0,
+      XL(I) <= X(I)           if  IX(I) = 1,
+               X(I) <= XU(I)  if  IX(I) = 2,
+      XL(I) <= X(I) <= XU(I)  if  IX(I) = 3,
+      XL(I)  = X(I)  = XU(I)  if  IX(I) = 5,
+
+where 1 <= I <= N. General linear constraints are assumed in the form
+
+               C(I) unbounded if  IC(I) = 0,
+      CL(I) <= C(I)           if  IC(I) = 1,
+               C(I) <= CU(I)  if  IC(I) = 2,
+      CL(I) <= C(I) <= CU(I)  if  IC(I) = 3,
+      CL(I)  = C(I)  = CU(I)  if  IC(I) = 5,
+
+where C(I) = A_I * X, 1 <= I <= NC, are linear functions. To simplify
+user's work, three additional easy to use subroutines are added. They
+call the basic general subroutine PBUN:
+
+      PBUNU - unconstrained nonsmooth optimization,
+      PBUNS - nonsmooth optimization with simple bounds,
+      PBUNL - nonsmooth optimization with simple bounds and general
+              linear constraints.
+
+All subroutines contain a description of formal parameters and
+extensive comments. Furthermore, two test programs TBUNU and TBUNL are
+included, which contain several test problems (see [4]). These test
+programs serve as examples for using the subroutines, verify their
+correctness and demonstrate their efficiency.
+      In this short guide, we describe all subroutines which can be
+called from the user's program. A detailed description of methods is
+given in [2] and [3]. In the description of formal parameters, we
+introduce a type of the argument that specifies whether the argument
+must have a value defined on entry to the subroutine (I), whether it
+is a value which will be returned (O), or both (U), or whether it is
+an auxiliary value (A). Note that the arguments of the type I can be
+changed on output under some circumstances, especially if improper
+input values were given. Besides formal parameters, we can use a
+COMMON /STAT/ block containing statistical information. This block,
+used in each subroutine, has the following form:
+
+      COMMON /STAT/ NDECF,NRES,NRED,NREM,NADD,NIT,NFV,NFG,NFH
+
+The arguments have the following meaning:
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NDECF     O   Positive INTEGER variable that indicates the number of
+                matrix decompositions.
+  NRES      O   Positive INTEGER variable that indicates the number of
+                restarts.
+  NRED      O   Positive INTEGER variable that indicates the number of
+                reductions.
+  NREM      O   Positive INTEGER variable that indicates the number of
+                constraint deletions during the QP solutions.
+  NADD      O   Positive INTEGER variable that indicates the number of
+                constraint additions during the QP solutions.
+  NIT       O   Positive INTEGER variable that indicates the number of
+                iterations.
+  NFV       O   Positive INTEGER variable that indicates the number of
+                function evaluations.
+  NFG       O   Positive INTEGER variable that specifies the number of
+                gradient evaluations.
+  NFH       O   Positive INTEGER variable that specifies the number of
+                Hessian evaluations.
+
+
+2. Subroutines PBUNU, PBUNS, PBUNL:
+-----------------------------------
+
+The calling sequences are
+
+      CALL PBUNU(NF,NA,X,IA,RA,IPAR,RPAR,FP,GMAX,ITERM)
+      CALL PBUNS(NF,NA,NB,X,IX,XL,XU,IA,RA,IPAR,RPAR,FP,GMAX,ITERM)
+      CALL PBUNL(NF,NA,NB,NC,X,IX,XL,XU,CF,IC,CL,CU,CG,IA,RA,IPAR,
+     &           RPAR,FP,GMAX,ITERM)
+
+The arguments have the following meaning.
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NF        I   Positive INTEGER variable that specifies the number of
+                variables of the objective function.
+  NA        I   Nonnegative INTEGER variable that specifies the maximum
+                bundle dimension. The choice NA=0 causes that the
+                default value NA=NF+3 will be taken.
+  NB        I   Nonnegative INTEGER variable that specifies whether the
+                simple bounds are suppressed (NB=0) or accepted (NB>0).
+  NC        I   Nonnegative INTEGER variable that specifies the number
+                of linear constraints; if NC=0 the linear constraints
+                are suppressed.
+  X(NF)     U   On input, DOUBLE PRECISION vector with the initial
+                estimate to the solution. On output, the approximation
+                to the minimum.
+  IX(NF)    I   On input (significant only if NB>0) INTEGER vector
+                containing the simple bounds types:
+                   IX(I)=0 - the variable X(I) is unbounded,
+                   IX(I)=1 - the lower bound X(I) >= XL(I),
+                   IX(I)=2 - the upper bound X(I) <= XU(I),
+                   IX(I)=3 - the two side bound XL(I) <= X(I) <= XU(I),
+                   IX(I)=5 - the variable X(I) is fixed (given by its
+                             initial estimate).
+  XL(NF)    I   DOUBLE PRECISION vector with lower bounds for variables
+                (significant only if NB>0).
+  XU(NF)    I   DOUBLE PRECISION vector with upper bounds for variables
+                (significant only if NB>0).
+  CF(NC)    A   DOUBLE PRECISION vector which contains values of
+                constraint functions (only if NC>0).
+  IC(NC)    I   On input (significant only if NC>0) INTEGER vector which
+                contains constraint types:
+                  IC(K)=0 - the constraint CF(K) is not used,
+                  IC(K)=1 - the lower constraint CF(K) >= CL(K),
+                  IC(K)=2 - the upper constraint CF(K) <= CU(K),
+                  IC(K)=3 - the two side constraint
+                            CL(K) <= CF(K) <= CU(K),
+                  IC(K)=5 - the equality constraint CF(K) = CL(K).
+  CL(NC)    I   DOUBLE PRECISION vector with lower bounds for constraint
+                functions (significant only if NC>0).
+  CU(NC)    I   DOUBLE PRECISION vector with upper bounds for constraint
+                functions (significant only if NC>0).
+  CG(NF*NC) I   DOUBLE PRECISION matrix whose columns are normals of the
+                linear constraints (significant only if NC>0).
+  IA(NIA)   A   INTEGER working array of the dimension of at least
+                NIA=NF+NA+1.
+  RA(NRA)   A   DOUBLE PRECISION working array of the dimension of at
+                least NRA=NF*(NF+1)/2+NF*(NA+5)+5*NA+4.
+  IPAR(7)   A   INTEGER parameters:
+                  IPAR(1)=MET,   IPAR(2)=MES,   IPAR(3)=MTESX,
+                  IPAR(4)=MTESF, IPAR(5)=MIT,   IPAR(6)=MFV,
+                  IPAR(7)=IPRNT.
+                Parameters MET, MES, MTESX, MTESF, MIT, MFV, IPRNT are
+                described in Section 3 together with other parameters
+                of the subroutine PBUN.
+  RPAR(9)   A   DOUBLE PRECISION parameters:
+                  RPAR(1)=TOLX,  RPAR(2)=TOLF,  RPAR(3)=TOLB,
+                  RPAR(4)=TOLG,  RPAR(5)=TOLD,  RPAR(6)=TOLS,
+                  RPAR(7)=TOLP.  RPAR(8)=ETA,   RPAR(9)=XMAX.
+                Parameters TOLX, TOLF, TOLB, TOLG, TOLD, TOLS, TOLP,
+                ETA, XMAX are described in Section 3 together with
+                other parameters of the subroutine PBUN.
+  FP        O   DOUBLE PRECISION value of the objective function at the
+                solution X.
+  GMAX      O   DOUBLE PRECISION maximum absolute value of a partial
+                derivative of the Lagrangian function.
+  ITERM     O   INTEGER variable that indicates the cause of termination:
+                  ITERM= 1 - if |X - XO| was less than or equal to TOLX
+                             in MTESX subsequent iterations,
+                  ITERM= 2 - if |F - FO| was less than or equal to TOLF
+                             in MTESF subsequent iterations,
+                  ITERM= 3 - if F is less than or equal to TOLB,
+                  ITERM= 4 - if GMAX is less than or equal to TOLG,
+                  ITERM=11 - if NFV exceeded MFV,
+                  ITERM=12 - if NIT exceeded MIT,
+                  ITERM< 0 - if the method failed.
+
+The subroutines PBUNU, PBUNS, PBUNL require the user supplied subroutine
+FUNDER that defines the objective function and its subgradient and has
+the form
+
+      SUBROUTINE FUNDER(NF,X,F,G)
+
+The arguments of the user supplied subroutine have the following meaning.
+
+ Argument  Type Significance
+ ----------------------------------------------------------------------
+  NF        I   Positive INTEGER variable that specifies the number of
+                variables of the objective function.
+  X(NF)     I   DOUBLE PRECISION an estimate to the solution.
+  F         O   DOUBLE PRECISION value of the objective function at the
+                point X.
+  G(NF)     O   DOUBLE PRECISION subgradient of the objective function
+                at the point X.
+
+
+3. Subroutine PBUN:
+-------------------
+
+This general subroutine is called from all the subroutines described
+in Section 2. The calling sequence is
+
+      CALL PBUN(NF,NA,NB,NC,X,IX,XL,XU,CF,IC,CL,CU,CG,AF,IA,AFD,AG,
+     & IAA,AR,AZ,G,H,S,XO,GO,XS,GS,TOLX,TOLF,TOLB,TOLG,TOLD,TOLS,TOLP,
+     & ETA,XMAX,GMAX,FP,MET,MES,MTESX,MTESF,MIT,MFV,IPRNT,ITERM).
+
+The arguments NF, NA, NB, NC, X, IX, XL, XU, CF, IC, CL, CU, CG,
+GMAX, FP, ITERM, have the same meaning as in Section 2. Other
+arguments have the following meaning:
+
+ Argument  Type Significance
+ ---------------------------------------------------------------------
+  AF(4*NA)  A   DOUBLE PRECISION vector of bundle function values.
+  IA(NA)    A   INTEGER vector containing types of bundle functions.
+  AFD(NA)   A   DOUBLE PRECISION vector of bundle function increments.
+  AG(NF*NA) A   DOUBLE PRECISION matrix whose columns are bundle
+                gradients.
+  IAA(NA)   A   INTEGER vector containing indices of active functions.
+  AR(NAR)   A   DOUBLE PRECISION matrix containing triangular
+                decomposition of the orthogonal projection kernel
+                (NAR is equal to NF*(NF+1)/2).
+  AZ(NF+1)  A   DOUBLE PRECISION vector of Lagrange multipliers.
+  G(NF)     A   DOUBLE PRECISION subgradient of the objective function.
+  H(NF)     A   DOUBLE PRECISION diagonal matrix of weight parameters.
+  S(NF+1)   A   DOUBLE PRECISION direction vector.
+  XO(NF)    A   DOUBLE PRECISION vector which contains increments of
+                variables.
+  GO(NF+1)  A   DOUBLE PRECISION gradient of the Lagrangian function.
+  XS(NF)    A   DOUBLE PRECISION auxiliary vector.
+  GS(NF)    A   DOUBLE PRECISION auxiliary vector.
+  TOLX      I   DOUBLE PRECISION tolerance for the change of the
+                coordinate vector X; the choice TOLX=0 causes that the
+                default value TOLX=1.0D-16 will be taken.
+  TOLF      I   DOUBLE PRECISION tolerance for the change of function
+                values; the choice TOLF=0 causes that the default
+                value TOLF=1.0D-8 will be taken.
+  TOLB      I   DOUBLE PRECISION minimum acceptable function value;
+                the choice TOLB=0 causes that the default value
+                TOLB=-1.0D60 will be taken.
+  TOLG      I   DOUBLE PRECISION tolerance for the Lagrangian function
+                gradient; the choice TOLG=0 causes that the default
+                value TOLG=1.0D-6 will be taken.
+  TOLD      I   DOUBLE PRECISION tolerance for a descent direction;
+                the choice TOLD= 0 causes that the default value
+                TOLD=1.0D-4 will be taken.
+  TOLS      I   DOUBLE PRECISION tolerance parameter for a function
+                decrease in a line search; the choice TOLS=0 causes
+                that the default value TOLS=1.0D-2 will be taken.
+  TOLP      I   DOUBLE PRECISION tolerance parameter for a significant
+                modification of the next line search direction; the
+                choice TOLP=0 causes that the default value TOLP=0.5D0
+                will be taken.
+  ETA       I   DOUBLE PRECISION distance measure parameter.
+  XMAX      I   DOUBLE PRECISION maximum stepsize; the choice XMAX=0
+                causes that the default value 1.0D3 will be taken.
+  MET       I   INTEGER variable that specifies the weight updating
+                method:
+                  MET=1 - quadratic interpolation,
+                  MET=2 - local minimization,
+                  MET=3 - quasi-Newton condition.
+                The choice MET=0 causes that the default value MET=1
+                will be taken.
+  MES       I   INTEGER variable that specifies the interpolation
+                method selection in a line search:
+                  MES=1 - bisection,
+                  MES=2 - two point quadratic interpolation,
+                  MES=3 - three point quadratic interpolation,
+                  MES=4 - three point cubic interpolation.
+                The choice MES=0 causes that the default value MES=1
+                will be taken.
+  MTESX     I   INTEGER variable that specifies the maximum number of
+                iterations with changes of the coordinate vector X
+                smaller than TOLX; the choice MTESX=0 causes that the
+                default value MTESX=20 will be taken.
+  MTESF     I   INTEGER variable that specifies the maximum number of
+                iterations with changes of function values smaller
+                than TOLF; the choice MTESF=0 causes that the default
+                value MTESF=2 will be taken.
+  MIT       I   INTEGER variable that specifies the maximum number of
+                iterations; the choice MIT=0 causes that the default
+                value 200 will be taken.
+  MFV       I   INTEGER variable that specifies the maximum number of
+                function evaluations; the choice |MFV|=0 causes that
+                the default value 500 will be taken.
+  IPRNT     I   INTEGER variable that specifies PRINT:
+                  IPRNT= 0 - print is suppressed,
+                  IPRNT= 1 - basic print of final results,
+                  IPRNT=-1 - extended print of final results,
+                  IPRNT= 2 - basic print of intermediate and final
+                             results,
+                  IPRNT=-2 - extended print of intermediate and final
+                             results.
+
+     The subroutine PBUN has a modular structure. The following list
+contains its most important subroutines:
+
+      PDDBQ1 - Determination of the descent direction using quadratic
+               programming subroutine and bundle updating.
+      PLQDF1 - Dual range space method for solving a quadratic
+               programming subproblem with linear constraints
+               (see [1]).
+      PS1L05 - Line search using function values and derivatives.
+
+The subroutine PBUN requires the user supplied subroutine FUNDER
+which is described in Section 2.
+
+
+4. Subroutine PLQDF1:
+---------------------
+
+Since the dual range space method for special quadratic programming
+subproblems arising in bundle type nonsmooth optimization can be used
+separately in many applications (e.g. in minimax optimization), we
+describe the subroutine PLQDF1 in more details. The calling sequence
+is
+
+      CALL PLQDF1(NF,NA,NC,X,IX,XL,XU,AF,AFD,IA,IAA,AG,AR,AZ,
+     & CF,IC,CL,CU,CG,G,H,S,MFP,KBF,KBC,IDECF,ETA0,ETA2,ETA9,
+     & EPS7,EPS9,XNORM,UMAX,GMAX,N,ITERQ)
+
+The arguments NF, NA, NC, X, IX, XL, XU, AF, CF, IC, CL, CU, CG have
+the same meaning as in Section 2 (only with the difference that the
+arguments X and AF are of the type (I), i.e. they  must have a value
+defined on entry to PLQDF1 and they are not changed). The arguments AFD,
+IA, IAA, AG, AR, AZ have the same meaning as in Section 3 (only with
+the difference that the arguments AFD, IAA, AR, AZ are of the type (O),
+i.e. their values can be used subsequently). Other arguments have the
+following meaning:
+
+ Argument  Type Significance
+ ---------------------------------------------------------------------
+  G(NF+1)   O   DOUBLE PRECISION gradient of the Lagrangian function.
+  H(NH)     U   DOUBLE PRECISION Choleski decomposition of the
+                approximate Hessian (NH is equal to NF*(NF+1)/2).
+  S(NF+1)   O   DOUBLE PRECISION direction vector.
+  MFP       I   INTEGER variable that specifies the type of the
+                computed point.
+                  MFP=1 - computation is terminated whenever an
+                          arbitrary feasible point is found,
+                  MFP=2 - computation is terminated whenever an
+                          optimum feasible point is found,
+                  MFP=3 - computation starts from the previously
+                          reached point and is terminated whenever
+                          an optimum feasible point is found.
+  KBF       I   INTEGER variable that specifies simple bounds on
+                variables.
+                  KBF=0 - simple bounds are suppressed,
+                  KBF=1 - one sided simple bounds,
+                  KBF=2 - two sided simple bounds.
+  KBC       I   INTEGER variable that specifies general linear
+                constraints.
+                  KBC=0 - linear constraints are suppressed,
+                  KBC=1 - one sided linear constraints,
+                  KBC=2 - two sided linear constraints.
+  IDECF     U   INTEGER variable that specifies the type of matrix
+                decomposition.
+                  IDECF= 0 - no decomposition,
+                  IDECF= 1 - Choleski decomposition,
+                  IDECF= 9 - inversion,
+                  IDECF=10 - diagonal matrix.
+  ETA0      I   DOUBLE PRECISION machine precision (the recommended
+                value is 1.0D-15.
+  ETA2      I   DOUBLE PRECISION tolerance for positive definiteness
+                in the Choleski decomposition.
+  ETA9      I   DOUBLE PRECISION maximum floating point number.
+  EPS7      I   DOUBLE PRECISION tolerance for linear independence
+                of constraints (the recommended value is 1.0D-10).
+  EPS9      I   DOUBLE PRECISION tolerance for the definition of active
+                constraints (the recommended value is 1.0D-8).
+  XNORM     O   DOUBLE PRECISION value of the linearized minimax
+                function.
+  UMAX      O   DOUBLE PRECISION maximum absolute value of the negative
+                Lagrange multiplier.
+  GMAX      O   DOUBLE PRECISION infinity norm of the gradient of the
+                Lagrangian function.
+  N         O   INTEGER dimension of a manifold defined by active
+                constraints.
+  ITERQ     O   INTEGER variable that indicates the type of the
+                computed feasible point.
+                  ITERQ= 1 - an arbitrary feasible point was found,
+                  ITERQ= 2 - the optimum feasible point was found,
+                  ITERQ=-1 - an arbitrary feasible point does not
+                             exist,
+                  ITERQ=-2 - the optimum feasible point does not
+                             exist.
+
+
+5. Form of printed results:
+---------------------------
+      The form of printed results is specified by the parameter IPRNT
+as is described in Section 3. Here we demonstrate individual forms of
+printed results by the simple use of the program TBUNU described in the
+next section (with NEXT=9). If we set IPRNT=1, then the printed results
+will have the form
+
+NIT=  13  NFV=  15  NFG=  15  F= -.10000000D+01  G= .9859D-07  ITERM=  4
+
+If we set IPRNT=-1, then the printed results will have the form
+
+EXIT FROM PBUN :
+NIT=  13  NFV=  15  NFG=  15  F= -.10000000D+01  G= .9859D-07  ITERM=  4
+X=  .1000000D+01  .0000000D+00
+
+If we set IPRNT=2, then the printed results will have the form
+
+ENTRY TO PBUN :
+NIT=   0  NFV=   1  NFG=   1  F=  .00000000D+00  G= .1000D+61
+NIT=   1  NFV=   3  NFG=   3  F= -.37888889D+00  G= .8500D+01
+NIT=   2  NFV=   4  NFG=   4  F= -.60615144D+00  G= .9333D+00
+NIT=   3  NFV=   5  NFG=   5  F= -.60615144D+00  G= .8024D+00
+NIT=   4  NFV=   6  NFG=   6  F= -.72848266D+00  G= .8024D+00
+NIT=   5  NFV=   7  NFG=   7  F= -.72848266D+00  G= .3478D+00
+NIT=   6  NFV=   8  NFG=   8  F= -.82757096D+00  G= .7222D+00
+NIT=   7  NFV=   9  NFG=   9  F= -.84360358D+00  G= .1618D+00
+NIT=   8  NFV=  10  NFG=  10  F= -.99860813D+00  G= .9839D-01
+NIT=   9  NFV=  11  NFG=  11  F= -.99860813D+00  G= .1141D+00
+NIT=  10  NFV=  12  NFG=  12  F= -.99928519D+00  G= .5014D+00
+NIT=  11  NFV=  13  NFG=  13  F= -.99999999D+00  G= .5301D-01
+NIT=  12  NFV=  14  NFG=  14  F= -.99999999D+00  G= .2704D-06
+NIT=  13  NFV=  15  NFG=  15  F= -.10000000D+01  G= .9859D-07
+EXIT FROM PBUN :
+NIT=  13  NFV=  15  NFG=  15  F= -.10000000D+01  G= .9859D-07  ITERM=  4
+
+If we set IPRNT=-2, then the printed results will have the form
+
+ENTRY TO PBUN :
+NIT=   0  NFV=   1  NFG=   1  F=  .00000000D+00  G= .1000D+61
+NIT=   1  NFV=   3  NFG=   3  F= -.37888889D+00  G= .8500D+01
+NIT=   2  NFV=   4  NFG=   4  F= -.60615144D+00  G= .9333D+00
+NIT=   3  NFV=   5  NFG=   5  F= -.60615144D+00  G= .8024D+00
+NIT=   4  NFV=   6  NFG=   6  F= -.72848266D+00  G= .8024D+00
+NIT=   5  NFV=   7  NFG=   7  F= -.72848266D+00  G= .3478D+00
+NIT=   6  NFV=   8  NFG=   8  F= -.82757096D+00  G= .7222D+00
+NIT=   7  NFV=   9  NFG=   9  F= -.84360358D+00  G= .1618D+00
+NIT=   8  NFV=  10  NFG=  10  F= -.99860813D+00  G= .9839D-01
+NIT=   9  NFV=  11  NFG=  11  F= -.99860813D+00  G= .1141D+00
+NIT=  10  NFV=  12  NFG=  12  F= -.99928519D+00  G= .5014D+00
+NIT=  11  NFV=  13  NFG=  13  F= -.99999999D+00  G= .5301D-01
+NIT=  12  NFV=  14  NFG=  14  F= -.99999999D+00  G= .2704D-06
+NIT=  13  NFV=  15  NFG=  15  F= -.10000000D+01  G= .9859D-07
+EXIT FROM PBUN :
+NIT=  13  NFV=  15  NFG=  15  F= -.10000000D+01  G= .9859D-07  ITERM=  4
+X=  .1000000D+01  .0000000D+00
+
+
+6. Verification of the subroutines:
+-----------------------------------
+
+      Subroutine PBUNU can be verified and tested using the program
+TBUNU. This program calls the subroutines TIUD19 (initiation), TFFU19
+(function evaluation) and TFGU19 (subgradient evaluation) containing
+20 academic test problems with at most 50 variables [4]. The results
+obtained by the program TBUNU on a PC computer with Microsoft Power
+Station Fortran compiler have the following form.
+
+NIT=  42  NFV=  45  NFG=  45  F=  .38117065D-06  G= .1135D-02  ITERM=  2
+NIT=  18  NFV=  20  NFG=  20  F= -.22203912D-16  G= .8975D-08  ITERM=  2
+NIT=  31  NFV=  33  NFG=  33  F=  .19522245D+01  G= .3085D-03  ITERM=  2
+NIT=  14  NFV=  16  NFG=  16  F=  .20000000D+01  G= .1921D-06  ITERM=  2
+NIT=  17  NFV=  19  NFG=  19  F= -.30000000D+01  G= .5564D-08  ITERM=  4
+NIT=  13  NFV=  15  NFG=  15  F=  .72000015D+01  G= .2212D-02  ITERM=  4
+NIT=  11  NFV=  12  NFG=  12  F= -.14142136D+01  G= .1437D-04  ITERM=  4
+NIT=  66  NFV=  68  NFG=  68  F= -.99999941D+00  G= .1089D-02  ITERM=  4
+NIT=  13  NFV=  15  NFG=  15  F= -.10000000D+01  G= .9859D-07  ITERM=  4
+NIT=  43  NFV=  46  NFG=  46  F= -.80000000D+01  G= .1282D-02  ITERM=  4
+NIT=  43  NFV=  45  NFG=  45  F= -.43999999D+02  G= .3734D-02  ITERM=  2
+NIT=  27  NFV=  29  NFG=  29  F=  .22600162D+02  G= .1451D-03  ITERM=  4
+NIT=  60  NFV=  62  NFG=  62  F= -.32348679D+02  G= .2190D-02  ITERM=  2
+NIT= 117  NFV= 118  NFG= 118  F= -.29196928D+01  G= .1683D-02  ITERM=  2
+NIT=  92  NFV=  93  NFG=  93  F=  .55981567D+00  G= .8266D-03  ITERM=  4
+NIT=  74  NFV=  75  NFG=  75  F= -.84140829D+00  G= .7236D-03  ITERM=  2
+NIT= 157  NFV= 159  NFG= 159  F=  .97857727D+01  G= .6510D-03  ITERM=  2
+NIT=  89  NFV=  94  NFG=  94  F=  .16703858D+02  G= .3694D-02  ITERM=  2
+NIT= 150  NFV= 151  NFG= 151  F=  .16712381D-06  G= .7782D-04  ITERM=  2
+NIT=  39  NFV=  40  NFG=  40  F=  .12440973D-12  G= .2969D-01  ITERM=  2
+
+The rows corresponding to individual test problems contain the number of
+iterations NIT, the number of function evaluations NFV, the number of
+gradient evaluations NFG, the final value of the objective function F,
+the value of the criterion for the termination G and the cause of
+termination ITERM.
+      Subroutine PBUNL can be verified and tested using the program
+TBUNL. This program calls the subroutines TIUD22 (initiation), TAFU22
+(function evaluation), TAGU22 (subgradient evaluation) containing
+10 academic test problems with at most 20 variables [4]. The results
+obtained by the program TBUNL on a PC computer with Microsoft Power
+Station Fortran compiler have the following form.
+
+NIT=  10  NFV=  11  NFG=  11  F= -.38965952D+00  G= .4532D-04  ITERM=  4
+NIT=   4  NFV=   5  NFG=   5  F= -.33035714D+00  G= .3220D-14  ITERM=  4
+NIT=   8  NFV=  10  NFG=  10  F= -.44891079D+00  G= .6982D-03  ITERM=  4
+NIT=  79  NFV=  80  NFG=  80  F= -.42928061D+00  G= .7703D-05  ITERM=  2
+NIT=  16  NFV=  17  NFG=  17  F= -.18596138D+01  G= .2017D-09  ITERM=  2
+NIT=  16  NFV=  17  NFG=  17  F=  .10183089D+00  G= .1272D-06  ITERM=  2
+NIT=  43  NFV=  44  NFG=  44  F=  .28724436D-08  G= .1966D-07  ITERM=  2
+NIT=  74  NFV=  76  NFG=  76  F=  .24306219D+02  G= .5835D-02  ITERM=  4
+NIT= 140  NFV= 143  NFG= 143  F=  .13372840D+03  G= .2872D-01  ITERM=  2
+NIT=  65  NFV=  68  NFG=  68  F=  .50694798D+00  G= .3576D-04  ITERM=  2
+
+
+References:
+-----------
+
+[1] Luksan L.: Dual Method for Solving a Special Problem of Quadratic
+    Programming as a Subproblem at Linearly Constrained Nonlinear
+    Minimax Approximation. Kybernetika 20 (1984) 445-457.
+
+[2] Vlcek J.: Bundle Algorithms for Nonsmooth Unconstrained
+    Minimization. Research Report V-608, Institute of Computer Science,
+    Academy of Sciences of the Czech Republic, Prague, Czech Republic,
+    1995.
+
+[3] Luksan L., Vlcek J.: NDA: Algorithms for Nondifferentiable
+    Optimization. Research Report V-797, Institute of Computer Science,
+    Academy of Sciences of the Czech Republic, Prague, Czech Republic,
+    2000.
+
+[4] Luksan L., Vlcek J.: Subroutines for Testing Nonsmooth
+    Unconstrained and Linearly Constrained Optimization Problems.
+    Research Report V-798, Institute of Computer Science,
+    Academy of Sciences of the Czech Republic, Prague, Czech Republic,
+    2000.
+
+

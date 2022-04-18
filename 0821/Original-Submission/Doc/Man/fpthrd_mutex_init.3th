@@ -1,0 +1,161 @@
+.TH FPTHRD_MUTEX 3F "" "FPTHRD API"
+
+.SH NAME
+fpthrd_mutex_init, fpthrd_mutex_lock, fpthrd_mutex_trylock, fpthrd_mutex_unlock, fpthrd_mutex_destroy \- Mutex creation and control
+
+.SH SYNOPSIS
+.B USE fpthrd
+
+.BI "CALL fpthrd_mutex_init(" mutex ", " mutexattr " [, " 
+.IB ierr "])"
+
+.BI "CALL fpthrd_mutex_lock(" mutex " [, " ierr "])"
+
+.BI "CALL fpthrd_mutex_trylock(" mutex " [, " ierr "])"
+
+.BI "CALL fpthrd_mutex_unlock(" mutex " [, " ierr "])"
+
+.BI "CALL fpthrd_mutex_destroy(" mutex " [, " ierr "])"
+
+.BI "TYPE(FPTHRD_MUTEX_T) :: " mutex
+.br
+.BI "TYPE(FPTHRD_MUTEXATTR_T) :: " mutexattr
+.br
+.BI "INTEGER :: " ierr 
+
+.SH DESCRIPTION
+A mutex is a MUTual EXclusion device, and is useful for protecting
+shared data structures from concurrent modifications, and implementing
+critical sections and monitors.
+
+A mutex has two possible states: unlocked (not owned by any thread),
+and locked (owned by one thread). A mutex can never be owned by multiple
+threads simultaneously. A thread attempting to lock a mutex
+that is already locked by another thread is suspended until after the owning
+thread unlocks the mutex first.
+
+.SS Initialize
+.B "fpthrd_mutex_init"
+initializes the mutex object 
+.I "mutex"
+according to the mutex attributes specified in 
+.IR "mutexattr" .
+If 
+.I "mutexattr"
+is 
+.BR "NULL" ,
+default attributes are used instead.
+As with the C version of POSIX threads, variables of type
+.B "FPTHRD_MUTEX_T"
+can be initialized statically at definition with the parameter
+.B "FPTHRD_MUTEX_INITIALIZER".
+See
+.BR "fpthrd_mutexattr_init" (3F)
+for more information on mutex attributes and their initialization.
+
+.SS Lock
+.B "fpthrd_mutex_lock"
+locks the given mutex. If the mutex is currently
+unlocked, it becomes locked and owned by the calling thread, and
+.B "fpthrd_mutex_lock"
+returns immediately. If the mutex is already
+locked by another thread, 
+.B "fpthrd_mutex_lock"
+suspends the calling
+thread until the mutex is unlocked.
+
+.SS "Try Lock"
+.B "fpthrd_mutex_trylock"
+behaves identically to 
+.BR "fpthrd_mutex_lock" ,
+except that it does not block the calling thread if the mutex is
+already locked by another thread (or by the calling thread).
+Instead, 
+.B "fpthrd_mutex_trylock"
+returns
+immediately with the error code 
+.BR "EBUSY" .
+
+.SS Unlock
+.B "fpthrd_mutex_unlock"
+unlocks the given mutex. The mutex is assumed
+to be locked and owned by the calling thread on entrance to
+.BR "fpthrd_mutex_unlock" .
+Threads may not unlock a mutex held by another thread.
+
+.SS Destroy
+.B "fpthrd_mutex_destroy"
+destroys a mutex object.
+The mutex must be unlocked on entrance. 
+
+.SH CANCELLATION
+
+None of the mutex routines is a cancellation point, not even
+.BR "fpthrd_mutex_lock" ,
+in spite of the fact that it can suspend a
+thread for arbitrary durations. This way, the status of mutexes at
+cancellation points is predictable, allowing cancellation handlers to
+unlock precisely those mutexes that need to be unlocked before the
+thread stops executing. Consequently, threads using deferred
+cancellation should never hold a mutex for extended periods of time.
+
+.SH "DIAGNOSTICS"
+
+.B "fpthrd_mutex_init"
+always returns 0 in the optional
+.I "ierr"
+while the other mutex routines
+return 0 on success and a non-zero error code on error.
+
+The 
+.B "fpthrd_mutex_lock"
+routine returns the following error codes
+on error:
+.RS
+.TP
+.B "EINVAL"
+The mutex has not been properly initialized or has been destroyed.
+.TP
+.B "EDEADLK"
+The mutex is already locked by the calling thread.
+.RE
+
+The 
+.B "fpthrd_mutex_trylock"
+routine returns the following error codes
+on error:
+.RS
+.TP
+.B "EBUSY"
+The mutex could not be acquired because it was currently locked.
+.TP
+.B "EINVAL"
+The mutex has not been properly initialized or has been destroyed.
+.RE
+
+The 
+.B "fpthrd_mutex_unlock"
+routine returns the following error codes
+on error:
+.RS
+.TP
+.B "EINVAL"
+The mutex has not been properly initialized or has been destroyed.
+.TP
+.B "EPERM"
+The calling thread does not own the mutex.
+.RE
+
+The 
+.B "fpthrd_mutex_destroy"
+routine returns the following error code
+on error:
+.RS
+.TP
+.B "EBUSY"
+The mutex is currently locked.
+.RE
+
+.SH "SEE ALSO"
+.BR "fpthrd_mutexattr_init" (3F),
+.BR "fpthrd_cancel" (3F).

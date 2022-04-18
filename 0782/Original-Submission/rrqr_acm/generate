@@ -1,0 +1,76 @@
+#!/bin/csh -f
+#
+#  Utility to run preprocessor and generate single, double, complex 
+#  and complex*16 versions of Fortran codes by using PREC_ and 
+#  FLOATING_DECLARE for real versions and CPREC_, RPREC_, 
+#  COMPLEX_DECLARE and REAL_DECLARE for complex versions.
+#
+if ($#argv < 4) goto usage
+
+set prec    = $1
+set infile  = $2
+set outfile = $3
+set cpp     = $4
+
+if (($prec != "s")&&($prec != "d")&&($prec != "c")&&($prec != "z")) goto usage
+if (! -e $infile ) then
+   echo "error in $0: cannot find $infile"
+   exit 2
+endif
+
+switch ( $prec )
+   case "s": 
+      $cpp  -P -DSINGLE_REAL $argv[5-$#argv] $infile | \
+      sed -e 's/PREC_/S/g' \
+          -e 's/TOXREAL/REAL/g' \
+          -e 's/^      FLOATING_DECLARE/      REAL            /g'\
+          -e 's/FLOATING_DECLARE/REAL/g'\
+          -e 's/GET_TIME/SECOND/g' \
+          -e '/^[ 	]*$/d' \
+      > $outfile
+      breaksw
+   case "d": 
+      $cpp  -P -DDOUBLE_REAL $argv[5-$#argv] $infile | \
+      sed -e 's/PREC_/D/g' \
+          -e 's/TOXREAL/DBLE/g' \
+          -e 's/^      FLOATING_DECLARE/      DOUBLE PRECISION/g'\
+          -e 's/FLOATING_DECLARE/DOUBLE PRECISION/g'\
+          -e 's/GET_TIME/DSECND/g' \
+          -e '/^[ 	]*$/d' \
+      > $outfile
+      breaksw
+   case "c": 
+      $cpp  -P -DSINGLE_COMPLEX $argv[5-$#argv] $infile | \
+      sed -e 's/RPREC_/S/g' \
+          -e 's/CPREC_/C/g' \
+          -e 's/TOXREAL/REAL/g' \
+          -e 's/^      REAL_DECLARE    /      REAL            /g'\
+          -e 's/REAL_DECLARE/REAL/g'\
+          -e 's/^      COMPLEX_DECLARE /      COMPLEX         /g'\
+          -e 's/COMPLEX_DECLARE/COMPLEX/g'\
+          -e 's/GET_TIME/SECOND/g' \
+          -e '/^[ 	]*$/d' \
+      > $outfile
+      breaksw
+   case "z":
+      $cpp  -P -DDOUBLE_COMPLEX $argv[5-$#argv] $infile | \
+      sed -e 's/RPREC_/D/g' \
+          -e 's/CPREC_/Z/g' \
+          -e 's/CONJG/DCONJG/g' \
+          -e 's/CMPLX/DCMPLX/g' \
+          -e 's/TOXREAL/DBLE/g' \
+          -e 's/^      REAL_DECLARE    /      DOUBLE PRECISION/g'\
+          -e 's/REAL_DECLARE/DOUBLE PRECISION/g'\
+          -e 's/^      COMPLEX_DECLARE /      COMPLEX*16      /g'\
+          -e 's/COMPLEX_DECLARE/COMPLEX*16/g'\
+          -e 's/GET_TIME/DSECND/g' \
+          -e '/^[ 	]*$/d' \
+      > $outfile
+      breaksw
+endsw
+
+exit 0
+
+usage: 	echo "$0 <prec> <infile> <outfile> [<cppflags>]"
+	echo "	 <prec> = c or z"
+	exit 1

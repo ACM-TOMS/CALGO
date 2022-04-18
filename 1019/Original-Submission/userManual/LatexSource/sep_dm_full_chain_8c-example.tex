@@ -1,0 +1,179 @@
+\hypertarget{sep_dm_full_chain_8c-example}{}\doxysection{sep\+\_\+dm\+\_\+full\+\_\+chain.\+c}
+
+\begin{DoxyCodeInclude}{0}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{preprocessor}{\#include "validate.h"}}
+\DoxyCodeLine{\textcolor{preprocessor}{\#include <stdlib.h>}}
+\DoxyCodeLine{\textcolor{preprocessor}{\#include <stdio.h>}}
+\DoxyCodeLine{\textcolor{preprocessor}{\#include <time.h>}}
+\DoxyCodeLine{\textcolor{preprocessor}{\#include <mpi.h>}}
+\DoxyCodeLine{\textcolor{preprocessor}{\#include <\mbox{\hyperlink{starneig_8h}{starneig/starneig.h}}>}}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{comment}{// a predicate function that selects all eigenvalues that have positive a real}}
+\DoxyCodeLine{\textcolor{comment}{// part}}
+\DoxyCodeLine{\textcolor{keyword}{static} \textcolor{keywordtype}{int} predicate(\textcolor{keywordtype}{double} real, \textcolor{keywordtype}{double} imag, \textcolor{keywordtype}{void} *arg)}
+\DoxyCodeLine{\{}
+\DoxyCodeLine{    \textcolor{keywordflow}{if} (0.0 < real)}
+\DoxyCodeLine{        \textcolor{keywordflow}{return} 1;}
+\DoxyCodeLine{    \textcolor{keywordflow}{return} 0;}
+\DoxyCodeLine{\}}
+\DoxyCodeLine{}
+\DoxyCodeLine{\textcolor{keywordtype}{int} main(\textcolor{keywordtype}{int} argc, \textcolor{keywordtype}{char} **argv)}
+\DoxyCodeLine{\{}
+\DoxyCodeLine{    \textcolor{keyword}{const} \textcolor{keywordtype}{int} n = 3000; \textcolor{comment}{// matrix dimension}}
+\DoxyCodeLine{    \textcolor{keyword}{const} \textcolor{keywordtype}{int} root = 0; \textcolor{comment}{// root rank}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{comment}{// initialize MPI}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{keywordtype}{int} thread\_support;}
+\DoxyCodeLine{    MPI\_Init\_thread(}
+\DoxyCodeLine{        \&argc, (\textcolor{keywordtype}{char} ***)\&argv, MPI\_THREAD\_MULTIPLE, \&thread\_support);}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{keywordtype}{int} world\_rank;}
+\DoxyCodeLine{    MPI\_Comm\_rank(MPI\_COMM\_WORLD, \&world\_rank);}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{comment}{// the root node initializes the matrices locally}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{keywordtype}{int} ldA = 0, ldQ = 0, ldC = 0;}
+\DoxyCodeLine{    \textcolor{keywordtype}{double} *A = NULL, *Q = NULL, *C = NULL;}
+\DoxyCodeLine{    \textcolor{keywordflow}{if} (world\_rank == root) \{}
+\DoxyCodeLine{        srand((\textcolor{keywordtype}{unsigned}) time(NULL));}
+\DoxyCodeLine{}
+\DoxyCodeLine{        \textcolor{comment}{// generate a full random matrix A and a copy C}}
+\DoxyCodeLine{}
+\DoxyCodeLine{        ldA = ((n/8)+1)*8; ldC = ((n/8)+1)*8;}
+\DoxyCodeLine{        A = malloc(n*ldA*\textcolor{keyword}{sizeof}(\textcolor{keywordtype}{double}));}
+\DoxyCodeLine{        C = malloc(n*ldC*\textcolor{keyword}{sizeof}(\textcolor{keywordtype}{double}));}
+\DoxyCodeLine{        \textcolor{keywordflow}{for} (\textcolor{keywordtype}{int} j = 0; j < n; j++)}
+\DoxyCodeLine{            \textcolor{keywordflow}{for} (\textcolor{keywordtype}{int} i = 0; i < n; i++)}
+\DoxyCodeLine{                A[j*ldA+i] = C[j*ldC+i] = 2.0*rand()/RAND\_MAX -\/ 1.0;}
+\DoxyCodeLine{}
+\DoxyCodeLine{        \textcolor{comment}{// generate an identity matrix Q}}
+\DoxyCodeLine{}
+\DoxyCodeLine{        ldQ = ((n/8)+1)*8;}
+\DoxyCodeLine{        Q = malloc(n*ldA*\textcolor{keyword}{sizeof}(\textcolor{keywordtype}{double}));}
+\DoxyCodeLine{        \textcolor{keywordflow}{for} (\textcolor{keywordtype}{int} j = 0; j < n; j++)}
+\DoxyCodeLine{            \textcolor{keywordflow}{for} (\textcolor{keywordtype}{int} i = 0; i < n; i++)}
+\DoxyCodeLine{                Q[j*ldQ+i] = i == j ? 1.0 : 0.0;}
+\DoxyCodeLine{    \}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{comment}{// allocate space for the eigenvalues and the eigenvalue selection vector}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{keywordtype}{double} *real = malloc(n*\textcolor{keyword}{sizeof}(\textcolor{keywordtype}{double}));}
+\DoxyCodeLine{    \textcolor{keywordtype}{double} *imag = malloc(n*\textcolor{keyword}{sizeof}(\textcolor{keywordtype}{double}));}
+\DoxyCodeLine{    \textcolor{keywordtype}{int} *select = malloc(n*\textcolor{keyword}{sizeof}(\textcolor{keywordtype}{int}));}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{comment}{// Initialize the StarNEig library using all available CPU cores and}}
+\DoxyCodeLine{    \textcolor{comment}{// GPUs. The STARNEIG\_HINT\_DM flag indicates that the library should}}
+\DoxyCodeLine{    \textcolor{comment}{// initialize itself for distributed memory computations.}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__node_ga4d6386652685ba5c5706e72ebbb7cb3a}{starneig\_node\_init}}(\mbox{\hyperlink{group__starneig__node_gab90bed6cebfd3e80b0cdd89a3d5465eb}{STARNEIG\_USE\_ALL}}, \mbox{\hyperlink{group__starneig__node_gab90bed6cebfd3e80b0cdd89a3d5465eb}{STARNEIG\_USE\_ALL}}, \mbox{\hyperlink{group__starneig__node_ga3c59d6d34eba90c254f4e34e44700ab4}{STARNEIG\_HINT\_DM}});}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{comment}{// create a two-\/dimensional block cyclic distribution with row-\/major}}
+\DoxyCodeLine{    \textcolor{comment}{// ordering}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__matrix_ga752a8405b28dfae3b2c85202887a250d}{starneig\_distr\_t}} distr = \mbox{\hyperlink{group__starneig__dm__matrix_ga8238518d3fec830454e78c59b561c2d2}{starneig\_distr\_init\_mesh}}(}
+\DoxyCodeLine{        -\/1, -\/1, \mbox{\hyperlink{group__starneig__dm__matrix_gga5a0f09f962b09e0858bbbc7986e3964aaa82c5ab8e2e6d95e94e648284f223ef0}{STARNEIG\_ORDER\_ROW\_MAJOR}});}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{comment}{// Convert the local matrix A to a distributed matrix lA that is owned by}}
+\DoxyCodeLine{    \textcolor{comment}{// the root node. This is done in-\/place, i.e., the matrices A and lA point}}
+\DoxyCodeLine{    \textcolor{comment}{// to the same data.}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__matrix_gafe12044a51d121d0c3d8544eede44512}{starneig\_distr\_matrix\_t}} lA = \mbox{\hyperlink{group__starneig__dm__matrix_ga4e05c038d2bd44b7757eb4c07bef96dc}{starneig\_distr\_matrix\_create\_local}}(}
+\DoxyCodeLine{        n, n, \mbox{\hyperlink{group__starneig__dm__matrix_ggad8f668a249453af08e1063acaf6f95c1ac36c6c4ab926ecf1e5cb22c1968971ad}{STARNEIG\_REAL\_DOUBLE}}, root, A, ldA);}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{comment}{// create a distributed matrix dA using default data distribution and}}
+\DoxyCodeLine{    \textcolor{comment}{// distributed block size}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__matrix_gafe12044a51d121d0c3d8544eede44512}{starneig\_distr\_matrix\_t}} dA =}
+\DoxyCodeLine{        \mbox{\hyperlink{group__starneig__dm__matrix_ga87b37007fe51519b91f9976197577a8d}{starneig\_distr\_matrix\_create}}(n, n, -\/1, -\/1, \mbox{\hyperlink{group__starneig__dm__matrix_ggad8f668a249453af08e1063acaf6f95c1ac36c6c4ab926ecf1e5cb22c1968971ad}{STARNEIG\_REAL\_DOUBLE}}, distr);}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{comment}{// copy the local matrix lA to the distributed matrix dA (scatter)}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__matrix_ga41cf77e628b68c39142d148cdd5d991e}{starneig\_distr\_matrix\_copy}}(lA, dA);}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{comment}{// scatter the matrix Q}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__matrix_gafe12044a51d121d0c3d8544eede44512}{starneig\_distr\_matrix\_t}} lQ = \mbox{\hyperlink{group__starneig__dm__matrix_ga4e05c038d2bd44b7757eb4c07bef96dc}{starneig\_distr\_matrix\_create\_local}}(}
+\DoxyCodeLine{        n, n, \mbox{\hyperlink{group__starneig__dm__matrix_ggad8f668a249453af08e1063acaf6f95c1ac36c6c4ab926ecf1e5cb22c1968971ad}{STARNEIG\_REAL\_DOUBLE}}, root, Q, ldQ);}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__matrix_gafe12044a51d121d0c3d8544eede44512}{starneig\_distr\_matrix\_t}} dQ =}
+\DoxyCodeLine{        \mbox{\hyperlink{group__starneig__dm__matrix_ga87b37007fe51519b91f9976197577a8d}{starneig\_distr\_matrix\_create}}(n, n, -\/1, -\/1, \mbox{\hyperlink{group__starneig__dm__matrix_ggad8f668a249453af08e1063acaf6f95c1ac36c6c4ab926ecf1e5cb22c1968971ad}{STARNEIG\_REAL\_DOUBLE}}, distr);}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__matrix_ga41cf77e628b68c39142d148cdd5d991e}{starneig\_distr\_matrix\_copy}}(lQ, dQ);}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{comment}{// reduce the full matrix dA to upper Hessenberg form}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    printf(\textcolor{stringliteral}{"Hessenberg reduction...\(\backslash\)n"});}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__sep_gab328fae0d50eaab2e35110da6d6812c8}{starneig\_SEP\_DM\_Hessenberg}}(dA, dQ);}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{comment}{// reduce the upper Hessenberg matrix dA to Schur form}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    printf(\textcolor{stringliteral}{"Schur reduction...\(\backslash\)n"});}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__sep_ga84f941b63f8bfee1f7535fc072b186ce}{starneig\_SEP\_DM\_Schur}}(dA, dQ, real, imag);}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{comment}{// select eigenvalues that have positive a real part}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{keywordtype}{int} num\_selected;}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__sep_ga2387379625b60d79ad9ae20ec58ff64a}{starneig\_SEP\_DM\_Select}}(dA, \&predicate, NULL, select, \&num\_selected);}
+\DoxyCodeLine{    printf(\textcolor{stringliteral}{"Selected \%d eigenvalues out of \%d.\(\backslash\)n"}, num\_selected, n);}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{comment}{// reorder the selected eigenvalues to the upper left corner of the matrix}}
+\DoxyCodeLine{    \textcolor{comment}{// dA}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    printf(\textcolor{stringliteral}{"Reordering...\(\backslash\)n"});}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__sep_ga22daf6b10b6da2750125dce46b663e07}{starneig\_SEP\_DM\_ReorderSchur}}(select, dA, dQ, real, imag);}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{comment}{// copy the distributed matrix dA back to the local matrix lA (gather)}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__matrix_ga41cf77e628b68c39142d148cdd5d991e}{starneig\_distr\_matrix\_copy}}(dA, lA);}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{comment}{// free the distributed matrix lA (matrix A is not freed)}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__matrix_gab5e014192e0b468e72802ea8b512848d}{starneig\_distr\_matrix\_destroy}}(lA);}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{comment}{// free the distributed matrix dA (all local resources are freed)}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__matrix_gab5e014192e0b468e72802ea8b512848d}{starneig\_distr\_matrix\_destroy}}(dA);}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{comment}{// gather the matrix Q}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__matrix_ga41cf77e628b68c39142d148cdd5d991e}{starneig\_distr\_matrix\_copy}}(dQ, lQ);}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__matrix_gab5e014192e0b468e72802ea8b512848d}{starneig\_distr\_matrix\_destroy}}(lQ);}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__matrix_gab5e014192e0b468e72802ea8b512848d}{starneig\_distr\_matrix\_destroy}}(dQ);}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{comment}{// free the data distribution}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__dm__matrix_ga2a3f59a9521ce7ea0583e75f0b08de67}{starneig\_distr\_destroy}}(distr);}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{comment}{// de-\/initialize the StarNEig library}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \mbox{\hyperlink{group__starneig__node_gad4c8101c0864588743c486cbd8e75dea}{starneig\_node\_finalize}}();}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{comment}{// de-\/initialize MPI}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    MPI\_Finalize();}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{keywordflow}{if} (world\_rank == root) \{}
+\DoxyCodeLine{}
+\DoxyCodeLine{        \textcolor{comment}{// check residual || Q A Q\string^T -\/ C ||\_F / || C ||\_F}}
+\DoxyCodeLine{}
+\DoxyCodeLine{        check\_residual(n, ldQ, ldA, ldQ, ldC, Q, A, Q, C);}
+\DoxyCodeLine{}
+\DoxyCodeLine{        \textcolor{comment}{// check residual || Q Q\string^T -\/ I ||\_F / || I ||\_F}}
+\DoxyCodeLine{}
+\DoxyCodeLine{        check\_orthogonality(n, ldQ, Q);}
+\DoxyCodeLine{    \}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{comment}{// cleanup}}
+\DoxyCodeLine{}
+\DoxyCodeLine{    free(A);}
+\DoxyCodeLine{    free(C);}
+\DoxyCodeLine{    free(Q);}
+\DoxyCodeLine{}
+\DoxyCodeLine{    free(real);}
+\DoxyCodeLine{    free(imag);}
+\DoxyCodeLine{    free(select);}
+\DoxyCodeLine{}
+\DoxyCodeLine{    \textcolor{keywordflow}{return} 0;}
+\DoxyCodeLine{\}}
+\end{DoxyCodeInclude}
+ 

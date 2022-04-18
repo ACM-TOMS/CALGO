@@ -1,0 +1,136 @@
+#include <iostream>
+#include <iomanip>
+using namespace std;
+
+#include "MpIeee.hh"
+#include "CMpIeee.hh"
+#include "ArithmosIO.hh"
+
+/* specfunc/bessel_J1.c
+ * 
+ * Copyright (C) 1996, 1997, 1998, 1999, 2000 Gerard Jungman
+ * 
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or (at
+ * your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
+
+/* Author:  G. Jungman */
+
+#include <config.h>
+#include <gsl/gsl_math.h>
+#include <gsl/gsl_errno.h>
+#include <gsl/gsl_sf_trig.h>
+#include <gsl/gsl_sf_bessel.h>
+
+#include "error.h"
+
+#include "bessel.h"
+#include "bessel_amp_phase.h"
+#include "cheb_eval.c"
+
+#define ROOT_EIGHT (2.0*M_SQRT2)
+
+/*-*-*-*-*-*-*-*-*-*-*-* Private Section *-*-*-*-*-*-*-*-*-*-*-*/
+
+
+/* based on SLATEC besj1, 1983 version, w. fullerton */
+
+/* chebyshev expansions
+
+ series for bj1        on the interval  0.          to  1.60000d+01
+                                        with weighted error   4.48e-17
+                                         log weighted error  16.35
+                               significant figures required  15.77
+                                    decimal places required  16.89
+
+*/
+static MpIeee bj1_data[12] =  {
+  -MpIeee( "0.11726141513332787" ),
+  -MpIeee( "0.25361521830790640" ),
+   MpIeee( "0.050127080984469569" ),
+  -MpIeee( "0.004631514809625081" ),
+   MpIeee( "0.000247996229415914" ),
+  -MpIeee( "0.000008678948686278" ),
+   MpIeee( "0.000000214293917143" ),
+  -MpIeee( "0.000000003936093079" ),
+   MpIeee( "0.000000000055911823" ),
+  -MpIeee( "0.000000000000632761" ),
+   MpIeee( "0.000000000000005840" ),
+  -MpIeee( "0.000000000000000044" ),
+};
+static cheb_series bj1_cs = {
+  bj1_data,
+  11,
+  -1, 1,
+  8
+};
+
+
+/*-*-*-*-*-*-*-*-*-*-*-* Functions with Error Codes *-*-*-*-*-*-*-*-*-*-*-*/
+
+int  gsl_sf_bessel_J1_e(const MpIeee x, gsl_sf_result * result)
+{
+  MpIeee y=  fabs(x);
+
+  /* CHECK_POINTER(result) */
+
+  if(y == MpIeee( "0.0" )) {
+    result->val = 0.0;
+    result->err = 0.0;
+    return GSL_SUCCESS;
+  }
+  else if(y < MpIeee( "2.0" )*GSL_DBL_MIN) {
+    UNDERFLOW_ERROR(result);
+  }
+  else if(y < ROOT_EIGHT * GSL_SQRT_DBL_EPSILON) {
+    result->val = 0.5*x;
+    result->err = 0.0;
+    return GSL_SUCCESS;
+  }
+  else if(y < MpIeee( "4.0" )) {
+    gsl_sf_result c;
+    cheb_eval_e(&bj1_cs, 0.125*y*y-1.0, &c);
+    result->val = x * (0.25 + c.val);
+    result->err = fabs(x * c.err);
+    return GSL_SUCCESS;
+  }
+  else {
+    /* Because the leading term in the phase is y,
+     * which we assume is exactly known, the error
+     * in the cos() evaluation is bounded.
+     */
+    const MpIeee z=  32.0/(y*y) - 1.0;
+    gsl_sf_result ca;
+    gsl_sf_result ct;
+    gsl_sf_result sp;
+    const int stat_ca = cheb_eval_e(&_gsl_sf_bessel_amp_phase_bm1_cs,  z, &ca);
+    const int stat_ct = cheb_eval_e(&_gsl_sf_bessel_amp_phase_bth1_cs, z, &ct);
+    const int stat_sp = gsl_sf_bessel_sin_pi4_e(y, ct.val/y, &sp);
+    const MpIeee sqrty=  sqrt(y);
+    const MpIeee ampl=  (0.75 + ca.val) / sqrty;
+    result->val  = (x < 0.0 ? -ampl : ampl) * sp.val;
+    result->err  = fabs(sp.val) * ca.err/sqrty + fabs(ampl) * sp.err;
+    result->err += GSL_DBL_EPSILON * fabs(result->val);
+    return GSL_ERROR_SELECT_3(stat_ca, stat_ct, stat_sp);
+  }
+}
+
+/*-*-*-*-*-*-*-*-*-* Functions w/ Natural Prototypes *-*-*-*-*-*-*-*-*-*-*/
+
+#include "eval.h"
+
+MpIeee gsl_sf_bessel_J1(const MpIeee x)
+{
+  EVAL_RESULT(gsl_sf_bessel_J1_e(x, &result));
+}

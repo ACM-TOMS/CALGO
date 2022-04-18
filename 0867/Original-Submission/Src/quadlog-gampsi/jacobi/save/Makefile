@@ -1,0 +1,682 @@
+#=======================================================================
+# Makefile for files in /u/sy/beebe/jim-ball/toms/dist/jacobi/
+#
+# Current target list:
+#	all			make everything
+#	check			run complete validation suite
+#	check-qp		run complete quadruple-precision suite
+#	check-gjf		run gjf validation suites
+#	check-gjfd		run gjfd validation suites
+#	check-qgjf		run qgjf validation suites
+#	check-qgjfd		run qgjfd validation suites
+#	check-xxx		internal target: do not use
+#	clean			remove unneeded intermediate files
+#	clean-test		remove unneeded test output files
+#	clobber			same as distclean
+#	demgjq.tab		make data for Table 2 of paper 1
+#	demo			run complete demonstration suite
+#	demo-dp			run double-precision demonstration
+#	demo-dp-1
+#	demo-dp-2
+#	demo-dp-3
+#	demo-lapack		run demonstration suite for LAPACK eigensolvers
+#	demo-qp			run quadruple-precision demonstration
+#	demo-qp-1
+#	demo-qp-2
+#	demo-qp-3
+#	demo-setup		internal target
+#	distclean		remove almost everything make can rebuild
+#				(paring back to the original distribution)
+#	gjqf.o
+#	gjqfd.o
+#	gjqli.o
+#	install			install files on local system
+#	maintainer-clean	remove absolutely everything make can rebuild
+#				at the author's site (do NOT use this target)
+#	mostlyclean		same as clean
+#	tgjf1
+#	tgjf2
+#	tgjfd1
+#	tgjfd2
+#	uninstall		remove files installed by "make install"
+#	tgjf1.o
+#	tgjfd1.o
+#
+# [27-Mar-2000]
+#=======================================================================
+
+prefix		= /usr/local
+
+#=======================================================================
+# Macro definitions
+
+ABSERR		= 0
+
+AUTOCONF	= autoconf
+
+AR		= ar
+
+AWK		= awk
+
+CC		= gcc
+
+CHMOD		= chmod
+
+CMP		= cmp
+
+CP		= cp
+
+DIFF		= diff
+
+FC		= f77
+
+LAPACK		= -L$(prefix)/lib -llapack
+
+# We include this value in all load commands, because sometimes
+# special compilation options require additional libraries; normally,
+# none are needed.
+LIBS		= $(LIBRARY)
+
+LS		= ls
+
+MKDIR		= mkdir
+
+MV		= mv
+
+# This script will use ndiff if it is available in the search path,
+# and will otherwise fall back to using diff.
+NDIFF		= `$(WHICH) ndiff`
+
+NDIFFFLAGS	= --relerr $(RELERR) --minwidth 10 --abserr $(ABSERR)
+
+RANLIB		= ranlib
+
+# This is the relative error tolerance used in the check target.
+# It can be redefined on the make command line if desired.
+RELERR		= 1.0e-10
+
+RM		= rm -f
+
+SED		= sed
+
+SHELL		= /bin/sh
+
+TEST		= test
+
+# We use our own private version of the `which' command, because
+# system implementations of `which' have inconsistent behavior.
+WHICH		= $(COMMON)/which.sh
+
+#=======================================================================
+# Compiler flags and source files
+
+CDEFS		=
+
+CEXTRA		= 
+
+CFLAGS		=  $(COPT) $(CINC) $(CWARN) $(CDEFS) $(CEXTRA)
+
+CHECKFILES	= unknown
+
+CHECKGJF1	= gjf101 gjf102 gjf103 gjf104 gjf105
+
+CHECKGJF2	= gjf201 gjf202 gjf203 gjf204 gjf205
+
+CHECKGJFD1	= gjfd101 gjfd102 gjfd103 gjfd104 gjfd105
+
+CHECKGJFD2	= gjfd201 gjfd202 gjfd203 gjfd204 gjfd205
+
+CHECKQGJF1	= qgjf101 qgjf102 qgjf103 qgjf104 qgjf105
+
+CHECKQGJF2	= qgjf201 qgjf202 qgjf203 qgjf204 qgjf205
+
+CHECKQGJFD1	= qgjfd101 qgjfd102 qgjfd103 qgjfd104 qgjfd105
+
+CHECKQGJFD2	= qgjfd201 qgjfd202 qgjfd203 qgjfd204 qgjfd205
+
+CINC		=
+
+COMMON		= ../common
+
+COMMONOBJS      = $(COMMON)/d2norm.o $(COMMON)/dcopy.o $(COMMON)/deps.o \
+		  $(COMMON)/derbit.o $(COMMON)/dfloat.o $(COMMON)/dgamma.o \
+		  $(COMMON)/dinf.o $(COMMON)/dlog2.o $(COMMON)/dnan.o \
+		  $(COMMON)/dpsi.o $(COMMON)/dstore.o $(COMMON)/dstorf.o \
+		  $(COMMON)/dvsum.o $(COMMON)/isdnan.o $(COMMON)/prthdr.o \
+		  $(COMMON)/pythag.o $(COMMON)/tql1.o $(COMMON)/trapit.o
+
+COPT		= -O
+
+CWARN		=
+
+DEMOPROGS       = demgjq demgjq-eqr demgjq-erf demgjq-ev demgjq-evd \
+		  demgjq-evr demgjq-evx demgjq-tql1
+
+FEXTRA		= 
+
+FFLAGS		= -u $(FOPT) $(FINC) $(FWARN) $(FEXTRA)
+
+FINC		=  -I$(COMMON)
+
+FOPT		= -O
+
+FWARN		=
+
+GJFOBJS		= gjqf.o gjqli.o gjqrc.o $(GJFDOBJS)
+
+GJFDOBJS	= gjqfd.o $(COMMONOBJS)
+
+LDFLAGS		= 
+
+LIBNAME		= libgjl
+
+LIBOBJS		= gjqf.o gjqfd.o gjqli.o gjqrc.o
+
+LIBRARY		= ../$(LIBNAME).a
+
+QCOMMONOBJS     = $(COMMON)/q2norm.o $(COMMON)/qcopy.o $(COMMON)/qeps.o \
+		  $(COMMON)/qerbit.o $(COMMON)/qfloat.o $(COMMON)/qgamma.o \
+		  $(COMMON)/qinf.o $(COMMON)/qlog2.o $(COMMON)/qnan.o \
+		  $(COMMON)/qpsi.o $(COMMON)/qstore.o $(COMMON)/qstorf.o \
+		  $(COMMON)/qvsum.o $(COMMON)/isqnan.o $(COMMON)/qprthdr.o \
+		  $(COMMON)/qpythg.o $(COMMON)/qtql1.o $(COMMON)/trapit.o
+
+QDEMOPROGS	= demqgjq
+
+QGJFOBJS	= qgjqf.o qgjqli.o qgjqrc.o $(QGJFDOBJS)
+
+QGJFDOBJS	= qgjqfd.o $(QCOMMONOBJS)
+
+QLIBOBJS	= qgjqf.o qgjqfd.o qgjqli.o qgjqrc.o
+
+QTESTPROGS	= tqgjf1 tqgjf2 tqgjfd1 tqgjfd2
+
+TESTNAME	= unknown
+
+TESTPROGS	= tgjf1 tgjf2 tgjfd1 tgjfd2
+
+TGJF1OBJS	= tgjf1.o $(GJFOBJS)
+
+TGJF2OBJS	= tgjf2.o $(GJFOBJS)
+
+TGJFD1OBJS	= tgjfd1.o $(GJFDOBJS)
+
+TGJFD2OBJS	= tgjfd2.o $(GJFDOBJS)
+
+TQGJF1OBJS	= tqgjf1.o $(QGJFOBJS)
+
+TQGJF2OBJS	= tqgjf2.o $(QGJFOBJS)
+
+TQGJFD1OBJS	= tqgjfd1.o $(QGJFDOBJS)
+
+TQGJFD2OBJS	= tqgjfd2.o $(QGJFDOBJS)
+
+#=======================================================================
+# Suffixes and extra rule(s)
+
+.SUFFIXES:	.s .i .c .f
+
+# Preprocessor output:
+.c.i:
+	$(CC) $(CFLAGS) -E $< > $@
+
+# Assembly code:
+.c.s:
+	$(CC) $(CFLAGS) -S $<
+
+# Object code (an explicit "-o $*.o" makes compilations in ../common work properly!)
+.f.o:
+	$(FC) $(FFLAGS) -c -o $*.o $<
+
+# Assembly code:
+.f.s:
+	$(FC) $(FFLAGS) -S $<
+
+#=======================================================================
+# Targets:
+
+all:	all-dp
+
+all-dp:	lib-dp $(TESTPROGS)
+
+all-qp:	lib-qp $(QTESTPROGS)
+
+check-header:
+	@echo ========================================================================
+	@echo There should be no output from these tests, except their names.  If
+	@echo ndiff is available, there will also be reports of the maximum absolute
+	@echo and relative errors found.  If small numeric differences are reported,
+	@echo then YOU must decide whether they are significant.  You can do
+	@echo "        " make check RELERR=xxx
+	@echo to rerun the tests with a different relative error tolerance, where xxx
+	@echo is either a suitable small positive floating-point number, or else a
+	@echo 'value >= 1.0, meaning that multiple of the machine epsilon.'
+	@echo ========================================================================
+
+
+check:	check-dp
+
+check-dp:	all
+	@if $(TEST) -f test/gjf101.in ; \
+	then \
+		$(MAKE) -k -s check-header check-gjf check-gjfd ; \
+	else \
+		echo ======================================================================== ; \
+		echo WARNING: This seems to be the slim package distribution without the ; \
+		echo extensive validation suite: running the quick demos instead. ; \
+		echo ======================================================================== ; \
+		$(MAKE) demo ; \
+	fi
+
+check-qp:	all
+	@if $(TEST) -f test/gjf101.in ; \
+	then \
+		$(MAKE) -k -s check-header check-qgjf check-qgjfd ; \
+	else \
+		echo ======================================================================== ; \
+		echo WARNING: This seems to be the slim package distribution without the ; \
+		echo extensive validation suite: running the quick demos instead. ; \
+		echo ======================================================================== ; \
+		$(MAKE) demo-qp ; \
+	fi
+
+check-gjf:	check-gjf1 check-gjf2
+
+check-gjfd:	check-gjfd1 check-gjfd2
+
+check-gjf1:	tgjf1
+	$(MAKE) -s check-xxx TESTNAME=tgjf1 CHECKFILES="$(CHECKGJF1)"
+
+check-gjf2:	tgjf2
+	$(MAKE) -s check-xxx TESTNAME=tgjf2 CHECKFILES="$(CHECKGJF2)"
+
+check-gjfd1:	tgjfd1
+	$(MAKE) -s check-xxx TESTNAME=tgjfd1 CHECKFILES="$(CHECKGJFD1)"
+
+check-gjfd2:	tgjfd2
+	$(MAKE) -s check-xxx TESTNAME=tgjfd2 CHECKFILES="$(CHECKGJFD2)"
+
+check-qgjf:	check-qgjf1 check-qgjf2
+
+check-qgjfd:	check-qgjfd1 check-qgjfd2
+
+check-qgjf1:	tqgjf1
+	$(MAKE) -s check-xxx TESTNAME=tqgjf1 CHECKFILES="$(CHECKQGJF1)"
+
+check-qgjf2:	tqgjf2
+	$(MAKE) -s check-xxx TESTNAME=tqgjf2 CHECKFILES="$(CHECKQGJF2)"
+
+check-qgjfd1:	tqgjfd1
+	$(MAKE) -s check-xxx TESTNAME=tqgjfd1 CHECKFILES="$(CHECKQGJFD1)"
+
+check-qgjfd2:	tqgjfd2
+	$(MAKE) -s check-xxx TESTNAME=tqgjfd2 CHECKFILES="$(CHECKQGJFD2)"
+
+# This is an internal target for use ONLY by other Makefile targets.
+# Invoke with TESTNAME=... CHECKFILES="..."
+check-xxx:
+	@echo Checking $(TESTNAME) ... ; \
+	NDIFF="$(NDIFF)" ; \
+	if test -n "$$NDIFF" ; \
+	then \
+		DIFF="$$NDIFF $(NDIFFFLAGS)" ; \
+	else \
+		echo !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ; \
+		echo You should consider installing ndiff: the difference output will likely ; \
+		echo be voluminous with diff.  Further information is in the ../INSTALL file. ; \
+		echo !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ; \
+		DIFF=$(DIFF) ; \
+	fi ; \
+	echo File differences are made with: $$DIFF ; \
+	cd test ; \
+	for f in $(CHECKFILES) ; \
+	do \
+		echo $$f ; \
+		../$(TESTNAME) < $$f.in > $$f.out 2> $$f.err ; \
+		$(TEST) -s $$f.err || $(RM) $$f.err ; \
+		$(MV) output.dat $$f.dat ; \
+		if $(CMP) -s okay/$$f.out $$f.out ; \
+		then \
+			$(RM) $$f.out ; \
+		else \
+			$$DIFF okay/$$f.out $$f.out ; \
+		fi ; \
+		if $(CMP) -s okay/$$f.dat $$f.dat ; \
+		then \
+			$(RM) $$f.dat ; \
+		else \
+			$$DIFF okay/$$f.dat $$f.dat ; \
+		fi ; \
+	done
+
+clean:	clean-test
+	-$(RM) *.dcl
+	-$(RM) *.i
+	-$(RM) *.lst
+	-$(RM) *.o
+	-$(RM) *.s
+	-$(RM) *.stb
+	-$(RM) *.stx
+	-$(RM) *.u
+	-$(RM) *~
+	-$(RM) \#*
+	-$(RM) core
+	-$(RM) core.*
+	-$(RM) demgjq.tab
+	-$(RM) output.dat
+	-$(RM) tg_[0-9][0-9][0-9][0-9][0-9].*
+	-(cd $(COMMON) ; $(MAKE) $@)
+
+clean-exe:
+	-$(RM) a.out
+	-$(RM) $(DEMOPROGS)
+	-$(RM) $(TESTPROGS)
+	-$(RM) $(QDEMOPROGS)
+	-$(RM) $(QTESTPROGS)
+
+clean-test:
+	-$(RM) test/*.dat
+	-$(RM) test/*.err
+	-$(RM) test/*.ls?
+	-$(RM) test/*.nbs
+	-$(RM) test/*.out
+	-$(RM) test/core
+	-$(RM) test/core.*
+
+clobber:	distclean
+
+# We need to reverse the search order for Fortran compilers, because g77
+# on IBM and HP systems adds trailing underscores to names, while the
+# native Fortran compilers do not.
+configure:	configure.in FRC
+	$(AUTOCONF)
+	$(SED) -e 's/for ac_prog in g77 f77 f2c/for ac_prog in f77 g77 f90 f95/' < $@ >$@.tmp
+	$(CHMOD) 775 $@.tmp
+	$(CMP) -s $@.tmp $@ || $(MV) $@.tmp $@
+	-$(RM) $@.tmp
+
+demgjq:	demgjq.o $(LIBRARY)
+	$(FC) $(FFLAGS) -o $@ demgjq.o $(LDFLAGS) $(LIBS)
+
+demgjq.tab:	demgjq FRC
+	echo -0.9375 -0.9375 20 40 | \
+		./demgjq | \
+			$(AWK) '(NF == 5) && ($$1 ~ /^[0-9]+$$/)' | \
+				$(AWK) '{printf("%14d  &  %9.2e  &  %9.2e  &  %9.2e  \\\\\n", $$1, $$2, $$4, $$3)}' | \
+					$(SED) -e 's/e[+]/e$$+$$/g' -e 's/e-/e$$-$$/g' -e 's/ -/  /g' > $@
+
+demo:	demo-dp
+
+demo-dp:	demo-info demo-dp-1 demo-dp-2 demo-dp-3
+
+demo-dp-1:	all-dp demo-setup demgjq
+	@echo
+	@echo "This output file should closely match results in Table 2 of the paper"
+	@echo "Efficient High-Accuracy Quadrature for Two Classes of Logarithmic"
+	@echo "Weight Functions"
+	@echo
+	echo -0.9375 -0.9375 20 40 | ./demgjq > test/demgjq.out 2>/dev/null
+	@$(LS) -l test/demgjq.out
+	@echo
+	@echo "Correct output from the development site is available here:"
+	@echo
+	@$(LS) -l test/okay/demgjq.out
+	@echo
+
+demo-dp-2:	all-dp demo-setup demgjq
+	@echo
+	@echo "This output file must reproduce the Gauss-Legendre n=96 section"
+	@echo "of Table 25.4 of Abramowitz and Stegen, Handbook of Mathematical"
+	@echo "Functions, NBS #55, p. 919"
+	@echo
+	echo 0 0 96 0 | ./demgjq > test/demgjq.nbs 2>/dev/null
+	@$(LS) -l test/demgjq.nbs
+	@echo
+	@echo "Correct output from the development site is available here:"
+	@echo
+	@$(LS) -l test/okay/demgjq.nbs
+	@echo
+
+demo-dp-3:	all-dp demo-setup demgjq
+	@echo
+	@echo "The final tables in these output files must reproduce the values in the"
+	@echo "literature citations therein:"
+	@echo
+	echo 0 -0.5 99 0 | ./demgjq > test/demgjq.ls1 2>/dev/null
+	echo 0  0.0 99 0 | ./demgjq > test/demgjq.ls2 2>/dev/null
+	echo 0 +0.5 99 0 | ./demgjq > test/demgjq.ls3 2>/dev/null
+	echo -0.5 -0.5 1 0 | ./demgjq > test/demgjq.ls4 2>/dev/null
+	echo +0.5 +0.5 1 0 | ./demgjq > test/demgjq.ls5 2>/dev/null
+	echo +1.0 +1.0 1 0 | ./demgjq > test/demgjq.ls6 2>/dev/null
+	echo +1.5 +1.5 1 0 | ./demgjq > test/demgjq.ls7 2>/dev/null
+	@echo
+	@$(LS) -l test/demgjq.ls?
+	@echo
+	@echo "Correct output from the development site is available here:"
+	@echo
+	@$(LS) -l test/okay/demgjq.ls?
+	@echo
+
+demo-info:
+	@echo "========================================================================"
+	@echo "The demonstration programs demgjq and demqgjq read a single free-format"
+	@echo "line of data on standard input with the four numeric values"
+	@echo ""
+	@echo "        alpha beta nquad pmax"
+	@echo ""
+	@echo "where"
+	@echo ""
+	@echo "        alpha = power of (1-x) in Jacobi weight function"
+	@echo "        beta  = power of (1+x) in Jacobi weight function"
+	@echo "        nquad = quadrature order"
+	@echo "        pmax  = maximum power of (1-x) in test function"
+	@echo ""
+	@echo "In the demonstration targets, these values are supplied by a simple"
+	@echo "echo command embedded in the Makefile.  Results are written to standard"
+	@echo "output."
+	@echo ========================================================================
+
+demo-lapack:	lapack-build lapack-demo
+
+demo-qp:	demo-info demo-qp-1 demo-qp-2 demo-qp-3
+
+demo-qp-1:	all-qp demo-setup demqgjq
+	@echo
+	@echo "This output file should produce quadruple-precision results analogous to"
+	@echo "double-precision results in Table 2 of the paper"
+	@echo "Fast Gaussian Quadrature for Two Classes of Logarithmic Weight Functions"
+	@echo
+	echo -0.9375 -0.9375 20 40 | ./demqgjq > test/demqgjq.out 2>/dev/null
+	@$(LS) -l test/demqgjq.out
+	@echo
+	@echo "Correct output from the development site is available here:"
+	@echo
+	@$(LS) -l test/okay/demqgjq.out
+	@echo
+
+demo-qp-2:	all-qp demo-setup demqgjq
+	@echo
+	@echo "This output file must reproduce the Gauss-Legendre n=96 section"
+	@echo "of Table 25.4 of Abramowitz and Stegen, Handbook of Mathematical"
+	@echo "Functions, NBS #55, p. 919"
+	@echo
+	echo 0 0 96 0 | ./demqgjq > test/demqgjq.nbs 2>/dev/null
+	@$(LS) -l test/demqgjq.nbs
+	@echo
+	@echo "Correct output from the development site is available here:"
+	@echo
+	@$(LS) -l test/okay/demqgjq.nbs
+	@echo
+
+demo-qp-3:	all-qp demo-setup demqgjq
+	@echo
+	@echo "The final tables in these output files must reproduce the values in the"
+	@echo "literature citations therein:"
+	@echo
+	echo 0 -0.5 99 0 | ./demqgjq > test/demqgjq.ls1 2>/dev/null
+	echo 0  0.0 99 0 | ./demqgjq > test/demqgjq.ls2 2>/dev/null
+	echo 0 +0.5 99 0 | ./demqgjq > test/demqgjq.ls3 2>/dev/null
+	echo -0.5 -0.5 1 0 | ./demqgjq > test/demqgjq.ls4 2>/dev/null
+	echo +0.5 +0.5 1 0 | ./demqgjq > test/demqgjq.ls5 2>/dev/null
+	echo +1.0 +1.0 1 0 | ./demqgjq > test/demqgjq.ls6 2>/dev/null
+	echo +1.5 +1.5 1 0 | ./demqgjq > test/demqgjq.ls7 2>/dev/null
+	@echo
+	@$(LS) -l test/demqgjq.ls?
+	@echo
+	@echo "Correct output from the development site is available here:"
+	@echo
+	@$(LS) -l test/okay/demqgjq.ls?
+	@echo
+
+demo-setup:
+	@-$(TEST) -d test || $(MKDIR) test
+	@-$(TEST) -d test/okay || $(MKDIR) test/okay
+
+demqgjq:	demqgjq.o $(LIBRARY)
+	$(FC) $(FFLAGS) -o $@ demqgjq.o $(LDFLAGS) $(LIBS)
+
+distclean:	mostlyclean clean-test
+	-$(RM) config.cache config.status config.log Makefile
+
+FRC:
+
+install:
+	@echo There is nothing to install from this directory
+
+## Executables with tql1 wrappers that call LAPACK eigenvalue solvers
+lapack-build:	all-dp
+	for f in eqr erf ev evd evr evx ; \
+	do \
+		echo demgjq-$$f ; \
+		$(FC) $(FFLAGS) -o demgjq-$$f demgjq.f ../common/tql1-$$f.f $(LDFLAGS) $(LIBS) $(LAPACK) ; \
+	done
+
+## Tests with wrapped LAPACK eigenvalue solvers
+lapack-demo:	all-dp demgjq
+	$(CP) demgjq demgjq-tql1
+	for f in eqr erf ev evd evr evx tql1 ; \
+	do \
+		echo demgjq-$$f ; \
+		echo -0.9375 -0.9375 50 100 | ./demgjq-$$f > test/gjq-$$f.out 2>/dev/null ; \
+		echo 0 0 96 192             | ./demgjq-$$f > test/gjq-$$f.nbs 2>/dev/null ; \
+		echo 0 -0.5 99 198          | ./demgjq-$$f > test/gjq-$$f.ls1 2>/dev/null ; \
+		echo 0  0.0 99 198          | ./demgjq-$$f > test/gjq-$$f.ls2 2>/dev/null ; \
+		echo 0 +0.5 99 198          | ./demgjq-$$f > test/gjq-$$f.ls3 2>/dev/null ; \
+		echo -0.5 0 99 198          | ./demgjq-$$f > test/gjq-$$f.ls4 2>/dev/null ; \
+		echo  0.0 0 99 198          | ./demgjq-$$f > test/gjq-$$f.ls5 2>/dev/null ; \
+		echo +0.5 0 99 198          | ./demgjq-$$f > test/gjq-$$f.ls6 2>/dev/null ; \
+		echo 1 3 99 198             | ./demgjq-$$f > test/gjq-$$f.ls7 2>/dev/null ; \
+		echo 3 1 99 198             | ./demgjq-$$f > test/gjq-$$f.ls8 2>/dev/null ; \
+		echo 10 10 99 198           | ./demgjq-$$f > test/gjq-$$f.ls9 2>/dev/null ; \
+	done
+	$(LS) -l test/gjq-*.*
+
+lib-dp:	$(LIBOBJS)
+	(cd ../common; $(MAKE) $@)
+	$(AR) -r $(LIBRARY) $(LIBOBJS)
+	$(RANLIB) $(LIBRARY) || true
+
+lib-qp:	 $(QLIBOBJS)
+	(cd ../common; $(MAKE) $@)
+	$(AR) -r $(LIBRARY) $(QLIBOBJS)
+	$(RANLIB) $(LIBRARY) || true
+
+maintainer-clean:	distclean
+	@echo "This command is intended for maintainers to use;"
+	@echo "it deletes files that may require special tools to rebuild."
+
+mostlyclean:	clean clean-exe
+	-$(RM) *.d
+	-$(RM) *.tcov
+
+tqgjf1:	$(TQGJF1OBJS)
+	$(FC) $(FFLAGS) -o $@ $(TQGJF1OBJS) $(LIBS)
+
+tqgjfd1:	$(TQGJFD1OBJS)
+	$(FC) $(FFLAGS) -o $@ $(TQGJFD1OBJS) $(LIBS)
+
+tqgjf2:	$(TQGJF2OBJS)
+	$(FC) $(FFLAGS) -o $@ $(TQGJF2OBJS) $(LIBS)
+
+tqgjfd2:	$(TQGJFD2OBJS)
+	$(FC) $(FFLAGS) -o $@ $(TQGJFD2OBJS) $(LIBS)
+
+tgjf1:	$(TGJF1OBJS)
+	$(FC) $(FFLAGS) -o $@ $(TGJF1OBJS) $(LIBS)
+
+tgjfd1:	$(TGJFD1OBJS)
+	$(FC) $(FFLAGS) -o $@ $(TGJFD1OBJS) $(LIBS)
+
+tgjf2:	$(TGJF2OBJS)
+	$(FC) $(FFLAGS) -o $@ $(TGJF2OBJS) $(LIBS)
+
+tgjfd2:	$(TGJFD2OBJS)
+	$(FC) $(FFLAGS) -o $@ $(TGJFD2OBJS) $(LIBS)
+
+uninstall:
+
+#=======================================================================
+# File dependencies
+# Fortran/SFTRAN3 header file dependencies
+
+demgjq.o:	$(COMMON)/dlgtwo.inc
+demgjq.o:	$(COMMON)/maxpts.inc
+
+demqgjq.o:	$(COMMON)/maxpts.inc
+demqgjq.o:	$(COMMON)/qlgtwo.inc
+
+gjqf.o:		$(COMMON)/dlgtwo.inc
+gjqf.o:		$(COMMON)/ecodes.inc
+gjqf.o:		$(COMMON)/maxpts.inc
+
+gjqfd.o:	$(COMMON)/dlgtwo.inc
+gjqfd.o:	$(COMMON)/ecodes.inc
+gjqfd.o:	$(COMMON)/maxpts.inc
+
+gjqli.o:	$(COMMON)/maxpts.inc
+
+gjqrc.o:	$(COMMON)/dlgtwo.inc
+gjqrc.o:	$(COMMON)/ecodes.inc
+gjqrc.o:	$(COMMON)/maxpts.inc
+
+qgjqf.o:	$(COMMON)/ecodes.inc
+qgjqf.o:	$(COMMON)/maxpts.inc
+qgjqf.o:	$(COMMON)/qlgtwo.inc
+
+qgjqfd.o:	$(COMMON)/ecodes.inc
+qgjqfd.o:	$(COMMON)/maxpts.inc
+qgjqfd.o:	$(COMMON)/qlgtwo.inc
+
+qgjqli.o:	$(COMMON)/maxpts.inc
+
+qgjqrc.o:	$(COMMON)/ecodes.inc
+qgjqrc.o:	$(COMMON)/maxpts.inc
+qgjqrc.o:	$(COMMON)/qlgtwo.inc
+
+tgjf1.o:	$(COMMON)/maxpts.inc
+tgjf1.o:	$(COMMON)/stdio.inc
+
+tgjf2.o:	$(COMMON)/maxpts.inc
+tgjf2.o:	$(COMMON)/stdio.inc
+
+tgjfd1.o:	$(COMMON)/dlgtwo.inc
+tgjfd1.o:	$(COMMON)/maxpts.inc
+tgjfd1.o:	$(COMMON)/stdio.inc
+
+tgjfd2.o:	$(COMMON)/maxpts.inc
+tgjfd2.o:	$(COMMON)/stdio.inc
+
+tqgjf1.o:	$(COMMON)/maxpts.inc
+tqgjf1.o:	$(COMMON)/stdio.inc
+
+tqgjf2.o:	$(COMMON)/maxpts.inc
+tqgjf2.o:	$(COMMON)/stdio.inc
+
+tqgjfd1.o:	$(COMMON)/dlgtwo.inc
+tqgjfd1.o:	$(COMMON)/maxpts.inc
+tqgjfd1.o:	$(COMMON)/stdio.inc
+
+tqgjfd2.o:	$(COMMON)/maxpts.inc
+tqgjfd2.o:	$(COMMON)/stdio.inc
+
+#=======================================================================

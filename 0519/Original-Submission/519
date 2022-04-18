@@ -1,0 +1,350 @@
+      FUNCTION PLN(N, S2, B2, S1, B1)                                   PLN   10
+C COMPUTES PROB FOR BOUNDARIES OF FORM S*Y+B.  N IS
+C SAMPLE SIZE, S2,B2 ARE PARAMETERS FOR UPPER BOUNDARY,
+C CALLS SUBROUTINE RAKK.  TO CALL DURB
+C CHANGE AS INDICATED BELOW.
+      DIMENSION YY(2,202), S(2), B(2)
+C MAX SIZE FOR N IS 200
+      S(1) = S1
+      S(2) = S2
+      B(1) = B1
+      B(2) = B2
+      IF (N.GT.0) GO TO 10
+      PLN = 0.
+      RETURN
+   10 IF (S(1).GE.0.) GO TO 20
+      S(1) = 0.
+   20 IF (S(2).GE.0.) GO TO 30
+      B(2) = S(2) + B(2)
+      S(2) = 0.
+   30 N1 = 1 + N
+      AN = N
+      DO 50 I=1,2
+        DO 40 K=1,N1
+          C = FLOAT(K-1)/AN - B(I)
+          YY(I,K) = -.5
+          IF (C.LE.0.) GO TO 40
+          YY(I,K) = 1.1
+          IF (S(I).GT.C) YY(I,K) = C/S(I)
+   40   CONTINUE
+   50 CONTINUE
+      CALL RAKK(N, YY, ANS)
+C TO CALL DURB CHANGE PRECEDING STATEMENT TO
+C    CALL DURB (N,YY,ANS)
+      PLN = ANS
+      RETURN
+      END
+      SUBROUTINE RAKK(N, YY, ANS)                                       RAK   10
+C N IS SAMPLE SIZE.  YY(2,.),YY(1,.)
+C CONTAIN, RESPECTIVELY, UPPER AND LOWER BOUNDARY
+C LEVEL POINTS CORRESPONDING TO 0,1/N,2/N,...,1.  MUST
+C BE N+1 OF EACH.  ROUTINE ASSUMES THEY ARE NONDECREASING.
+      DIMENSION W(201,2), YY(2,202), KBLOC(41), FRNG(41,2), SSS(41)
+      DATA RNG, RRNG, SQRNG, SQRRNG, MAXNB /1.E292,1.E-292,1.E146,
+     * 1.E-146,40/
+C RNG AND RRNG ARE MACHINE DEPENDENT CONSTANTS SELECTED
+C SO RRNG=1./RNG G.E. SMALLEST POSITIVE FLOATING
+C NUMBER AND RNG L.E. LARGEST POSITIVE FLOATING
+C NUMBER OF MACHINE. SQRNG AND SQRRNG ARE SQUARE ROOTS
+C OF RNG AND RRNG.
+C MAXNB IS THE MAX NUMBER OF BLOCKS INTO WHICH
+C W(.,.) WILL BE PARTITIONED.  IF MAXNB IS
+C INCREASED REVISE DIMENSION STATEMENT ACCORDINGLY.
+      N1 = N + 1
+      TF = 1.
+      NNN = 1
+      IEXT = 1
+      M2 = 1
+      M1 = 2
+      W(1,M2) = SQRNG
+      NBLOC = 1
+      KBLOC(1) = 1
+      KBLOC(2) = 2
+      FRNG(1,M2) = 1.
+      ANS = 0.
+      IF (N1.LE.1) RETURN
+      YY(2,N1+1) = 1.
+      Y1 = 0.
+      IF ((YY(1,1).LE.0.) .OR. (YY(2,N1).GE.1.) .OR.
+     * (YY(1,N1).LE.1.) .OR. (YY(2,1).GE.0.)) RETURN
+      JBOTP = 1
+      JTOPP = 1
+      JTOP1 = 1
+C ENTRY POINT FOR SUBSEQUENT ITERATIONS.
+   10 JBOT0 = JBOTP
+      JTOP0 = JTOP1
+      MT = M1
+      M1 = M2
+      M2 = MT
+      Y0 = Y1
+C COMPUTE SUMMATION INDICES, JBOTP,JTOPP FOR NEXT
+C ITERATION.
+   20 IF (YY(2,JTOPP+1).GT.Y0) GO TO 30
+      JTOPP = JTOPP + 1
+      GO TO 20
+   30 Y1 = AMIN1(YY(2,JTOPP+1),YY(1,JBOTP))
+      IF (Y1.GE.1.) GO TO 50
+   40 IF (YY(1,JBOTP).GT.Y1) GO TO 60
+      JBOTP = JBOTP + 1
+      GO TO 40
+   50 Y1 = 1.
+C SET EXIT FLAG.  NEXT ITERATION IS FINAL ONE.
+      IEXT = 2
+      JBOTP = N1
+   60 IF (JBOTP.GT.JTOPP) RETURN
+C RETURN WITH ANS=0 SINCE NO PATHS BETWEEN BOUNDARIES.
+      JTOP1 = JTOPP
+      P = Y1 - Y0
+      KBLOC(NBLOC+1) = JTOP1 + 1
+      DO 70 L=JBOT0,JTOP1
+        W(L,M2) = 0.
+   70 CONTINUE
+      L0 = KBLOC(NBLOC)
+      L1 = JTOP0
+      DO 80 L=L0,L1
+        IF (W(L,M1).GT.SQRRNG) GO TO 80
+        JTOP0 = L - 1
+        GO TO 90
+   80 CONTINUE
+   90 IF (JBOT0.LT.KBLOC(2)) GO TO 110
+C THE NEXT FEW STATEMENTS ELIMINATE BLOCKS NO
+C LONGER USED.
+      DO 100 I=1,NBLOC
+        FRNG(I,M1) = FRNG(I+1,M1)
+        KBLOC(I) = KBLOC(I+1)
+  100 CONTINUE
+      NBLOC = NBLOC - 1
+      CALL ACCUM(RRNG/FRNG(1,M1), TF, NNN)
+      GO TO 90
+  110 KBLOC(1) = JBOT0
+      MBAV = (MAXNB-NBLOC+1)/2
+      IF (P.LE.(1./FLOAT(4*N1))) MBAV = 2
+      MBAV = MIN0(MAXNB,NBLOC+MBAV)
+C MBAV IS UPPER LIMIT ON NUMBER OF BLOCKS DURING NEXT
+C ITERATION.  MBAV IS SET TO LIMIT NUMBER OF NEW
+C BLOCKS WHEN P IS SMALL.
+      CONVI = 1.
+      I1 = 1
+      J1 = 1
+  120 DO 400 I=I1,NBLOC
+        KBLI = KBLOC(I)
+        IF (I.EQ.I1) GO TO 170
+        FRNG(I,M2) = AMIN1(FRNG(I,M1),1./(SQRNG*W(KBLI-1,M2)))
+        CONVI = (CONVI/FRNG(I-J1+1,M1))*FRNG(I,M2)
+        IF (J1.EQ.1) GO TO 170
+        K1 = KBLOC(I) - KBLOC(I-J1+2) + 1
+        K0 = KBLOC(I-1) - KBLOC(I-J1+1) + 1
+        IF (K1-K0) 150, 170, 130
+  130   K0P1 = K0 + 1
+        DO 140 K=K0P1,K1
+          CONVI = CONVI*P/FLOAT(K)
+  140   CONTINUE
+        GO TO 170
+  150   K1P1 = K1 + 1
+        DO 160 K=K1P1,K0
+          CONVI = CONVI*FLOAT(K)/P
+  160   CONTINUE
+  170   IF (CONVI.GT.RRNG) GO TO 210
+        DO 190 J=J1,J11
+C CHANGE UPPER LIMIT IF EARLY EXIT FROM PREVIOUS LOOP
+          CONVI = FRNG(I,M2)*RNG
+          K0 = MAX0(1,KBLOC(I-1)-MIN0(JTOP0+1,KBLOC(I-J+1))+2)
+          K1 = KBLOC(I) - MIN0(JTOP0+1,KBLOC(I-J+1)) + 1
+          DO 180 K=K0,K1
+            CONVI = CONVI*P/FLOAT(K)
+  180     CONTINUE
+          CONVI = SSS(J)*CONVI
+          IF (CONVI.GT.RRNG) GO TO 200
+  190   CONTINUE
+        GO TO (10, 440), IEXT
+  200   J1 = J + 1
+  210   DO 390 J=J1,I
+          LFG = 1
+C LFG=2 IF NEXT ITERATION ON J BECOMES NECESSARY.
+          LB1 = KBLOC(I)
+          K01 = KBLOC(I) - KBLOC(I-J+1) + 1
+          S = CONVI
+          IF (J.EQ.J1) GO TO 240
+          IF (TMLT) 220, 400, 230
+  220     S = -TMLT*FRNG(I-J+2,M1)
+          IF (S.GT.RRNG) GO TO 240
+  230     S = TMLT*(FRNG(I-J+2,M1)*RNG)
+  240     K0 = MAX0(KBLOC(I)-MIN0(KBLOC(I-J+2)-1,JTOP0)+1,1)
+          K1 = KBLOC(I+1) - KBLOC(I-J+1)
+          TMLT = 0.
+          RRNGS = 1.
+          IF (S.LT.0.) RRNGS = -RRNG
+          SSS(J) = S
+          DO 370 K=K0,K1
+            LDF = 1 - K
+            LB = MAX0(KBLOC(I),KBLOC(I-J+1)-LDF,LB1)
+            LT = MIN0(KBLOC(I+1)-1,MIN0(JTOP0,KBLOC(I-J+2)-1)-LDF)
+            IF (LB.GT.LB1) LFG = 2
+            IF (LB.GT.LT) GO TO 270
+            DO 260 L=LB,LT
+              IF (W(L,M2).EQ.((W(L+LDF,M1)*RRNGS)*S+W(L,M2))) GO TO
+     *         250
+              LB1 = L
+C WHEN THE SUMMANDS BECOME SO SMALL THAT THE VALUE OF
+C W(L,M2) IS UNCHANGED LB1 IS INCREASED.  THIS PREVENTS
+C FURTHER ADDITIONS TO SUCH W(L,M2).
+              GO TO 290
+  250         IF (W(L,M2).GT.RRNG) GO TO 260
+              IF (K-K01) 340, 340, 280
+  260       CONTINUE
+  270       LB1 = LT + 1
+            IF ((LB1.NE.KBLOC(I+1)) .OR. (K.LE.K01)) GO TO 340
+  280       J11 = J
+            IF (W(KBLI,M2).LE.RRNG) LFG = 2
+            GO TO (400, 380), LFG
+  290       IF (S) 300, 380, 320
+  300       DO 310 L=LB1,LT
+              W(L,M2) = (W(L+LDF,M1)*RRNGS)*S + W(L,M2)
+  310       CONTINUE
+            GO TO 340
+  320       DO 330 L=LB1,LT
+              W(L,M2) = W(L+LDF,M1)*S + W(L,M2)
+  330       CONTINUE
+  340       T = S
+            S = S*P/FLOAT(K)
+            IF (S) 360, 350, 360
+  350       IF (T.LE.0.) GO TO 380
+            S = -(T*RNG)*P/FLOAT(K)
+            RRNGS = -RRNG
+C THE NEGATIVE BIT IN S,TMLT IS USED TO
+C INDICATE ITS VALUE IS RNG TIMES THE USUAL VALUE.
+  360       IF (K.EQ.K01) TMLT = S
+C THE ITERATION ON K MUST CONTINUE UNTIL TMLT IS
+C SET.  TMLT USED IN NEXT ITERATION ON J.
+  370     CONTINUE
+  380     J11 = J
+  390   CONTINUE
+  400 CONTINUE
+C CREATE NEW BLOCK IF NECESSARY.
+      IF (NBLOC.GE.MBAV) GO TO (10, 440), IEXT
+      L1 = KBLOC(NBLOC+1) - KBLOC(NBLOC)
+      DO 410 L=1,L1
+        LL = KBLOC(NBLOC+1) - L
+        IF (W(LL,M2).GE.SQRRNG) GO TO 420
+  410 CONTINUE
+  420 IF (LL.EQ.JTOP1) GO TO (10, 440), IEXT
+      KBLOC(NBLOC+2) = KBLOC(NBLOC+1)
+      KBLOC(NBLOC+1) = LL + 1
+      NBLOC = NBLOC + 1
+      L0 = KBLOC(NBLOC)
+      DO 430 L=L0,JTOP1
+        W(L,M2) = 0.
+  430 CONTINUE
+      I1 = NBLOC
+      FRNG(NBLOC,M2) = 1.
+      CONVI = 0.
+      GO TO 120
+  440 CALL ACCUM(W(N1,M2), TF, NNN)
+      CALL ACCUM(SQRRNG, TF, NNN)
+      IF (NBLOC.EQ.1) GO TO 460
+      DO 450 I=2,NBLOC
+        CALL ACCUM(RRNG/FRNG(I,M2), TF, NNN)
+  450 CONTINUE
+  460 ANS = TF
+      IF (N-NNN) 470, 490, 500
+  470 DO 480 J=N1,NNN
+        ANS = ANS/FLOAT(J)
+  480 CONTINUE
+  490 RETURN
+  500 NNN = NNN + 1
+      DO 510 J=NNN,N
+        ANS = ANS*FLOAT(J)
+  510 CONTINUE
+      RETURN
+      END
+      SUBROUTINE ACCUM(F, TF, NNN)                                      ACC   10
+C THIS SUBROUTINE ANCILLARY TO RAKK AND ACCUMULATES THE
+C MULTIPLIERS USED TO KEEP W(.,.) IN RANGE.
+      TF = TF*F
+   10 IF ((TF.GT.1.) .OR. (TF.EQ.0.)) RETURN
+      NNN = NNN + 1
+      TF = TF*FLOAT(NNN)
+      GO TO 10
+      END
+      SUBROUTINE DURB(N, YY, ANS)                                       DUR   10
+C DURBINS METHOD.  J.APPL.PROB., 8(1971), PP431-453,
+C FORMULAS (36),(37),(40).
+C N IS SAMPLE SIZE.  YY(2,.),YY(1,.)
+C CONTAIN, RESPECTIVELY, UPPER AND LOWER BOUNDARY
+C LEVEL POINTS CORRESPONDING TO 0,1/N,2/N,...,1.  MUST
+C BE N+1 OF EACH.  ROUTINE ASSUMES THEY ARE NONDECREASING.
+      DIMENSION ALPHA(201), BETA(201), YY(2,202)
+C DIMENSION STATEMENT PERMITS MAX SAMPLE SIZE OF 200
+      N1 = N + 1
+      ANS = 0.
+      IF ((YY(1,1).LE.0.) .OR. (YY(2,N1).GE.1.) .OR.
+     * (YY(1,N1).LE.1.) .OR. (YY(2,1).GE.0.)) RETURN
+      IP = 1
+      DO 20 I=1,N1
+        IF (YY(2,I).LT.0.) GO TO 10
+        IP = I
+        GO TO 30
+   10   YY(2,I) = 0.
+   20 CONTINUE
+   30 DO 40 I=1,N1
+        IF (YY(1,I).LE.1.) GO TO 40
+        YY(1,I) = 1.
+   40 CONTINUE
+      ALPHA(1) = 0.
+      BETA(1) = 1.
+      DO 120 K=2,N1
+        ALPHA(K) = YY(2,K)**(K-1)
+        IF (IP.GT.(K-1)) GO TO 60
+        COMB = 1.
+        I1 = K - IP
+        DO 50 I=1,I1
+          COMB = COMB*FLOAT(K-I)/FLOAT(I)
+C COMB IS BINOMIAL COEFFICIENT K-1 OVER I-1.
+          ALPHA(K) = ALPHA(K) - ALPHA(K-I)*(YY(2,K)-YY(2,K-I))**I*
+     *     COMB
+   50   CONTINUE
+   60   COMB = 1.
+        DO 70 J=1,N1
+          IF (YY(2,K).LE.YY(1,J)) GO TO 80
+          ALPHA(K) = ALPHA(K) - BETA(J)*(YY(2,K)-YY(1,J))**(K-J)*
+     *     COMB
+C COMB IS BINOMIAL COEFFICIENT K-1 OVER J-1.
+          COMB = COMB*FLOAT(K-J)/FLOAT(J)
+   70   CONTINUE
+   80   BETA(K) = YY(1,K)**(K-1)
+        IF (IP.GT.K) GO TO 100
+        COMB = 1.
+        I1 = K - IP + 1
+        DO 90 I=1,I1
+          BETA(K) = BETA(K) - ALPHA(K-I+1)*(YY(1,K)-YY(2,K-I+1))**
+     *     (I-1)*COMB
+C COMB IS BINOMIAL COEFFICIENT K-1 OVER I-1.
+          COMB = COMB*FLOAT(K-I)/FLOAT(I)
+   90   CONTINUE
+        COMB = 1.
+  100   KM1 = K - 1
+        DO 110 J=1,KM1
+          IF (YY(1,J).EQ.1.) GO TO 120
+C COMB IS BINOMIAL COEFFICIENT K-1 OVER J-1.
+          BETA(K) = BETA(K) - BETA(J)*(YY(1,K)-YY(1,J))**(K-J)*COMB
+          COMB = COMB*FLOAT(K-J)/FLOAT(J)
+  110   CONTINUE
+  120 CONTINUE
+      COMB = 1.
+      I1 = N1 - IP + 1
+      DO 130 I=1,I1
+        ANS = ANS + (1.-YY(2,N1-I+1))**(I-1)*ALPHA(N1-I+1)*COMB
+        COMB = COMB*FLOAT(N1-I)/FLOAT(I)
+  130 CONTINUE
+      COMB = 1.
+      DO 140 J=1,N1
+        IF (YY(1,J).EQ.1.) GO TO 150
+        ANS = ANS + (1.-YY(1,J))**(N1-J)*BETA(J)*COMB
+C COMB IS BINOMIAL COEFFICIENT N OVER J-1.
+        COMB = COMB*FLOAT(N1-J)/FLOAT(J)
+  140 CONTINUE
+C FOR PROB OF COMPLEMENTARY EVENT CHANGE NEXT STATEMENT TO
+C 150 CONTINUE
+  150 ANS = 1. - ANS
+      RETURN
+      END

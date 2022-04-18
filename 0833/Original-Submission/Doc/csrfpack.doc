@@ -1,0 +1,222 @@
+
+                             CSRFPACK.DOC
+                              01/31/2004
+
+
+     Overview:
+
+     CSRFPACK is a Fortran-77 software package which constructs a
+     once-continuously differentiable convex bivariate function F
+     that interpolates a set of N strictly convex data points
+     (data points for which the piecewise linear interpolant on
+     some triangulation is convex, and no four points are
+     coplanar).  The interpolant F is obtained by applying convo-
+     lution smoothing to a piecewise linear Hermite interpolant H
+     of the data values and a set of convexity-preserving nodal
+     gradients.
+
+
+     Usage:
+
+     The program is distributed in the form of two source code
+     files and a sample input data set:  csrftest.f, csrfpack.f,
+     and csrftest.dat.  The driver, csrftest.f, prompts for the
+     name of an input data set which consists of the number of
+     data points N (read with format I5) followed by a sequence
+     of N ordered triples of data point coordinates (x,y,z) read
+     with format 3E23.15:  the x, y, and z components are read
+     from columns 1 to 23, 24 to 46, and 47 to 69, respecively,
+     and each must include a decimal point (and optional expo-
+     nent).  The output consists of the following files.
+
+       csrftest.prt:  Print file with parameter values and error
+                      messages.
+
+       csrftest.out:  Data set (suitable for a surface plotting
+                      package) consisting of interpolated values
+                      on a triangulation of a uniform grid in the
+                      bounding box (the smallest rectangle with
+                      sides parallel to the axes that contains
+                      the nodes).
+
+       csrftest.eps:  Encapsulated Postscript file containing a
+                      contour plot of the interpolatory surface.
+
+       tplot.eps:  Encapsulated Postscript file containing a plot
+                   of the convexity-preserving triangulation of
+                   the nodes.
+
+       gplot.eps:  Encapsulated Postscript file containing a plot
+                   of the gradient feasibility diagram and nodal
+                   gradients.
+
+       tgplot.eps:  Encapsulated Postscript file containing a
+                    plot of the gradient triangulation.
+
+       rplot.eps:  Encapsulated Postscript file containing a plot
+                   of the cell diagram and nodes.
+
+     Various options governing the behavior of the code are
+     easily specified by altering PARAMETER and DATA statements
+     in the driver.
+
+
+     Computational procedure and code structure:
+
+     The procedure consists of the following ten steps:
+
+     1)  Construct a convexity-preserving triangulation T, if it
+         exists, of the data points (nodes and data values):
+         Subroutine TRMSHC.  Remove extraneous boundary edges
+         (nearly null triangles):  Subroutine DELBE.
+
+     2)  Construct a gradient feasibility diagram (the straight
+         line dual of T):  a set of N convex polygons that parti-
+         tion the plane and such that, for any choice of nodal
+         gradients, one from each polygon, the piecewise linear
+         Hermite interpolant H of the nodal values and gradients
+         is convex:  Subroutine VLIST.
+
+     3)  Select a set of nodal gradients by taking the centroids
+         of the gradient feasibility regions or (in the case of
+         boundary nodes) truncated regions:  Subroutine GLIST.
+
+     4)  Optionally, create level-2 Encapsulated PostScript files
+         containing plots of T and/or the dual of T (along with
+         the nodal gradients):  Subroutines PLTTR and PLTGR.
+
+     5)  Optionally, compute a scale factor EPS defining a quad-
+         ratic function q(p) = EPS*<p,p>, and adjust the data
+         values and gradients by subtracting nodal values and
+         gradients of q, where EPS is defined so that a strictly
+         convex Hermite interpolant of the original data can be
+         constructed from a convex Hermite interpolant of the
+         adjusted data (Subroutine ADDQT).
+
+     6)  Construct a convexity-preserving triangulation Tg of the
+         (possibly adjusted) nodal gradients and negative z-
+         intercepts of the affine nodal functions defined by the
+         (adjusted) data values and nodal gradients:  Subroutine
+         TRMSHC.
+
+     7)  Construct a cell diagram (the straight line dual of Tg):
+         a set of N convex polygons R_i that partition the plane
+         and such that the restriction of H to R_i is the i-th
+         affine nodal function f_i, where f_i(p) = <g_i,p-p_i> +
+         z_i for nodes p_i, (adjusted) data values z_i and
+         (adjusted) gradients g_i for i = 1 to N and H(p) =
+         Max(i=1,N){f_i(p)}:  Subroutine VLIST.
+
+     8)  Optionally, create level-2 Encapsulated PostScript files
+         containing plots of Tg and/or the dual of Tg (along with
+         the nodes):  Subroutines PLTTR and PLTGR.
+
+     9)  Compute the distance D_i from each node p_i to the
+         nearest boundary point of cell R_i:  Subroutine DELTAI.
+
+     10) Compute weights W_i and quadrature points q_ij defining
+         the quadrature rule Q(p) = Sum(i=1,NR) [ W_i*Sum(j=1,NA)
+         H(p+q_ij) ] for approximating F(p) = Integral[ H(p+q)*
+         Phi(q) ]dq, where the integral is over the disk D0 of
+         radius Dmin = Min(i=1,N){D_i} centered at the origin,
+         and Phi(q) = phi(Norm(q)/Dmin), normalized to have inte-
+         gral 1, for phi(t) = 1 - 3*t**2 + 2*t**3 (t in [0,1]):
+         Subroutine GETQW.
+
+
+     Subprograms:
+
+     The subprograms in csrfpack.f are alphabetically ordered
+     except for Subroutine CSURF which appears at the beginning
+     of the file.  The header comments in CSURF duplicate much
+     of the documentation provided here.  The subprograms that
+     are likely to be called directly by a driver program are as
+     follows.
+
+       CSURF:  Subroutine which computes parameters defining the
+               smooth interpolatory surface F, and optionally
+               creates plots of the triangulations and their
+               duals, by executing the 10-step procedure outlined
+               above.
+
+       FGRID:  Subroutine which uses FVAL to evaluate F at the
+               vertices of a rectangular grid.
+
+       FVAL:  Subroutine which, given a point p and the output
+              parameters from Subroutine CSURF, returns the value
+              and gradient of F at p.
+
+       PLTCNT:  Subroutine which, given a set of function values
+                z = F(x,y) at the vertices of a rectangular grid,
+                creates an Encapsulated PostScript file contain-
+                ing a contour plot of the piecewise bilinear
+                interpolant of the function values.
+
+       PLTTR:  Subroutine which creates an Encapsulated PostScript
+               file containing a plot of a triangulation created
+               by Subroutine TRMSHC.
+
+       TRMSHC:  Subroutine which constructs a convexity-preserving
+                triangulation, if it exists, of a set of N data
+                points.
+
+     Additional high-level subprograms that are called by CSURF
+     are the following.
+
+       ADDQT:  Subroutine which, given a set of strictly convex
+               Hermite data (nodes, data values, and nodal gradi-
+               ents such that there exists a convex Hermite
+               interpolant of the data values and gradients, and
+               no four data points are coplanar), adjusts the
+               data values and gradients (using a quadratic
+               correction term) such that a strictly convex Her-
+               mite interpolant of the data can be constructed
+               from a convex Hermite interpolant of the adjusted
+               data.
+
+       DELBE:  Subroutine which removes extraneous boundary edges
+               (nearly null triangles) to avoid large errors
+               caused by steep gradients on the boundary.  The
+               calling program specifies a lower bound on the
+               acceptable aspect ratio (ratio of the radius of
+               the inscribed circle to that of the circumcircle)
+               of boundary triangles.
+
+       DELTAI:  Subroutine which, given a set of nodes p_i, data
+                values z_i, and a data structure representing a
+                convexity-preserving gradient triangulation Tg
+                (Subroutine TRMSHC), returns the perpendicular
+                distances D_i from each node p_i to the boundary
+                of R_i.
+
+       GETQW:  Subroutine which computes the weights and quadra-
+               ture points defining the quadrature rule for
+               approximating values of F.
+
+       GLIST:  Subroutine which, given a convexity-preserving
+               triangulation and its straight-line dual computed
+               by Subroutine VLIST, returns a set of nodal gradi-
+               ents for which there exists a convex Hermite
+               interpolant of the data values and gradients.  The
+               nodal gradients are taken to be the centroids of
+               the gradient feasibility regions (or truncated
+               regions).
+
+       PLTGR:  Subroutine which creates an Encapsulated PostScript
+               file containing a plot of the straight-line dual
+               of a triangulation along with the set of nodal
+               gradients.
+
+       VLIST:  Subroutine which, given a convexity-preserving
+               triangulation, computes its straight-line dual,
+               returning the vertices and adjacency information
+               defining the gradient feasibility regions or cell
+               diagram.
+
+     The header comments in Subroutine TRMSHC include a list of
+     additional user-callable subprograms related to the triangu-
+     lations.  Many of these are, with the exception of minor
+     changes in comments, identical to subprograms in TRIPACK
+     (ACM TOMS Algorithm 751).  The triangulation data structure
+     is the same as that of TRIPACK, and the structure defining T
+     is overwritten by the structure for Tg.

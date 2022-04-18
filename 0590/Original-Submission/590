@@ -1,0 +1,2190 @@
+C     ALGORITHM 590, COLLECTED ALGORITHMS FROM ACM.
+C     ALGORITHM APPEARED IN ACM-TRANS. MATH. SOFTWARE, VOL.8, NO. 4,
+C     DEC., 1982, P.376-382.
+C***                                                                    MAN   10
+C*** THIS IS THE MAIN PROGRAM FOR TESTING THE ROUTINES                  MAN   20
+C***    DSUBSP,EXCHQZ,GIV,FIN,FOUT,FOLP AND FCRHP                       MAN   30
+C*** SUBMITTED TO ACM TOMS                                              MAN   40
+C***                                                                    MAN   50
+C*** THIS TEST PROGRAM ALSO USES THE ROUTINES PRMT,ROOTS                MAN   60
+C*** Z1ORTH,DEFTST AND SSVDC (FROM LINPACK) ADDED BELOW                 MAN   70
+C***                                                                    MAN   80
+C*** TWO EXAMPLES ARE GIVEN BELOW WHERE DEFLATING                       MAN   90
+C*** SUBSPACES WITH PRESCRIBED SPECTRUM OF A GIVEN PENCIL               MAN  100
+C***                                                                    MAN  110
+C***                  LAMBDA*B-A                                        MAN  120
+C***                                                                    MAN  130
+C*** ARE COMPUTED AS THE FIRST COLUMNS OF A TRANSFORMATION              MAN  140
+C*** MATRIX Z (TO BE INITIALIZED BY THE IDENTITY MATRIX)                MAN  150
+C***                                                                    MAN  160
+      EXTERNAL FIN, FOUT, FOLHP, FCRHP                                  MAN  170
+      INTEGER KW, N, NMAX, NNMAX, NLINE, NDIM, IND(10), I, J, IFAIL,    MAN  180
+     * ITEXTA, ITEXTB, ITEXTZ                                           MAN  190
+      REAL A(10,10), B(10,10), Z(10,10), EPS, ABMAX, EMAX, QMAX, SRELPR MAN  200
+      REAL A0(10,10), B0(10,10), Q(20,20), S1(20), S2(20), WORK(20)     MAN  210
+      LOGICAL FAIL, OK
+C***
+C*** KW IS THE MACHINE DEPENDENT CONSTANT ASSOCIATED WITH
+C***   THE OUTPUT DEVICE
+C*** NLINE IS THE NUMBER OF ELEMENTS PRINTED ON ONE LINE
+C***   BY THE ROUTINE PRMT USED FOR PRINTING MATRICES
+C***   (USE NLINE=5 FOR SCREEN AND NLINE=8 FOR PRINTER)
+C*** ITEXTA,ITEXTB,ITEXTZ CONTAIN LITERALS FOR THE
+C***   ROUTINE PRMT
+C***   SEE COMMENTS OF THIS ROUTINE FOR MORE INFORMATION
+C***
+      DATA ITEXTA /1HA/, ITEXTB /1HB/, ITEXTZ /1HZ/, NLINE /5/, KW /3/
+C***
+C*** EPS IS THE REQUESTED ABSOLUTE PRECISION WHICH, FOR
+C***   OPTIMAL RESULTS, SHOULD BE CHOSEN EQUAL TO
+C***   SRELPR*MAX(NORM(A),NORM(B)), WHERE SRELPR IS THE
+C***   RELATIVE PRECISION OF THE COMPUTER USED. THIS IS
+C***   A MACHINE DEPENDENT PARAMETER EQUAL TO 2.0**(-23)
+C***   ON VAX-11/780
+C***
+      SRELPR = 1.192093E-7
+C***
+C*** NMAX AND NNMAX ARE DIMENSIONS OF THE FOLLOWING ARRAYS
+C***  A(NMAX,NMAX),B(NMAX,NMAX),Z(NMAX,NMAX),A0(NMAX,NMAX)
+C***   B0(NMAX,NMAX) USED IN THE MAIN PROGRAM AND
+C***   Q(NNMAX,NNMAX), S1(NNMAX), S2(NNMAX) AND WORK(NNMAX)
+C***   USED AS WORKING ARRAYS FOR THE ROUTINE DFTEST
+C*** Q,S1,S2 AND WORK ARE WORKING ARRAYS FOR DEFTST WHICH
+C***   CALLS THE LINPACK SUBROUTINE SSVDC FOR THE
+C***   COMPUTATION OF SINGULAR VALUES. NNMAX IS THE FIRST
+C***   AND SECOND DIMENSION OF Q AND SHOULD BE EQUAL TO
+C***   2*NMAX
+C***
+      NMAX = 10
+      NNMAX = 20
+C***  THIS IS THE FIRST EXAMPLE. DATA FOR A,B AND Z ARE ENTERED
+      N = 8
+      DO 20 I=1,N
+        DO 10 J=1,N
+          A(I,J) = 0.0
+          B(I,J) = 0.0
+          Z(I,J) = 0.0
+   10   CONTINUE
+        B(I,I) = 1.0
+        Z(I,I) = 1.0
+   20 CONTINUE
+      A(1,8) = 1.0
+      A(2,2) = 0.3
+      A(2,3) = 0.2
+      A(3,2) = -0.2
+      A(3,3) = 0.3
+      A(4,4) = 0.5
+      A(2,4) = 4.0
+      A(2,5) = 6.0
+      A(3,7) = 0.5
+      A(4,6) = 2.0
+      A(5,5) = 1.0
+      A(6,6) = 4.0
+      A(6,7) = 2.5
+      A(7,6) = -10.0
+      A(7,7) = 4.0
+      A(8,8) = 2.0
+      B(5,5) = 0.0
+C* STORE DATA IN A0, B0 AND COMPUTE REQUESTED ACCURACY EPS
+      ABMAX = 0.0
+      DO 40 I=1,N
+        DO 30 J=1,N
+          A0(I,J) = A(I,J)
+          IF (ABMAX.LT.ABS(A(I,J))) ABMAX = ABS(A(I,J))
+          B0(I,J) = B(I,J)
+          IF (ABMAX.LT.ABS(B(I,J))) ABMAX = ABS(B(I,J))
+   30   CONTINUE
+   40 CONTINUE
+      EPS = ABMAX*SRELPR
+C* PRINT OUT GIVEN DATA A, B, Z
+      WRITE (KW,99999)
+      CALL PRMT(A, NMAX, N, N, ITEXTA, KW, NLINE)
+      CALL PRMT(B, NMAX, N, N, ITEXTB, KW, NLINE)
+      CALL PRMT(Z, NMAX, N, N, ITEXTZ, KW, NLINE)
+C* PUT THE EIGENVALUES OUTSIDE THE UNIT CIRCLE AT THE TOP
+      WRITE (KW,99998)
+      CALL DSUBSP(NMAX, N, A, B, Z, FOUT, EPS, NDIM, FAIL, IND)
+      IF (FAIL) GO TO 50
+      CALL PRMT(A, NMAX, N, N, ITEXTA, KW, NLINE)
+      CALL PRMT(B, NMAX, N, N, ITEXTB, KW, NLINE)
+      CALL PRMT(Z, NMAX, N, N, ITEXTZ, KW, NLINE)
+      WRITE (KW,99993) NDIM
+C* TEST COMPUTED DEFLATING SUBSPACE OF DIMENSION NDIM
+      CALL ROOTS(NMAX, N, A, B, Z, NDIM, FOUT, OK)
+      WRITE (KW,99992) OK
+      CALL Z1ORTH(NMAX, N, Z, NDIM, EMAX)
+      WRITE (KW,99991) EMAX, SRELPR
+      CALL DEFTST(NMAX, N, A0, B0, Z, NDIM, QMAX, IFAIL, NNMAX, Q, S1,
+     * S2, WORK)
+      IF (IFAIL.EQ.0) WRITE (KW,99990) SRELPR, QMAX
+C* PUT THE EIGENVALUES INSIDE THE UNIT CIRCLE BACK AT THE TOP
+   50 WRITE (KW,99997)
+      CALL DSUBSP(NMAX, N, A, B, Z, FIN, EPS, NDIM, FAIL, IND)
+      IF (FAIL) GO TO 60
+      CALL PRMT(A, NMAX, N, N, ITEXTA, KW, NLINE)
+      CALL PRMT(B, NMAX, N, N, ITEXTB, KW, NLINE)
+      CALL PRMT(Z, NMAX, N, N, ITEXTZ, KW, NLINE)
+      WRITE (KW,99993) NDIM
+C* TEST COMPUTED DEFLATING SUBSPACE OF DIMENSION NDIM
+      CALL ROOTS(NMAX, N, A, B, Z, NDIM, FIN, OK)
+      WRITE (KW,99992) OK
+      CALL Z1ORTH(NMAX, N, Z, NDIM, EMAX)
+      WRITE (KW,99991) EMAX, SRELPR
+      CALL DEFTST(NMAX, N, A0, B0, Z, NDIM, QMAX, IFAIL, NNMAX, Q, S1,
+     * S2, WORK)
+      IF (IFAIL.EQ.0) WRITE (KW,99990) SRELPR, QMAX
+C***  THIS IS THE SECOND EXAMPLE. DATA FOR A,B AND Z ARE ENTERED
+   60 N = 8
+      DO 80 I=1,N
+        DO 70 J=1,N
+          A(I,J) = 0.0
+          B(I,J) = 0.0
+          Z(I,J) = 0.0
+   70   CONTINUE
+        B(I,I) = 1.0
+        Z(I,I) = 1.0
+   80 CONTINUE
+      A(1,1) = -1.0
+      A(1,2) = 0.5
+      A(1,4) = 6.0
+      A(1,6) = 3.0
+      A(2,1) = 8.0
+      A(2,2) = -1.0
+      A(2,3) = 4.0
+      A(3,3) = -3.0
+      A(4,4) = -3.0
+      A(5,5) = 2.0
+      A(5,6) = 1.0
+      A(5,7) = 1.0
+      A(5,8) = -1.0
+      A(6,6) = 2.0
+      A(7,7) = 1.0
+      A(8,8) = 0.5
+      B(2,6) = 2.0
+      B(3,8) = 4.0
+      B(7,7) = 0.5
+      B(1,3) = 2.0
+C* STORE DATA IN A0, B0 AND COMPUTE REQUESTED ACCURACY EPS
+      ABMAX = 0.0
+      DO 100 I=1,N
+        DO 90 J=1,N
+          A0(I,J) = A(I,J)
+          IF (ABMAX.LT.ABS(A(I,J))) ABMAX = ABS(A(I,J))
+          B0(I,J) = B(I,J)
+          IF (ABMAX.LT.ABS(B(I,J))) ABMAX = ABS(B(I,J))
+   90   CONTINUE
+  100 CONTINUE
+C* PRINT OUT GIVEN DATA A, B, Z
+      WRITE (KW,99996)
+      CALL PRMT(A, NMAX, N, N, ITEXTA, KW, NLINE)
+      CALL PRMT(B, NMAX, N, N, ITEXTB, KW, NLINE)
+      CALL PRMT(Z, NMAX, N, N, ITEXTZ, KW, NLINE)
+C* PUT THE EIGENVALUES IN THE CLOSED RIGHT HALF PLANE AT THE TOP
+      WRITE (KW,99995)
+      CALL DSUBSP(NMAX, N, A, B, Z, FCRHP, EPS, NDIM, FAIL, IND)
+      IF (FAIL) GO TO 110
+      CALL PRMT(A, NMAX, N, N, ITEXTA, KW, NLINE)
+      CALL PRMT(B, NMAX, N, N, ITEXTB, KW, NLINE)
+      CALL PRMT(Z, NMAX, N, N, ITEXTZ, KW, NLINE)
+      WRITE (KW,99993) NDIM
+C* TEST COMPUTED DEFLATING SUBSPACE OF DIMENSION NDIM
+      CALL ROOTS(NMAX, N, A, B, Z, NDIM, FCRHP, OK)
+      WRITE (KW,99992) OK
+      CALL Z1ORTH(NMAX, N, Z, NDIM, EMAX)
+      WRITE (KW,99991) EMAX, SRELPR
+      CALL DEFTST(NMAX, N, A0, B0, Z, NDIM, QMAX, IFAIL, NNMAX, Q, S1,
+     * S2, WORK)
+      IF (IFAIL.EQ.0) WRITE (KW,99990) SRELPR, QMAX
+C* PUT THE EIGENVALUES IN THE OPEN LEFT HALF PLANE BACK AT THE TOP
+  110 WRITE (KW,99994)
+      CALL DSUBSP(NMAX, N, A, B, Z, FOLHP, EPS, NDIM, FAIL, IND)
+      IF (FAIL) GO TO 120
+      CALL PRMT(A, NMAX, N, N, ITEXTA, KW, NLINE)
+      CALL PRMT(B, NMAX, N, N, ITEXTB, KW, NLINE)
+      CALL PRMT(Z, NMAX, N, N, ITEXTZ, KW, NLINE)
+      WRITE (KW,99993) NDIM
+C* TEST COMPUTED DEFLATING SUBSPACE OF DIMENSION NDIM
+      CALL ROOTS(NMAX, N, A, B, Z, NDIM, FOLHP, OK)
+      WRITE (KW,99992) OK
+      CALL Z1ORTH(NMAX, N, Z, NDIM, EMAX)
+      WRITE (KW,99991) EMAX, SRELPR
+      CALL DEFTST(NMAX, N, A0, B0, Z, NDIM, QMAX, IFAIL, NNMAX, Q, S1,
+     * S2, WORK)
+      IF (IFAIL.EQ.0) WRITE (KW,99990) SRELPR, QMAX
+  120 STOP
+99999 FORMAT (26H1THIS IS THE FIRST EXAMPLE/24H THE ORDERED GENERALIZED,
+     * 19H EIGENVALUES IN THE/27H QUASI-TRIANGULAR FORM ARE /8H (0.,.3+,
+     * 40HJ.2,.3-J.2,.5,INFINITY,4.+J5.,4.-J5.,2.)/17H ALL ROOTS ARE SI,
+     * 30HMPLE, FOUR OF THEM ARE COMPLEX)
+99998 FORMAT (48H1REORDER THE EIGENVALUES SUCH THAT THOSE OUTSIDE/
+     * 46H THE UNIT DISC APPEAR AT THE TOP OF THE PENCIL)
+99997 FORMAT (46H1PUT THE EIGENVALUES INSIDE THE UNIT DISC BACK/
+     * 53H AT THE TOP, IN ORDER TO HAVE AN IDEA OF THE ROUNDING/
+     * 34H ERRORS PERFORMED IN THE TWO STEPS)
+99996 FORMAT (27H1THIS IS THE SECOND EXAMPLE/23H THE ORDERED GENERALIZE,
+     * 20HD EIGENVALUES IN THE/27H QUASI-TRIANGULAR FORM ARE /7H (-1.+J,
+     * 31H4.,-1.-J4.,-3.,-3.,2.,2.,2.,.5)/26H THE ROOT AT -3. IS DOUBLE,
+     * 19H (ONE JORDAN BLOCK)/38H THE ROOT AT 2. IS TRIPLE (TWO JORDAN ,
+     * 7HBLOCKS)/28H THERE ARE TWO COMPLEX ROOTS)
+99995 FORMAT (47H1REORDER THE EIGENVALUES SUCH THAT THOSE IN THE/
+     * 42H CLOSED RIGHT HALF PLANE APPEAR AT THE TOP)
+99994 FORMAT (48H1PUT THE EIGENVALUES IN THE OPEN LEFT HALF PLANE/
+     * 48H BACK AT THE TOP IN ORDER TO HAVE AN IDEA OF THE/9H ROUNDING,
+     * 34H ERRORS PERFORMED IN THE TWO STEPS)
+99993 FORMAT (49H THE DEFLATING SUBSPACE CORRESPONDS TO THE FIRST , I3,
+     * 24H COLUMNS OF THE MATRIX Z/)
+99992 FORMAT (33H THE ROOTS ARE CORRECTLY ORDERED , L6/)
+99991 FORMAT (48H THE VECTORS SPANNING THE DEFLATING SUBSPACE ARE/
+     * 27H ORTHOGONAL WITH PRECISION , E12.3/23H THIS MUST BE OF THE OR,
+     * 31HDER OF THE RELATIVE PRECISION (, E10.3, 2H )/)
+99990 FORMAT (45H THE SPACE SPANNED THE COLUMNS OF (A*Z1,B*Z1)/6H WHERE,
+     * 41H Z1 SPANS THE COMPUTED DEFLATING SUBSPACE/16H HAS INDEED DIME,
+     * 34HNSION NDIM IF QMAX IS OF THE ORDER/23H OF THE RELATIVE PRECIS,
+     * 5HION (, E10.3, 10H ). QMAX= , E10.3/)
+      END
+      SUBROUTINE PRMT(A, MMAX, M, N, TEXT, KW, L)                       PRM   10
+      INTEGER MMAX, M, N, TEXT, KW, L, I, J, J1, J2, JJ, N1
+      REAL A(MMAX,N)
+C*
+C* THIS ROUTINE PRINTS OUT THE M BY N MATRIX A ROW BY ROW
+C* TEXT IS THE NAME OF THE MATRIX (A1 FORMAT) AS PRINTED OUT
+C* KW IS THE NUMBER ASSOCIATED WITH THE OUTPUT DEVICE
+C* L IS THE NUMBER OF ELEMENTS PRINTED ON ONE LINE (L<9)
+C*
+      WRITE (KW,99996) TEXT, M, N
+      IF (M.LE.0 .OR. N.LE.0) RETURN
+      N1 = (N-1)/L
+      J1 = 1
+      J2 = L
+      IF (N1.EQ.0) GO TO 30
+      WRITE (KW,99999) J1, J2
+      DO 20 J=1,N1
+        DO 10 I=1,M
+          WRITE (KW,99997) (A(I,JJ),JJ=J1,J2)
+   10   CONTINUE
+        WRITE (KW,99998)
+        J1 = J1 + L
+        J2 = J2 + L
+   20 CONTINUE
+   30 WRITE (KW,99999) J1, N
+      DO 40 I=1,M
+        WRITE (KW,99997) (A(I,JJ),JJ=J1,N)
+   40 CONTINUE
+      WRITE (KW,99998)
+99999 FORMAT (9H COLUMNS , I2, 9H THROUGH , I2)
+99998 FORMAT (1H )
+99997 FORMAT (8E15.7)
+99996 FORMAT (8H MATRIX , A1, 2H (, I2, 1HX, I2, 1H))
+      RETURN
+      END
+      SUBROUTINE ROOTS(NMAX, N, A, B, Z, NDIM, FTEST, OK)               ROO   10
+      INTEGER NMAX, N, NDIM, FTEST
+      REAL A(NMAX,N), B(NMAX,N), Z(NMAX,N)
+      LOGICAL OK
+C*
+C* THIS ROUTINE CHECKS IF THE NDIM FIRST EIGENVALUES OF THE QUASI
+C* TRIANGULAR PENCIL LAMBDA*B-A ARE INSIDE THE REGION SPECIFIED
+C* BY THE INTEGER FUNCTION FTEST, AND IF THE REMAINING EIGENVALUES
+C* ARE OUTSIDE THIS REGION. IF THIS IS SO, OK IS PUT EQUAL TO
+C* .TRUE. OTHERWISE IT IS PUT EQUAL TO .FALSE.
+C*
+      INTEGER L, LS, L1, LL, IS, NDIM1
+      REAL S, P, D, ALPHA, BETA
+      OK = .FALSE.
+C* CHECK IF THERE IS A SEPARATION OF DIMENSION NDIM
+      IF (NDIM.EQ.0 .OR. NDIM.EQ.N) GO TO 10
+      NDIM1 = NDIM + 1
+      IF (A(NDIM1,NDIM).NE.0.) RETURN
+C* CHECK THE LOCATION OF THE EIGENVALUES
+   10 L = 0
+      LS = 1
+      DO 40 LL=1,N
+        L = L + LS
+        IF (L.GT.N) GO TO 50
+        L1 = L + 1
+        IF (L1.GT.N) GO TO 20
+        IF (A(L1,L).EQ.0.) GO TO 20
+C* HERE A 2X2  BLOCK IS CHECKED
+        LS = 2
+        D = B(L,L)*B(L1,L1)
+        S = (A(L,L)*B(L1,L1)+A(L1,L1)*B(L,L)-A(L1,L)*B(L,L1))/D
+        P = (A(L,L)*A(L1,L1)-A(L,L1)*A(L1,L))/D
+        IS = FTEST(LS,ALPHA,BETA,S,P)
+        GO TO 30
+C* HERE A 1X1  BLOCK IS CHECKED
+   20   LS = 1
+        IS = FTEST(LS,A(L,L),B(L,L),S,P)
+   30   IF (IS.EQ.(-1) .AND. L.LE.NDIM) RETURN
+        IF (IS.EQ.1 .AND. L.GT.NDIM) RETURN
+   40 CONTINUE
+   50 OK = .TRUE.
+      RETURN
+      END
+      SUBROUTINE Z1ORTH(NMAX, N, Z, NDIM, EMAX)                         Z1O   10
+      INTEGER NMAX, N, NDIM
+      REAL Z(NMAX,N), EMAX
+C*
+C* THIS ROUTINE CHECKS THE ORTHONORMALITY OF THE FIRST NDIM
+C* COLUMNS OF THE MATRIX Z BY COMPUTING THE QUANTITY
+C*    EMAX = MAX(ABS(DELTA(I,J)-Z(.,I)**T*Z(.,J)))
+C* WHERE DELTA IS THE KRONECKER DELTA AND Z(.,L) IS THE
+C* L-TH COLUMN OF Z, L VARYING FROM 1 TO NDIM.
+C*
+      INTEGER I, J, K
+      REAL S
+      EMAX = 0.
+      IF (NDIM.EQ.0) RETURN
+      DO 30 J=1,NDIM
+        DO 20 I=J,NDIM
+          S = 0.
+          IF (I.EQ.J) S = -1.
+          DO 10 K=1,N
+            S = S + Z(K,I)*Z(K,J)
+   10     CONTINUE
+          IF (ABS(S).GT.EMAX) EMAX = ABS(S)
+   20   CONTINUE
+   30 CONTINUE
+      RETURN
+      END
+      SUBROUTINE DEFTST(NMAX, N, A, B, Z, NDIM, QMAX, INFO, NNMAX, Q,   DEF   10
+     * S1, S2, WORK)
+      INTEGER NMAX, N, NDIM, NNMAX, INFO
+      REAL A(NMAX,N), B(NMAX,N), Z(NMAX,N), QMAX, Q(NNMAX,N),
+     * S1(NNMAX), S2(N), WORK(NNMAX)
+C*
+C* THIS ROUTINE CHECKS IF THE FIRST NDIM COLUMNS OF THE Z
+C* MATRIX, GATHERED IN THE SUBMATRIX Z1, FORM A BASIS FOR A
+C* DEFLATING SUBSPACE OF THE PENCIL LAMBDA*B-A, BY COMPUTING
+C* THE (NDIM+1)-TH SINGULAR VALUE OF THE COMPOUND MATRIX
+C* (A*Z1,B*Z1) DIVIDED BY THE LARGEST SINGULAR VALUE OF THE
+C* COMPOUND MATRIX (A,B). IF THIS VALUE, RETURNED IN QMAX,
+C* IS OF THE ORDER OF THE RELATIVE PRECISION OF THE COMPUTER,
+C* THEN THE COLUMNS OF Z1 SPAN A DEFLATING SUBSPACE.
+C*
+      INTEGER NDIM1, NM, N1, M1, I, J, K, M, IN, JNDIM
+      REAL SA, SB, ABNORM
+      INFO = 0
+      JOB = 00
+      QMAX = 0.
+      IF (NDIM.EQ.0) RETURN
+C*** CALCULATE LARGEST SINGULAR VALUE OF Q=(A,B)
+      DO 20 J=1,N
+        DO 10 I=1,N
+          Q(I,J) = A(I,J)
+          IN = I + N
+          Q(IN,J) = B(I,J)
+   10   CONTINUE
+   20 CONTINUE
+      M = N + N
+      CALL SSVDC(Q, NNMAX, M, N, S1, S2, Q, NNMAX, Q, NNMAX, WORK, JOB,
+     * INFO)
+      IF (INFO.NE.0) RETURN
+      ABNORM = S1(1)
+C*** CALCULATE (NDIM+1)-TH SINGULAR VALUE OF Q=(A*Z1,B*Z1)
+      M = NDIM + NDIM
+      NM = MIN0(N,M)
+      DO 50 J=1,NDIM
+        DO 40 I=1,N
+          SA = 0.
+          SB = 0.
+          DO 30 K=1,N
+            SA = SA + A(I,K)*Z(K,J)
+            SB = SB + B(I,K)*Z(K,J)
+   30     CONTINUE
+          IF (M.LE.N) Q(I,J) = SA
+          IF (M.GT.N) Q(J,I) = SA
+          JNDIM = J + NDIM
+          IF (M.LE.N) Q(I,JNDIM) = SB
+          IF (M.GT.N) Q(JNDIM,I) = SB
+   40   CONTINUE
+   50 CONTINUE
+      M1 = M
+      IF (M.GT.N) M1 = N
+      N1 = N
+      IF (M.GT.N) N1 = M
+      CALL SSVDC(Q, NNMAX, N1, M1, S1, S2, Q, NNMAX, Q, NNMAX, WORK,
+     * JOB, INFO)
+      IF (INFO.NE.0) RETURN
+      NDIM1 = NDIM + 1
+      QMAX = S1(NDIM1)
+      QMAX = QMAX/ABNORM
+      RETURN
+      END
+      SUBROUTINE SSVDC(X, LDX, N, P, S, E, U, LDU, V, LDV, WORK, JOB,   SSV   10
+     * INFO)
+      INTEGER LDX, N, P, LDU, LDV, JOB, INFO
+      REAL X(LDX,1), S(1), E(1), U(LDU,1), V(LDV,1), WORK(1)
+C
+C
+C     SSVDC IS A SUBROUTINE TO REDUCE A REAL NXP MATRIX X BY
+C     ORTHOGONAL TRANSFORMATIONS U AND V TO DIAGONAL FORM.  THE
+C     DIAGONAL ELEMENTS S(I) ARE THE SINGULAR VALUES OF X.  THE
+C     COLUMNS OF U ARE THE CORRESPONDING LEFT SINGULAR VECTORS,
+C     AND THE COLUMNS OF V THE RIGHT SINGULAR VECTORS.
+C
+C     ON ENTRY
+C
+C         X         REAL(LDX,P), WHERE LDX.GE.N.
+C                   X CONTAINS THE MATRIX WHOSE SINGULAR VALUE
+C                   DECOMPOSITION IS TO BE COMPUTED.  X IS
+C                   DESTROYED BY SSVDC.
+C
+C         LDX       INTEGER.
+C                   LDX IS THE LEADING DIMENSION OF THE ARRAY X.
+C
+C         N         INTEGER.
+C                   N IS THE NUMBER OF COLUMNS OF THE MATRIX X.
+C
+C         P         INTEGER.
+C                   P IS THE NUMBER OF ROWS OF THE MATRIX X.
+C
+C         LDU       INTEGER.
+C                   LDU IS THE LEADING DIMENSION OF THE ARRAY U.
+C                   (SEE BELOW).
+C
+C         LDV       INTEGER.
+C                   LDV IS THE LEADING DIMENSION OF THE ARRAY V.
+C                   (SEE BELOW).
+C
+C         WORK      REAL(N).
+C                   WORK IS A SCRATCH ARRAY.
+C
+C         JOB       INTEGER.
+C                   JOB CONTROLS THE COMPUTATION OF THE SINGULAR
+C                   VECTORS.  IT HAS THE DECIMAL EXPANSION AB
+C                   WITH THE FOLLOWING MEANING
+C
+C                        A.EQ.0    DO NOT COMPUTE THE LEFT SINGULAR
+C                                  VECTORS.
+C                        A.EQ.1    RETURN THE N LEFT SINGULAR VECTORS
+C                                  IN U.
+C                        A.GE.2    RETURN THE FIRST MIN(N,P) SINGULAR
+C                                  VECTORS IN U.
+C                        B.EQ.0    DO NOT COMPUTE THE RIGHT SINGULAR
+C                                  VECTORS.
+C                        B.EQ.1    RETURN THE RIGHT SINGULAR VECTORS
+C                                  IN V.
+C
+C     ON RETURN
+C
+C         S         REAL(MM), WHERE MM=MIN(N+1,P).
+C                   THE FIRST MIN(N,P) ENTRIES OF S CONTAIN THE
+C                   SINGULAR VALUES OF X ARRANGED IN DESCENDING
+C                   ORDER OF MAGNITUDE.
+C
+C         E         REAL(P).
+C                   E ORDINARILY CONTAINS ZEROS.  HOWEVER SEE THE
+C                   DISCUSSION OF INFO FOR EXCEPTIONS.
+C
+C         U         REAL(LDU,K), WHERE LDU.GE.N.  IF JOBA.EQ.1 THEN
+C                                   K.EQ.N, IF JOBA.GE.2 THEN
+C                                   K.EQ.MIN(N,P).
+C                   U CONTAINS THE MATRIX OF RIGHT SINGULAR VECTORS.
+C                   U IS NOT REFERENCED IF JOBA.EQ.0.  IF N.LE.P
+C                   OR IF JOBA.EQ.2, THEN U MAY BE IDENTIFIED WITH X
+C                   IN THE SUBROUTINE CALL.
+C
+C         V         REAL(LDV,P), WHERE LDV.GE.P.
+C                   V CONTAINS THE MATRIX OF RIGHT SINGULAR VECTORS.
+C                   V IS NOT REFERENCED IF JOB.EQ.0.  IF P.LE.N,
+C                   THEN V MAY BE IDENTIFIED WITH X IN THE
+C                   SUBROUTINE CALL.
+C
+C         INFO      INTEGER.
+C                   THE SINGULAR VALUES (AND THEIR CORRESPONDING
+C                   SINGULAR VECTORS) S(INFO+1),S(INFO+2),...,S(M)
+C                   ARE CORRECT (HERE M=MIN(N,P)).  THUS IF
+C                   INFO.EQ.0, ALL THE SINGULAR VALUES AND THEIR
+C                   VECTORS ARE CORRECT.  IN ANY EVENT, THE MATRIX
+C                   B = TRANS(U)*X*V IS THE BIDIAGONAL MATRIX
+C                   WITH THE ELEMENTS OF S ON ITS DIAGONAL AND THE
+C                   ELEMENTS OF E ON ITS SUPER-DIAGONAL (TRANS(U)
+C                   IS THE TRANSPOSE OF U).  THUS THE SINGULAR
+C                   VALUES OF X AND B ARE THE SAME.
+C
+C     LINPACK. THIS VERSION DATED 03/19/79 .
+C     G.W. STEWART, UNIVERSITY OF MARYLAND, ARGONNE NATIONAL LAB.
+C
+C     ***** USES THE FOLLOWING FUNCTIONS AND SUBPROGRAMS.
+C
+C     EXTERNAL SROT
+C     BLAS SAXPY,SDOT,SSCAL,SSWAP,SNRM2,SROTG
+C     FORTRAN ABS,AMAX1,MAX0,MIN0,MOD,SQRT
+C
+C     INTERNAL VARIABLES
+C
+      INTEGER I, ITER, J, JOBU, K, KASE, KK, L, LL, LLS, LM1, LP1, LS,
+     * LU, M, MAXIT, MM, MM1, MP1, NCT, NCTP1, NCU, NRT, NRTP1
+      REAL SDOT, T
+      REAL B, C, CS, EL, EMM1, F, G, SNRM2, SCALE, SHIFT, SL, SM, SN,
+     * SMM1, T1, TEST, ZTEST
+      LOGICAL WANTU, WANTV
+C
+C
+C     SET THE MAXIMUM NUMBER OF ITERATIONS.
+C
+      MAXIT = 30
+C
+C     DETERMINE WHAT IS TO BE COMPUTED.
+C
+      WANTU = .FALSE.
+      WANTV = .FALSE.
+      JOBU = MOD(JOB,100)/10
+      NCU = N
+      IF (JOBU.GT.1) NCU = MIN0(N,P)
+      IF (JOBU.NE.0) WANTU = .TRUE.
+      IF (MOD(JOB,10).NE.0) WANTV = .TRUE.
+C
+C     REDUCE X TO BIDIAGONAL FORM, STORING THE DIAGONAL ELEMENTS
+C     IN S AND THE SUPER-DIAGONAL ELEMENTS IN E.
+C
+      INFO = 0
+      NCT = MIN0(N-1,P)
+      NRT = MAX0(0,MIN0(P-2,N))
+      LU = MAX0(NCT,NRT)
+      IF (LU.LT.1) GO TO 170
+      DO 160 L=1,LU
+        LP1 = L + 1
+        IF (L.GT.NCT) GO TO 20
+C
+C           COMPUTE THE TRANSFORMATION FOR THE L-TH COLUMN AND
+C           PLACE THE L-TH DIAGONAL IN S(L).
+C
+        S(L) = SNRM2(N-L+1,X(L,L),1)
+        IF (S(L).EQ.0.0E0) GO TO 10
+        IF (X(L,L).NE.0.0E0) S(L) = SIGN(S(L),X(L,L))
+        CALL SSCAL(N-L+1, 1.0E0/S(L), X(L,L), 1)
+        X(L,L) = 1.0E0 + X(L,L)
+   10   CONTINUE
+        S(L) = -S(L)
+   20   CONTINUE
+        IF (P.LT.LP1) GO TO 50
+        DO 40 J=LP1,P
+          IF (L.GT.NCT) GO TO 30
+          IF (S(L).EQ.0.0E0) GO TO 30
+C
+C              APPLY THE TRANSFORMATION.
+C
+          T = -SDOT(N-L+1,X(L,L),1,X(L,J),1)/X(L,L)
+          CALL SAXPY(N-L+1, T, X(L,L), 1, X(L,J), 1)
+   30     CONTINUE
+C
+C           PLACE THE L-TH ROW OF X INTO  E FOR THE
+C           SUBSEQUENT CALCULATION OF THE ROW TRANSFORMATION.
+C
+          E(J) = X(L,J)
+   40   CONTINUE
+   50   CONTINUE
+        IF (.NOT.WANTU .OR. L.GT.NCT) GO TO 70
+C
+C           PLACE THE TRANSFORMATION IN U FOR SUBSEQUENT BACK
+C           MULTIPLICATION.
+C
+        DO 60 I=L,N
+          U(I,L) = X(I,L)
+   60   CONTINUE
+   70   CONTINUE
+        IF (L.GT.NRT) GO TO 150
+C
+C           COMPUTE THE L-TH ROW TRANSFORMATION AND PLACE THE
+C           L-TH SUPER-DIAGONAL IN E(L).
+C
+        E(L) = SNRM2(P-L,E(LP1),1)
+        IF (E(L).EQ.0.0E0) GO TO 80
+        IF (E(LP1).NE.0.0E0) E(L) = SIGN(E(L),E(LP1))
+        CALL SSCAL(P-L, 1.0E0/E(L), E(LP1), 1)
+        E(LP1) = 1.0E0 + E(LP1)
+   80   CONTINUE
+        E(L) = -E(L)
+        IF (LP1.GT.N .OR. E(L).EQ.0.0E0) GO TO 120
+C
+C              APPLY THE TRANSFORMATION.
+C
+        DO 90 I=LP1,N
+          WORK(I) = 0.0E0
+   90   CONTINUE
+        DO 100 J=LP1,P
+          CALL SAXPY(N-L, E(J), X(LP1,J), 1, WORK(LP1), 1)
+  100   CONTINUE
+        DO 110 J=LP1,P
+          CALL SAXPY(N-L, -E(J)/E(LP1), WORK(LP1), 1, X(LP1,J), 1)
+  110   CONTINUE
+  120   CONTINUE
+        IF (.NOT.WANTV) GO TO 140
+C
+C              PLACE THE TRANSFORMATION IN V FOR SUBSEQUENT
+C              BACK MULTIPLICATION.
+C
+        DO 130 I=LP1,P
+          V(I,L) = E(I)
+  130   CONTINUE
+  140   CONTINUE
+  150   CONTINUE
+  160 CONTINUE
+  170 CONTINUE
+C
+C     SET UP THE FINAL BIDIAGONAL MATRIX OR ORDER M.
+C
+      M = MIN0(P,N+1)
+      NCTP1 = NCT + 1
+      NRTP1 = NRT + 1
+      IF (NCT.LT.P) S(NCTP1) = X(NCTP1,NCTP1)
+      IF (N.LT.M) S(M) = 0.0E0
+      IF (NRTP1.LT.M) E(NRTP1) = X(NRTP1,M)
+      E(M) = 0.0E0
+C
+C     IF REQUIRED, GENERATE U.
+C
+      IF (.NOT.WANTU) GO TO 300
+      IF (NCU.LT.NCTP1) GO TO 200
+      DO 190 J=NCTP1,NCU
+        DO 180 I=1,N
+          U(I,J) = 0.0E0
+  180   CONTINUE
+        U(J,J) = 1.0E0
+  190 CONTINUE
+  200 CONTINUE
+      IF (NCT.LT.1) GO TO 290
+      DO 280 LL=1,NCT
+        L = NCT - LL + 1
+        IF (S(L).EQ.0.0E0) GO TO 250
+        LP1 = L + 1
+        IF (NCU.LT.LP1) GO TO 220
+        DO 210 J=LP1,NCU
+          T = -SDOT(N-L+1,U(L,L),1,U(L,J),1)/U(L,L)
+          CALL SAXPY(N-L+1, T, U(L,L), 1, U(L,J), 1)
+  210   CONTINUE
+  220   CONTINUE
+        CALL SSCAL(N-L+1, -1.0E0, U(L,L), 1)
+        U(L,L) = 1.0E0 + U(L,L)
+        LM1 = L - 1
+        IF (LM1.LT.1) GO TO 240
+        DO 230 I=1,LM1
+          U(I,L) = 0.0E0
+  230   CONTINUE
+  240   CONTINUE
+        GO TO 270
+  250   CONTINUE
+        DO 260 I=1,N
+          U(I,L) = 0.0E0
+  260   CONTINUE
+        U(L,L) = 1.0E0
+  270   CONTINUE
+  280 CONTINUE
+  290 CONTINUE
+  300 CONTINUE
+C
+C     IF IT IS REQUIRED, GENERATE V.
+C
+      IF (.NOT.WANTV) GO TO 350
+      DO 340 LL=1,P
+        L = P - LL + 1
+        LP1 = L + 1
+        IF (L.GT.NRT) GO TO 320
+        IF (E(L).EQ.0.0E0) GO TO 320
+        DO 310 J=LP1,P
+          T = -SDOT(P-L,V(LP1,L),1,V(LP1,J),1)/V(LP1,L)
+          CALL SAXPY(P-L, T, V(LP1,L), 1, V(LP1,J), 1)
+  310   CONTINUE
+  320   CONTINUE
+        DO 330 I=1,P
+          V(I,L) = 0.0E0
+  330   CONTINUE
+        V(L,L) = 1.0E0
+  340 CONTINUE
+  350 CONTINUE
+C
+C     MAIN ITERATION LOOP FOR THE SINGULAR VALUES.
+C
+      MM = M
+      ITER = 0
+  360 CONTINUE
+C
+C        QUIT IF ALL THE SINGULAR VALUES HAVE BEEN FOUND.
+C
+C     ...EXIT
+      IF (M.EQ.0) GO TO 620
+C
+C        IF TOO MANY ITERATIONS HAVE BEEN PERFORMED, SET
+C        FLAG AND RETURN.
+C
+      IF (ITER.LT.MAXIT) GO TO 370
+      INFO = M
+C     ......EXIT
+      GO TO 620
+  370 CONTINUE
+C
+C        THIS SECTION OF THE PROGRAM INSPECTS FOR
+C        NEGLIGIBLE ELEMENTS IN THE S AND E ARRAYS.  ON
+C        COMPLETION THE VARIABLES KASE AND L ARE SET AS FOLLOWS.
+C
+C           KASE = 1     IF S(M) AND E(L-1) ARE NEGLIGIBLE AND L.LT.M
+C           KASE = 2     IF S(L) IS NEGLIGIBLE AND L.LT.M
+C           KASE = 3     IF E(L-1) IS NEGLIGIBLE, L.LT.M, AND
+C                        S(L), ..., S(M) ARE NOT NEGLIGIBLE (QR STEP).
+C           KASE = 4     IF E(M-1) IS NEGLIGIBLE (CONVERGENCE).
+C
+      DO 390 LL=1,M
+        L = M - LL
+C        ...EXIT
+        IF (L.EQ.0) GO TO 400
+        TEST = ABS(S(L)) + ABS(S(L+1))
+        ZTEST = TEST + ABS(E(L))
+        IF (ZTEST.NE.TEST) GO TO 380
+        E(L) = 0.0E0
+C        ......EXIT
+        GO TO 400
+  380   CONTINUE
+  390 CONTINUE
+  400 CONTINUE
+      IF (L.NE.M-1) GO TO 410
+      KASE = 4
+      GO TO 480
+  410 CONTINUE
+      LP1 = L + 1
+      MP1 = M + 1
+      DO 430 LLS=LP1,MP1
+        LS = M - LLS + LP1
+C           ...EXIT
+        IF (LS.EQ.L) GO TO 440
+        TEST = 0.0E0
+        IF (LS.NE.M) TEST = TEST + ABS(E(LS))
+        IF (LS.NE.L+1) TEST = TEST + ABS(E(LS-1))
+        ZTEST = TEST + ABS(S(LS))
+        IF (ZTEST.NE.TEST) GO TO 420
+        S(LS) = 0.0E0
+C           ......EXIT
+        GO TO 440
+  420   CONTINUE
+  430 CONTINUE
+  440 CONTINUE
+      IF (LS.NE.L) GO TO 450
+      KASE = 3
+      GO TO 470
+  450 CONTINUE
+      IF (LS.NE.M) GO TO 460
+      KASE = 1
+      GO TO 470
+  460 CONTINUE
+      KASE = 2
+      L = LS
+  470 CONTINUE
+  480 CONTINUE
+      L = L + 1
+C
+C        PERFORM THE TASK INDICATED BY KASE.
+C
+      GO TO (490, 520, 540, 570), KASE
+C
+C        DEFLATE NEGLIGIBLE S(M).
+C
+  490 CONTINUE
+      MM1 = M - 1
+      F = E(M-1)
+      E(M-1) = 0.0E0
+      DO 510 KK=L,MM1
+        K = MM1 - KK + L
+        T1 = S(K)
+        CALL SROTG(T1, F, CS, SN)
+        S(K) = T1
+        IF (K.EQ.L) GO TO 500
+        F = -SN*E(K-1)
+        E(K-1) = CS*E(K-1)
+  500   CONTINUE
+        IF (WANTV) CALL SROT(P, V(1,K), 1, V(1,M), 1, CS, SN)
+  510 CONTINUE
+      GO TO 610
+C
+C        SPLIT AT NEGLIGIBLE S(L).
+C
+  520 CONTINUE
+      F = E(L-1)
+      E(L-1) = 0.0E0
+      DO 530 K=L,M
+        T1 = S(K)
+        CALL SROTG(T1, F, CS, SN)
+        S(K) = T1
+        F = -SN*E(K)
+        E(K) = CS*E(K)
+        IF (WANTU) CALL SROT(N, U(1,K), 1, U(1,L-1), 1, CS, SN)
+  530 CONTINUE
+      GO TO 610
+C
+C        PERFORM ONE QR STEP.
+C
+  540 CONTINUE
+C
+C           CALCULATE THE SHIFT.
+C
+      SCALE = AMAX1(ABS(S(M)),ABS(S(M-1)),ABS(E(M-1)),ABS(S(L)),ABS(E(L)
+     * ))
+      SM = S(M)/SCALE
+      SMM1 = S(M-1)/SCALE
+      EMM1 = E(M-1)/SCALE
+      SL = S(L)/SCALE
+      EL = E(L)/SCALE
+      B = ((SMM1+SM)*(SMM1-SM)+EMM1**2)/2.0E0
+      C = (SM*EMM1)**2
+      SHIFT = 0.0E0
+      IF (B.EQ.0.0E0 .AND. C.EQ.0.0E0) GO TO 550
+      SHIFT = SQRT(B**2+C)
+      IF (B.LT.0.0E0) SHIFT = -SHIFT
+      SHIFT = C/(B+SHIFT)
+  550 CONTINUE
+      F = (SL+SM)*(SL-SM) - SHIFT
+      G = SL*EL
+C
+C           CHASE ZEROS.
+C
+      MM1 = M - 1
+      DO 560 K=L,MM1
+        CALL SROTG(F, G, CS, SN)
+        IF (K.NE.L) E(K-1) = F
+        F = CS*S(K) + SN*E(K)
+        E(K) = CS*E(K) - SN*S(K)
+        G = SN*S(K+1)
+        S(K+1) = CS*S(K+1)
+        IF (WANTV) CALL SROT(P, V(1,K), 1, V(1,K+1), 1, CS, SN)
+        CALL SROTG(F, G, CS, SN)
+        S(K) = F
+        F = CS*E(K) + SN*S(K+1)
+        S(K+1) = -SN*E(K) + CS*S(K+1)
+        G = SN*E(K+1)
+        E(K+1) = CS*E(K+1)
+        IF (WANTU .AND. K.LT.N) CALL SROT(N, U(1,K), 1, U(1,K+1), 1,
+     *   CS, SN)
+  560 CONTINUE
+      E(M-1) = F
+      ITER = ITER + 1
+      GO TO 610
+C
+C        CONVERGENCE.
+C
+  570 CONTINUE
+C
+C           MAKE THE SINGULAR VALUE  POSITIVE.
+C
+      IF (S(L).GE.0.0E0) GO TO 580
+      S(L) = -S(L)
+      IF (WANTV) CALL SSCAL(P, -1.0E0, V(1,L), 1)
+  580 CONTINUE
+C
+C           ORDER THE SINGULAR VALUE.
+C
+  590 IF (L.EQ.MM) GO TO 600
+C           ...EXIT
+      IF (S(L).GE.S(L+1)) GO TO 600
+      T = S(L)
+      S(L) = S(L+1)
+      S(L+1) = T
+      IF (WANTV .AND. L.LT.P) CALL SSWAP(P, V(1,L), 1, V(1,L+1), 1)
+      IF (WANTU .AND. L.LT.N) CALL SSWAP(N, U(1,L), 1, U(1,L+1), 1)
+      L = L + 1
+      GO TO 590
+  600 CONTINUE
+      ITER = 0
+      M = M - 1
+  610 CONTINUE
+      GO TO 360
+  620 CONTINUE
+      RETURN
+      END
+      SUBROUTINE SROT(N, SX, INCX, SY, INCY, C, S)                      SRO   10
+C
+C     APPLIES A PLANE ROTATION.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SX(1), SY(1), STEMP, C, S
+      INTEGER I, INCX, INCY, IX, IY, N
+C
+      IF (N.LE.0) RETURN
+      IF (INCX.EQ.1 .AND. INCY.EQ.1) GO TO 20
+C
+C       CODE FOR UNEQUAL INCREMENTS OR EQUAL INCREMENTS NOT EQUAL
+C         TO 1
+C
+      IX = 1
+      IY = 1
+      IF (INCX.LT.0) IX = (-N+1)*INCX + 1
+      IF (INCY.LT.0) IY = (-N+1)*INCY + 1
+      DO 10 I=1,N
+        STEMP = C*SX(IX) + S*SY(IY)
+        SY(IY) = C*SY(IY) - S*SX(IX)
+        SX(IX) = STEMP
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      RETURN
+C
+C       CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+   20 DO 30 I=1,N
+        STEMP = C*SX(I) + S*SY(I)
+        SY(I) = C*SY(I) - S*SX(I)
+        SX(I) = STEMP
+   30 CONTINUE
+      RETURN
+      END
+      SUBROUTINE SAXPY(N, SA, SX, INCX, SY, INCY)                       SAX   10
+C
+C     CONSTANT TIMES A VECTOR PLUS A VECTOR.
+C     USES UNROLLED LOOP FOR INCREMENTS EQUAL TO ONE.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SX(1), SY(1), SA
+      INTEGER I, INCX, INCY, IX, IY, M, MP1, N
+C
+      IF (N.LE.0) RETURN
+      IF (SA.EQ.0.0) RETURN
+      IF (INCX.EQ.1 .AND. INCY.EQ.1) GO TO 20
+C
+C        CODE FOR UNEQUAL INCREMENTS OR EQUAL INCREMENTS
+C          NOT EQUAL TO 1
+C
+      IX = 1
+      IY = 1
+      IF (INCX.LT.0) IX = (-N+1)*INCX + 1
+      IF (INCY.LT.0) IY = (-N+1)*INCY + 1
+      DO 10 I=1,N
+        SY(IY) = SY(IY) + SA*SX(IX)
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      RETURN
+C
+C        CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,4)
+      IF (M.EQ.0) GO TO 40
+      DO 30 I=1,M
+        SY(I) = SY(I) + SA*SX(I)
+   30 CONTINUE
+      IF (N.LT.4) RETURN
+   40 MP1 = M + 1
+      DO 50 I=MP1,N,4
+        SY(I) = SY(I) + SA*SX(I)
+        SY(I+1) = SY(I+1) + SA*SX(I+1)
+        SY(I+2) = SY(I+2) + SA*SX(I+2)
+        SY(I+3) = SY(I+3) + SA*SX(I+3)
+   50 CONTINUE
+      RETURN
+      END
+      REAL FUNCTION SDOT(N, SX, INCX, SY, INCY)                         SDO   10
+C
+C     FORMS THE DOT PRODUCT OF TWO VECTORS.
+C     USES UNROLLED LOOPS FOR INCREMENTS EQUAL TO ONE.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SX(1), SY(1), STEMP
+      INTEGER I, INCX, INCY, IX, IY, M, MP1, N
+C
+      STEMP = 0.0E0
+      SDOT = 0.0E0
+      IF (N.LE.0) RETURN
+      IF (INCX.EQ.1 .AND. INCY.EQ.1) GO TO 20
+C
+C        CODE FOR UNEQUAL INCREMENTS OR EQUAL INCREMENTS
+C          NOT EQUAL TO 1
+C
+      IX = 1
+      IY = 1
+      IF (INCX.LT.0) IX = (-N+1)*INCX + 1
+      IF (INCY.LT.0) IY = (-N+1)*INCY + 1
+      DO 10 I=1,N
+        STEMP = STEMP + SX(IX)*SY(IY)
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      SDOT = STEMP
+      RETURN
+C
+C        CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,5)
+      IF (M.EQ.0) GO TO 40
+      DO 30 I=1,M
+        STEMP = STEMP + SX(I)*SY(I)
+   30 CONTINUE
+      IF (N.LT.5) GO TO 60
+   40 MP1 = M + 1
+      DO 50 I=MP1,N,5
+        STEMP = STEMP + SX(I)*SY(I) + SX(I+1)*SY(I+1) + SX(I+2)*SY(I+2)
+     *   + SX(I+3)*SY(I+3) + SX(I+4)*SY(I+4)
+   50 CONTINUE
+   60 SDOT = STEMP
+      RETURN
+      END
+      REAL FUNCTION SNRM2(N, SX, INCX)                                  SNR   10
+      INTEGER NEXT
+      REAL SX(1), CUTLO, CUTHI, HITEST, SUM, XMAX, ZERO, ONE
+      DATA ZERO, ONE /0.0E0,1.0E0/
+C
+C     EUCLIDEAN NORM OF THE N-VECTOR STORED IN SX() WITH STORAGE
+C     INCREMENT INCX .
+C     IF    N .LE. 0 RETURN WITH RESULT = 0.
+C     IF N .GE. 1 THEN INCX MUST BE .GE. 1
+C
+C           C.L.LAWSON, 1978 JAN 08
+C
+C     FOUR PHASE METHOD     USING TWO BUILT-IN CONSTANTS THAT ARE
+C     HOPEFULLY APPLICABLE TO ALL MACHINES.
+C         CUTLO = MAXIMUM OF  SQRT(U/EPS)  OVER ALL KNOWN MACHINES.
+C         CUTHI = MINIMUM OF  SQRT(V)      OVER ALL KNOWN MACHINES.
+C     WHERE
+C         EPS = SMALLEST NO. SUCH THAT EPS + 1. .GT. 1.
+C         U   = SMALLEST POSITIVE NO.   (UNDERFLOW LIMIT)
+C         V   = LARGEST  NO.            (OVERFLOW  LIMIT)
+C
+C     BRIEF OUTLINE OF ALGORITHM..
+C
+C     PHASE 1    SCANS ZERO COMPONENTS.
+C     MOVE TO PHASE 2 WHEN A COMPONENT IS NONZERO AND .LE. CUTLO
+C     MOVE TO PHASE 3 WHEN A COMPONENT IS .GT. CUTLO
+C     MOVE TO PHASE 4 WHEN A COMPONENT IS .GE. CUTHI/M
+C     WHERE M = N FOR X() REAL AND M = 2*N FOR COMPLEX.
+C
+C     VALUES FOR CUTLO AND CUTHI..
+C     FROM THE ENVIRONMENTAL PARAMETERS LISTED IN THE IMSL CONVERTER
+C     DOCUMENT THE LIMITING VALUES ARE AS FOLLOWS..
+C     CUTLO, S.P.   U/EPS = 2**(-102) FOR  HONEYWELL.  CLOSE SECONDS ARE
+C                   UNIVAC AND DEC AT 2**(-103)
+C                   THUS CUTLO = 2**(-51) = 4.44089E-16
+C     CUTHI, S.P.   V = 2**127 FOR UNIVAC, HONEYWELL, AND DEC.
+C                   THUS CUTHI = 2**(63.5) = 1.30438E19
+C     CUTLO, D.P.   U/EPS = 2**(-67) FOR HONEYWELL AND DEC.
+C                   THUS CUTLO = 2**(-33.5) = 8.23181D-11
+C     CUTHI, D.P.   SAME AS S.P.  CUTHI = 1.30438D19
+C     DATA CUTLO, CUTHI / 8.232D-11,  1.304D19 /
+C     DATA CUTLO, CUTHI / 4.441E-16,  1.304E19 /
+      DATA CUTLO, CUTHI /4.441E-16,1.304E19/
+C
+      IF (N.GT.0) GO TO 10
+      SNRM2 = ZERO
+      GO TO 140
+C
+   10 ASSIGN 30 TO NEXT
+      SUM = ZERO
+      NN = N*INCX
+C                                                 BEGIN MAIN LOOP
+      I = 1
+   20 GO TO NEXT, (30, 40, 70, 80)
+   30 IF (ABS(SX(I)).GT.CUTLO) GO TO 110
+      ASSIGN 40 TO NEXT
+      XMAX = ZERO
+C
+C                        PHASE 1.  SUM IS ZERO
+C
+   40 IF (SX(I).EQ.ZERO) GO TO 130
+      IF (ABS(SX(I)).GT.CUTLO) GO TO 110
+C
+C                                PREPARE FOR PHASE 2.
+      ASSIGN 70 TO NEXT
+      GO TO 60
+C
+C                                PREPARE FOR PHASE 4.
+C
+   50 I = J
+      ASSIGN 80 TO NEXT
+      SUM = (SUM/SX(I))/SX(I)
+   60 XMAX = ABS(SX(I))
+      GO TO 90
+C
+C                   PHASE 2.  SUM IS SMALL.
+C                             SCALE TO AVOID DESTRUCTIVE UNDERFLOW.
+C
+   70 IF (ABS(SX(I)).GT.CUTLO) GO TO 100
+C
+C                     COMMON CODE FOR PHASES 2 AND 4.
+C                     IN PHASE 4 SUM IS LARGE.  SCALE TO AVOID OVERFLOW.
+C
+   80 IF (ABS(SX(I)).LE.XMAX) GO TO 90
+      SUM = ONE + SUM*(XMAX/SX(I))**2
+      XMAX = ABS(SX(I))
+      GO TO 130
+C
+   90 SUM = SUM + (SX(I)/XMAX)**2
+      GO TO 130
+C
+C
+C                  PREPARE FOR PHASE 3.
+C
+  100 SUM = (SUM*XMAX)*XMAX
+C
+C
+C     FOR REAL OR D.P. SET HITEST = CUTHI/N
+C     FOR COMPLEX      SET HITEST = CUTHI/(2*N)
+C
+  110 HITEST = CUTHI/FLOAT(N)
+C
+C                   PHASE 3.  SUM IS MID-RANGE.  NO SCALING.
+C
+      DO 120 J=I,NN,INCX
+        IF (ABS(SX(J)).GE.HITEST) GO TO 50
+        SUM = SUM + SX(J)**2
+  120 CONTINUE
+      SNRM2 = SQRT(SUM)
+      GO TO 140
+C
+  130 CONTINUE
+      I = I + INCX
+      IF (I.LE.NN) GO TO 20
+C
+C              END OF MAIN LOOP.
+C
+C              COMPUTE SQUARE ROOT AND ADJUST FOR SCALING.
+C
+      SNRM2 = XMAX*SQRT(SUM)
+  140 CONTINUE
+      RETURN
+      END
+      SUBROUTINE SROTG(SA, SB, C, S)                                    SRO   10
+C
+C     CONSTRUCT GIVENS PLANE ROTATION.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SA, SB, C, S, ROE, SCALE, R, Z
+C
+      ROE = SB
+      IF (ABS(SA).GT.ABS(SB)) ROE = SA
+      SCALE = ABS(SA) + ABS(SB)
+      IF (SCALE.NE.0.0) GO TO 10
+      C = 1.0
+      S = 0.0
+      R = 0.0
+      GO TO 20
+   10 R = SCALE*SQRT((SA/SCALE)**2+(SB/SCALE)**2)
+      R = SIGN(1.0,ROE)*R
+      C = SA/R
+      S = SB/R
+   20 Z = 1.0
+      IF (ABS(SA).GT.ABS(SB)) Z = S
+      IF (ABS(SB).GE.ABS(SA) .AND. C.NE.0.0) Z = 1.0/C
+      SA = R
+      SB = Z
+      RETURN
+      END
+      SUBROUTINE SSCAL(N, SA, SX, INCX)                                 SSC   10
+C
+C     SCALES A VECTOR BY A CONSTANT.
+C     USES UNROLLED LOOPS FOR INCREMENT EQUAL TO 1.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SA, SX(1)
+      INTEGER I, INCX, M, MP1, N, NINCX
+C
+      IF (N.LE.0) RETURN
+      IF (INCX.EQ.1) GO TO 20
+C
+C        CODE FOR INCREMENT NOT EQUAL TO 1
+C
+      NINCX = N*INCX
+      DO 10 I=1,NINCX,INCX
+        SX(I) = SA*SX(I)
+   10 CONTINUE
+      RETURN
+C
+C        CODE FOR INCREMENT EQUAL TO 1
+C
+C
+C        CLEAN-UP LOOP
+C
+   20 M = MOD(N,5)
+      IF (M.EQ.0) GO TO 40
+      DO 30 I=1,M
+        SX(I) = SA*SX(I)
+   30 CONTINUE
+      IF (N.LT.5) RETURN
+   40 MP1 = M + 1
+      DO 50 I=MP1,N,5
+        SX(I) = SA*SX(I)
+        SX(I+1) = SA*SX(I+1)
+        SX(I+2) = SA*SX(I+2)
+        SX(I+3) = SA*SX(I+3)
+        SX(I+4) = SA*SX(I+4)
+   50 CONTINUE
+      RETURN
+      END
+      SUBROUTINE SSWAP(N, SX, INCX, SY, INCY)                           SSW   10
+C
+C     INTERCHANGES TWO VECTORS.
+C     USES UNROLLED LOOPS FOR INCREMENTS EQUAL TO 1.
+C     JACK DONGARRA, LINPACK, 3/11/78.
+C
+      REAL SX(1), SY(1), STEMP
+      INTEGER I, INCX, INCY, IX, IY, M, MP1, N
+C
+      IF (N.LE.0) RETURN
+      IF (INCX.EQ.1 .AND. INCY.EQ.1) GO TO 20
+C
+C       CODE FOR UNEQUAL INCREMENTS OR EQUAL INCREMENTS NOT EQUAL
+C         TO 1
+C
+      IX = 1
+      IY = 1
+      IF (INCX.LT.0) IX = (-N+1)*INCX + 1
+      IF (INCY.LT.0) IY = (-N+1)*INCY + 1
+      DO 10 I=1,N
+        STEMP = SX(IX)
+        SX(IX) = SY(IY)
+        SY(IY) = STEMP
+        IX = IX + INCX
+        IY = IY + INCY
+   10 CONTINUE
+      RETURN
+C
+C       CODE FOR BOTH INCREMENTS EQUAL TO 1
+C
+C
+C       CLEAN-UP LOOP
+C
+   20 M = MOD(N,3)
+      IF (M.EQ.0) GO TO 40
+      DO 30 I=1,M
+        STEMP = SX(I)
+        SX(I) = SY(I)
+        SY(I) = STEMP
+   30 CONTINUE
+      IF (N.LT.3) RETURN
+   40 MP1 = M + 1
+      DO 50 I=MP1,N,3
+        STEMP = SX(I)
+        SX(I) = SY(I)
+        SY(I) = STEMP
+        STEMP = SX(I+1)
+        SX(I+1) = SY(I+1)
+        SY(I+1) = STEMP
+        STEMP = SX(I+2)
+        SX(I+2) = SY(I+2)
+        SY(I+2) = STEMP
+   50 CONTINUE
+      RETURN
+      END
+      SUBROUTINE DSUBSP(NMAX, N, A, B, Z, FTEST, EPS, NDIM, FAIL, IND)  DSU   10
+      INTEGER NMAX, N, FTEST, NDIM, IND(N)
+      LOGICAL FAIL
+      REAL A(NMAX,N), B(NMAX,N), Z(NMAX,N), EPS
+C*
+C* GIVEN THE UPPER TRIANGULAR MATRIX B AND UPPER HESSENBERG MATRIX A
+C* WITH 1X1 OR 2X2 DIAGONAL BLOCKS, THIS ROUTINE REORDERS THE DIAGONAL
+C* BLOCKS ALONG WITH THEIR GENERALIZED EIGENVALUES BY CONSTRUCTING EQUI-
+C* VALENCE TRANSFORMATIONS QT AND ZT. THE ROW TRANSFORMATION ZT IS ALSO
+C* PERFORMED ON THE GIVEN (INITIAL) TRANSFORMATION Z (RESULTING FROM A
+C* POSSIBLE PREVIOUS STEP OR INITIALIZED WITH THE IDENTITY MATRIX).
+C* AFTER REORDERING, THE EIGENVALUES INSIDE THE REGION SPECIFIED BY THE
+C* FUNCTION FTEST APPEAR AT THE TOP. IF NDIM IS THEIR NUMBER THEN THE
+C* NDIM FIRST COLUMNS OF Z SPAN THE REQUESTED SUBSPACE. DSUBSP REQUIRES
+C* THE SUBROUTINE EXCHQZ AND THE INTEGER FUNCTION FTEST WHICH HAS TO BE
+C* PROVIDED BY THE USER. THE PARAMETERS IN THE CALLING SEQUENCE ARE :
+C* (STARRED PARAMETERS ARE ALTERED BY THE SUBROUTINE)
+C*
+C*    NMAX     THE FIRST DIMENSION OF A, B AND Z
+C*    N        THE ORDER OF A, B AND Z
+C*   *A,*B     THE MATRIX PAIR WHOSE BLOCKS ARE TO BE REORDERED.
+C*   *Z        UPON RETURN THIS ARRAY IS MULTIPLIED BY THE COLUMN
+C*             TRANSFORMATION ZT.
+C*    FTEST(LS,ALPHA,BETA,S,P) AN INTEGER FUNCTION DESCRIBING THE
+C*             SPECTRUM OF THE DEFLATING SUBSPACE TO BE COMPUTED:
+C*             WHEN LS=1 FTEST CHECKS IF ALPHA/BETA IS IN THAT SPECTRUM
+C*             WHEN LS=2 FTEST CHECKS IF THE TWO COMPLEX CONJUGATE
+C*             ROOTS WITH SUM S AND PRODUCT P ARE IN THAT SPECTRUM
+C*             IF THE ANSWER IS POSITIVE, FTEST=1, OTHERWISE FTEST=-1
+C*    EPS      THE REQUIRED ABSOLUTE ACCURACY OF THE RESULT
+C*   *NDIM     AN INTEGER GIVING THE DIMENSION OF THE COMPUTED
+C*             DEFLATING SUBSPACE
+C*   *FAIL     A LOGICAL VARIABLE WHICH IS FALSE ON A NORMAL RETURN,
+C*             TRUE OTHERWISE (WHEN EXCHQZ FAILS)
+C*   *IND      AN INTEGER WORKING ARRAY OF DIMENSION AT LEAST N
+C*
+      INTEGER L, LS, LS1, LS2, L1, LL, NUM, IS, L2I, L2K, I, K, II,
+     * ISTEP, IFIRST
+      REAL S, P, D, ALPHA, BETA
+      FAIL = .TRUE.
+      NDIM = 0
+      NUM = 0
+      L = 0
+      LS = 1
+C*** CONSTRUCT ARRAY IND(I) WHERE :
+C***     IABS(IND(I)) IS THE SIZE OF THE BLOCK I
+C***     SIGN(IND(I)) INDICATES THE LOCATION OF ITS EIGENVALUES
+C***                  (AS DETERMINED BY FTEST).
+C*** NUM IS THE NUMBER OF ELEMENTS IN THIS ARRAY
+      DO 30 LL=1,N
+        L = L + LS
+        IF (L.GT.N) GO TO 40
+        L1 = L + 1
+        IF (L1.GT.N) GO TO 10
+        IF (A(L1,L).EQ.0.) GO TO 10
+C* HERE A 2X2  BLOCK IS CHECKED *
+        LS = 2
+        D = B(L,L)*B(L1,L1)
+        S = (A(L,L)*B(L1,L1)+A(L1,L1)*B(L,L)-A(L1,L)*B(L,L1))/D
+        P = (A(L,L)*A(L1,L1)-A(L,L1)*A(L1,L))/D
+        IS = FTEST(LS,ALPHA,BETA,S,P)
+        GO TO 20
+C* HERE A 1X1  BLOCK IS CHECKED *
+   10   LS = 1
+        IS = FTEST(LS,A(L,L),B(L,L),S,P)
+   20   NUM = NUM + 1
+        IF (IS.EQ.1) NDIM = NDIM + LS
+        IND(NUM) = LS*IS
+   30 CONTINUE
+C***  REORDER BLOCKS SUCH THAT THOSE WITH POSITIVE VALUE
+C***    OF IND(.) APPEAR FIRST.
+   40 L2I = 1
+      DO 100 I=1,NUM
+        IF (IND(I).GT.0) GO TO 90
+C* IF A NEGATIVE IND(I) IS ENCOUNTERED, THEN SEARCH FOR THE FIRST
+C* POSITIVE IND(K) FOLLOWING ON IT
+        L2K = L2I
+        DO 60 K=I,NUM
+          IF (IND(K).LT.0) GO TO 50
+          GO TO 70
+   50     L2K = L2K - IND(K)
+   60   CONTINUE
+C* IF THERE ARE NO POSITIVE INDICES FOLLOWING ON A NEGATIVE ONE
+C* THEN STOP
+        GO TO 110
+C* IF A POSITIVE IND(K) FOLLOWS ON A NEGATIVE IND(I) THEN
+C* INTERCHANGE BLOCK K BEFORE BLOCK I BY PERFORMING K-I SWAPS
+   70   ISTEP = K - I
+        LS2 = IND(K)
+        L = L2K
+        DO 80 II=1,ISTEP
+          IFIRST = K - II
+          LS1 = -IND(IFIRST)
+          L = L - LS1
+          CALL EXCHQZ(NMAX, N, A, B, Z, L, LS1, LS2, EPS, FAIL)
+          IF (FAIL) RETURN
+          IND(IFIRST+1) = IND(IFIRST)
+   80   CONTINUE
+        IND(I) = LS2
+   90   L2I = L2I + IND(I)
+  100 CONTINUE
+  110 FAIL = .FALSE.
+      RETURN
+      END
+      SUBROUTINE EXCHQZ(NMAX, N, A, B, Z, L, LS1, LS2, EPS, FAIL)       EXC   10
+      INTEGER NMAX, N, L, LS1, LS2
+      REAL A(NMAX,N), B(NMAX,N), Z(NMAX,N), EPS
+      LOGICAL FAIL
+C*
+C* GIVEN THE UPPER TRIANGULAR MATRIX B AND UPPER HESSENBERG MATRIX A
+C* WITH CONSECUTIVE LS1XLS1 AND LS2XLS2 DIAGONAL BLOCKS (LS1,LS2.LE.2)
+C* STARTING AT ROW/COLUMN L, EXCHQZ PRODUCES EQUIVALENCE TRANSFORMA-
+C* TIONS QT AND ZT THAT EXCHANGE THE BLOCKS ALONG WITH THEIR GENERALIZED
+C* EIGENVALUES. EXCHQZ REQUIRES THE SUBROUTINES SROT (BLAS) AND GIV.
+C* THE PARAMETERS IN THE CALLING SEQUENCE ARE (STARRED PARAMETERS ARE
+C* ALTERED BY THE SUBROUTINE):
+C*
+C*    NMAX     THE FIRST DIMENSION OF A, B AND Z
+C*    N        THE ORDER OF A, B AND Z
+C*   *A,*B     THE MATRIX PAIR WHOSE BLOCKS ARE TO BE INTERCHANGED
+C*   *Z        UPON RETURN THIS ARRAY IS MULTIPLIED BY THE COLUMN
+C*             TRANSFORMATION ZT.
+C*    L        THE POSITION OF THE BLOCKS
+C*    LS1      THE SIZE OF THE FIRST BLOCK
+C*    LS2      THE SIZE OF THE SECOND BLOCK
+C*    EPS      THE REQUIRED ABSOLUTE ACCURACY OF THE RESULT
+C*   *FAIL     A LOGICAL VARIABLE WHICH IS FALSE ON A NORMAL RETURN,
+C*             TRUE OTHERWISE.
+C*
+      INTEGER I, J, L1, L2, L3, LI, LJ, LL, IT1, IT2
+      REAL U(3,3), D, E, F, G, SA, SB, A11B11, A21B11, A12B22, B12B22,
+     * A22B22, AMMBMM, ANMBMM, AMNBNN, BMNBNN, ANNBNN
+      LOGICAL ALTB
+      FAIL = .FALSE.
+      L1 = L + 1
+      LL = LS1 + LS2
+      IF (LL.GT.2) GO TO 10
+C*** INTERCHANGE 1X1 AND 1X1 BLOCKS VIA AN EQUIVALENCE
+C*** TRANSFORMATION       A:=Q*A*Z , B:=Q*B*Z
+C*** WHERE Q AND Z ARE GIVENS ROTATIONS
+      F = AMAX1(ABS(A(L1,L1)),ABS(B(L1,L1)))
+      ALTB = .TRUE.
+      IF (ABS(A(L1,L1)).GE.F) ALTB = .FALSE.
+      SA = A(L1,L1)/F
+      SB = B(L1,L1)/F
+      F = SA*B(L,L) - SB*A(L,L)
+C* CONSTRUCT THE COLUMN TRANSFORMATION Z
+      G = SA*B(L,L1) - SB*A(L,L1)
+      CALL GIV(F, G, D, E)
+      CALL SROT(L1, A(1,L), 1, A(1,L1), 1, E, -D)
+      CALL SROT(L1, B(1,L), 1, B(1,L1), 1, E, -D)
+      CALL SROT(N, Z(1,L), 1, Z(1,L1), 1, E, -D)
+C* CONSTRUCT THE ROW TRANSFORMATION Q
+      IF (ALTB) CALL GIV(B(L,L), B(L1,L), D, E)
+      IF (.NOT.ALTB) CALL GIV(A(L,L), A(L1,L), D, E)
+      CALL SROT(N-L+1, A(L,L), NMAX, A(L1,L), NMAX, D, E)
+      CALL SROT(N-L+1, B(L,L), NMAX, B(L1,L), NMAX, D, E)
+      A(L1,L) = 0.
+      B(L1,L) = 0.
+      RETURN
+C*** INTERCHANGE 1X1 AND 2X2 BLOCKS VIA AN EQUIVALENCE
+C*** TRANSFORMATION  A:=Q2*Q1*A*Z1*Z2 , B:=Q2*Q1*B*Z1*Z2
+C*** WHERE EACH QI AND ZI IS A GIVENS ROTATION
+   10 L2 = L + 2
+      IF (LS1.EQ.2) GO TO 60
+      G = AMAX1(ABS(A(L,L)),ABS(B(L,L)))
+      ALTB = .TRUE.
+      IF (ABS(A(L,L)).LT.G) GO TO 20
+      ALTB = .FALSE.
+      CALL GIV(A(L1,L1), A(L2,L1), D, E)
+      CALL SROT(N-L, A(L1,L1), NMAX, A(L2,L1), NMAX, D, E)
+      CALL SROT(N-L, B(L1,L1), NMAX, B(L2,L1), NMAX, D, E)
+C**  EVALUATE THE PENCIL AT THE EIGENVALUE CORRESPONDING
+C**  TO THE 1X1 BLOCK
+   20 SA = A(L,L)/G
+      SB = B(L,L)/G
+      DO 40 J=1,2
+        LJ = L + J
+        DO 30 I=1,3
+          LI = L + I - 1
+          U(I,J) = SA*B(LI,LJ) - SB*A(LI,LJ)
+   30   CONTINUE
+   40 CONTINUE
+      CALL GIV(U(3,1), U(3,2), D, E)
+      CALL SROT(3, U(1,1), 1, U(1,2), 1, E, -D)
+C* PERFORM THE ROW TRANSFORMATION Q1
+      CALL GIV(U(1,1), U(2,1), D, E)
+      U(2,2) = -U(1,2)*E + U(2,2)*D
+      CALL SROT(N-L+1, A(L,L), NMAX, A(L1,L), NMAX, D, E)
+      CALL SROT(N-L+1, B(L,L), NMAX, B(L1,L), NMAX, D, E)
+C* PERFORM THE COLUMN TRANSFORMATION Z1
+      IF (ALTB) CALL GIV(B(L1,L), B(L1,L1), D, E)
+      IF (.NOT.ALTB) CALL GIV(A(L1,L), A(L1,L1), D, E)
+      CALL SROT(L2, A(1,L), 1, A(1,L1), 1, E, -D)
+      CALL SROT(L2, B(1,L), 1, B(1,L1), 1, E, -D)
+      CALL SROT(N, Z(1,L), 1, Z(1,L1), 1, E, -D)
+C* PERFORM THE ROW TRANSFORMATION Q2
+      CALL GIV(U(2,2), U(3,2), D, E)
+      CALL SROT(N-L+1, A(L1,L), NMAX, A(L2,L), NMAX, D, E)
+      CALL SROT(N-L+1, B(L1,L), NMAX, B(L2,L), NMAX, D, E)
+C* PERFORM THE COLUMN TRANSFORMATION Z2
+      IF (ALTB) CALL GIV(B(L2,L1), B(L2,L2), D, E)
+      IF (.NOT.ALTB) CALL GIV(A(L2,L1), A(L2,L2), D, E)
+      CALL SROT(L2, A(1,L1), 1, A(1,L2), 1, E, -D)
+      CALL SROT(L2, B(1,L1), 1, B(1,L2), 1, E, -D)
+      CALL SROT(N, Z(1,L1), 1, Z(1,L2), 1, E, -D)
+      IF (ALTB) GO TO 50
+      CALL GIV(B(L,L), B(L1,L), D, E)
+      CALL SROT(N-L+1, A(L,L), NMAX, A(L1,L), NMAX, D, E)
+      CALL SROT(N-L+1, B(L,L), NMAX, B(L1,L), NMAX, D, E)
+C*  PUT THE NEGLECTABLE ELEMENTS EQUAL TO ZERO
+   50 A(L2,L) = 0.
+      A(L2,L1) = 0.
+      B(L1,L) = 0.
+      B(L2,L) = 0.
+      B(L2,L1) = 0.
+      RETURN
+C*** INTERCHANGE 2X2 AND 1X1 BLOCKS VIA AN EQUIVALENCE
+C*** TRANSFORMATION  A:=Q2*Q1*A*Z1*Z2 , B:=Q2*Q1*B*Z1*Z2
+C*** WHERE EACH QI AND ZI IS A GIVENS ROTATION
+   60 IF (LS2.EQ.2) GO TO 110
+      G = AMAX1(ABS(A(L2,L2)),ABS(B(L2,L2)))
+      ALTB = .TRUE.
+      IF (ABS(A(L2,L2)).LT.G) GO TO 70
+      ALTB = .FALSE.
+      CALL GIV(A(L,L), A(L1,L), D, E)
+      CALL SROT(N-L+1, A(L,L), NMAX, A(L1,L), NMAX, D, E)
+      CALL SROT(N-L+1, B(L,L), NMAX, B(L1,L), NMAX, D, E)
+C**  EVALUATE THE PENCIL AT THE EIGENVALUE CORRESPONDING
+C**  TO THE 1X1 BLOCK
+   70 SA = A(L2,L2)/G
+      SB = B(L2,L2)/G
+      DO 90 I=1,2
+        LI = L + I - 1
+        DO 80 J=1,3
+          LJ = L + J - 1
+          U(I,J) = SA*B(LI,LJ) - SB*A(LI,LJ)
+   80   CONTINUE
+   90 CONTINUE
+      CALL GIV(U(1,1), U(2,1), D, E)
+      CALL SROT(3, U(1,1), 3, U(2,1), 3, D, E)
+C* PERFORM THE COLUMN TRANSFORMATION Z1
+      CALL GIV(U(2,2), U(2,3), D, E)
+      U(1,2) = U(1,2)*E - U(1,3)*D
+      CALL SROT(L2, A(1,L1), 1, A(1,L2), 1, E, -D)
+      CALL SROT(L2, B(1,L1), 1, B(1,L2), 1, E, -D)
+      CALL SROT(N, Z(1,L1), 1, Z(1,L2), 1, E, -D)
+C* PERFORM THE ROW TRANSFORMATION Q1
+      IF (ALTB) CALL GIV(B(L1,L1), B(L2,L1), D, E)
+      IF (.NOT.ALTB) CALL GIV(A(L1,L1), A(L2,L1), D, E)
+      CALL SROT(N-L+1, A(L1,L), NMAX, A(L2,L), NMAX, D, E)
+      CALL SROT(N-L+1, B(L1,L), NMAX, B(L2,L), NMAX, D, E)
+C* PERFORM THE COLUMN TRANSFORMATION Z2
+      CALL GIV(U(1,1), U(1,2), D, E)
+      CALL SROT(L2, A(1,L), 1, A(1,L1), 1, E, -D)
+      CALL SROT(L2, B(1,L), 1, B(1,L1), 1, E, -D)
+      CALL SROT(N, Z(1,L), 1, Z(1,L1), 1, E, -D)
+C* PERFORM THE ROW TRANSFORMATION Q2
+      IF (ALTB) CALL GIV(B(L,L), B(L1,L), D, E)
+      IF (.NOT.ALTB) CALL GIV(A(L,L), A(L1,L), D, E)
+      CALL SROT(N-L+1, A(L,L), NMAX, A(L1,L), NMAX, D, E)
+      CALL SROT(N-L+1, B(L,L), NMAX, B(L1,L), NMAX, D, E)
+      IF (ALTB) GO TO 100
+      CALL GIV(B(L1,L1), B(L2,L1), D, E)
+      CALL SROT(N-L, A(L1,L1), NMAX, A(L2,L1), NMAX, D, E)
+      CALL SROT(N-L, B(L1,L1), NMAX, B(L2,L1), NMAX, D, E)
+C*  PUT THE NEGLECTABLE ELEMENTS EQUAL TO ZERO
+  100 A(L1,L) = 0.
+      A(L2,L) = 0.
+      B(L1,L) = 0.
+      B(L2,1) = 0.
+      B(L2,L1) = 0.
+      RETURN
+C*** INTERCHANGE 2X2 AND 2X2 BLOCKS VIA A SEQUENCE OF
+C*** QZ-STEPS REALIZED BY THE EQUIVALENCE TRANSFORMATIONS
+C***          A:=Q5*Q4*Q3*Q2*Q1*A*Z1*Z2*Z3*Z4*Z5
+C***          B:=Q5*Q4*Q3*Q2*Q1*B*Z1*Z2*Z3*Z4*Z5
+C*** WHERE EACH QI AND ZI IS A GIVENS ROTATION
+  110 L3 = L + 3
+C* COMPUTE IMPLICIT SHIFT
+      AMMBMM = A(L,L)/B(L,L)
+      ANMBMM = A(L1,L)/B(L,L)
+      AMNBNN = A(L,L1)/B(L1,L1)
+      ANNBNN = A(L1,L1)/B(L1,L1)
+      BMNBNN = B(L,L1)/B(L1,L1)
+      DO 130 IT1=1,3
+        U(1,1) = 1.
+        U(2,1) = 1.
+        U(3,1) = 1.
+        DO 120 IT2=1,10
+C* PERFORM ROW TRANSFORMATIONS Q1 AND Q2
+          CALL GIV(U(2,1), U(3,1), D, E)
+          CALL SROT(N-L+1, A(L1,L), NMAX, A(L2,L), NMAX, D, E)
+          CALL SROT(N-L, B(L1,L1), NMAX, B(L2,L1), NMAX, D, E)
+          U(2,1) = D*U(2,1) + E*U(3,1)
+          CALL GIV(U(1,1), U(2,1), D, E)
+          CALL SROT(N-L+1, A(L,L), NMAX, A(L1,L), NMAX, D, E)
+          CALL SROT(N-L+1, B(L,L), NMAX, B(L1,L), NMAX, D, E)
+C* PERFORM COLUMN TRANSFORMATIONS Z1 AND Z2
+          CALL GIV(B(L2,L1), B(L2,L2), D, E)
+          CALL SROT(L3, A(1,L1), 1, A(1,L2), 1, E, -D)
+          CALL SROT(L2, B(1,L1), 1, B(1,L2), 1, E, -D)
+          CALL SROT(N, Z(1,L1), 1, Z(1,L2), 1, E, -D)
+          CALL GIV(B(L1,L), B(L1,L1), D, E)
+          CALL SROT(L3, A(1,L), 1, A(1,L1), 1, E, -D)
+          CALL SROT(L1, B(1,L), 1, B(1,L1), 1, E, -D)
+          CALL SROT(N, Z(1,L), 1, Z(1,L1), 1, E, -D)
+C* PERFORM TRANSFORMATIONS Q3,Z3,Q4,Z4,Q5 AND Z5 IN
+C* ORDER TO REDUCE THE PENCIL TO HESSENBERG FORM
+          CALL GIV(A(L2,L), A(L3,L), D, E)
+          CALL SROT(N-L+1, A(L2,L), NMAX, A(L3,L), NMAX, D, E)
+          CALL SROT(N-L1, B(L2,L2), NMAX, B(L3,L2), NMAX, D, E)
+          CALL GIV(B(L3,L2), B(L3,L3), D, E)
+          CALL SROT(L3, A(1,L2), 1, A(1,L3), 1, E, -D)
+          CALL SROT(L3, B(1,L2), 1, B(1,L3), 1, E, -D)
+          CALL SROT(N, Z(1,L2), 1, Z(1,L3), 1, E, -D)
+          CALL GIV(A(L1,L), A(L2,L), D, E)
+          CALL SROT(N-L+1, A(L1,L), NMAX, A(L2,L), NMAX, D, E)
+          CALL SROT(N-L, B(L1,L1), NMAX, B(L2,L1), NMAX, D, E)
+          CALL GIV(B(L2,L1), B(L2,L2), D, E)
+          CALL SROT(L3, A(1,L1), 1, A(1,L2), 1, E, -D)
+          CALL SROT(L2, B(1,L1), 1, B(1,L2), 1, E, -D)
+          CALL SROT(N, Z(1,L1), 1, Z(1,L2), 1, E, -D)
+          CALL GIV(A(L2,L1), A(L3,L1), D, E)
+          CALL SROT(N-L, A(L2,L1), NMAX, A(L3,L1), NMAX, D, E)
+          CALL SROT(N-L1, B(L2,L2), NMAX, B(L3,L2), NMAX, D, E)
+          CALL GIV(B(L3,L2), B(L3,L3), D, E)
+          CALL SROT(L3, A(1,L2), 1, A(1,L3), 1, E, -D)
+          CALL SROT(L3, B(1,L2), 1, B(1,L3), 1, E, -D)
+          CALL SROT(N, Z(1,L2), 1, Z(1,L3), 1, E, -D)
+C* TEST OF CONVERGENCE ON THE ELEMENT SEPARATING THE BLOCKS
+          IF (ABS(A(L2,L1)).LE.EPS) GO TO 140
+C* COMPUTE A NEW SHIFT IN CASE OF NO CONVERGENCE
+          A11B11 = A(L,L)/B(L,L)
+          A12B22 = A(L,L1)/B(L1,L1)
+          A21B11 = A(L1,L)/B(L,L)
+          A22B22 = A(L1,L1)/B(L1,L1)
+          B12B22 = B(L,L1)/B(L1,L1)
+          U(1,1) = ((AMMBMM-A11B11)*(ANNBNN-A11B11)-AMNBNN*
+     *     ANMBMM+ANMBMM*BMNBNN*A11B11)/A21B11 + A12B22 - A11B11*B12B22
+          U(2,1) = (A22B22-A11B11) - A21B11*B12B22 - (AMMBMM-A11B11) -
+     *     (ANNBNN-A11B11) + ANMBMM*BMNBNN
+          U(3,1) = A(L2,L1)/B(L1,L1)
+  120   CONTINUE
+  130 CONTINUE
+      FAIL = .TRUE.
+      RETURN
+C*  PUT THE NEGLECTABLE ELEMENTS EQUAL TO ZERO IN
+C*  CASE OF CONVERGENCE
+  140 A(L2,L) = 0.
+      A(L2,L1) = 0.
+      A(L3,L) = 0.
+      A(L3,L1) = 0.
+      B(L1,L) = 0.
+      B(L2,L) = 0.
+      B(L2,L1) = 0.
+      B(L3,L) = 0.
+      B(L3,L1) = 0.
+      B(L3,L2) = 0.
+      RETURN
+      END
+      SUBROUTINE GIV(SA, SB, SC, SS)                                    GIV   10
+      REAL SA, SB, SC, SS
+C*
+C* THIS ROUTINE CONSTRUCTS THE GIVENS TRANSFORMATION
+C*
+C*           ( SC  SS )
+C*       G = (        ),   SC**2+SS**2 = 1. ,
+C*           (-SS  SC )
+C*
+C* WHICH ZEROS THE SECOND ENTRY OF THE 2-VECTOR (SA,SB)**T
+C* THIS ROUTINE IS A MODIFICATION OF THE BLAS ROUTINE SROTG
+C* (ALGORITHM 539) IN ORDER TO LEAVE THE ARGUMENTS SA AND SB
+C* UNCHANGED
+C*
+      REAL R, U, V
+      IF (ABS(SA).LE.ABS(SB)) GO TO 10
+C* HERE ABS(SA) .GT. ABS(SB)
+      U = SA + SA
+      V = SB/U
+      R = SQRT(.25+V**2)*U
+      SC = SA/R
+      SS = V*(SC+SC)
+      RETURN
+C* HERE ABS(SA) .LE. ABS(SB)
+   10 IF (SB.EQ.0.) GO TO 20
+      U = SB + SB
+      V = SA/U
+      R = SQRT(.25+V**2)*U
+      SS = SB/R
+      SC = V*(SS+SS)
+      RETURN
+C* HERE SA = SB = 0.
+   20 SC = 1.
+      SS = 0.
+      RETURN
+      END
+      INTEGER FUNCTION FIN(LSIZE, ALPHA, BETA, S, P)                    FIN   10
+      INTEGER LSIZE
+      REAL ALPHA, BETA, S, P
+C*
+C* THIS FUNCTION CHECKS IF
+C*  THE REAL ROOT ALPHA/BETA LIES IN THE UNIT DISC (IF LSIZE=1)
+C*  THE COMPLEX CONJUGATE ROOTS WITH SUM S AND PRODUCT P LIE
+C*  IN THE UNIT DISC (IF LSIZE=2)
+C* IF SO, FIN=1, OTHERWISE FIN=-1
+C* IN THIS FUNCTION THE PARAMETER S IS NOT REFERENCED
+C*
+      FIN = -1
+      IF (LSIZE.EQ.2) GO TO 10
+      IF (ABS(ALPHA).LT.ABS(BETA)) FIN = 1
+      RETURN
+   10 IF (ABS(P).LT.1.) FIN = 1
+      RETURN
+      END
+      INTEGER FUNCTION FOUT(LSIZE, ALPHA, BETA, S, P)                   FOU   10
+      INTEGER LSIZE
+      REAL ALPHA, BETA, S, P
+C*
+C* THIS FUNCTION CHECKS IF
+C*  THE REAL ROOT ALPHA/BETA LIES OUTSIDE THE UNIT DISC
+C*  (IF LSIZE=1)
+C*  THE COMPLEX CONJUGATE ROOTS WITH SUM S AND PRODUCT P LIE
+C*  OUTSIDE THE UNIT DISC (IF LSIZE=2).
+C* IF SO, FOUT=1, OTHERWISE, FOUT=-1
+C* IN THIS FUNCTION THE PARAMETER S IS NOT REFERENCED
+C*
+      FOUT = -1
+      IF (LSIZE.EQ.2) GO TO 10
+      IF (ABS(ALPHA).GE.ABS(BETA)) FOUT = 1
+      RETURN
+   10 IF (ABS(P).GE.1.) FOUT = 1
+      RETURN
+      END
+      INTEGER FUNCTION FOLHP(LS, ALPHA, BETA, S, P)                     FOL   10
+      INTEGER LS
+      REAL ALPHA, BETA, S, P
+C*
+C* THIS ROUTINE CHECKS IF
+C*  THE REAL ROOT ALPHA/BETA LIES IN THE OPEN LEFT HALF PLANE
+C*  (IF LS=1)
+C*  THE COMPLEX CONJUGATE ROOTS WITH SUM S AND PRODUCT P LIE
+C*  IN THE OPEN LEFT HALF PLANE (IF LS=2)
+C* IF SO, FOLHP=1, OTHERWISE, FOLHP=-1
+C* IN THIS FUNCTION THE PARAMETER P IS NOT REFERENCED
+C*
+      FOLHP = -1
+      IF (LS.EQ.2) GO TO 10
+      IF (ALPHA*BETA.LT.0.) FOLHP = 1
+      RETURN
+   10 IF (S.LT.0.) FOLHP = 1
+      RETURN
+      END
+      INTEGER FUNCTION FCRHP(LS, ALPHA, BETA, S, P)                     FCR   10
+      INTEGER LS
+      REAL ALPHA, BETA, S, P
+C*
+C* THIS FUNCTION CHECKS IF
+C*  THE REAL ROOT ALPHA/BETA LIES IN THE CLOSED RIGHT HALF PLANE
+C*  (IF LS=1)
+C*  THE COMPLEX CONJUGATE ROOTS WITH SUM S AND PRODUCT P LIE IN
+C*  THE CLOSED RIGHT HALF PLANE (IF LS=2)
+C* IF SO, FCRHP=1, OTHERWISE, FCRHP=-1
+C* IN THIS FUNCTION THE PARAMETER P IS NOT REFERENCED
+C*
+      FCRHP = -1
+      IF (LS.EQ.2) GO TO 10
+      IF (ALPHA*BETA.GE.0.) FCRHP = 1
+      RETURN
+   10 IF (S.GE.0.) FCRHP = 1
+      RETURN
+      END
+ THE ORDERED GENERALIZED EIGENVALUES IN THE
+ QUASI-TRIANGULAR FORM ARE
+ (0.,.3+J.2,.3-J.2,.5,INFINITY,4.+J5.,4.-J5.,2.)
+ ALL ROOTS ARE SIMPLE, FOUR OF THEM ARE COMPLEX
+ MATRIX A ( 8X 8)
+ COLUMNS  1 THROUGH  5
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.3000000E+00  0.2000000E+00  0.4000000E+01  0.6000000E+01
+  0.0000000E+00 -0.2000000E+00  0.3000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.5000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.1000000E+01
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ 
+ COLUMNS  6 THROUGH  8
+  0.0000000E+00  0.0000000E+00  0.1000000E+01
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.5000000E+00  0.0000000E+00
+  0.2000000E+01  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.4000000E+01  0.2500000E+01  0.0000000E+00
+ -0.1000000E+02  0.4000000E+01  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.2000000E+01
+ 
+ MATRIX B ( 8X 8)
+ COLUMNS  1 THROUGH  5
+  0.1000000E+01  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.1000000E+01  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.1000000E+01  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.1000000E+01  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ 
+ COLUMNS  6 THROUGH  8
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.1000000E+01  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.1000000E+01  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.1000000E+01
+ 
+ MATRIX Z ( 8X 8)
+ COLUMNS  1 THROUGH  5
+  0.1000000E+01  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.1000000E+01  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.1000000E+01  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.1000000E+01  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.1000000E+01
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ 
+ COLUMNS  6 THROUGH  8
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.1000000E+01  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.1000000E+01  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.1000000E+01
+ 
+1REORDER THE EIGENVALUES SUCH THAT THOSE OUTSIDE
+ THE UNIT DISC APPEAR AT THE TOP OF THE PENCIL
+ MATRIX A ( 8X 8)
+ COLUMNS  1 THROUGH  5
+  0.6082762E+01  0.4247846E+00  0.7971165E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00 -0.2834365E+01 -0.9662392E+01  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.2709858E+01 -0.5131377E+01  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.2000000E+01 -0.9999999E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ 
+ COLUMNS  6 THROUGH  8
+  0.3065953E+00  0.6962077E-01  0.3844395E+01
+  0.4439181E-01  0.1043377E+01  0.2228958E+01
+ -0.3462731E+00  0.8746473E+00  0.6793562E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.6909709E-01 -0.2666103E+00 -0.4428166E+00
+  0.1333106E+00 -0.2030090E+00  0.5098801E+00
+  0.0000000E+00  0.0000000E+00  0.5000001E+00
+ 
+ MATRIX B ( 8X 8)
+ COLUMNS  1 THROUGH  5
+  0.0000000E+00  0.1059563E+00 -0.4474930E-01  0.0000000E+00  0.0000000E+00
+  0.0000000E+00 -0.9943707E+00 -0.4768348E-02  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00 -0.9989867E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.9999999E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.9999999E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ 
+ COLUMNS  6 THROUGH  8
+  0.9627479E+00 -0.1812727E+00  0.0000000E+00
+  0.1025867E+00 -0.1931578E-01 -0.2759742E-07
+ -0.4361560E-01  0.8212470E-02 -0.1856091E-07
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ -0.2463527E+00 -0.7179121E+00  0.5473342E-09
+  0.0000000E+00 -0.6717899E+00  0.1506086E-10
+  0.0000000E+00  0.0000000E+00  0.1000000E+01
+ 
+ MATRIX Z ( 8X 8)
+ COLUMNS  1 THROUGH  5
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.4472136E+00  0.8944272E+00
+  0.0000000E+00  0.1074179E+00 -0.4536656E-01  0.0000000E+00  0.0000000E+00
+  0.0000000E+00 -0.6787907E-01  0.1235434E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.1029986E+00  0.1992532E+00  0.0000000E+00  0.0000000E+00
+  0.1000000E+01  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00 -0.1485334E+00  0.9610816E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00 -0.9752861E+00 -0.1389224E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.8944272E+00 -0.4472136E+00
+ 
+ COLUMNS  6 THROUGH  8
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.9760279E+00 -0.1837731E+00  0.0000000E+00
+  0.1959325E+00  0.9704328E+00  0.0000000E+00
+ -0.5292628E-02 -0.1709338E-01  0.9743559E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.3470590E-01 -0.1397496E+00 -0.1831004E+00
+  0.8801831E-01 -0.6830373E-01  0.1307860E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ 
+ THE DEFLATING SUBSPACE CORRESPONDS TO THE FIRST   4 COLUMNS OF THE MATRIX Z
+ 
+ THE ROOTS ARE CORRECTLY ORDERED      T
+ 
+ THE VECTORS SPANNING THE DEFLATING SUBSPACE ARE
+ ORTHOGONAL WITH PRECISION    0.218E-06
+ THIS MUST BE OF THE ORDER OF THE RELATIVE PRECISION ( 0.119E-06 )
+ 
+ THE SPACE SPANNED THE COLUMNS OF (A*Z1,B*Z1)
+ WHERE Z1 SPANS THE COMPUTED DEFLATING SUBSPACE
+ HAS INDEED DIMENSION NDIM IF QMAX IS OF THE ORDER
+ OF THE RELATIVE PRECISION ( 0.119E-06 ). QMAX=  0.133E-07
+ 
+1PUT THE EIGENVALUES INSIDE THE UNIT DISC BACK
+ AT THE TOP, IN ORDER TO HAVE AN IDEA OF THE ROUNDING
+ ERRORS PERFORMED IN THE TWO STEPS
+ MATRIX A ( 8X 8)
+ COLUMNS  1 THROUGH  5
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00 -0.3000008E+00 -0.1999998E+00 -0.3861725E+01 -0.5792588E+01
+  0.0000000E+00 -0.2000000E+00  0.3000000E+00 -0.1042630E+01 -0.1563946E+01
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.5000001E+00  0.7416856E-07
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00 -0.9999997E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ 
+ COLUMNS  6 THROUGH  8
+  0.0000000E+00  0.0000000E+00  0.1000000E+01
+  0.2844763E-01  0.1271856E+00  0.0000000E+00
+ -0.1053679E+00 -0.4710751E+00  0.0000000E+00
+ -0.1951771E+01  0.4365628E+00  0.0000000E+00
+  0.2695750E-05 -0.1959555E-05  0.0000000E+00
+ -0.2402363E+01 -0.2857354E+01  0.0000000E+00
+  0.9642651E+01 -0.5597637E+01  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.2000000E+01
+ 
+ MATRIX B ( 8X 8)
+ COLUMNS  1 THROUGH  5
+  0.9999999E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00 -0.9999996E+00  0.2086163E-06  0.1284087E-08  0.1450339E-06
+  0.0000000E+00  0.0000000E+00  0.9999997E+00 -0.3143996E-07 -0.2357594E-14
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.1000000E+01  0.7498718E-07
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.7105427E-14
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.1472735E-07
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ 
+ COLUMNS  6 THROUGH  8
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ -0.6419378E-07 -0.5004005E-07  0.0000000E+00
+  0.3068601E-06  0.9210834E-07  0.0000000E+00
+  0.8940697E-07 -0.7847285E-08  0.0000000E+00
+ -0.6580947E-07 -0.2721659E-06  0.0000000E+00
+ -0.9999999E+00 -0.1487739E-06  0.0000000E+00
+  0.0000000E+00 -0.1000000E+01  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.9999999E+00
+ 
+ MATRIX Z ( 8X 8)
+ COLUMNS  1 THROUGH  5
+  0.1000000E+01  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.9654310E+00 -0.2606577E+00  0.1746090E-07 -0.1400202E-06
+  0.0000000E+00  0.2606576E+00  0.9654312E+00  0.1434496E-07 -0.3780420E-07
+  0.0000000E+00 -0.1197377E-07 -0.2722759E-07  0.1000000E+01  0.7498718E-07
+  0.0000000E+00  0.1450339E-06  0.0000000E+00 -0.7498718E-07  0.1000000E+01
+  0.0000000E+00  0.1719005E-07  0.1705425E-07  0.2980232E-07 -0.2583486E-15
+  0.0000000E+00  0.1023079E-06  0.1156735E-06  0.1117587E-06 -0.6457651E-14
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ 
+ COLUMNS  6 THROUGH  8
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ -0.1927987E-07  0.8423950E-07  0.0000000E+00
+  0.1780931E-07  0.9934946E-07  0.0000000E+00
+  0.5960464E-07  0.1341105E-06  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ -0.9758859E+00  0.2182818E+00  0.0000000E+00
+ -0.2182818E+00 -0.9758859E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.1000000E+01
+ 
+ THE DEFLATING SUBSPACE CORRESPONDS TO THE FIRST   4 COLUMNS OF THE MATRIX Z
+ 
+ THE ROOTS ARE CORRECTLY ORDERED      T
+ 
+ THE VECTORS SPANNING THE DEFLATING SUBSPACE ARE
+ ORTHOGONAL WITH PRECISION    0.514E-06
+ THIS MUST BE OF THE ORDER OF THE RELATIVE PRECISION ( 0.119E-06 )
+ 
+ THE SPACE SPANNED THE COLUMNS OF (A*Z1,B*Z1)
+ WHERE Z1 SPANS THE COMPUTED DEFLATING SUBSPACE
+ HAS INDEED DIMENSION NDIM IF QMAX IS OF THE ORDER
+ OF THE RELATIVE PRECISION ( 0.119E-06 ). QMAX=  0.500E-07
+ 
+1THIS IS THE SECOND EXAMPLE
+ THE ORDERED GENERALIZED EIGENVALUES IN THE
+ QUASI-TRIANGULAR FORM ARE
+ (-1.+J4.,-1.-J4.,-3.,-3.,2.,2.,2.,.5)
+ THE ROOT AT -3. IS DOUBLE (ONE JORDAN BLOCK)
+ THE ROOT AT 2. IS TRIPLE (TWO JORDAN BLOCKS)
+ THERE ARE TWO COMPLEX ROOTS
+ MATRIX A ( 8X 8)
+ COLUMNS  1 THROUGH  5
+ -0.1000000E+01  0.5000000E+00  0.0000000E+00  0.6000000E+01  0.0000000E+00
+  0.8000000E+01 -0.1000000E+01  0.4000000E+01  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00 -0.3000000E+01  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00 -0.3000000E+01  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.2000000E+01
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ 
+ COLUMNS  6 THROUGH  8
+  0.3000000E+01  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.1000000E+01  0.1000000E+01 -0.1000000E+01
+  0.2000000E+01  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.1000000E+01  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.5000000E+00
+ 
+ MATRIX B ( 8X 8)
+ COLUMNS  1 THROUGH  5
+  0.1000000E+01  0.0000000E+00  0.2000000E+01  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.1000000E+01  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.1000000E+01  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.1000000E+01  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.1000000E+01
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ 
+ COLUMNS  6 THROUGH  8
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.2000000E+01  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.4000000E+01
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.1000000E+01  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.5000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.1000000E+01
+ 
+ MATRIX Z ( 8X 8)
+ COLUMNS  1 THROUGH  5
+  0.1000000E+01  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.1000000E+01  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.1000000E+01  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.1000000E+01  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.1000000E+01
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ 
+ COLUMNS  6 THROUGH  8
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.1000000E+01  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.1000000E+01  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.1000000E+01
+ 
+1REORDER THE EIGENVALUES SUCH THAT THOSE IN THE
+ CLOSED RIGHT HALF PLANE APPEAR AT THE TOP
+ MATRIX A ( 8X 8)
+ COLUMNS  1 THROUGH  5
+  0.2000000E+01 -0.3386427E+00  0.1000000E+01 -0.6746697E+00  0.5176763E-01
+  0.0000000E+00 -0.3199770E+01  0.0000000E+00  0.7981671E+00  0.6523610E+01
+  0.0000000E+00  0.0000000E+00  0.1000000E+01  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00 -0.1455217E+01 -0.1924946E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.3883201E+01
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00 -0.2141422E+01
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ 
+ COLUMNS  6 THROUGH  8
+  0.1086880E+01 -0.4961390E+00  0.0000000E+00
+  0.1871692E+01  0.3234498E+01  0.1778002E+01
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.6808200E+00  0.2202973E+01  0.1172104E+01
+ -0.1957553E+01  0.1485564E+01 -0.5609354E+01
+  0.1593988E+01 -0.6706139E+00  0.2382231E-06
+  0.0000000E+00  0.9674711E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00 -0.3000000E+01
+ 
+ MATRIX B ( 8X 8)
+ COLUMNS  1 THROUGH  5
+  0.1000000E+01  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00 -0.1599885E+01  0.0000000E+00 -0.1380231E+00 -0.5083830E+00
+  0.0000000E+00  0.0000000E+00  0.5000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00 -0.1490116E-07  0.0000000E+00 -0.2910433E+01  0.1296672E+01
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00 -0.1130106E+01
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ 
+ COLUMNS  6 THROUGH  8
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.1583474E+01  0.5145793E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.5686928E+00 -0.2475236E+01  0.0000000E+00
+  0.3945926E+00 -0.2211524E+01  0.0000000E+00
+  0.5892744E+00 -0.1165192E+00  0.0000000E+00
+  0.0000000E+00 -0.3224904E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.1000000E+01
+ 
+ MATRIX Z ( 8X 8)
+ COLUMNS  1 THROUGH  5
+  0.0000000E+00 -0.4740998E+00  0.0000000E+00  0.3014449E+00  0.8272607E+00
+  0.0000000E+00 -0.8127426E+00  0.0000000E+00 -0.2268298E+00 -0.3831251E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00 -0.4554505E+00  0.1659613E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.1000000E+01  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00 -0.3386427E+00  0.0000000E+00  0.1223686E+00 -0.2386646E+00
+  0.0000000E+00  0.0000000E+00  0.1000000E+01  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.7970383E+00 -0.2904322E+00
+ 
+ COLUMNS  6 THROUGH  8
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ -0.3757830E+00  0.0000000E+00  0.0000000E+00
+  0.1057147E+00  0.8682432E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.1000000E+01
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.9018794E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ -0.1850007E+00  0.4961390E+00  0.0000000E+00
+ 
+ THE DEFLATING SUBSPACE CORRESPONDS TO THE FIRST   4 COLUMNS OF THE MATRIX Z
+ 
+ THE ROOTS ARE CORRECTLY ORDERED      T
+ 
+ THE VECTORS SPANNING THE DEFLATING SUBSPACE ARE
+ ORTHOGONAL WITH PRECISION    0.522E-07
+ THIS MUST BE OF THE ORDER OF THE RELATIVE PRECISION ( 0.119E-06 )
+ 
+ THE SPACE SPANNED THE COLUMNS OF (A*Z1,B*Z1)
+ WHERE Z1 SPANS THE COMPUTED DEFLATING SUBSPACE
+ HAS INDEED DIMENSION NDIM IF QMAX IS OF THE ORDER
+ OF THE RELATIVE PRECISION ( 0.119E-06 ). QMAX=  0.108E-07
+ 
+1PUT THE EIGENVALUES IN THE OPEN LEFT HALF PLANE
+ BACK AT THE TOP IN ORDER TO HAVE AN IDEA OF THE
+ ROUNDING ERRORS PERFORMED IN THE TWO STEPS
+ MATRIX A ( 8X 8)
+ COLUMNS  1 THROUGH  5
+ -0.1000003E+01  0.4999999E+00 -0.1635711E-05  0.5999996E+01 -0.3909277E-06
+  0.8000001E+01 -0.9999980E+00  0.4000000E+01  0.3516674E-05 -0.7766335E-06
+  0.0000000E+00  0.0000000E+00  0.3000001E+01 -0.1050870E-06 -0.2533010E-06
+  0.0000000E+00  0.0000000E+00  0.0000000E+00 -0.3000000E+01  0.4561587E-06
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.2000000E+01
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ 
+ COLUMNS  6 THROUGH  8
+  0.3000000E+01  0.5364416E-07 -0.1399407E-07
+  0.3504679E-05  0.8940703E-08  0.3079634E-13
+  0.2410492E-06  0.1371277E-07 -0.2372302E-06
+ -0.6240241E-06  0.9123173E-07 -0.1218821E-06
+  0.9999999E+00  0.1000000E+01 -0.1000000E+01
+  0.2000000E+01  0.0000000E+00  0.1321507E-06
+  0.0000000E+00  0.1000000E+01  0.0000000E+00
+  0.0000000E+00  0.0000000E+00 -0.5000001E+00
+ 
+ MATRIX B ( 8X 8)
+ COLUMNS  1 THROUGH  5
+  0.9999996E+00 -0.1788139E-06  0.2000000E+01  0.3864053E-13 -0.1871509E-06
+  0.0000000E+00  0.9999999E+00  0.7651802E-06 -0.2861023E-06 -0.3624664E-13
+  0.0000000E+00  0.0000000E+00 -0.1000000E+01  0.3502899E-07  0.1072883E-06
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.1000000E+01 -0.7105427E-14
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.1000000E+01
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+ 
+ COLUMNS  6 THROUGH  8
+ -0.3785269E-06  0.0000000E+00 -0.1788139E-06
+  0.2000000E+01  0.0000000E+00  0.1201371E-07
+ -0.2513636E-06  0.0000000E+00 -0.4000001E+01
+  0.2679036E-13  0.0000000E+00  0.2332190E-13
+ -0.1788139E-07  0.0000000E+00  0.5485112E-07
+  0.9999999E+00  0.0000000E+00 -0.1404679E-06
+  0.0000000E+00  0.5000000E+00  0.0000000E+00
+  0.0000000E+00  0.0000000E+00 -0.1000000E+01
+ 
+ MATRIX Z ( 8X 8)
+ COLUMNS  1 THROUGH  5
+  0.9999999E+00  0.2451462E-06 -0.1444656E-07 -0.2071139E-13 -0.5364414E-07
+ -0.1788139E-06  0.1000000E+01  0.7393054E-08  0.7824140E-14 -0.8940686E-08
+  0.1312004E-07 -0.1225242E-07  0.9999999E+00 -0.3100330E-13 -0.9357550E-07
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.1000000E+01 -0.9123174E-07
+  0.5364414E-07  0.8940694E-08  0.9357551E-07  0.9123174E-07  0.1000000E+01
+ -0.1043081E-06  0.5002784E-22 -0.1534058E-06 -0.1430512E-06  0.3300135E-13
+  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.0000000E+00  0.1146243E-07 -0.2980232E-07 -0.8757230E-08  0.3485222E-14
+ 
+ COLUMNS  6 THROUGH  8
+  0.1090235E-06  0.0000000E+00  0.2528145E-07
+ -0.5960464E-07  0.0000000E+00 -0.1293783E-07
+  0.1570504E-06  0.0000000E+00  0.0000000E+00
+  0.1430512E-06  0.0000000E+00  0.8757234E-08
+  0.0000000E+00  0.0000000E+00  0.0000000E+00
+  0.1000000E+01  0.0000000E+00  0.1293783E-07
+  0.0000000E+00  0.1000000E+01  0.0000000E+00
+ -0.2750984E-07  0.0000000E+00  0.1000000E+01
+ 
+ THE DEFLATING SUBSPACE CORRESPONDS TO THE FIRST   4 COLUMNS OF THE MATRIX Z
+ 
+ THE ROOTS ARE CORRECTLY ORDERED      T
+ 
+ THE VECTORS SPANNING THE DEFLATING SUBSPACE ARE
+ ORTHOGONAL WITH PRECISION    0.119E-06
+ THIS MUST BE OF THE ORDER OF THE RELATIVE PRECISION ( 0.119E-06 )
+ 
+ THE SPACE SPANNED THE COLUMNS OF (A*Z1,B*Z1)
+ WHERE Z1 SPANS THE COMPUTED DEFLATING SUBSPACE
+ HAS INDEED DIMENSION NDIM IF QMAX IS OF THE ORDER
+ OF THE RELATIVE PRECISION ( 0.119E-06 ). QMAX=  0.536E-08
+ 
