@@ -22,9 +22,9 @@ driver.o: cons.o parab.o
 
 parab.o: cons.o air.o
 
-diffres: Res res
+diffres: Res result
 	echo "Differences in results from driver"
-	$(DIFF)  Res res
+	$(DIFF)  Res result
 
 clean: 
 	rm -rf *.o $(DRIVERS) $(CLEANUP) $(RESULTS)
