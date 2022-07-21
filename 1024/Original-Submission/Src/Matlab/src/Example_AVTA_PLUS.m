@@ -1,0 +1,11 @@
+m=10;
+K=20;
+n=100;
+vtx_A=Random_pts(m,K,'normal');
+inhulldata=Random_cvx(vtx_A,n,'unif');
+matA=[inhulldata,vtx_A];
+[m,n]=size(matA);
+tic
+[index]=AVTA_PLUS(matA,0.01);
+toc
+index
