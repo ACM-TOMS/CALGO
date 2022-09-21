@@ -1,0 +1,241 @@
+---------------------------------------------------------------------------
+Instructions for Writing a Blackbox Multiobjective Function for VTMOP_SOLVE
+---------------------------------------------------------------------------
+
+The driver subroutine VTMOP_SOLVE accepts, among other parameters, a
+Fortran subroutine OBJ_FUNC that implements the blackbox multiobjective
+cost function F. The interface block for OBJ_FUNC is as follows.
+
+INTERFACE
+   SUBROUTINE OBJ_FUNC(C, V, IERR)
+      USE REAL_PRECISION, ONLY : R8
+      REAL(KIND=R8), INTENT(IN) :: C(:)
+      REAL(KIND=R8), INTENT(OUT) :: V(:)
+      INTEGER, INTENT(OUT) :: IERR
+   END SUBROUTINE OBJ_FUNC
+END INTERFACE
+
+In the above interface block,
+ - C(1:D) is a REAL input array containing the D design variables,
+ - V(1:P) is a REAL output array returning the P objective values, and
+ - IERR is an integer valued error flag --- (IERR .EQ. 0) indicates success,
+   (IERR .NE. 0 .OR. ANY(IEEE_IS_NAN(V(:)))) indicates a missing value.
+
+This file provides advice and examples for users of VTMOP_SOLVE, when
+implementing F as a Fortran 2008 subroutine, matching the above interface.
+
+There are four cases that will be covered:
+ - when F is already available as a Fortran function,
+ - when "call_f" is an ISO C/C++ function implementing F,
+ - when "APPLE" is a command line executable implementing F, and
+ - when F is the result of an MPI executable.
+
+Additionally, advice/examples are given for using the last two options
+when VTMOP_SOLVE is run with parallel function evaluations
+(when PFLAG=1 or PFLAG=3).
+
+F is a Fortran function
+-----------------------
+
+The simplest case is when F is already implemented as a Fortran function.
+Then OBJ_FUNC could be implemented as follows.
+
+SUBROUTINE OBJ_FUNC(C, V, IERR)
+   USE REAL_PRECISION, ONLY : R8
+   USE IEEE_ARITHMETIC, ONLY : IEEE_IS_NAN
+   REAL(KIND=R8), INTENT(IN) :: C(:)
+   REAL(KIND=R8), INTENT(OUT) :: V(:)
+   INTEGER, INTENT(OUT) :: IERR
+
+   V(:) = F(C(:))
+   IF (ANY(IEEE_IS_NAN(V(:)))) THEN
+      IERR = 1
+   ELSE
+      IERR = 0
+   END IF
+
+   RETURN
+END SUBROUTINE OBJ_FUNC
+
+F is a C/C++ function
+---------------------
+
+Another simple case is when F has been implemented as an ISO C/C++ function.
+Consider the following interface.
+
+void call_f(double *c, double *v, int *ierr);
+
+In the above ISO C interface for F,
+ - "c" is the starting address for a block of memory containing the D design
+   variables (as C doubles),
+ - "v" is the starting address for a block of memory containing the P
+   objective values (as C doubles), and
+ - "ierr" is the address for a C int returning an error flag (same contents as
+   IERR).
+
+***
+   Note that if "call_f" is an ISO C++ function, then an ISO C interface
+   can be produced by adding the following statement into the C++ file where
+   call_f is defined.
+
+   extern "C" {
+      void call_f(double *c, double *v, int *ierr);
+   }
+***
+
+Then the Fortran 2008 compliant ISO C bindings can be generated using the
+following Fortran interface block.
+
+INTERFACE
+   SUBROUTINE CALL_F(C, V, IERR) BIND(C, NAME="call_f")
+      USE ISO_C_BINDING, ONLY : C_DOUBLE, C_INT
+      REAL(KIND=C_DOUBLE), INTENT(IN) :: C(:)
+      REAL(KIND=C_DOUBLE), INTENT(OUT) :: V(:)
+      INTEGER(KIND=C_INT), INTENT(OUT) :: IERR
+   END SUBROUTINE CALL_F
+END INTERFACE
+
+On most compilers, the above binding can be directly passed as the actual
+argument for OBJ_FUNC in VTMOP_SOLVE, since typically C_DOUBLE is the same
+as R8 and C_INT is the default kind for INTEGER. However, in general, this
+may result in a type mismatch. Therefore, the following implementation of
+OBJ_FUNC using the above C binding is recommended.
+
+SUBROUTINE OBJ_FUNC(C, V, IERR)
+   USE ISO_C_BINDING, ONLY : C_DOUBLE, C_INT
+   USE REAL_PRECISION, ONLY : R8
+   REAL(KIND=R8), INTENT(IN) :: C(:)
+   REAL(KIND=R8), INTENT(OUT) :: V(:)
+   INTEGER, INTENT(OUT) :: IERR
+
+   REAL(KIND=C_DOUBLE) :: C_C(1:SIZE(C)) ! C compatible copy of C(:).
+   REAL(KIND=C_DOUBLE) :: C_V(1:SIZE(V)) ! C compatible copy of V(:).
+   INTEGER(KIND=C_INT) :: C_IERR ! C compatible copy of IERR.
+
+   ! Interface for CALL_F, the Fortran binding for call_f.
+   INTERFACE
+      SUBROUTINE CALL_F(C, V, IERR) BIND(C, NAME="call_f")
+         USE ISO_C_BINDING, ONLY : C_DOUBLE, C_INT
+         REAL(KIND=C_DOUBLE), INTENT(IN) :: C(:)
+         REAL(KIND=C_DOUBLE), INTENT(OUT) :: V(:)
+         INTEGER(KIND=C_INT), INTENT(OUT) :: IERR
+      END SUBROUTINE CALL_F
+   END INTERFACE
+
+   C_C(:) = REAL(C(:), KIND=C_DOUBLE) ! Convert the input C(:) into a C_DOUBLE.
+   CALL CALL_F(C_C(:), C_V(:), C_IERR) ! Call the C function.
+   V(:) = REAL(C_V(:), KIND=R8) ! Convert the output C_V(:) into a R8 type.
+   IERR = INT(C_IERR) ! Convert the error flag into a Fortran default INTEGER.
+
+   RETURN
+END SUBROUTINE OBJ_FUNC
+
+When F is a command line executable "APPLE"
+-------------------------------------------
+
+The final and most flexible way to implement a blackbox function in Fortran
+is by calling a command line program. Let the character string APPLE be the
+command for running an implementation of F that is a command line executable.
+Suppose that APPLE receives design variable inputs via an input file,
+input.dat, and returns output variables via an output file, output.dat.
+In each file, suppose that the values are listed comma and/or space separated
+and that no additional information is required or returned. Then the following
+implementation of OBJ_FUNC can be used.
+
+SUBROUTINE OBJ_FUNC(C, V, IERR)
+   USE REAL_PRECISION, ONLY : R8
+   REAL(KIND=R8), INTENT(IN) :: C(:)
+   REAL(KIND=R8), INTENT(OUT) :: V(:)
+   INTEGER, INTENT(OUT) :: IERR
+   OPEN(100, FILE="input.dat", IOSTAT=IERR) ! Open the input file, input.dat.
+   IF (IERR .NE. 0) RETURN
+   WRITE(100, *, IOSTAT=IERR) C(:) ! Write C(:) with list-directed formatting.
+   IF (IERR .NE. 0) RETURN
+   CLOSE(100, IOSTAT=IERR) ! Close input.dat.
+   IF (IERR .NE. 0) RETURN
+   CALL EXECUTE_COMMAND_LINE(APPLE, EXITSTAT=IERR, WAIT=.TRUE.)
+   IF (IERR .NE. 0) RETURN
+   OPEN(100, FILE="output.dat", IOSTAT=IERR) ! Open the output file, output.dat.
+   IF (IERR .NE. 0) RETURN
+   READ(100, *, IOSTAT=IERR) V(:) ! Read V(:) with list-directed formatting.
+   IF (IERR .NE. 0) RETURN
+   CLOSE(100, IOSTAT=IERR) ! Close output.dat.
+   IF (IERR .NE. 0) RETURN
+   RETURN
+END SUBROUTINE OBJ_FUNC
+
+A special case of the above is when APPLE runs a distributed computation,
+for example, using MPI:
+
+APPLE = "mpirun -np NP -machinefile MACHINEFILE ./MPI_APPLE"
+
+where
+ - NP is the number of MPI processes to launch,
+ - MACHINEFILE is an MPI machine file listing available nodes/cores, and
+ - MPI_APPLE is the MPI executable.
+
+When using parallelism with a command line executable
+-----------------------------------------------------
+
+When VTMOP_SOLVE is being used with parallel function evaluations
+(i.e., PFLAG=1 or PFLAG=3), then extra care is needed to ensure that there
+is no conflict between multiple copies of the input and output files. This
+can be nontrivial since the recommended usage of VTMOP_SOLVE is to have
+more OpenMP tasks than desired concurrent function evaluations, and
+manually control the number of concurrent function evaluations to match the
+desired number using an external counter. One suggestion for how to achieve
+this is to create a separate working subdirectory for each desired
+concurrent function evaluation and place a copy of the executable in each
+subdirectory. Access to these subdirectories must be controlled using an
+internal counter. Sample code that achieves this can be found in the file
+cl_objfunc.f90.
+
+To use cl_objfunc.f90 as a template, create M new working subdirectories
+in the calling directory,
+
+mkdir workdir1
+mkdir workdir2
+ ...
+mkdir workdirM
+
+and place a copy of the command line application in each of the above
+subdirectories (or add the executable to your PATH variable).
+
+Then, edit the file cl_objfunc.f90 as follows:
+ - on Line 5, set the string parameter APPLE to the command line execution
+   command (by default, it is "./a.out" --- this could be an MPI command if
+   an appropriate MACHINEFILE is placed in each of the above subdirectories),
+ - on Line 7, set the string parameter APP_INFILE to the application's input
+   file (by default, it is "input.dat"),
+ - on Line 8, set the string parameter APP_OUTFILE to the application's output
+   file (by default, it is "output.dat"), and
+ - on Line 10, set the integer parameter NUM_TASKS to M.
+
+Finally, in the main Fortran program, before calling VTMOP_SOLVE (with
+OBJ_FUNC being CL_OBJ_FUNC) use the module CL_OBJ_FUNC_MOD and initialize the
+OpenMP locks as follows.
+
+PROGRAM MAIN
+USE VTMOP_LIB
+USE CL_OBJ_FUNC_MOD
+...
+CALL INIT_LOCKS()
+...
+CALL VTMOP_SOLVE( D, P, LB, UB, CL_OBJ_FUNC, PARETO_X, PARETO_F, IERR, ... )
+...
+CALL DESTROY_LOCKS()
+END PROGRAM MAIN
+
+Limitations
+-----------
+
+Note that the Fortran 2008 standard does not require that the
+EXECUTE_COMMAND_LINE intrinsic subroutine be implemented threadsafe. Most
+Fortran compilers utilize the C function system() in their implementation
+of EXECUTE_COMMAND_LINE. The system() function is implemented threadsafe for
+most C compilers in most Linux/Unix environments. However, before committing
+to a large parallel run using EXECUTE_COMMAND_LINE, users are advised to
+check the implementation of system() on their machine.
+
+If none of the above techniques are appropriate for the desired usage, then
+it may be necessary to use the return-to-caller interface.
